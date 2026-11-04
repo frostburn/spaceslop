@@ -46,10 +46,14 @@ Choose Vex, Brass, or Glint on the title or results screen. The selected pilot i
 
 To install the optional pilot art, place square PNGs at `public/pilots/vex.png`, `public/pilots/brass.png`, and `public/pilots/glint.png`, then rebuild. The build precaches the portraits it finds. Missing or unreadable images fall back to callsign tiles.
 
-The encounter textures are optional base-color PNGs. Add the reviewed files and rebuild to precache them for offline play. The same materials appear in the workshop.
+The encounter textures and backdrops are optional PNGs. Add the reviewed files and rebuild to precache them for offline play. The workshop also shows the model textures.
 
 | File | Surface |
 | --- | --- |
 | `public/encounters/interceptor-metal.png` | Tileable bronze and slate armor |
 | `public/encounters/feather-vane.png` | Raptor wing and tail feathers and the ace's crest. Orient the root down and tip up. |
 | `public/encounters/draconian-scales.png` | Tileable draconian face, snout, and jaw |
+| `public/encounters/preserve-backdrop.png` | Portrait, top-down scenery. It scrolls underneath the procedural ferns. |
+| `public/encounters/shipyard-backdrop.png` | Portrait backdrop for the boss approach and fight. |
+
+The preserve catwalks and orbital shipyard also have procedural scenery that runs without background images.

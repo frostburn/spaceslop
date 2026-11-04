@@ -8,6 +8,8 @@ import {
 } from './game';
 import { createPreserveEdges, PRESERVE_LOOP } from './preserve-edges';
 import { createDroneRig, createFighterRig, createScoutRig } from './ship-rigs';
+import { createShipyard } from './shipyard';
+import { createStageBackdrops } from './stage-backdrops';
 import { wingWeapons, type WingProjectile } from './wing';
 
 const sceneColor = 0x0b1020;
@@ -25,6 +27,8 @@ export class FlightView {
   private boss = createInterceptorRig(BOSS_CANNON_X);
   private raptor = createRaptorRig();
   private preserveEdges = createPreserveEdges();
+  private shipyard = createShipyard();
+  private backdrops = createStageBackdrops();
   private drone = createDroneRig();
   private droneGoal = new T.Mesh(
     new T.RingGeometry(0.31, 0.38, 4),
@@ -81,6 +85,10 @@ export class FlightView {
   private swing = 0;
   private scroll = 0;
   private matrix = new T.Matrix4();
+  private shotPosition = new T.Vector3();
+  private shotRotation = new T.Quaternion();
+  private shotScale = new T.Vector3(1, 1.85, 1);
+  private forwardAxis = new T.Vector3(0, 0, 1);
   private rotation = new T.Quaternion();
   private axis = new T.Vector3(1, 0, 0);
 
@@ -106,7 +114,8 @@ export class FlightView {
     const scout = createScoutRig();
     this.enemies = Array.from({ length: 12 }, () => scout.clone());
     this.towline.add(this.towlineGlow, this.towlineCore);
-    this.plane.add(this.player.root, this.drone, this.droneGoal, this.towline, this.boss.root, this.raptor.root, this.cannonMarker, this.stars, this.preserveEdges,
+    this.plane.add(this.player.root, this.drone, this.droneGoal, this.towline, this.boss.root, this.raptor.root, this.cannonMarker, this.stars,
+      this.preserveEdges.root, this.shipyard, this.backdrops.preserve, this.backdrops.shipyard,
       this.pulse, this.shotMeshes, this.droneShots, this.threatMeshes, ...this.enemies, ...this.markers,
       ...Object.values(this.wingProjectiles), ...this.wingLasers, ...this.drops);
   }
@@ -165,10 +174,7 @@ export class FlightView {
     }
     this.scroll = flight.phase === 'stage' ? (this.scroll + elapsed * 1.65) % 12 : this.scroll;
     this.stars.position.y = -this.scroll;
-    this.preserveEdges.visible = this.swing === 0;
-    if (flight.phase === 'stage') {
-      this.preserveEdges.position.y = -(flight.time * 1.65 % PRESERVE_LOOP);
-    }
+    this.drawScenery(flight, eased, distance);
 
     const raptor = flight.enemies.find((enemy) => enemy.raptor);
     this.raptor.root.visible = Boolean(raptor);
@@ -218,6 +224,24 @@ export class FlightView {
     this.renderer.render(this.scene, camera);
   }
 
+  private drawScenery(flight: Flight, reveal: number, distance: number) {
+    const { preserve, shipyard } = this.backdrops;
+    this.preserveEdges.root.visible = reveal === 0;
+    this.preserveEdges.structure.visible = !preserve.material.map;
+    if (flight.phase === 'stage') {
+      this.preserveEdges.root.position.y = -(flight.time * 1.65 % PRESERVE_LOOP);
+      preserve.position.y = HEIGHT - flight.time * 1.2;
+    }
+    preserve.material.opacity = Math.max(0, 1 - reveal * 2.5);
+    preserve.visible = Boolean(preserve.material.map) && preserve.material.opacity > 0;
+
+    const emerging = T.MathUtils.smoothstep(reveal, 0.08, 0.9);
+    shipyard.material.opacity = emerging;
+    shipyard.visible = Boolean(shipyard.material.map) && emerging > 0;
+    shipyard.scale.setScalar((distance - shipyard.position.z) / distance);
+    this.shipyard.visible = reveal >= 0.1 && !shipyard.material.map;
+  }
+
   private drawWings(flight: Flight) {
     const fighting = flight.phase === 'stage' || flight.phase === 'boss';
     for (const [index, wing] of flight.wings.entries()) {
@@ -255,7 +279,9 @@ export class FlightView {
     mesh.count = Math.min(shots.length, 128);
     for (let i = 0; i < mesh.count; i++) {
       const shot = shots[i];
-      this.matrix.makeTranslation(shot.x, shot.y, shot.z + 0.12);
+      this.shotPosition.set(shot.x, shot.y, shot.z + 0.12);
+      this.shotRotation.setFromAxisAngle(this.forwardAxis, Math.atan2(-shot.vx, shot.vy));
+      this.matrix.compose(this.shotPosition, this.shotRotation, this.shotScale);
       mesh.setMatrixAt(i, this.matrix);
     }
     mesh.instanceMatrix.needsUpdate = true;

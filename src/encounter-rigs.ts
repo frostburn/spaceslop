@@ -118,7 +118,7 @@ export function createRaptorRig() {
 export function createInterceptorRig(cannonX: number) {
   const root = new T.Group();
   const steel = armor(0x65768b);
-  const bronze = armor(0xb9754a);
+  const bronze = armor(0xca8454);
   const darkPlate = armor(0x3a444d);
   const trim = flat(0xddab78);
   const shadow = flat(0x1c2230);
@@ -128,30 +128,45 @@ export function createInterceptorRig(cannonX: number) {
     [1.45, -0.52], [0, -1.72], [-1.45, -0.52]], 0.45), steel, 0, 0, -0.86);
   part(root, plating([[-0.56, 1.79], [-0.33, 2.16], [0.33, 2.16], [0.56, 1.79]], 0.27, 0.037),
     darkPlate, 0, 0, -0.23);
-  part(root, plating([[-1.6, 0.98], [-0.87, 1.96], [0.87, 1.96], [1.6, 0.98],
-    [1.66, -0.64], [0, -2.22], [-1.66, -0.64]], 0.58), darkPlate, 0, 0, -0.36);
-  part(root, plating([[-1.37, 0.12], [-0.76, -0.02], [0, -0.48], [0.76, -0.02],
-    [1.37, 0.12], [1.45, -0.62], [0, -2.1], [-1.45, -0.62]], 0.21), bronze, 0, 0, 0.26);
-  part(root, polygon([[-0.09, -0.58], [0.17, -0.66], [0.14, -1.73], [0, -1.93], [-0.12, -1.65]]),
+  part(root, plating([[-2.23, 0.92], [-1.96, 2.78], [-0.97, 3.94], [0.97, 3.94],
+    [1.96, 2.78], [2.23, 0.92], [1.86, -0.91], [0, -3.28], [-1.86, -0.91]], 0.58),
+    darkPlate, 0, 0, -0.36);
+  part(root, plating([[-1.67, 0.12], [-0.85, -0.02], [0, -0.48], [0.85, -0.02],
+    [1.67, 0.12], [1.68, -0.85], [0, -3.09], [-1.68, -0.85]], 0.21), bronze, 0, 0, 0.26);
+  part(root, polygon([[-0.09, -0.58], [0.17, -0.66], [0.14, -2.51], [0, -2.88], [-0.12, -2.44]]),
     trim, 0, 0, 0.56);
+  for (const side of [-1, 1]) {
+    const cheek = part(root, plating([[0.83, -0.27], [1.62, -0.08], [1.51, -0.77], [0.69, -1.59]],
+      0.13, 0.03), steel, 0, 0, 0.46);
+    cheek.scale.x = side;
+    const intake = part(root, new T.BoxGeometry(0.34, 0.085, 0.045), signal, side * 1.25, -0.55, 0.653);
+    intake.rotation.z = side * 0.76;
+  }
+
+  const cockpit = pivot(root, 'cockpit', 0, 0.35, 0.08);
+  cockpit.scale.set(1.65, 1.91, 1.11);
   const canopyFrame: [number, number][] = [[-1.23, 0.24], [-1.34, 0.91], [-0.84, 1.79],
     [0.85, 1.79], [1.34, 0.91], [1.23, 0.24], [0.74, -0.03], [-0.74, -0.03]];
-  part(root, plating(canopyFrame, 0.16), bronze, 0, 0, 0.43);
-  const interior = part(root, polygon(canopyFrame), shadow, 0, 0.1, 0.68);
+  part(cockpit, plating(canopyFrame, 0.16), bronze, 0, 0, 0.43);
+  const interior = part(cockpit, polygon(canopyFrame), shadow, 0, 0.1, 0.68);
   interior.scale.set(0.88, 0.85, 1);
-  part(root, polygon([[-0.89, 0.25], [-0.63, 0.34], [0.63, 0.34], [0.89, 0.25], [0.67, 0.04], [-0.67, 0.04]]),
+  part(cockpit, polygon([[-0.89, 0.25], [-0.63, 0.34], [0.63, 0.34], [0.89, 0.25], [0.67, 0.04], [-0.67, 0.04]]),
     steel, 0, 0, 1.13);
   for (let i = -2; i <= 2; i++) {
-    part(root, new T.BoxGeometry(0.045, 0.053, 0.025), signal, i * 0.14, 0.21, 1.145);
+    part(cockpit, new T.BoxGeometry(0.045, 0.053, 0.025), signal, i * 0.14, 0.21, 1.145);
   }
 
   const cannons = ([-1, 1] as const).map((side) => {
     const wing = pivot(root, side < 0 ? 'wing_L' : 'wing_R', 0, 0, 0);
     wing.scale.x = side;
-    part(wing, plating([[1.2, 0.8], [3.72, 1.06], [4.15, 0.76], [3.12, -0.34], [1.2, -0.51]],
+    part(wing, plating([[1.2, 0.8], [3.89, 2.22], [5.51, 3.45], [4.93, 0.8], [3.12, -0.34], [1.2, -0.51]],
       0.22), darkPlate, 0, 0, -0.51);
-    part(wing, plating([[1.13, 0.86], [4.51, 1.31], [4.08, 0.32], [3.25, -0.29],
-      [2.57, -0.57], [1.13, -0.54]], 0.29), steel, 0, 0, -0.25);
+    part(wing, plating([[1.13, 0.86], [3.51, 2.32], [5.83, 4.91], [5.17, 1.63], [4.08, 0.32],
+      [3.25, -0.29], [2.57, -0.57], [1.13, -0.54]], 0.29), steel, 0, 0, -0.25);
+    part(wing, plating([[3.29, 1.92], [5.63, 4.54], [5.0, 1.63], [4.19, 0.83]],
+      0.09, 0.039), bronze, 0, 0, 0.07);
+    part(wing, polygon([[4.36, 1.56], [5.48, 3.81], [5.24, 2.68], [4.86, 1.67]]),
+      flat(0xa14e39), 0, 0, 0.22);
     part(wing, plating([[1.3, 0.43], [4.15, 1.13], [3.77, 0.67], [2.85, 0.26], [1.35, -0.07]], 0.09),
       bronze, 0, 0, 0.08);
     part(wing, plating([[1.3, 0.64], [2.57, 0.94], [3.24, 0.99], [2.49, 0.75], [1.44, 0.44]],
@@ -188,7 +203,7 @@ export function createInterceptorRig(cannonX: number) {
     return { side, pod, glow };
   });
 
-  const pilot = pivot(root, 'pilot', 0, 0.27, 0.87);
+  const pilot = pivot(cockpit, 'pilot', 0, 0.27, 0.87);
   const oval = new T.SphereGeometry(1, 24, 16);
   const skin = smoothHide(0xa87e62);
   const face = smoothHide(0xcead85);
@@ -213,6 +228,10 @@ export function createInterceptorRig(cannonX: number) {
     const brow = part(neck, new T.BoxGeometry(0.12, 0.043, 0.05), face, side * 0.16, 0.334, 0.179);
     brow.rotation.z = side * 0.34;
     part(neck, new T.CircleGeometry(0.024, 6), shadow, side * 0.091, 0.188, 0.537);
+    for (let i = 0; i < 3; i++) {
+      plume(neck, side * (0.19 - i * 0.033), 0.19 - i * 0.053, 0.13,
+        0.18, 0.07, Math.PI + side * (0.36 + i * 0.10), 0x73534a, 0xc3a180);
+    }
   }
   const crest = pivot(neck, 'pilot_crest', 0, 0.45, 0.01);
   for (let i = -3; i <= 3; i++) {
@@ -242,9 +261,9 @@ export function createInterceptorRig(cannonX: number) {
         glow.material.opacity = Math.min(1, 0.18 + 0.7 * charge + kick);
         glow.scale.setScalar(0.8 + 0.21 * charge + 0.22 * kick);
       }
-      neck.rotation.y = 0.32 + 0.68 * (1 - reveal) + 0.16 * Math.sign(activeX) * windup;
+      neck.rotation.y = 0.57 + 0.53 * (1 - reveal) + 0.16 * Math.sign(activeX) * windup;
       neck.rotation.x = 0.18 * windup + 0.13 * recoil;
-      jaw.rotation.x = 0.27 * recoil;
+      jaw.rotation.x = 0.07 + 0.12 * windup + 0.28 * recoil;
       crest.rotation.x = -0.14 * recoil;
       pilot.position.y = 0.27 - 0.08 * windup;
     },

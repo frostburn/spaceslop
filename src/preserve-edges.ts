@@ -70,19 +70,71 @@ function seededRandom(seed: number) {
   };
 }
 
-export function createPreserveEdges() {
-  const group = new T.Group();
-  const railGeometry = new T.BoxGeometry(0.095, 3 * PRESERVE_LOOP, 0.08);
-  const railMaterial = new T.MeshBasicMaterial({ color: 0x21262c });
-  for (const side of [-1, 1]) {
-    const rail = new T.Mesh(railGeometry, railMaterial);
-    rail.position.set(side * 4.18, PRESERVE_LOOP / 2, -1.4);
-    group.add(rail);
+function createTrench(tiles: number[]) {
+  const placements: { x: number; y: number; z: number; width: number; height: number; angle: number; color: number }[] = [];
+  function block(x: number, y: number, z: number, width: number, height: number, color: number, angle = 0) {
+    placements.push({ x, y, z, width, height, angle, color });
   }
 
+  const length = tiles.length * PRESERVE_LOOP;
+  block(0, PRESERVE_LOOP / 2, -4.6, 9, length, 0x10131b);
+  for (const side of [-1, 1]) {
+    block(side * 2.81, PRESERVE_LOOP / 2, -4.38, 0.16, length, 0x202630);
+    block(side * 3.17, PRESERVE_LOOP / 2, -3.48, 0.5, length, 0x22252d);
+    block(side * 3.47, PRESERVE_LOOP / 2, -1.62, 0.09, length, 0x675047);
+    block(side * 4.37, PRESERVE_LOOP / 2, -1.53, 0.11, length, 0x43373b);
+  }
+
+  for (const tile of tiles) {
+    const offset = tile * PRESERVE_LOOP;
+    for (const y of [3.6, 14.8]) {
+      block(0, offset + y, -4.2, 6.44, 0.47, 0x252831, 0.11);
+      block(0, offset + y + 0.34, -4.14, 6.44, 0.11, 0x35333a, 0.11);
+    }
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 8; i++) {
+        const y = offset + 1.5 + 3 * i;
+        block(side * 4.08, y, -2.12, 1.19, 2.81, i % 2 ? 0x41363a : 0x30323b);
+        block(side * 4.03, y + 0.14, -2.02, 0.87, 1.79, 0x1b2028);
+        for (let slat = -4; slat <= 4; slat++) {
+          block(side * 4.03, y + 0.14 + slat * 0.185, -1.95, 0.86, 0.025, 0x50464a);
+        }
+        for (const x of [3.69, 3.89, 4.09, 4.29]) {
+          block(side * x, y + 0.14, -1.89, 0.023, 1.78, 0x3e3b43);
+        }
+        block(side * 4.11, y - 1.19, -1.84, 1.14, 0.18, 0x63443d);
+        if (i % 3 === 1) {
+          for (let stripe = 0; stripe < 4; stripe++) {
+            block(side * (3.64 + stripe * 0.18), y - 1.19, -1.77, 0.09, 0.18, 0x8a703f, side * 0.42);
+          }
+        }
+        if (i % 4 === 2) {
+          block(side * 3.52, y + 1.05, -1.47, 0.05, 0.19, 0x92734a);
+        }
+      }
+    }
+  }
+
+  const mesh = new T.InstancedMesh(new T.BoxGeometry(1, 1, 0.08), new T.MeshBasicMaterial(), placements.length);
+  const transform = new T.Object3D();
+  const tint = new T.Color();
+  for (const [index, { x, y, z, width, height, angle, color }] of placements.entries()) {
+    transform.position.set(x, y, z);
+    transform.rotation.z = angle;
+    transform.scale.set(width, height, 1);
+    transform.updateMatrix();
+    mesh.setMatrixAt(index, transform.matrix);
+    mesh.setColorAt(index, tint.setHex(color));
+  }
+  return mesh;
+}
+
+export function createPreserveEdges() {
+  const group = new T.Group();
   const crownsPerSide = 8;
   const frondsPerCrown = 5;
   const tiles = [-1, 0, 1];
+  const structure = createTrench(tiles);
   const crownCount = 2 * crownsPerSide * tiles.length;
   const braces = new T.InstancedMesh(
     new T.BoxGeometry(1.11, 0.23, 0.12), new T.MeshBasicMaterial(), crownCount,
@@ -127,6 +179,7 @@ export function createPreserveEdges() {
     }
   }
 
-  group.add(braces, fronds);
-  return group;
+  structure.add(braces);
+  group.add(structure, fronds);
+  return { root: group, structure };
 }
