@@ -1,10 +1,7 @@
+import { pilots } from './pilot-data';
+
 declare const __PILOT_PORTRAITS__: readonly string[];
 
-const pilots = [
-  { id: 'vex', name: 'Vex', color: '#88f2ff' },
-  { id: 'brass', name: 'Brass', color: '#ffbd76' },
-  { id: 'glint', name: 'Glint', color: '#dca2f8' },
-] as const;
 type Pilot = typeof pilots[number];
 
 const storageKey = 'spaceslop.pilot';
@@ -47,6 +44,7 @@ export function setupPilots(
   choices: HTMLElement,
   selectedPortrait: HTMLElement,
   selectedName: HTMLElement,
+  perkDescription: HTMLElement,
   desktopSlot: HTMLElement,
   mobileSlot: HTMLElement,
 ) {
@@ -62,9 +60,12 @@ export function setupPilots(
   desktop.addEventListener('change', placePicker);
   placePicker();
 
-  const selected = savedPilot();
+  let selected = savedPilot();
   function showPilot(pilot: Pilot) {
+    selected = pilot;
     selectedPortrait.replaceChildren(portrait(pilot));
+    selectedPortrait.style.setProperty('--pilot-color', pilot.color);
+    perkDescription.textContent = `${pilot.perk} · ${pilot.description}`;
     selectedName.textContent = pilot.name;
   }
   showPilot(selected);
@@ -94,7 +95,10 @@ export function setupPilots(
     choices.append(label);
   }
 
-  return (selectable: boolean) => {
-    if (picker.hidden === selectable) picker.hidden = !selectable;
+  return {
+    get selectedId() { return selected.id; },
+    setVisible(selectable: boolean) {
+      if (picker.hidden === selectable) picker.hidden = !selectable;
+    },
   };
 }

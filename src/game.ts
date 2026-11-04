@@ -1,3 +1,4 @@
+import { CLOSE_CALLS_REQUIRED, HOT_DOCK_COOLDOWN, HOT_DOCK_DISTANCE, type PilotId } from './pilot-data';
 import { wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
 
 export const WIDTH = 9;
@@ -18,8 +19,9 @@ type Phase = 'stage' | 'approach' | 'boss' | 'won' | 'lost';
 type Point = { x: number; y: number };
 type Shot = Point & {
   z: number; vx: number; vy: number; vz: number;
-  drone?: boolean; targetsBoss?: boolean; wing?: WingProjectile; pierced?: Set<Enemy>;
+  drone?: boolean; targetsBoss?: boolean; wing?: WingProjectile; pierced?: Set<Enemy>; damage?: number;
 };
+type Threat = Shot & { graze?: 'near' | 'counted' };
 type Enemy = Point & { lane: number; age: number; fire: number; hp: number; drop?: WingWeapon };
 type Drop = Point & { weapon: WingWeapon };
 type Wing = {
@@ -27,6 +29,7 @@ type Wing = {
   beamEnd?: Point; laserTarget?: Enemy | number; laserHold: number;
 };
 
+const MAX_HULL = 4;
 const SHIP_SPEED = 6.5;
 const DRONE_SPEED = 4 * SHIP_SPEED;
 const DRONE_FIRE_INTERVAL = 0.44;
@@ -83,14 +86,14 @@ export class Flight {
   player = { x: 0, y: -5.3 };
   drone = { x: -1.15, y: -5.3 };
   droneTarget?: Point;
-  hull = 4;
+  hull = MAX_HULL;
   invulnerable = 0;
   charges = 2;
   score = 0;
   bossHealth = BOSS_HP;
   enemies: Enemy[] = [];
   shots: Shot[] = [];
-  threats: Shot[] = [];
+  threats: Threat[] = [];
   markers: Point[] = [];
   pulseFlash = 0;
   towlineFlash = 0;
@@ -101,6 +104,14 @@ export class Flight {
   ];
   pickupTime = 0;
   pickupMessage = '';
+  perkTime = 0;
+  perkMessage = '';
+  private closeCalls = 0;
+  private repairUsed = false;
+  private longRedeploy = false;
+  private hotDockReady = false;
+  private hotDockCooldown = 0;
+  private towlineDamage = TOWLINE_DAMAGE;
   private aim?: Point;
   private nextWave = 0;
   private cooldown = 0;
@@ -110,13 +121,32 @@ export class Flight {
   private towlineHitCannon = false;
 
   readonly droneWeapon: DroneWeapon;
+  readonly pilot: PilotId;
 
-  constructor(droneWeapon: DroneWeapon = 'sentry', loadout: readonly (WingWeapon | undefined)[] = []) {
+  constructor(
+    droneWeapon: DroneWeapon = 'sentry',
+    loadout: readonly (WingWeapon | undefined)[] = [],
+    pilot: PilotId = 'vex',
+  ) {
     this.droneWeapon = droneWeapon;
+    this.pilot = pilot;
     if (droneWeapon === 'towline') this.droneCooldown = TOWLINE_INTERVAL;
     for (const [index, wing] of this.wings.entries()) {
       const weapon = loadout[index];
       if (weapon) this.equip(wing, weapon);
+    }
+  }
+
+  get perkReadout() {
+    switch (this.pilot) {
+      case 'vex':
+        return this.closeCalls >= CLOSE_CALLS_REQUIRED
+          ? 'Close Call · Pulse earned' : `Close Call · ${this.closeCalls}/${CLOSE_CALLS_REQUIRED} grazes`;
+      case 'brass':
+        return this.repairUsed ? 'Field Repair · Used' : 'Field Repair · Available';
+      case 'glint':
+        if (this.hotDockReady) return 'Hot Dock · Charged';
+        return this.hotDockCooldown > 0 ? 'Hot Dock · Cooling down' : 'Hot Dock · Awaiting redeploy';
     }
   }
 
@@ -137,6 +167,7 @@ export class Flight {
     const target = { x: 0, y: 0 };
     moveWithinField(target, x, y);
     this.droneTarget = target;
+    this.longRedeploy = this.pilot === 'glint' && !near(this.drone, target, HOT_DOCK_DISTANCE);
   }
 
   aimBy(dx: number, dy: number) {
@@ -181,8 +212,15 @@ export class Flight {
     this.invulnerable = Math.max(0, this.invulnerable - dt);
     this.pulseFlash = Math.max(0, this.pulseFlash - dt);
     this.pickupTime = Math.max(0, this.pickupTime - dt);
+    this.perkTime = Math.max(0, this.perkTime - dt);
+    this.hotDockCooldown = Math.max(0, this.hotDockCooldown - dt);
     if (this.droneTarget && moveToward(this.drone, this.droneTarget, DRONE_SPEED * dt)) {
       this.droneTarget = undefined;
+      if (this.longRedeploy && !this.hotDockReady && this.hotDockCooldown === 0) {
+        this.hotDockReady = true;
+        this.announcePerk('Hot Dock ready');
+      }
+      this.longRedeploy = false;
     }
     if (this.phase === 'approach') {
       if (this.time >= TRANSITION_TIME) this.enter('boss');
@@ -210,7 +248,7 @@ export class Flight {
         const impact = { x: shot.x + shot.vx * untilImpact, y: shot.y + shot.vy * untilImpact };
         if (shot.targetsBoss ||
           ((shot.drone || shot.wing) && near(impact, { x: this.exposedCannonX, y: BOSS_Y }, BOSS_CANNON_RADIUS))) {
-          this.damageBoss(shot.wing ? wingShots[shot.wing].damage : 1);
+          this.damageBoss(shot.damage ?? 1);
         }
         return false;
       }
@@ -221,7 +259,7 @@ export class Flight {
           : Math.abs(shot.x - enemy.x) < 0.52 &&
             shot.y >= enemy.y - 0.46 && previous.y <= enemy.y + 0.46;
         if (!hit) continue;
-        this.damageEnemy(enemy, shot.wing ? wingShots[shot.wing].damage : 1);
+        this.damageEnemy(enemy, shot.damage ?? 1);
         if (!shot.pierced) return false;
         shot.pierced.add(enemy);
       }
@@ -234,19 +272,56 @@ export class Flight {
       if (boss) {
         if (shot.z < 0) return true;
         if (near(shot, this.player, 0.58)) this.hit();
+        else if (near(shot, this.player, 1.05)) this.recordGraze();
         return false;
       }
       if (near(shot, this.player, 0.44)) {
         this.hit();
         return false;
       }
-      return Math.abs(shot.x) < 5 && Math.abs(shot.y) < 9;
+      const inField = Math.abs(shot.x) < 5 && Math.abs(shot.y) < 9;
+      this.trackGraze(shot, inField);
+      return inField;
     });
 
     if (this.phase === 'stage') {
       this.collectDrops(dt);
       if (this.time >= 14) this.enter('approach');
     }
+  }
+
+  private trackGraze(shot: Threat, inField: boolean) {
+    if (this.pilot !== 'vex' || this.closeCalls >= CLOSE_CALLS_REQUIRED || shot.graze === 'counted') return;
+    if (this.invulnerable > 0) {
+      shot.graze = undefined;
+    } else if (inField && near(shot, this.player, 0.9)) {
+      shot.graze = 'near';
+    } else if (shot.graze === 'near') {
+      shot.graze = 'counted';
+      this.recordGraze();
+    }
+  }
+
+  private recordGraze() {
+    if (this.pilot !== 'vex' || this.invulnerable > 0 || this.closeCalls >= CLOSE_CALLS_REQUIRED) return;
+    this.closeCalls++;
+    if (this.closeCalls === CLOSE_CALLS_REQUIRED) {
+      this.charges++;
+      this.announcePerk('Close Call · +1 Pulse');
+    }
+  }
+
+  private announcePerk(message: string) {
+    this.perkMessage = message;
+    this.perkTime = 1.6;
+  }
+
+  private droneDamage(base: number) {
+    if (!this.hotDockReady) return base;
+    this.hotDockReady = false;
+    this.hotDockCooldown = HOT_DOCK_COOLDOWN;
+    this.announcePerk('Hot Dock · Double damage');
+    return base * 2;
   }
 
   private equip(wing: Wing, weapon: WingWeapon) {
@@ -263,6 +338,11 @@ export class Flight {
       if (!near(drop, this.player, 0.78)) return drop.y > -9;
       const nearbyWing = this.wings[drop.x <= this.player.x ? 0 : 1];
       const wing = nearbyWing.weapon ? (this.wings.find((slot) => !slot.weapon) ?? nearbyWing) : nearbyWing;
+      if (this.pilot === 'brass' && wing.weapon && !this.repairUsed && this.hull < MAX_HULL) {
+        this.hull++;
+        this.repairUsed = true;
+        this.announcePerk('Field Repair · +1 Hull');
+      }
       this.equip(wing, drop.weapon);
       this.pickupMessage = `${wing.side < 0 ? 'Left' : 'Right'} wing · ${wingWeapons[drop.weapon].name}`;
       this.pickupTime = 1.6;
@@ -283,7 +363,7 @@ export class Flight {
     wing.cooldown = spec.interval;
     const duration = spec.bossTravel;
     this.shots.push({
-      ...origin, z: 0, wing: wing.weapon,
+      ...origin, z: 0, wing: wing.weapon, damage: spec.damage,
       vx: boss ? origin.x * (1 / BOSS_PROJECTION - 1) / duration : 0,
       vy: boss ? (BOSS_Y - origin.y) / duration : spec.speed,
       vz: boss ? BOSS_DEPTH / duration : 0,
@@ -349,7 +429,7 @@ export class Flight {
     if (this.droneWeapon === 'sentry') {
       if (!this.droneTarget && this.droneCooldown === 0) {
         this.droneCooldown = DRONE_FIRE_INTERVAL;
-        this.fire(this.drone, true);
+        this.fire(this.drone, true, this.droneDamage(1));
       }
       return;
     }
@@ -362,6 +442,7 @@ export class Flight {
     if (this.droneCooldown === 0) {
       this.droneCooldown = TOWLINE_INTERVAL;
       this.towlineFlash = TOWLINE_DURATION;
+      this.towlineDamage = this.droneDamage(TOWLINE_DAMAGE);
       this.towlineEnemies.clear();
       this.towlineHitCannon = false;
     }
@@ -372,7 +453,7 @@ export class Flight {
       if (!this.towlineHitCannon &&
         nearSegment(cannon, this.player, this.drone, BOSS_CANNON_RADIUS * BOSS_PROJECTION)) {
         this.towlineHitCannon = true;
-        this.damageBoss(TOWLINE_DAMAGE);
+        this.damageBoss(this.towlineDamage);
       }
       return;
     }
@@ -380,7 +461,7 @@ export class Flight {
       if (enemy.hp > 0 && !this.towlineEnemies.has(enemy) &&
         nearSegment(enemy, this.player, this.drone, 0.52)) {
         this.towlineEnemies.add(enemy);
-        this.damageEnemy(enemy, TOWLINE_DAMAGE);
+        this.damageEnemy(enemy, this.towlineDamage);
       }
     }
   }
@@ -435,9 +516,9 @@ export class Flight {
     if (elapsed >= 1.68) this.markers = [];
   }
 
-  private fire({ x, y }: Point, drone = false) {
+  private fire({ x, y }: Point, drone = false, damage = 1) {
     if (this.phase === 'stage') {
-      this.shots.push({ x, y: y + (drone ? 0.3 : 0.45), z: 0, vx: 0, vy: 15, vz: 0, drone });
+      this.shots.push({ x, y: y + (drone ? 0.3 : 0.45), z: 0, vx: 0, vy: 15, vz: 0, drone, damage });
       return;
     }
 
@@ -448,7 +529,7 @@ export class Flight {
     const dx = drone ? x * expansion : (targetsBoss ? -x : 0);
     const dy = drone ? y * expansion : (targetsBoss ? BOSS_Y - y : 0);
     this.shots.push({ x, y, z: 0, vx: dx / duration, vy: dy / duration,
-      vz: BOSS_DEPTH / duration, targetsBoss, drone });
+      vz: BOSS_DEPTH / duration, targetsBoss, drone, damage });
   }
 
   private advance(shot: Shot, dt: number) {

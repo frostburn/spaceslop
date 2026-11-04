@@ -17,7 +17,10 @@
         <aside class="pilot-console" aria-label="Pilot">
           <figure>
             <div id="selected-portrait"></div>
-            <figcaption id="selected-pilot"></figcaption>
+            <figcaption>
+              <strong id="selected-pilot"></strong>
+              <span id="pilot-perk-readout" hidden></span>
+            </figcaption>
           </figure>
           <div id="desktop-picker"></div>
         </aside>
@@ -39,6 +42,7 @@
                   <legend>Select pilot</legend>
                   <div id="pilot-choices"></div>
                 </fieldset>
+                <p id="pilot-perk-description"></p>
                 <label class="loadout-field">
                   Drone weapon
                   <select id="drone-weapon">
