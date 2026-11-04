@@ -26,7 +26,7 @@ During boss fights, line a wing up horizontally with the green cannon. Homing mi
 
 The second wave includes a feathered raptor. Its wings fold before it dives along its lane. At the boss, the draconian ace turns toward the camera, then the active cannon glows during its windup and recoils on the volley.
 
-The graybox rigs live in `src/encounter-rigs.ts`. A future model can use the same local pose and pivot names while the simulation owns movement, attack timing, and hitboxes. The interceptor's `muzzle_L` and `muzzle_R` pivots line up with the existing cannon lanes.
+The procedural encounter rigs live in `src/encounter-rigs.ts`. A future model can use the same local pose and pivot names while the simulation owns movement, attack timing, and hitboxes. The interceptor's `muzzle_L` and `muzzle_R` pivots line up with the existing cannon lanes.
 
 ## Assets and offline play
 
@@ -41,3 +41,5 @@ Choose Vex, Brass, or Glint on the title or results screen. The selected pilot i
 - **Glint · Hot Dock** doubles the first Sentry shot or Towline pulse after the drone completes a move of at least three playfield units. The perk cools down for three seconds after the attack.
 
 To install the optional pilot art, place square PNGs at `public/pilots/vex.png`, `public/pilots/brass.png`, and `public/pilots/glint.png`, then rebuild. The build precaches the portraits it finds. Missing or unreadable images fall back to callsign tiles.
+
+To add the optional interceptor alloy texture, place a square tileable base-color PNG at `public/encounters/interceptor-metal.png` and rebuild. The game precaches the file and applies it to the bronze and slate armor. The painted materials work without it.

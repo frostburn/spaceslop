@@ -16,12 +16,18 @@ const portraits = existsSync(pilotDir)
     .map((entry) => `pilots/${entry.name}`)
   : [];
 
+const armorPath = 'encounters/interceptor-metal.png';
+const armorTexture = existsSync(new URL(`./public/${armorPath}`, import.meta.url)) ? armorPath : '';
+
 export default defineConfig({
-  define: { __PILOT_PORTRAITS__: JSON.stringify(portraits) },
+  define: {
+    __PILOT_PORTRAITS__: JSON.stringify(portraits),
+    __INTERCEPTOR_METAL__: JSON.stringify(armorTexture),
+  },
   plugins: [
     VitePWA({
       registerType: 'prompt',
-      includeAssets: portraits,
+      includeAssets: armorTexture ? [...portraits, armorTexture] : portraits,
       manifest: {
         name: 'Spaceslop',
         short_name: 'Spaceslop',

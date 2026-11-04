@@ -1,11 +1,13 @@
 import * as T from 'three';
-import { createInterceptorRig, createRaptorRig } from './encounter-rigs';
+import { createInterceptorRig, createPreserveEdges, createRaptorRig } from './encounter-rigs';
 import { BOSS_RECOIL_TIME } from './encounters';
 import {
   BOSS_CAMERA_DISTANCE, BOSS_CANNON_RADIUS, BOSS_CANNON_X, BOSS_DEPTH, BOSS_PROJECTION,
   BOSS_Y, Flight, HEIGHT, TRANSITION_TIME, WIDTH,
 } from './game';
 import { wingWeapons, type WingProjectile } from './wing';
+
+declare const __INTERCEPTOR_METAL__: string;
 
 const sceneColor = 0x0b1020;
 const teal = 0x88f2ff;
@@ -33,6 +35,7 @@ export class FlightView {
   private player = hull(0x44b6d9, 'fighter');
   private boss = createInterceptorRig(BOSS_CANNON_X);
   private raptor = createRaptorRig();
+  private preserveEdges = createPreserveEdges();
   private drone = new T.Group();
   private droneGoal = new T.Mesh(
     new T.RingGeometry(0.31, 0.38, 4),
@@ -105,12 +108,20 @@ export class FlightView {
     this.stars = new T.Points(geometry, new T.PointsMaterial({ color: 0x607796, size: 0.07 }));
     this.stars.frustumCulled = false;
     this.boss.root.position.set(0, BOSS_Y, BOSS_DEPTH);
+    if (__INTERCEPTOR_METAL__) {
+      new T.TextureLoader().load(import.meta.env.BASE_URL + __INTERCEPTOR_METAL__, (texture) => {
+        texture.colorSpace = T.SRGBColorSpace;
+        texture.wrapS = texture.wrapT = T.RepeatWrapping;
+        texture.repeat.set(0.62, 0.62);
+        this.boss.setArmorTexture(texture);
+      });
+    }
     this.drone.add(
       new T.Mesh(new T.OctahedronGeometry(0.22), new T.MeshBasicMaterial({ color: mint })),
       new T.Mesh(new T.RingGeometry(0.29, 0.38, 6), new T.MeshBasicMaterial({ color: 0x60c994 })),
     );
     this.towline.add(this.towlineGlow, this.towlineCore);
-    this.plane.add(this.player, this.drone, this.droneGoal, this.towline, this.boss.root, this.raptor.root, this.cannonMarker, this.stars,
+    this.plane.add(this.player, this.drone, this.droneGoal, this.towline, this.boss.root, this.raptor.root, this.cannonMarker, this.stars, this.preserveEdges,
       this.pulse, this.shotMeshes, this.droneShots, this.threatMeshes, ...this.enemies, ...this.markers,
       ...Object.values(this.wingProjectiles), ...this.mounts, ...this.wingLasers, ...this.drops);
   }
@@ -169,6 +180,8 @@ export class FlightView {
     }
     this.scroll = flight.phase === 'stage' ? (this.scroll + elapsed * 1.65) % 12 : this.scroll;
     this.stars.position.y = -this.scroll;
+    this.preserveEdges.visible = this.swing === 0;
+    this.preserveEdges.position.y = -this.scroll;
 
     const raptor = flight.enemies.find((enemy) => enemy.raptor);
     this.raptor.root.visible = Boolean(raptor);
