@@ -1,9 +1,13 @@
 import * as T from 'three';
-import { BOSS_DEPTH, BOSS_Y, Flight, HEIGHT, TRANSITION_TIME, WIDTH } from './game';
+import {
+  BOSS_CAMERA_DISTANCE, BOSS_CANNON_RADIUS, BOSS_CANNON_X, BOSS_DEPTH, BOSS_PROJECTION,
+  BOSS_Y, Flight, HEIGHT, TRANSITION_TIME, WIDTH,
+} from './game';
 
 const sceneColor = 0x0b1020;
 const teal = 0x88f2ff;
 const orange = 0xff885d;
+const mint = 0xa1ffc5;
 
 function hull(color: number, body: 'fighter' | 'enemy' | 'boss') {
   const model = new T.Group();
@@ -16,7 +20,7 @@ function hull(color: number, body: 'fighter' | 'enemy' | 'boss') {
   const glow = new T.MeshBasicMaterial({ color: body === 'fighter' ? teal : orange });
   for (let i = 0; i < count; i++) {
     const lamp = new T.Mesh(new T.OctahedronGeometry(body === 'boss' ? 0.38 : 0.17), glow);
-    lamp.position.set((i - (count - 1) / 2) * 2.4, body === 'fighter' ? -0.45 : 0, 0.37);
+    lamp.position.set((i - (count - 1) / 2) * BOSS_CANNON_X, body === 'fighter' ? -0.45 : 0, 0.37);
     model.add(lamp);
   }
   return model;
@@ -30,8 +34,18 @@ export class FlightView {
   private perspective = new T.PerspectiveCamera(38, WIDTH / HEIGHT, 0.1, 240);
   private player = hull(0x44b6d9, 'fighter');
   private boss = hull(0xa299be, 'boss');
+  private drone = new T.Group();
+  private droneGoal = new T.Mesh(
+    new T.RingGeometry(0.31, 0.38, 4),
+    new T.MeshBasicMaterial({ color: mint, transparent: true, opacity: 0.55, depthWrite: false }),
+  );
+  private cannonMarker = new T.Mesh(
+    new T.RingGeometry(BOSS_CANNON_RADIUS * BOSS_PROJECTION - 0.06, BOSS_CANNON_RADIUS * BOSS_PROJECTION, 24),
+    new T.MeshBasicMaterial({ color: mint, depthTest: false }),
+  );
   private enemies = Array.from({ length: 12 }, () => hull(0xb84559, 'enemy'));
   private shotMeshes = this.projectiles(teal);
+  private droneShots = this.projectiles(mint);
   private threatMeshes = this.projectiles(orange);
   private markers = Array.from({ length: 3 }, () => new T.Mesh(
     new T.RingGeometry(0.53, 0.61, 24),
@@ -66,8 +80,12 @@ export class FlightView {
     this.stars = new T.Points(geometry, new T.PointsMaterial({ color: 0x607796, size: 0.07 }));
     this.stars.frustumCulled = false;
     this.boss.position.set(0, BOSS_Y, BOSS_DEPTH);
-    this.plane.add(this.player, this.boss, this.stars, this.pulse, this.shotMeshes,
-      this.threatMeshes, ...this.enemies, ...this.markers);
+    this.drone.add(
+      new T.Mesh(new T.OctahedronGeometry(0.22), new T.MeshBasicMaterial({ color: mint })),
+      new T.Mesh(new T.RingGeometry(0.29, 0.38, 6), new T.MeshBasicMaterial({ color: 0x60c994 })),
+    );
+    this.plane.add(this.player, this.drone, this.droneGoal, this.boss, this.cannonMarker, this.stars,
+      this.pulse, this.shotMeshes, this.droneShots, this.threatMeshes, ...this.enemies, ...this.markers);
   }
 
   resize(width: number, height: number) {
@@ -85,7 +103,7 @@ export class FlightView {
     this.rotation.setFromAxisAngle(this.axis, angle);
     this.plane.quaternion.copy(this.rotation);
     const camera = this.swing === 0 ? this.ortho : this.perspective;
-    const distance = 95 - 73 * eased;
+    const distance = T.MathUtils.lerp(95, BOSS_CAMERA_DISTANCE, eased);
     this.perspective.fov = T.MathUtils.radToDeg(2 * Math.atan(HEIGHT / 2 / distance));
     this.perspective.updateProjectionMatrix();
     camera.position.set(0, 0, distance).applyQuaternion(this.rotation);
@@ -95,6 +113,12 @@ export class FlightView {
     this.player.position.set(flight.player.x, flight.player.y, 0);
     this.player.rotation.x = -1.18 * eased;
     this.player.visible = flight.hull > 0 && Math.floor(flight.invulnerable * 12) % 2 === 0;
+    this.drone.position.set(flight.drone.x, flight.drone.y, 0.23);
+    this.drone.visible = flight.hull > 0;
+    this.droneGoal.visible = Boolean(flight.droneTarget) && this.drone.visible;
+    if (flight.droneTarget) this.droneGoal.position.set(flight.droneTarget.x, flight.droneTarget.y, 0.03);
+    this.cannonMarker.visible = flight.phase === 'boss';
+    this.cannonMarker.position.set(flight.exposedCannonX * BOSS_PROJECTION, BOSS_Y * BOSS_PROJECTION, 0);
     this.boss.visible = this.swing > 0 && flight.bossHealth > 0;
     this.boss.position.z = BOSS_DEPTH - 70 * (1 - eased);
     this.boss.rotation.x = 0.9 * (1 - eased);
@@ -110,7 +134,8 @@ export class FlightView {
       }
     }
 
-    this.drawProjectiles(this.shotMeshes, flight.shots);
+    this.drawProjectiles(this.shotMeshes, flight.shots.filter((shot) => !shot.drone));
+    this.drawProjectiles(this.droneShots, flight.shots.filter((shot) => shot.drone));
     this.drawProjectiles(this.threatMeshes, flight.threats);
     for (const [index, ring] of this.markers.entries()) {
       const marker = flight.markers[index];
