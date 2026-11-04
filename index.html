@@ -39,13 +39,18 @@
                   <legend>Select pilot</legend>
                   <div id="pilot-choices"></div>
                 </fieldset>
-                <label class="drone-weapon">
+                <label class="loadout-field">
                   Drone weapon
                   <select id="drone-weapon">
                     <option value="sentry">Sentry</option>
                     <option value="towline">Towline</option>
                   </select>
                 </label>
+                <details id="test-wing-loadout" class="test-wings" hidden>
+                  <summary>Test wing loadout</summary>
+                  <label class="loadout-field">Left wing <select id="left-wing"></select></label>
+                  <label class="loadout-field">Right wing <select id="right-wing"></select></label>
+                </details>
               </div>
             </div>
             <button id="start" type="button">Launch</button>
