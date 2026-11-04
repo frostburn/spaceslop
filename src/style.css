@@ -89,7 +89,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   text-transform: uppercase;
   color: #eef8ff;
 }
-#panel p { max-width: 27ch; font-size: .83rem; line-height: 1.4; margin: .9rem 0; }
+#panel > p { max-width: 27ch; font-size: .83rem; line-height: 1.4; margin: .9rem 0; }
 #panel small { max-width: 32ch; color: var(--muted); font-size: .68rem; margin-top: .8rem; }
 #start { background: #b7f4f4; border-color: #b7f4f4; color: #06111b; font-weight: bold; }
 #update { margin-top: .75rem; }
@@ -109,6 +109,12 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   font-size: .7rem;
   letter-spacing: .08em;
   text-transform: uppercase;
+}
+#pilot-perk-description {
+  margin: .45rem 0;
+  color: var(--muted);
+  font-size: .7rem;
+  line-height: 1.35;
 }
 .loadout-field {
   display: flex;
@@ -245,6 +251,9 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     border: 1px solid var(--line);
     font-size: 3rem;
   }
+  .pilot-console figcaption { display: grid; gap: .25rem; text-align: center; }
+  #pilot-perk-readout { color: var(--muted); font-size: .7rem; }
+  #selected-portrait.perk-flash { box-shadow: 0 0 0 2px var(--pilot-color), 0 0 1rem var(--pilot-color); }
   #selected-pilot {
     color: #eef8ff;
     font-size: .92rem;

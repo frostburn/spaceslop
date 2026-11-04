@@ -36,11 +36,14 @@ for (const select of wingSelectors) {
 }
 bossHealth.max = BOSS_HP;
 
-const showLoadoutPicker = setupPilots(
+const selectedPortrait = element('selected-portrait');
+const perkReadout = element('pilot-perk-readout');
+const pilotPicker = setupPilots(
   element('loadout-picker'),
   element('pilot-choices'),
-  element('selected-portrait'),
+  selectedPortrait,
   element('selected-pilot'),
+  element('pilot-perk-description'),
   element('desktop-picker'),
   element('mobile-picker'),
 );
@@ -52,7 +55,7 @@ const directions: Record<string, readonly [number, number]> = {
 };
 const keys = new Set<string>();
 let screen: Screen = 'title';
-let flight = new Flight();
+let flight = new Flight('sentry', [], pilotPicker.selectedId);
 let pointer: { id: number; x: number; y: number; dragging: boolean } | undefined;
 let pendingUpdate = false;
 let offlineReady = false;
@@ -92,14 +95,21 @@ function syncUI() {
   pause.hidden = !active;
   panel.hidden = active;
   const betweenRuns = screen === 'title' || screen === 'results';
-  showLoadoutPicker(betweenRuns);
+  pilotPicker.setVisible(betweenRuns);
+  perkReadout.hidden = betweenRuns;
+  if (!betweenRuns && perkReadout.textContent !== flight.perkReadout) {
+    perkReadout.textContent = flight.perkReadout;
+  }
+  selectedPortrait.classList.toggle('perk-flash', active && flight.perkTime > 1.15);
   update.hidden = !pendingUpdate || !betweenRuns;
   let tip = 'Tap for drone · Drag to steer';
   if (screen === 'title' && offlineReady) tip = 'Ready offline';
   else if (flight.droneWeapon === 'towline') {
     tip = flight.phase === 'boss' ? 'Sweep the arc across the green cannon.' : 'Park the drone · Sweep the arc';
   } else if (flight.phase === 'boss') tip = 'Tap the green cannon. Dodge amber rings.';
-  if (active && flight.pickupTime > 0) {
+  if (active && flight.perkTime > 0) {
+    tip = flight.perkMessage;
+  } else if (active && flight.pickupTime > 0) {
     tip = flight.pickupMessage;
   } else if (active && flight.phase === 'stage') {
     const wings = flight.wings.flatMap((wing) => wing.weapon
@@ -143,6 +153,7 @@ start.addEventListener('click', () => {
     flight = new Flight(
       droneWeapon.value === 'towline' ? 'towline' : 'sentry',
       testingWings ? wingSelectors.map((select) => readWingWeapon(select.value)) : [],
+      pilotPicker.selectedId,
     );
   }
   screen = 'active';

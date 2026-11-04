@@ -30,6 +30,10 @@ The entire run plays with procedural shapes and works without media files. Gener
 
 Run `npm run build` and serve `dist/` over HTTPS for a deployment. Use `npm run preview` for a local production check. Once the title screen reports **Ready offline**, reload offline and play a run. The standalone manifest picks up the owner-supplied `public/icons/spaceslop-192.png` and `public/icons/spaceslop-512.png` when present. Supply both for Chrome's install promotion.
 
-Choose Vex, Brass, or Glint on the title or results screen. The selected pilot is remembered on the device. On desktop, the portrait and flight controls sit beside the playfield.
+Choose Vex, Brass, or Glint on the title or results screen. The selected pilot is remembered on the device. On desktop, the portrait, perk status, and flight controls sit beside the playfield.
+
+- **Vex · Close Call** grants one extra Pulse after four enemy-shot grazes per stage.
+- **Brass · Field Repair** restores one hull the first time you replace an equipped wing weapon while damaged.
+- **Glint · Hot Dock** doubles the first Sentry shot or Towline pulse after the drone completes a move of at least three playfield units. The perk cools down for three seconds after the attack.
 
 To install the optional pilot art, place square PNGs at `public/pilots/vex.png`, `public/pilots/brass.png`, and `public/pilots/glint.png`, then rebuild. The build precaches the portraits it finds. Missing or unreadable images fall back to callsign tiles.
