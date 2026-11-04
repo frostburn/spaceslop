@@ -1,11 +1,12 @@
 import * as T from 'three';
-import { createInterceptorRig, createPreserveEdges, createRaptorRig } from './encounter-rigs';
+import { createInterceptorRig, createRaptorRig } from './encounter-rigs';
 import { loadEncounterTextures } from './encounter-texture';
 import { BOSS_RECOIL_TIME } from './encounters';
 import {
   BOSS_CAMERA_DISTANCE, BOSS_CANNON_RADIUS, BOSS_CANNON_X, BOSS_DEPTH, BOSS_PROJECTION,
   BOSS_Y, Flight, HEIGHT, TRANSITION_TIME, WIDTH,
 } from './game';
+import { createPreserveEdges, PRESERVE_LOOP } from './preserve-edges';
 import { wingWeapons, type WingProjectile } from './wing';
 
 const sceneColor = 0x0b1020;
@@ -173,7 +174,9 @@ export class FlightView {
     this.scroll = flight.phase === 'stage' ? (this.scroll + elapsed * 1.65) % 12 : this.scroll;
     this.stars.position.y = -this.scroll;
     this.preserveEdges.visible = this.swing === 0;
-    this.preserveEdges.position.y = -this.scroll;
+    if (flight.phase === 'stage') {
+      this.preserveEdges.position.y = -(flight.time * 1.65 % PRESERVE_LOOP);
+    }
 
     const raptor = flight.enemies.find((enemy) => enemy.raptor);
     this.raptor.root.visible = Boolean(raptor);
