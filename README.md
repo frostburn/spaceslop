@@ -30,7 +30,7 @@ The procedural encounter rigs live in `src/encounter-rigs.ts`. A future model ca
 
 ## Asset workshop
 
-Run `npm run dev` and open **Asset workshop** from the game menu or visit `/workshop.html`. Orbit and zoom the raptor or interceptor, switch camera presets, scrub or play their motion, and toggle wireframe. The workshop uses the game rigs and the optional alloy texture.
+Run `npm run dev` and open **Asset workshop** from the game menu or visit `/workshop.html`. Orbit and zoom the raptor, fighter, scout, drone, or interceptor. Switch camera presets, scrub or play the animated rigs, and toggle wireframe. The workshop uses the game rigs and the optional alloy texture.
 
 ## Assets and offline play
 

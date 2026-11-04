@@ -2,7 +2,7 @@ import {
   BOSS_FIRE_AT, BOSS_MUZZLE_Z, BOSS_RECOIL_TIME, BOSS_VOLLEY_INTERVAL, BOSS_WINDUP_AT, raptorFlight,
 } from './encounters';
 import { CLOSE_CALLS_REQUIRED, HOT_DOCK_COOLDOWN, HOT_DOCK_DISTANCE, type PilotId } from './pilot-data';
-import { wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
+import { WING_MOUNT, wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
 
 export const WIDTH = 9;
 export const HEIGHT = 16;
@@ -168,7 +168,7 @@ export class Flight {
   }
 
   wingOrigin(side: WingSide) {
-    return { x: this.player.x + side * 0.59, y: this.player.y + 0.12 };
+    return { x: this.player.x + side * WING_MOUNT.x, y: this.player.y + WING_MOUNT.y };
   }
 
   get cannonWindup() {

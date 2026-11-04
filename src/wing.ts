@@ -1,3 +1,5 @@
+export const WING_MOUNT = { x: 0.59, y: 0.12 };
+
 export const wingWeapons = {
   homing: { name: 'Homing Cannon', short: 'Homing', color: 0xc4ed74 },
   cannon: { name: 'Standard Cannon', short: 'Cannon', color: 0x77caff },

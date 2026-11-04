@@ -1,26 +1,6 @@
 import * as T from 'three';
 import { BOSS_MUZZLE_Z, raptorFlight } from './encounters';
-
-function part(
-  parent: T.Group, geometry: T.BufferGeometry, material: T.Material, x: number, y: number, z: number,
-) {
-  const mesh = new T.Mesh(geometry, material);
-  mesh.position.set(x, y, z);
-  parent.add(mesh);
-  return mesh;
-}
-
-function pivot(parent: T.Group, name: string, x: number, y: number, z: number) {
-  const group = new T.Group();
-  group.name = name;
-  group.position.set(x, y, z);
-  parent.add(group);
-  return group;
-}
-
-function polygon(vertices: [number, number][]) {
-  return new T.ShapeGeometry(new T.Shape(vertices.map(([x, y]) => new T.Vector2(x, y))));
-}
+import { part, pivot, plating, polygon } from './rig-geometry';
 
 const flat = (color: number) => new T.MeshBasicMaterial({ color, side: T.DoubleSide });
 const armor = (color: number) => new T.MeshStandardMaterial({ color, roughness: 0.58, flatShading: true });
@@ -135,13 +115,6 @@ export function createRaptorRig() {
   };
 }
 
-function plating(vertices: [number, number][], depth: number) {
-  const outline = new T.Shape(vertices.map(([x, y]) => new T.Vector2(x, y)));
-  return new T.ExtrudeGeometry(outline, {
-    depth, bevelEnabled: true, bevelSegments: 1, bevelSize: 0.065, bevelThickness: 0.075,
-  });
-}
-
 export function createInterceptorRig(cannonX: number) {
   const root = new T.Group();
   const steel = armor(0x65768b);
@@ -151,6 +124,10 @@ export function createInterceptorRig(cannonX: number) {
   const shadow = flat(0x1c2230);
   const signal = flat(0xfdad66);
   const insignia = flat(0xe0c89f);
+  part(root, plating([[-1.39, 0.87], [-0.7, 1.57], [0.7, 1.57], [1.39, 0.87],
+    [1.45, -0.52], [0, -1.72], [-1.45, -0.52]], 0.45), steel, 0, 0, -0.86);
+  part(root, plating([[-0.56, 1.79], [-0.33, 2.16], [0.33, 2.16], [0.56, 1.79]], 0.27, 0.037),
+    darkPlate, 0, 0, -0.23);
   part(root, plating([[-1.6, 0.98], [-0.87, 1.96], [0.87, 1.96], [1.6, 0.98],
     [1.66, -0.64], [0, -2.22], [-1.66, -0.64]], 0.58), darkPlate, 0, 0, -0.36);
   part(root, plating([[-1.37, 0.12], [-0.76, -0.02], [0, -0.48], [0.76, -0.02],
@@ -171,10 +148,16 @@ export function createInterceptorRig(cannonX: number) {
   const cannons = ([-1, 1] as const).map((side) => {
     const wing = pivot(root, side < 0 ? 'wing_L' : 'wing_R', 0, 0, 0);
     wing.scale.x = side;
-    part(wing, plating([[1.13, 0.86], [4.39, 1.29], [4.03, 0.34], [3.25, -0.29],
+    part(wing, plating([[1.2, 0.8], [3.72, 1.06], [4.15, 0.76], [3.12, -0.34], [1.2, -0.51]],
+      0.22), darkPlate, 0, 0, -0.51);
+    part(wing, plating([[1.13, 0.86], [4.51, 1.31], [4.08, 0.32], [3.25, -0.29],
       [2.57, -0.57], [1.13, -0.54]], 0.29), steel, 0, 0, -0.25);
     part(wing, plating([[1.3, 0.43], [4.15, 1.13], [3.77, 0.67], [2.85, 0.26], [1.35, -0.07]], 0.09),
       bronze, 0, 0, 0.08);
+    part(wing, plating([[1.3, 0.64], [2.57, 0.94], [3.24, 0.99], [2.49, 0.75], [1.44, 0.44]],
+      0.066, 0.022), steel, 0, 0, 0.23);
+    part(wing, plating([[2.88, 0.05], [3.53, 0.25], [3.81, 0.42], [3.53, -0.08],
+      [3.03, -0.32]], 0.092, 0.028), darkPlate, 0, 0, 0.11);
     part(wing, polygon([[2.68, 0.54], [3.91, 1.01], [3.5, 0.79], [2.74, 0.49]]), insignia, 0, 0, 0.25);
     for (let i = 0; i < 4; i++) {
       part(wing, polygon([[2.78 + i * 0.22, 0.53 + i * 0.081],
@@ -191,6 +174,9 @@ export function createInterceptorRig(cannonX: number) {
       [0.51, -0.36], [-0.51, -0.36]], 0.52), darkPlate, 0, 0, 0.04);
     const barrel = part(pod, new T.CylinderGeometry(0.32, 0.38, 0.57, 8), bronze, 0, 0, BOSS_MUZZLE_Z - 0.285);
     barrel.rotation.x = Math.PI / 2;
+    const sleeve = part(pod, new T.CylinderGeometry(0.34, 0.39, 0.15, 8), steel,
+      0, 0, BOSS_MUZZLE_Z - 0.17);
+    sleeve.rotation.x = Math.PI / 2;
     for (const x of [-0.43, 0.43]) {
       part(pod, new T.BoxGeometry(0.085, 0.36, 0.14), steel, x, 0, 0.57);
     }

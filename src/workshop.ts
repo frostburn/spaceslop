@@ -6,6 +6,7 @@ import {
   BOSS_FIRE_AT, BOSS_RECOIL_TIME, BOSS_VOLLEY_INTERVAL, BOSS_WINDUP_AT, RAPTOR_FLARE_END, raptorFlight,
 } from './encounters';
 import { BOSS_CANNON_X, TRANSITION_TIME } from './game';
+import { createDroneRig, createFighterRig, createScoutRig } from './ship-rigs';
 import './workshop.css';
 
 function element<T extends HTMLElement>(id: string) {
@@ -29,9 +30,17 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const interceptor = createInterceptorRig(BOSS_CANNON_X);
   loadEncounterTextures(interceptor);
   raptor.root.rotation.z = Math.PI;
-  scene.add(raptor.root, interceptor.root);
+  const scout = createScoutRig();
+  scout.rotation.z = Math.PI;
+
+  function staticAsset(root: T.Group) {
+    return { root, duration: 0, pose: () => '' };
+  }
 
   const assets = {
+    fighter: staticAsset(createFighterRig().root),
+    scout: staticAsset(scout),
+    drone: staticAsset(createDroneRig()),
     raptor: {
       root: raptor.root,
       duration: RAPTOR_FLARE_END,
@@ -60,9 +69,11 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
       },
     },
   };
+  for (const asset of Object.values(assets)) scene.add(asset.root);
   const assetSelect = element<HTMLSelectElement>('asset');
   const timeline = element<HTMLInputElement>('timeline');
   const play = element<HTMLButtonElement>('play');
+  const motion = element('motion-controls');
   const pose = element<HTMLOutputElement>('pose');
   const wireframe = element<HTMLInputElement>('wireframe');
   let selected: (typeof assets)[keyof typeof assets] = assets.raptor;
@@ -97,9 +108,11 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   }
 
   function selectAsset() {
-    selected = assetSelect.value === 'interceptor' ? assets.interceptor : assets.raptor;
+    const key = assetSelect.value;
+    selected = Object.hasOwn(assets, key) ? assets[key as keyof typeof assets] : assets.raptor;
     for (const asset of Object.values(assets)) asset.root.visible = asset === selected;
     time = 0;
+    motion.hidden = selected.duration === 0;
     timeline.max = String(selected.duration);
     timeline.value = '0';
     setPlaying(false);
