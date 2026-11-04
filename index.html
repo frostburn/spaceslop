@@ -32,12 +32,21 @@
           <div id="boss-hud" hidden><span>INTERCEPTOR</span><progress id="boss-health" aria-label="Boss health"></progress></div>
           <section id="panel" aria-labelledby="heading">
             <h1 id="heading">Spaceslop</h1>
-            <p id="message">Tap to send the drone. Drag to steer. Both guns fire automatically.</p>
+            <p id="message">Tap to place the drone. Drag to steer.</p>
             <div id="mobile-picker">
-              <fieldset id="pilot-picker">
-                <legend>Select pilot</legend>
-                <div id="pilot-choices"></div>
-              </fieldset>
+              <div id="loadout-picker">
+                <fieldset id="pilot-picker">
+                  <legend>Select pilot</legend>
+                  <div id="pilot-choices"></div>
+                </fieldset>
+                <label class="drone-weapon">
+                  Drone weapon
+                  <select id="drone-weapon">
+                    <option value="sentry">Sentry</option>
+                    <option value="towline">Towline</option>
+                  </select>
+                </label>
+              </div>
             </div>
             <button id="start" type="button">Launch</button>
             <small>Keyboard · WASD or arrows · Space for pulse</small>

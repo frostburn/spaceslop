@@ -39,6 +39,15 @@ export class FlightView {
     new T.RingGeometry(0.31, 0.38, 4),
     new T.MeshBasicMaterial({ color: mint, transparent: true, opacity: 0.55, depthWrite: false }),
   );
+  private towline = new T.Group();
+  private towlineGlow = new T.Mesh(
+    new T.PlaneGeometry(1, 1),
+    new T.MeshBasicMaterial({ color: 0xb49bff, transparent: true, depthWrite: false }),
+  );
+  private towlineCore = new T.Mesh(
+    new T.PlaneGeometry(1, 1),
+    new T.MeshBasicMaterial({ color: 0xf5eaff, transparent: true, depthWrite: false }),
+  );
   private cannonMarker = new T.Mesh(
     new T.RingGeometry(BOSS_CANNON_RADIUS * BOSS_PROJECTION - 0.06, BOSS_CANNON_RADIUS * BOSS_PROJECTION, 24),
     new T.MeshBasicMaterial({ color: mint, depthTest: false }),
@@ -84,7 +93,8 @@ export class FlightView {
       new T.Mesh(new T.OctahedronGeometry(0.22), new T.MeshBasicMaterial({ color: mint })),
       new T.Mesh(new T.RingGeometry(0.29, 0.38, 6), new T.MeshBasicMaterial({ color: 0x60c994 })),
     );
-    this.plane.add(this.player, this.drone, this.droneGoal, this.boss, this.cannonMarker, this.stars,
+    this.towline.add(this.towlineGlow, this.towlineCore);
+    this.plane.add(this.player, this.drone, this.droneGoal, this.towline, this.boss, this.cannonMarker, this.stars,
       this.pulse, this.shotMeshes, this.droneShots, this.threatMeshes, ...this.enemies, ...this.markers);
   }
 
@@ -117,6 +127,20 @@ export class FlightView {
     this.drone.visible = flight.hull > 0;
     this.droneGoal.visible = Boolean(flight.droneTarget) && this.drone.visible;
     if (flight.droneTarget) this.droneGoal.position.set(flight.droneTarget.x, flight.droneTarget.y, 0.03);
+    this.towline.visible = flight.towlineLinked;
+    if (this.towline.visible) {
+      const dx = flight.drone.x - flight.player.x;
+      const dy = flight.drone.y - flight.player.y;
+      const live = flight.towlineFlash > 0;
+      this.towline.position.set((flight.drone.x + flight.player.x) / 2,
+        (flight.drone.y + flight.player.y) / 2, 0.17);
+      this.towline.rotation.z = Math.atan2(dy, dx);
+      this.towline.scale.x = Math.hypot(dx, dy);
+      this.towlineGlow.scale.y = live ? 0.28 : 0.1;
+      this.towlineGlow.material.opacity = live ? 0.48 : 0.16;
+      this.towlineCore.scale.y = live ? 0.09 : 0.026;
+      this.towlineCore.material.opacity = live ? 1 : 0.45;
+    }
     this.cannonMarker.visible = flight.phase === 'boss';
     this.cannonMarker.position.set(flight.exposedCannonX * BOSS_PROJECTION, BOSS_Y * BOSS_PROJECTION, 0);
     this.boss.visible = this.swing > 0 && flight.bossHealth > 0;

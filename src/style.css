@@ -110,6 +110,28 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   letter-spacing: .08em;
   text-transform: uppercase;
 }
+.drone-weapon {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .4rem;
+  margin-top: .55rem;
+  color: var(--muted);
+  font-size: .7rem;
+  text-align: start;
+}
+.drone-weapon select {
+  min-height: 44px;
+  padding-inline: .45rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #16202f;
+  color: #eef8ff;
+  font: inherit;
+  font-size: .8rem;
+}
+.drone-weapon select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 #pilot-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .35rem; }
 #pilot-choices label { position: relative; cursor: pointer; }
 #pilot-choices input {

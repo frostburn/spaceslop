@@ -10,6 +10,8 @@ export const BOSS_CANNON_RADIUS = 0.8;
 export const BOSS_HP = 30;
 export const TRANSITION_TIME = 1.25;
 
+export type DroneWeapon = 'sentry' | 'towline';
+
 type Phase = 'stage' | 'approach' | 'boss' | 'won' | 'lost';
 type Point = { x: number; y: number };
 type Shot = Point & { z: number; vx: number; vy: number; vz: number; drone?: boolean; targetsBoss?: boolean };
@@ -18,6 +20,9 @@ type Enemy = Point & { lane: number; age: number; fire: number; hp: number };
 const SHIP_SPEED = 6.5;
 const DRONE_SPEED = 4 * SHIP_SPEED;
 const DRONE_FIRE_INTERVAL = 0.44;
+const TOWLINE_INTERVAL = 1.05;
+const TOWLINE_DURATION = 0.2;
+const TOWLINE_DAMAGE = 2;
 
 const stageWaves = [
   { time: 0.6, lanes: [-2.6, 0, 2.6] },
@@ -49,6 +54,13 @@ function moveToward(point: Point, target: Point, maxStep: number) {
   return false;
 }
 
+function nearSegment(point: Point, start: Point, end: Point, radius: number) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const fraction = clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / (dx * dx + dy * dy), 0, 1);
+  return near(point, { x: start.x + fraction * dx, y: start.y + fraction * dy }, radius);
+}
+
 export class Flight {
   phase: Phase = 'stage';
   time = 0;
@@ -65,11 +77,26 @@ export class Flight {
   threats: Shot[] = [];
   markers: Point[] = [];
   pulseFlash = 0;
+  towlineFlash = 0;
   private aim?: Point;
   private nextWave = 0;
   private cooldown = 0;
   private droneCooldown = 0;
   private volley = 0;
+  private towlineEnemies = new Set<Enemy>();
+  private towlineHitCannon = false;
+
+  readonly droneWeapon: DroneWeapon;
+
+  constructor(droneWeapon: DroneWeapon = 'sentry') {
+    this.droneWeapon = droneWeapon;
+    if (droneWeapon === 'towline') this.droneCooldown = TOWLINE_INTERVAL;
+  }
+
+  get towlineLinked() {
+    return this.droneWeapon === 'towline' && !this.droneTarget &&
+      (this.phase === 'stage' || this.phase === 'boss') && !near(this.player, this.drone, 0.5);
+  }
 
   get exposedCannonX() {
     return this.volley % 2 === 0 ? -BOSS_CANNON_X : BOSS_CANNON_X;
@@ -133,15 +160,10 @@ export class Flight {
       this.cooldown += 0.19;
       this.fire(this.player);
     }
-    this.droneCooldown = Math.max(0, this.droneCooldown - dt);
-    if (!this.droneTarget && this.droneCooldown === 0) {
-      this.droneCooldown = DRONE_FIRE_INTERVAL;
-      this.fire(this.drone, true);
-    }
-
     const boss = this.phase === 'boss';
     if (boss) this.stepBoss();
     else this.stepStage(dt);
+    this.stepDroneWeapon(dt);
 
     this.shots = this.shots.filter((shot) => {
       const previousY = shot.y;
@@ -160,8 +182,7 @@ export class Flight {
         Math.abs(shot.x - target.x) < 0.52 &&
         shot.y >= target.y - 0.46 && previousY <= target.y + 0.46);
       if (!enemy) return shot.y < 9;
-      enemy.hp--;
-      if (enemy.hp === 0) this.score += 100;
+      this.damageEnemy(enemy, 1);
       return false;
     });
     this.enemies = this.enemies.filter((enemy) => enemy.hp > 0 && enemy.y > -9);
@@ -181,6 +202,48 @@ export class Flight {
     });
 
     if (this.phase === 'stage' && this.time >= 14) this.enter('approach');
+  }
+
+  private stepDroneWeapon(dt: number) {
+    if (this.phase !== 'stage' && this.phase !== 'boss') return;
+    this.droneCooldown = Math.max(0, this.droneCooldown - dt);
+    if (this.droneWeapon === 'sentry') {
+      if (!this.droneTarget && this.droneCooldown === 0) {
+        this.droneCooldown = DRONE_FIRE_INTERVAL;
+        this.fire(this.drone, true);
+      }
+      return;
+    }
+
+    if (!this.towlineLinked) {
+      this.towlineFlash = 0;
+      return;
+    }
+    this.towlineFlash = Math.max(0, this.towlineFlash - dt);
+    if (this.droneCooldown === 0) {
+      this.droneCooldown = TOWLINE_INTERVAL;
+      this.towlineFlash = TOWLINE_DURATION;
+      this.towlineEnemies.clear();
+      this.towlineHitCannon = false;
+    }
+    if (this.towlineFlash === 0) return;
+
+    if (this.phase === 'boss') {
+      const cannon = { x: this.exposedCannonX * BOSS_PROJECTION, y: BOSS_Y * BOSS_PROJECTION };
+      if (!this.towlineHitCannon &&
+        nearSegment(cannon, this.player, this.drone, BOSS_CANNON_RADIUS * BOSS_PROJECTION)) {
+        this.towlineHitCannon = true;
+        this.damageBoss(TOWLINE_DAMAGE);
+      }
+      return;
+    }
+    for (const enemy of this.enemies) {
+      if (enemy.hp > 0 && !this.towlineEnemies.has(enemy) &&
+        nearSegment(enemy, this.player, this.drone, 0.52)) {
+        this.towlineEnemies.add(enemy);
+        this.damageEnemy(enemy, TOWLINE_DAMAGE);
+      }
+    }
   }
 
   private stepStage(dt: number) {
@@ -252,6 +315,11 @@ export class Flight {
     shot.z += shot.vz * dt;
   }
 
+  private damageEnemy(enemy: Enemy, damage: number) {
+    enemy.hp = Math.max(0, enemy.hp - damage);
+    if (enemy.hp === 0) this.score += 100;
+  }
+
   private damageBoss(damage: number) {
     if (this.phase !== 'boss') return;
     this.bossHealth = Math.max(0, this.bossHealth - damage);
@@ -278,7 +346,7 @@ export class Flight {
     }
     if (phase === 'boss') {
       this.cooldown = 0;
-      this.droneCooldown = 0;
+      this.droneCooldown = this.droneWeapon === 'towline' ? TOWLINE_INTERVAL : 0;
     }
   }
 }
