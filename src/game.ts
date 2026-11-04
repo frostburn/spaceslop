@@ -3,15 +3,21 @@ export const HEIGHT = 16;
 export const STEP = 1 / 60;
 export const BOSS_DEPTH = -12;
 export const BOSS_Y = 4.2;
+export const BOSS_CAMERA_DISTANCE = 22;
+export const BOSS_PROJECTION = BOSS_CAMERA_DISTANCE / (BOSS_CAMERA_DISTANCE - BOSS_DEPTH);
+export const BOSS_CANNON_X = 2.4;
+export const BOSS_CANNON_RADIUS = 0.8;
 export const BOSS_HP = 30;
 export const TRANSITION_TIME = 1.25;
 
 type Phase = 'stage' | 'approach' | 'boss' | 'won' | 'lost';
 type Point = { x: number; y: number };
-type Shot = Point & { z: number; vx: number; vy: number; vz: number; targetsBoss?: boolean };
+type Shot = Point & { z: number; vx: number; vy: number; vz: number; drone?: boolean; targetsBoss?: boolean };
 type Enemy = Point & { lane: number; age: number; fire: number; hp: number };
 
 const SHIP_SPEED = 6.5;
+const DRONE_SPEED = 4 * SHIP_SPEED;
+const DRONE_FIRE_INTERVAL = 0.44;
 
 const stageWaves = [
   { time: 0.6, lanes: [-2.6, 0, 2.6] },
@@ -28,10 +34,27 @@ function moveWithinField(point: Point, dx: number, dy: number) {
   point.y = clamp(point.y + dy, -7.1, 6.6);
 }
 
+function moveToward(point: Point, target: Point, maxStep: number) {
+  const dx = target.x - point.x;
+  const dy = target.y - point.y;
+  const distance = Math.hypot(dx, dy);
+  if (distance <= maxStep) {
+    point.x = target.x;
+    point.y = target.y;
+    return true;
+  }
+  const fraction = maxStep / distance;
+  point.x += dx * fraction;
+  point.y += dy * fraction;
+  return false;
+}
+
 export class Flight {
   phase: Phase = 'stage';
   time = 0;
   player = { x: 0, y: -5.3 };
+  drone = { x: -1.15, y: -5.3 };
+  droneTarget?: Point;
   hull = 4;
   invulnerable = 0;
   charges = 2;
@@ -45,7 +68,18 @@ export class Flight {
   private aim?: Point;
   private nextWave = 0;
   private cooldown = 0;
+  private droneCooldown = 0;
   private volley = 0;
+
+  get exposedCannonX() {
+    return this.volley % 2 === 0 ? -BOSS_CANNON_X : BOSS_CANNON_X;
+  }
+
+  deployDrone(x: number, y: number) {
+    const target = { x: 0, y: 0 };
+    moveWithinField(target, x, y);
+    this.droneTarget = target;
+  }
 
   aimBy(dx: number, dy: number) {
     this.aim ??= { ...this.player };
@@ -65,18 +99,7 @@ export class Flight {
       return;
     }
 
-    if (!this.aim) return;
-    const dx = this.aim.x - this.player.x;
-    const dy = this.aim.y - this.player.y;
-    const distance = Math.hypot(dx, dy);
-    if (distance <= maxStep) {
-      this.player.x = this.aim.x;
-      this.player.y = this.aim.y;
-      this.clearAim();
-    } else {
-      this.player.x += dx / distance * maxStep;
-      this.player.y += dy / distance * maxStep;
-    }
+    if (this.aim && moveToward(this.player, this.aim, maxStep)) this.clearAim();
   }
 
   pulse() {
@@ -97,6 +120,9 @@ export class Flight {
     this.time += dt;
     this.invulnerable = Math.max(0, this.invulnerable - dt);
     this.pulseFlash = Math.max(0, this.pulseFlash - dt);
+    if (this.droneTarget && moveToward(this.drone, this.droneTarget, DRONE_SPEED * dt)) {
+      this.droneTarget = undefined;
+    }
     if (this.phase === 'approach') {
       if (this.time >= TRANSITION_TIME) this.enter('boss');
       return;
@@ -105,7 +131,12 @@ export class Flight {
     this.cooldown -= dt;
     if (this.cooldown <= 0) {
       this.cooldown += 0.19;
-      this.fire();
+      this.fire(this.player);
+    }
+    this.droneCooldown = Math.max(0, this.droneCooldown - dt);
+    if (!this.droneTarget && this.droneCooldown === 0) {
+      this.droneCooldown = DRONE_FIRE_INTERVAL;
+      this.fire(this.drone, true);
     }
 
     const boss = this.phase === 'boss';
@@ -117,7 +148,12 @@ export class Flight {
       this.advance(shot, dt);
       if (boss) {
         if (shot.z > BOSS_DEPTH) return true;
-        if (shot.targetsBoss) this.damageBoss(1);
+        const untilImpact = (BOSS_DEPTH - shot.z) / shot.vz;
+        const impact = { x: shot.x + shot.vx * untilImpact, y: shot.y + shot.vy * untilImpact };
+        if (shot.targetsBoss ||
+          (shot.drone && near(impact, { x: this.exposedCannonX, y: BOSS_Y }, BOSS_CANNON_RADIUS))) {
+          this.damageBoss(1);
+        }
         return false;
       }
       const enemy = this.enemies.find((target) => target.hp > 0 &&
@@ -194,16 +230,20 @@ export class Flight {
     if (elapsed >= 1.68) this.markers = [];
   }
 
-  private fire() {
-    const { x, y } = this.player;
+  private fire({ x, y }: Point, drone = false) {
     if (this.phase === 'stage') {
-      this.shots.push({ x, y: y + 0.45, z: 0, vx: 0, vy: 15, vz: 0 });
-    } else {
-      const duration = 0.38;
-      const targetsBoss = Math.abs(x) < 1.65;
-      this.shots.push({ x, y, z: 0, vx: targetsBoss ? -x / duration : 0,
-        vy: targetsBoss ? (BOSS_Y - y) / duration : 0, vz: BOSS_DEPTH / duration, targetsBoss });
+      this.shots.push({ x, y: y + (drone ? 0.3 : 0.45), z: 0, vx: 0, vy: 15, vz: 0, drone });
+      return;
     }
+
+    const duration = 0.38;
+    const targetsBoss = !drone && Math.abs(x) < 1.65;
+    // Drone shots follow the sight line through their launch point, with no lock-on.
+    const expansion = 1 / BOSS_PROJECTION - 1;
+    const dx = drone ? x * expansion : (targetsBoss ? -x : 0);
+    const dy = drone ? y * expansion : (targetsBoss ? BOSS_Y - y : 0);
+    this.shots.push({ x, y, z: 0, vx: dx / duration, vy: dy / duration,
+      vz: BOSS_DEPTH / duration, targetsBoss, drone });
   }
 
   private advance(shot: Shot, dt: number) {
@@ -236,6 +276,9 @@ export class Flight {
       this.threats = [];
       this.enemies = [];
     }
-    if (phase === 'boss') this.cooldown = 0;
+    if (phase === 'boss') {
+      this.cooldown = 0;
+      this.droneCooldown = 0;
+    }
   }
 }

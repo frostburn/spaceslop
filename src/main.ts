@@ -44,7 +44,7 @@ const directions: Record<string, readonly [number, number]> = {
 const keys = new Set<string>();
 let screen: Screen = 'title';
 let flight = new Flight();
-let pointer: { id: number; x: number; y: number } | undefined;
+let pointer: { id: number; x: number; y: number; dragging: boolean } | undefined;
 let pendingUpdate = false;
 let offlineReady = false;
 let view: FlightView | undefined;
@@ -86,7 +86,7 @@ function syncUI() {
   showPilotPicker(betweenRuns);
   update.hidden = !pendingUpdate || !betweenRuns;
   const tip = screen === 'title' && offlineReady ? 'Ready offline'
-    : flight.phase === 'boss' ? 'Line up. Dodge the rings.' : 'Drag to steer';
+    : flight.phase === 'boss' ? 'Tap the green cannon. Dodge amber rings.' : 'Tap for drone · Drag to steer';
   if (status.textContent !== tip) status.textContent = tip;
 }
 
@@ -153,26 +153,35 @@ canvas.addEventListener('webglcontextrestored', () => {
 
 canvas.addEventListener('pointerdown', (event) => {
   if (screen !== 'active' || pointer || event.button !== 0) return;
+  const { left, top, width, height } = canvas.getBoundingClientRect();
+  if (width === 0 || height === 0) return;
   canvas.setPointerCapture(event.pointerId);
-  flight.clearAim();
-  pointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
+  flight.deployDrone(
+    ((event.clientX - left) / width - 0.5) * WIDTH,
+    (0.5 - (event.clientY - top) / height) * HEIGHT,
+  );
+  pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, dragging: false };
 });
 canvas.addEventListener('pointermove', (event) => {
   if (pointer?.id !== event.pointerId) return;
   const { width, height } = canvas.getBoundingClientRect();
   if (width === 0 || height === 0) return;
-  flight.aimBy(
-    (event.clientX - pointer.x) * WIDTH / width,
-    (pointer.y - event.clientY) * HEIGHT / height,
-  );
+  const dx = event.clientX - pointer.x;
+  const dy = pointer.y - event.clientY;
+  if (!pointer.dragging) {
+    if (Math.hypot(dx, dy) < 5) return;
+    pointer.dragging = true;
+    flight.clearAim();
+  }
+  flight.aimBy(dx * WIDTH / width, dy * HEIGHT / height);
   pointer.x = event.clientX;
   pointer.y = event.clientY;
 });
 for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) {
   canvas.addEventListener(type, (event) => {
     if (pointer?.id !== event.pointerId) return;
+    if (type !== 'pointerup' && pointer.dragging) flight.clearAim();
     pointer = undefined;
-    if (type !== 'pointerup') flight.clearAim();
   });
 }
 
