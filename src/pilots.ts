@@ -43,7 +43,7 @@ function portrait(pilot: Pilot) {
 }
 
 export function setupPilots(
-  picker: HTMLFieldSetElement,
+  picker: HTMLElement,
   choices: HTMLElement,
   selectedPortrait: HTMLElement,
   selectedName: HTMLElement,

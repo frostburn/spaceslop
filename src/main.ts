@@ -25,10 +25,11 @@ const score = element('score');
 const charges = element('charges');
 const bossHud = element('boss-hud');
 const bossHealth = element<HTMLProgressElement>('boss-health');
+const droneWeapon = element<HTMLSelectElement>('drone-weapon');
 bossHealth.max = BOSS_HP;
 
-const showPilotPicker = setupPilots(
-  element<HTMLFieldSetElement>('pilot-picker'),
+const showLoadoutPicker = setupPilots(
+  element('loadout-picker'),
   element('pilot-choices'),
   element('selected-portrait'),
   element('selected-pilot'),
@@ -83,10 +84,13 @@ function syncUI() {
   pause.hidden = !active;
   panel.hidden = active;
   const betweenRuns = screen === 'title' || screen === 'results';
-  showPilotPicker(betweenRuns);
+  showLoadoutPicker(betweenRuns);
   update.hidden = !pendingUpdate || !betweenRuns;
-  const tip = screen === 'title' && offlineReady ? 'Ready offline'
-    : flight.phase === 'boss' ? 'Tap the green cannon. Dodge amber rings.' : 'Tap for drone · Drag to steer';
+  let tip = 'Tap for drone · Drag to steer';
+  if (screen === 'title' && offlineReady) tip = 'Ready offline';
+  else if (flight.droneWeapon === 'towline') {
+    tip = flight.phase === 'boss' ? 'Sweep the arc across the green cannon.' : 'Park the drone · Sweep the arc';
+  } else if (flight.phase === 'boss') tip = 'Tap the green cannon. Dodge amber rings.';
   if (status.textContent !== tip) status.textContent = tip;
 }
 
@@ -118,7 +122,9 @@ function showResults() {
 
 start.addEventListener('click', () => {
   if (!view || screen === 'active') return;
-  if (screen !== 'paused') flight = new Flight();
+  if (screen !== 'paused') {
+    flight = new Flight(droneWeapon.value === 'towline' ? 'towline' : 'sentry');
+  }
   screen = 'active';
   resetInput();
   view.render(flight);
