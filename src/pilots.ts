@@ -2,7 +2,7 @@ declare const __PILOT_PORTRAITS__: readonly string[];
 
 const pilots = [
   { id: 'vex', name: 'Vex', color: '#88f2ff' },
-  { id: 'rook', name: 'Rook', color: '#ffbd76' },
+  { id: 'brass', name: 'Brass', color: '#ffbd76' },
   { id: 'glint', name: 'Glint', color: '#dca2f8' },
 ] as const;
 type Pilot = typeof pilots[number];
@@ -11,7 +11,8 @@ const storageKey = 'spaceslop.pilot';
 
 function savedPilot() {
   try {
-    const id = localStorage.getItem(storageKey);
+    const savedId = localStorage.getItem(storageKey);
+    const id = savedId === 'rook' ? 'brass' : savedId;
     return pilots.find((pilot) => pilot.id === id) ?? pilots[0];
   } catch {
     return pilots[0];

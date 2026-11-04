@@ -11,6 +11,8 @@ type Point = { x: number; y: number };
 type Shot = Point & { z: number; vx: number; vy: number; vz: number; targetsBoss?: boolean };
 type Enemy = Point & { lane: number; age: number; fire: number; hp: number };
 
+const SHIP_SPEED = 6.5;
+
 const stageWaves = [
   { time: 0.6, lanes: [-2.6, 0, 2.6] },
   { time: 3.6, lanes: [-2, 2] },
@@ -20,6 +22,11 @@ const stageWaves = [
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 const near = (a: Point, b: Point, radius: number) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 < radius ** 2;
+
+function moveWithinField(point: Point, dx: number, dy: number) {
+  point.x = clamp(point.x + dx, -3.95, 3.95);
+  point.y = clamp(point.y + dy, -7.1, 6.6);
+}
 
 export class Flight {
   phase: Phase = 'stage';
@@ -35,13 +42,41 @@ export class Flight {
   threats: Shot[] = [];
   markers: Point[] = [];
   pulseFlash = 0;
+  private aim?: Point;
   private nextWave = 0;
   private cooldown = 0;
   private volley = 0;
 
-  move(x: number, y: number) {
-    this.player.x = clamp(this.player.x + x, -3.95, 3.95);
-    this.player.y = clamp(this.player.y + y, -7.1, 6.6);
+  aimBy(dx: number, dy: number) {
+    this.aim ??= { ...this.player };
+    moveWithinField(this.aim, dx, dy);
+  }
+
+  clearAim() {
+    this.aim = undefined;
+  }
+
+  steer(x: number, y: number, dt: number) {
+    const maxStep = SHIP_SPEED * dt;
+    const direction = Math.hypot(x, y);
+    if (direction > 0) {
+      this.clearAim();
+      moveWithinField(this.player, x / direction * maxStep, y / direction * maxStep);
+      return;
+    }
+
+    if (!this.aim) return;
+    const dx = this.aim.x - this.player.x;
+    const dy = this.aim.y - this.player.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance <= maxStep) {
+      this.player.x = this.aim.x;
+      this.player.y = this.aim.y;
+      this.clearAim();
+    } else {
+      this.player.x += dx / distance * maxStep;
+      this.player.y += dy / distance * maxStep;
+    }
   }
 
   pulse() {

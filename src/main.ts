@@ -45,8 +45,6 @@ const keys = new Set<string>();
 let screen: Screen = 'title';
 let flight = new Flight();
 let pointer: { id: number; x: number; y: number } | undefined;
-let dragX = 0;
-let dragY = 0;
 let pendingUpdate = false;
 let offlineReady = false;
 let view: FlightView | undefined;
@@ -95,8 +93,7 @@ function syncUI() {
 function resetInput() {
   if (pointer && canvas.hasPointerCapture(pointer.id)) canvas.releasePointerCapture(pointer.id);
   pointer = undefined;
-  dragX = 0;
-  dragY = 0;
+  flight.clearAim();
   keys.clear();
 }
 
@@ -157,20 +154,25 @@ canvas.addEventListener('webglcontextrestored', () => {
 canvas.addEventListener('pointerdown', (event) => {
   if (screen !== 'active' || pointer || event.button !== 0) return;
   canvas.setPointerCapture(event.pointerId);
+  flight.clearAim();
   pointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
 });
 canvas.addEventListener('pointermove', (event) => {
   if (pointer?.id !== event.pointerId) return;
   const { width, height } = canvas.getBoundingClientRect();
   if (width === 0 || height === 0) return;
-  dragX += (event.clientX - pointer.x) * WIDTH / width;
-  dragY += (pointer.y - event.clientY) * HEIGHT / height;
+  flight.aimBy(
+    (event.clientX - pointer.x) * WIDTH / width,
+    (pointer.y - event.clientY) * HEIGHT / height,
+  );
   pointer.x = event.clientX;
   pointer.y = event.clientY;
 });
 for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) {
   canvas.addEventListener(type, (event) => {
-    if (pointer?.id === event.pointerId) pointer = undefined;
+    if (pointer?.id !== event.pointerId) return;
+    pointer = undefined;
+    if (type !== 'pointerup') flight.clearAim();
   });
 }
 
@@ -208,10 +210,7 @@ function frame(now: number) {
         x += directions[key][0];
         y += directions[key][1];
       }
-      const speed = 6.5 * STEP / (Math.hypot(x, y) || 1);
-      flight.move(dragX + x * speed, dragY + y * speed);
-      dragX = 0;
-      dragY = 0;
+      flight.steer(x, y, STEP);
       flight.step(STEP);
       accumulator -= STEP;
       if (flight.phase === 'won' || flight.phase === 'lost') showResults();
