@@ -46,4 +46,10 @@ Choose Vex, Brass, or Glint on the title or results screen. The selected pilot i
 
 To install the optional pilot art, place square PNGs at `public/pilots/vex.png`, `public/pilots/brass.png`, and `public/pilots/glint.png`, then rebuild. The build precaches the portraits it finds. Missing or unreadable images fall back to callsign tiles.
 
-To add the optional interceptor alloy texture, place a square tileable base-color PNG at `public/encounters/interceptor-metal.png` and rebuild. The game precaches the file and applies it to the bronze and slate armor. The painted materials work without it.
+The encounter textures are optional base-color PNGs. Add the reviewed files and rebuild to precache them for offline play. The same materials appear in the workshop.
+
+| File | Surface |
+| --- | --- |
+| `public/encounters/interceptor-metal.png` | Tileable bronze and slate armor |
+| `public/encounters/feather-vane.png` | Raptor wing and tail feathers and the ace's crest. Orient the root down and tip up. |
+| `public/encounters/draconian-scales.png` | Tileable draconian face, snout, and jaw |

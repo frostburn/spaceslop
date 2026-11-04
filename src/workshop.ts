@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createInterceptorRig, createRaptorRig } from './encounter-rigs';
-import { loadInterceptorTexture } from './encounter-texture';
+import { loadEncounterTextures } from './encounter-texture';
 import {
   BOSS_FIRE_AT, BOSS_RECOIL_TIME, BOSS_VOLLEY_INTERVAL, BOSS_WINDUP_AT, RAPTOR_FLARE_END, raptorFlight,
 } from './encounters';
@@ -27,7 +27,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
 
   const raptor = createRaptorRig();
   const interceptor = createInterceptorRig(BOSS_CANNON_X);
-  loadInterceptorTexture(interceptor);
+  loadEncounterTextures(interceptor);
   raptor.root.rotation.z = Math.PI;
   scene.add(raptor.root, interceptor.root);
 

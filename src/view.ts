@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { createInterceptorRig, createPreserveEdges, createRaptorRig } from './encounter-rigs';
-import { loadInterceptorTexture } from './encounter-texture';
+import { loadEncounterTextures } from './encounter-texture';
 import { BOSS_RECOIL_TIME } from './encounters';
 import {
   BOSS_CAMERA_DISTANCE, BOSS_CANNON_RADIUS, BOSS_CANNON_X, BOSS_DEPTH, BOSS_PROJECTION,
@@ -107,7 +107,7 @@ export class FlightView {
     this.stars = new T.Points(geometry, new T.PointsMaterial({ color: 0x607796, size: 0.07 }));
     this.stars.frustumCulled = false;
     this.boss.root.position.set(0, BOSS_Y, BOSS_DEPTH);
-    loadInterceptorTexture(this.boss);
+    loadEncounterTextures(this.boss);
     this.drone.add(
       new T.Mesh(new T.OctahedronGeometry(0.22), new T.MeshBasicMaterial({ color: mint })),
       new T.Mesh(new T.RingGeometry(0.29, 0.38, 6), new T.MeshBasicMaterial({ color: 0x60c994 })),
