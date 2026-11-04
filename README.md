@@ -28,6 +28,10 @@ The second wave includes a feathered raptor. Its wings fold before it dives alon
 
 The procedural encounter rigs live in `src/encounter-rigs.ts`. A future model can use the same local pose and pivot names while the simulation owns movement, attack timing, and hitboxes. The interceptor's `muzzle_L` and `muzzle_R` pivots line up with the existing cannon lanes.
 
+## Asset workshop
+
+Run `npm run dev` and open **Asset workshop** from the game menu or visit `/workshop.html`. Orbit and zoom the raptor or interceptor, switch camera presets, scrub or play their motion, and toggle wireframe. The workshop uses the game rigs and the optional alloy texture.
+
 ## Assets and offline play
 
 The entire run plays with procedural shapes and works without media files. Generated media goes through chat review and is uploaded by the owner. See [AGENTS.md](AGENTS.md).

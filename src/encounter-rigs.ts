@@ -51,12 +51,13 @@ export function createRaptorRig() {
   const ochre = 0xe8ae60;
   const cobalt = 0x658bd2;
   const umber = 0x633a35;
-  const skin = armor(0x94664e);
+  const hide = (color: number) => new T.MeshStandardMaterial({ color, roughness: 0.68 });
+  const skin = hide(0x94664e);
   const shadow = flat(0x36232d);
   const toes = flat(0xc59067);
-  const oval = new T.SphereGeometry(1, 10, 6);
+  const oval = new T.SphereGeometry(1, 24, 16);
   part(root, oval, skin, 0, 0.02, 0.17).scale.set(0.28, 0.48, 0.21);
-  part(root, oval, armor(0xbb8f65), 0, 0.16, 0.24).scale.set(0.18, 0.32, 0.16);
+  part(root, oval, hide(0xbb8f65), 0, 0.16, 0.24).scale.set(0.18, 0.32, 0.16);
   for (const side of [-1, 1]) {
     part(root, oval, skin, side * 0.19, -0.19, 0.15).scale.set(0.135, 0.23, 0.12);
     const claw = part(root, polygon([[0.14, -0.18], [0.27, -0.23], [0.32, -0.49],
@@ -67,7 +68,7 @@ export function createRaptorRig() {
   const head = pivot(root, 'head', 0, 0.36, 0.23);
   part(head, oval, skin, 0, 0.12, 0.04).scale.set(0.18, 0.26, 0.14);
   part(head, oval, shadow, 0, 0.29, 0.025).scale.set(0.12, 0.21, 0.1);
-  part(head, oval, armor(0xcea27b), 0, 0.3, 0.075).scale.set(0.105, 0.2, 0.095);
+  part(head, oval, hide(0xcea27b), 0, 0.3, 0.075).scale.set(0.105, 0.2, 0.095);
   for (const side of [-1, 1]) {
     part(head, new T.CircleGeometry(0.034, 6), flat(0xffd673), side * 0.118, 0.18, 0.153);
     plume(head, side * 0.095, 0.12, 0.126, 0.32, 0.09, Math.PI + side * 0.27, umber, ochre);

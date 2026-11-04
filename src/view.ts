@@ -1,13 +1,12 @@
 import * as T from 'three';
 import { createInterceptorRig, createPreserveEdges, createRaptorRig } from './encounter-rigs';
+import { loadInterceptorTexture } from './encounter-texture';
 import { BOSS_RECOIL_TIME } from './encounters';
 import {
   BOSS_CAMERA_DISTANCE, BOSS_CANNON_RADIUS, BOSS_CANNON_X, BOSS_DEPTH, BOSS_PROJECTION,
   BOSS_Y, Flight, HEIGHT, TRANSITION_TIME, WIDTH,
 } from './game';
 import { wingWeapons, type WingProjectile } from './wing';
-
-declare const __INTERCEPTOR_METAL__: string;
 
 const sceneColor = 0x0b1020;
 const teal = 0x88f2ff;
@@ -108,14 +107,7 @@ export class FlightView {
     this.stars = new T.Points(geometry, new T.PointsMaterial({ color: 0x607796, size: 0.07 }));
     this.stars.frustumCulled = false;
     this.boss.root.position.set(0, BOSS_Y, BOSS_DEPTH);
-    if (__INTERCEPTOR_METAL__) {
-      new T.TextureLoader().load(import.meta.env.BASE_URL + __INTERCEPTOR_METAL__, (texture) => {
-        texture.colorSpace = T.SRGBColorSpace;
-        texture.wrapS = texture.wrapT = T.RepeatWrapping;
-        texture.repeat.set(0.62, 0.62);
-        this.boss.setArmorTexture(texture);
-      });
-    }
+    loadInterceptorTexture(this.boss);
     this.drone.add(
       new T.Mesh(new T.OctahedronGeometry(0.22), new T.MeshBasicMaterial({ color: mint })),
       new T.Mesh(new T.RingGeometry(0.29, 0.38, 6), new T.MeshBasicMaterial({ color: 0x60c994 })),

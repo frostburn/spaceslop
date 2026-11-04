@@ -1,5 +1,8 @@
 export const BOSS_MUZZLE_Z = 0.8;
 export const BOSS_RECOIL_TIME = 0.24;
+export const BOSS_VOLLEY_INTERVAL = 2;
+export const BOSS_WINDUP_AT = 0.45;
+export const BOSS_FIRE_AT = 1.18;
 
 export const RAPTOR_FOLD_AT = 1.2;
 export const RAPTOR_DIVE_AT = 1.72;

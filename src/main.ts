@@ -13,6 +13,13 @@ function element<T extends HTMLElement>(id: string) {
 
 const canvas = element<HTMLCanvasElement>('field');
 const panel = element('panel');
+if (import.meta.env.DEV) {
+  const workshop = document.createElement('a');
+  workshop.href = import.meta.env.BASE_URL + 'workshop.html';
+  workshop.textContent = 'Asset workshop';
+  workshop.style.cssText = 'margin-top: .8rem; color: var(--accent); font-size: .75rem';
+  panel.append(workshop);
+}
 const heading = element('heading');
 const message = element('message');
 const start = element<HTMLButtonElement>('start');

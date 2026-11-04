@@ -1,4 +1,6 @@
-import { BOSS_MUZZLE_Z, BOSS_RECOIL_TIME, raptorFlight } from './encounters';
+import {
+  BOSS_FIRE_AT, BOSS_MUZZLE_Z, BOSS_RECOIL_TIME, BOSS_VOLLEY_INTERVAL, BOSS_WINDUP_AT, raptorFlight,
+} from './encounters';
 import { CLOSE_CALLS_REQUIRED, HOT_DOCK_COOLDOWN, HOT_DOCK_DISTANCE, type PilotId } from './pilot-data';
 import { wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
 
@@ -39,9 +41,6 @@ const DRONE_FIRE_INTERVAL = 0.44;
 const TOWLINE_INTERVAL = 1.05;
 const TOWLINE_DURATION = 0.2;
 const TOWLINE_DAMAGE = 2;
-const BOSS_VOLLEY_INTERVAL = 2;
-const BOSS_WINDUP_AT = 0.45;
-const BOSS_FIRE_AT = 1.18;
 const BOSS_IMPACT_TRAVEL = 0.48;
 
 const wingShots = {
