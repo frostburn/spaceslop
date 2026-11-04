@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { addBurner, burnerMaterial } from './burners';
 import { part, pivot, plating, polygon } from './rig-geometry';
 import { WING_MOUNT } from './wing';
 
@@ -54,6 +55,7 @@ export function createFighterRig() {
   const canopy = alloy(0x21435c);
   const ice = light(0x82d8e5);
   const core = light(0xaffbff);
+  const jet = burnerMaterial(0x28b6ff);
 
   part(root, fuselage([[-0.7, 0.23, 0.13, -0.11], [-0.19, 0.3, 0.19, -0.13],
     [0.38, 0.23, 0.15, -0.1], [0.78, 0.052, 0.071, -0.025], [0.88, 0.01, 0.033, -0.01]]),
@@ -76,7 +78,7 @@ export function createFighterRig() {
     part(wing, new T.CylinderGeometry(0.092, 0.105, 0.095, 8), titanium, 0.24, -0.774, 0.014);
     const exhaust = part(wing, new T.CircleGeometry(0.075, 8), core, 0.24, -0.826, 0.014);
     exhaust.rotation.x = Math.PI / 2;
-    part(wing, new T.OctahedronGeometry(1), ice, 0.24, -0.849, 0.014).scale.set(0.069, 0.12, 0.067);
+    addBurner(wing, jet, 0.24, -0.827, 0.014, 0.088, 0.92);
     part(wing, new T.BoxGeometry(0.148, 0.19, 0.111), graphite, WING_MOUNT.x, WING_MOUNT.y, 0.078);
     return pivot(root, side < 0 ? 'hardpoint_L' : 'hardpoint_R', side * WING_MOUNT.x, WING_MOUNT.y, 0.154);
   });
@@ -90,6 +92,7 @@ export function createScoutRig() {
   const bronze = alloy(0xbb7050);
   const charcoal = alloy(0x292237);
   const ember = light(0xf89462);
+  const jet = burnerMaterial(0xff6628);
 
   part(root, fuselage([[-0.52, 0.24, 0.12, -0.095], [-0.13, 0.31, 0.21, -0.13],
     [0.27, 0.26, 0.16, -0.1], [0.54, 0.13, 0.067, -0.045], [0.62, 0.04, 0.03, -0.016]]),
@@ -106,7 +109,8 @@ export function createScoutRig() {
       0.045, 0.015), wine, 0, 0, 0.069);
     part(wing, polygon([[0.51, 0.083], [0.74, 0.193], [0.72, 0.092], [0.5, -0.016]]), bronze, 0, 0, 0.134);
     part(wing, new T.BoxGeometry(0.104, 0.23, 0.095), charcoal, 0.34, -0.34, 0.066);
-    part(wing, new T.OctahedronGeometry(1), ember, 0.34, -0.481, 0.066).scale.set(0.046, 0.095, 0.038);
+    part(wing, new T.BoxGeometry(0.082, 0.018, 0.065), ember, 0.34, -0.461, 0.066);
+    addBurner(wing, jet, 0.34, -0.471, 0.066, 0.063, 0.62);
   }
   part(root, new T.BoxGeometry(0.12, 0.061, 0.05), ember, 0, 0.28, 0.218);
   return root;
@@ -116,12 +120,14 @@ export function createDroneRig() {
   const root = new T.Group();
   const steel = alloy(0x526875);
   const mint = light(0xa1ffc5);
+  const jet = burnerMaterial(0x4bff92);
   const shell = part(root, new T.CylinderGeometry(0.3, 0.36, 0.17, 6), steel, 0, 0, -0.018);
   shell.rotation.x = Math.PI / 2;
   part(root, new T.RingGeometry(0.208, 0.315, 6), light(0x6adba4), 0, 0, 0.084);
   part(root, new T.OctahedronGeometry(0.174), mint, 0, 0, 0.073);
   for (const side of [-1, 1]) {
     part(root, new T.BoxGeometry(0.086, 0.13, 0.096), steel, side * 0.315, 0, -0.005);
+    addBurner(root, jet, side * 0.315, -0.068, -0.005, 0.053, 0.7);
   }
   return root;
 }

@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { poseBurners, shipBurners } from './burners';
 import { createInterceptorRig, createRaptorRig } from './encounter-rigs';
 import { loadEncounterTextures } from './encounter-texture';
 import {
@@ -28,19 +29,31 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
 
   const raptor = createRaptorRig();
   const interceptor = createInterceptorRig(BOSS_CANNON_X);
+  const interceptorBurners = shipBurners(interceptor.root);
   loadEncounterTextures(interceptor);
   raptor.root.rotation.z = Math.PI;
   const scout = createScoutRig();
   scout.rotation.z = Math.PI;
 
-  function staticAsset(root: T.Group) {
-    return { root, duration: 0, pose: () => '' };
+  function shipAsset(root: T.Group) {
+    const burners = shipBurners(root);
+    poseBurners(burners, 1, 1);
+    return {
+      root,
+      duration: 2,
+      bounds: new T.Box3().setFromObject(root),
+      pose(time: number) {
+        const throttle = Math.sin(time * Math.PI / 2) ** 2;
+        poseBurners(burners, time, throttle);
+        return throttle > 0.6 ? 'boost' : 'cruise';
+      },
+    };
   }
 
   const assets = {
-    fighter: staticAsset(createFighterRig().root),
-    scout: staticAsset(scout),
-    drone: staticAsset(createDroneRig()),
+    fighter: shipAsset(createFighterRig().root),
+    scout: shipAsset(scout),
+    drone: shipAsset(createDroneRig()),
     raptor: {
       root: raptor.root,
       duration: RAPTOR_FLARE_END,
@@ -63,6 +76,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
         const windup = fired ? 0 : Math.max(0, (elapsed - BOSS_WINDUP_AT) / (BOSS_FIRE_AT - BOSS_WINDUP_AT));
         const recoil = fired ? Math.max(0, 1 - (elapsed - BOSS_FIRE_AT) / BOSS_RECOIL_TIME) : 0;
         interceptor.pose(eased, windup, fired ? -cannon : cannon, fired ? cannon : 0, recoil);
+        poseBurners(interceptorBurners, time, 0.42 + 0.48 * Math.sin(eased * Math.PI));
         if (reveal < 1) return 'reveal';
         if (recoil > 0) return 'recoil';
         return windup > 0 ? 'windup' : 'ready';
@@ -91,7 +105,8 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
 
   function fitCamera(direction: T.Vector3) {
     cameraView = direction;
-    const bounds = new T.Box3().setFromObject(selected.root).getBoundingSphere(new T.Sphere());
+    const box = 'bounds' in selected ? selected.bounds : new T.Box3().setFromObject(selected.root);
+    const bounds = box.getBoundingSphere(new T.Sphere());
     const vertical = T.MathUtils.degToRad(camera.fov) / 2;
     const horizontal = Math.atan(Math.tan(vertical) * camera.aspect);
     const distance = bounds.radius * 1.07 / Math.sin(Math.min(horizontal, vertical));

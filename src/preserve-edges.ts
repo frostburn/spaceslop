@@ -3,6 +3,7 @@ import * as T from 'three';
 export const PRESERVE_LOOP = 24;
 
 type Vertex = [x: number, y: number, z: number];
+type WakeActor = { x: number; y: number; strength: number };
 
 function fernFrond() {
   const positions: number[] = [];
@@ -70,7 +71,7 @@ function seededRandom(seed: number) {
   };
 }
 
-function createTrench(tiles: number[]) {
+function createTrench(tiles: number[], material: T.MeshBasicMaterial) {
   const placements: { x: number; y: number; z: number; width: number; height: number; angle: number; color: number }[] = [];
   function block(x: number, y: number, z: number, width: number, height: number, color: number, angle = 0) {
     placements.push({ x, y, z, width, height, angle, color });
@@ -115,7 +116,8 @@ function createTrench(tiles: number[]) {
     }
   }
 
-  const mesh = new T.InstancedMesh(new T.BoxGeometry(1, 1, 0.08), new T.MeshBasicMaterial(), placements.length);
+  const mesh = new T.InstancedMesh(new T.BoxGeometry(1, 1, 0.08), material, placements.length);
+  mesh.renderOrder = -2;
   const transform = new T.Object3D();
   const tint = new T.Color();
   for (const [index, { x, y, z, width, height, angle, color }] of placements.entries()) {
@@ -134,18 +136,29 @@ export function createPreserveEdges() {
   const crownsPerSide = 8;
   const frondsPerCrown = 5;
   const tiles = [-1, 0, 1];
-  const structure = createTrench(tiles);
+  const structureMaterial = new T.MeshBasicMaterial({ transparent: true });
+  const frondMaterial = new T.MeshBasicMaterial({
+    vertexColors: true, side: T.DoubleSide, transparent: true, forceSinglePass: true,
+  });
+  const structure = createTrench(tiles, structureMaterial);
   const crownCount = 2 * crownsPerSide * tiles.length;
   const braces = new T.InstancedMesh(
-    new T.BoxGeometry(1.11, 0.23, 0.12), new T.MeshBasicMaterial(), crownCount,
+    new T.BoxGeometry(1.11, 0.23, 0.12), structureMaterial, crownCount,
   );
+  braces.renderOrder = -2;
   const fronds = new T.InstancedMesh(
-    fernFrond(), new T.MeshBasicMaterial({ vertexColors: true, side: T.DoubleSide }), crownCount * frondsPerCrown,
+    fernFrond(), frondMaterial, crownCount * frondsPerCrown,
   );
+  fronds.renderOrder = -1;
+  fronds.instanceMatrix.setUsage(T.DynamicDrawUsage);
   const transform = new T.Object3D();
   const moss = [0x4e7448, 0x5d7944, 0x41654e, 0x6b8050].map((color) => new T.Color(color));
   const braceColors = [new T.Color(0x342827), new T.Color(0x252d33)];
   const random = seededRandom(316);
+  const crowns: {
+    x: number; y: number; bendX: number; bendY: number; start: number;
+    fan: { angle: number; length: number; spread: number; color: T.Color }[];
+  }[] = [];
   let braceIndex = 0;
   let fernIndex = 0;
 
@@ -159,6 +172,7 @@ export function createPreserveEdges() {
         spread: 0.8 + random() * 0.2,
         color: moss[Math.floor(random() * moss.length)],
       }));
+      crowns.push({ x, y, bendX: 0, bendY: 0, start: fernIndex, fan });
       for (const tile of tiles) {
         const tileY = y + tile * PRESERVE_LOOP;
         transform.position.set(side * 4.46, tileY - 0.34, -1.5);
@@ -181,5 +195,63 @@ export function createPreserveEdges() {
 
   structure.add(braces);
   group.add(structure, fronds);
-  return { root: group, structure };
+  // Keep enough room for the tips to bend beyond the resting bounds.
+  fronds.computeBoundingSphere();
+  fronds.boundingSphere!.radius += 1.5;
+
+  return {
+    root: group,
+    update(scroll: number, exit: number, showTrench: boolean, elapsed: number, actors: readonly WakeActor[]) {
+      group.position.y = -scroll - exit * 11;
+      const opacity = 1 - T.MathUtils.smoothstep(exit, 0.12, 0.76);
+      group.visible = opacity > 0;
+      structure.visible = showTrench;
+      for (const material of [structureMaterial, frondMaterial]) {
+        material.opacity = opacity;
+        material.depthWrite = opacity === 1;
+      }
+      if (elapsed <= 0 || !group.visible) return;
+
+      let changed = false;
+      for (const crown of crowns) {
+        let targetX = 0;
+        let targetY = 0;
+        for (const actor of actors) {
+          const dx = crown.x - actor.x;
+          if (Math.abs(dx) >= 2.4) continue;
+          // The repeating copies share a pose, including when the scroll wraps.
+          const dy = T.MathUtils.euclideanModulo(crown.y + group.position.y - actor.y + PRESERVE_LOOP / 2,
+            PRESERVE_LOOP) - PRESERVE_LOOP / 2;
+          const distance = Math.hypot(dx, dy);
+          const force = actor.strength * (1 - T.MathUtils.smoothstep(distance, 0.25, 2.4)) / Math.max(distance, 0.25);
+          targetX += dx * force;
+          targetY += dy * force;
+        }
+        const limit = Math.max(1, Math.hypot(targetX, targetY));
+        const follow = targetX || targetY ? 15 : 5;
+        const bendX = T.MathUtils.damp(crown.bendX, targetX / limit, follow, elapsed);
+        const bendY = T.MathUtils.damp(crown.bendY, targetY / limit, follow, elapsed);
+        const x = Math.abs(bendX) < 0.001 ? 0 : bendX;
+        const y = Math.abs(bendY) < 0.001 ? 0 : bendY;
+        if (x === crown.bendX && y === crown.bendY) continue;
+        crown.bendX = x;
+        crown.bendY = y;
+        changed = true;
+
+        let index = crown.start;
+        const reach = 1 - 0.19 * Math.hypot(x, y);
+        for (const tile of tiles) {
+          for (const [j, { angle, length, spread }] of crown.fan.entries()) {
+            const turn = -x * Math.cos(angle) - y * Math.sin(angle);
+            transform.position.set(crown.x, crown.y + tile * PRESERVE_LOOP, -1.24 + j * 0.035);
+            transform.rotation.set(0, 0, angle + 0.95 * turn);
+            transform.scale.set(length * spread, length * reach, 1);
+            transform.updateMatrix();
+            fronds.setMatrixAt(index++, transform.matrix);
+          }
+        }
+      }
+      if (changed) fronds.instanceMatrix.needsUpdate = true;
+    },
+  };
 }

@@ -6,8 +6,8 @@ export function createShipyard() {
   station.position.set(-1.1, 1.7, -27);
   station.rotation.set(0.18, -0.2, 0.15);
   yard.add(station);
-  const steel = new T.MeshBasicMaterial({ color: 0x323c50, side: T.DoubleSide });
-  const shadow = new T.MeshBasicMaterial({ color: 0x202737, side: T.DoubleSide });
+  const steel = new T.MeshBasicMaterial({ color: 0x323c50, side: T.DoubleSide, transparent: true, forceSinglePass: true });
+  const shadow = new T.MeshBasicMaterial({ color: 0x202737, side: T.DoubleSide, transparent: true, forceSinglePass: true });
   const gaps = [[0.04, 1.28], [1.48, 1.05], [2.71, 1.3], [4.34, 0.73], [5.3, 0.82]];
 
   for (const [start, span] of gaps) {
@@ -26,7 +26,8 @@ export function createShipyard() {
     Array.from({ length: Math.ceil(span * 14) }, (_, i) => start + (i + 0.5) / 14)
       .filter((angle) => angle < start + span),
   );
-  const plates = new T.InstancedMesh(new T.BoxGeometry(1, 1, 1), new T.MeshBasicMaterial(), segments.length * 2);
+  const plating = new T.MeshBasicMaterial({ transparent: true });
+  const plates = new T.InstancedMesh(new T.BoxGeometry(1, 1, 1), plating, segments.length * 2);
   const colors = [0x374454, 0x485061, 0x53505a, 0x31374a, 0x806039, 0x786253].map((hex) => new T.Color(hex));
   const transform = new T.Object3D();
   segments.forEach((angle, i) => {
@@ -54,9 +55,10 @@ export function createShipyard() {
   ];
   for (const { x, y, z, angle, length } of beams) {
     const dock = new T.Group();
+    dock.renderOrder = -4;
     dock.position.set(x, y, z);
     dock.rotation.z = angle;
-    const rails = new T.InstancedMesh(new T.BoxGeometry(1, 1, 1), new T.MeshBasicMaterial(), 12);
+    const rails = new T.InstancedMesh(new T.BoxGeometry(1, 1, 1), plating, 12);
     for (let i = 0; i < 12; i++) {
       const brace = i >= 2;
       transform.position.set(brace ? (i - 6.5) * length / 11 : 0, brace ? 0 : i === 0 ? -0.42 : 0.42, 0);
@@ -86,8 +88,22 @@ export function createShipyard() {
     shades.push(shade.r, shade.g, shade.b);
   }
   planetGeometry.setAttribute('color', new T.Float32BufferAttribute(shades, 3));
-  const planet = new T.Mesh(planetGeometry, new T.MeshBasicMaterial({ vertexColors: true }));
+  const planetMaterial = new T.MeshBasicMaterial({ vertexColors: true, transparent: true });
+  const planet = new T.Mesh(planetGeometry, planetMaterial);
   planet.position.set(13.2, -18, -37);
   yard.add(planet);
-  return yard;
+  yard.renderOrder = -4;
+  station.renderOrder = -4;
+  return {
+    root: yard,
+    update(reveal: number, showFallback: boolean) {
+      const opacity = T.MathUtils.smoothstep(reveal, 0.05, 0.77);
+      yard.visible = showFallback && opacity > 0;
+      yard.position.y = 12 * (1 - reveal);
+      for (const material of [steel, shadow, plating, planetMaterial]) {
+        material.opacity = opacity;
+        material.depthWrite = reveal === 1;
+      }
+    },
+  };
 }

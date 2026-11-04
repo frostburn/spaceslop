@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { addBurner, burnerMaterial } from './burners';
 import { BOSS_MUZZLE_Z, raptorFlight } from './encounters';
 import { part, pivot, plating, polygon } from './rig-geometry';
 
@@ -124,6 +125,7 @@ export function createInterceptorRig(cannonX: number) {
   const shadow = flat(0x1c2230);
   const signal = flat(0xfdad66);
   const insignia = flat(0xe0c89f);
+  const jet = burnerMaterial(0xff773f);
   part(root, plating([[-1.39, 0.87], [-0.7, 1.57], [0.7, 1.57], [1.39, 0.87],
     [1.45, -0.52], [0, -1.72], [-1.45, -0.52]], 0.45), steel, 0, 0, -0.86);
   part(root, plating([[-0.56, 1.79], [-0.33, 2.16], [0.33, 2.16], [0.56, 1.79]], 0.27, 0.037),
@@ -183,6 +185,9 @@ export function createInterceptorRig(cannonX: number) {
       const slit = part(wing, new T.BoxGeometry(0.43, 0.045, 0.03), signal, 3.16, y, 0.14);
       slit.rotation.z = 0.21;
     }
+    const nozzle = addBurner(wing, jet, 4.5, 0.66, -0.37, 0.26, 2.2);
+    nozzle.rotation.set(0.79, 0, 0.54, 'ZYX');
+    part(nozzle, new T.CylinderGeometry(0.29, 0.25, 0.24, 8), darkPlate, 0, 0.12, 0);
 
     const pod = pivot(root, side < 0 ? 'cannon_L' : 'cannon_R', side * cannonX, 0, 0);
     part(pod, plating([[-0.59, 0.21], [-0.44, 0.43], [0.44, 0.43], [0.59, 0.21],
