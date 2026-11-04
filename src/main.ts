@@ -1,5 +1,6 @@
 import { registerSW } from 'virtual:pwa-register';
 import { BOSS_HP, Flight, HEIGHT, STEP, WIDTH } from './game';
+import { setupPilots } from './pilots';
 import { FlightView } from './view';
 import './style.css';
 
@@ -25,6 +26,15 @@ const charges = element('charges');
 const bossHud = element('boss-hud');
 const bossHealth = element<HTMLProgressElement>('boss-health');
 bossHealth.max = BOSS_HP;
+
+const showPilotPicker = setupPilots(
+  element<HTMLFieldSetElement>('pilot-picker'),
+  element('pilot-choices'),
+  element('selected-portrait'),
+  element('selected-pilot'),
+  element('desktop-picker'),
+  element('mobile-picker'),
+);
 
 type Screen = 'title' | 'active' | 'paused' | 'results';
 const directions: Record<string, readonly [number, number]> = {
@@ -74,7 +84,9 @@ function syncUI() {
   pulse.disabled = !active || !fighting || flight.charges === 0;
   pause.hidden = !active;
   panel.hidden = active;
-  update.hidden = !pendingUpdate || (screen !== 'title' && screen !== 'results');
+  const betweenRuns = screen === 'title' || screen === 'results';
+  showPilotPicker(betweenRuns);
+  update.hidden = !pendingUpdate || !betweenRuns;
   const tip = screen === 'title' && offlineReady ? 'Ready offline'
     : flight.phase === 'boss' ? 'Line up. Dodge the rings.' : 'Drag to steer';
   if (status.textContent !== tip) status.textContent = tip;

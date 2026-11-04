@@ -8,11 +8,24 @@
   </head>
   <body>
     <main>
-      <header class="hud" aria-label="Flight status">
-        <div><span id="sector">SECTOR 01</span><strong id="score">000000</strong></div>
-        <div><span>HULL</span><strong id="hull">04</strong></div>
-        <button id="pause" type="button" hidden>Pause</button>
-      </header>
+      <div class="console">
+        <header class="hud" aria-label="Flight status">
+          <div><span id="sector">SECTOR 01</span><strong id="score">000000</strong></div>
+          <div><span>HULL</span><strong id="hull">04</strong></div>
+          <button id="pause" type="button" hidden>Pause</button>
+        </header>
+        <aside class="pilot-console" aria-label="Pilot">
+          <figure>
+            <div id="selected-portrait"></div>
+            <figcaption id="selected-pilot"></figcaption>
+          </figure>
+          <div id="desktop-picker"></div>
+        </aside>
+        <footer class="controls">
+          <span id="status" role="status">Drag to steer</span>
+          <button id="pulse" type="button" disabled>Pulse <b id="charges">02</b></button>
+        </footer>
+      </div>
       <div class="bay">
         <div id="flight">
           <canvas id="field" aria-label="Spaceslop flight view"></canvas>
@@ -20,16 +33,18 @@
           <section id="panel" aria-labelledby="heading">
             <h1 id="heading">Spaceslop</h1>
             <p id="message">Drag to steer. Guns fire automatically.</p>
+            <div id="mobile-picker">
+              <fieldset id="pilot-picker">
+                <legend>Select pilot</legend>
+                <div id="pilot-choices"></div>
+              </fieldset>
+            </div>
             <button id="start" type="button">Launch</button>
             <small>Keyboard · WASD or arrows · Space for pulse</small>
             <button id="update" type="button" hidden>Apply update</button>
           </section>
         </div>
       </div>
-      <footer class="controls">
-        <span id="status" role="status">Drag to steer</span>
-        <button id="pulse" type="button" disabled>Pulse <b id="charges">02</b></button>
-      </footer>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

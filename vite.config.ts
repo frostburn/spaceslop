@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
@@ -9,10 +9,19 @@ const icons = [192, 512].flatMap((size) => {
     : [];
 });
 
+const pilotDir = new URL('./public/pilots/', import.meta.url);
+const portraits = existsSync(pilotDir)
+  ? readdirSync(pilotDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && /^[a-z]+\.png$/.test(entry.name))
+    .map((entry) => `pilots/${entry.name}`)
+  : [];
+
 export default defineConfig({
+  define: { __PILOT_PORTRAITS__: JSON.stringify(portraits) },
   plugins: [
     VitePWA({
       registerType: 'prompt',
+      includeAssets: portraits,
       manifest: {
         name: 'Spaceslop',
         short_name: 'Spaceslop',
