@@ -1,54 +1,96 @@
 import * as T from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { addBurner, burnerMaterial } from './burners';
+import { addCreatureFace } from './creature-faces';
+import { applyRelief, hide, texturedSurface } from './encounter-surfaces';
 import { BOSS_MUZZLE_Z, raptorFlight } from './encounters';
 import { part, pivot, plating, polygon } from './rig-geometry';
 
 const flat = (color: number) => new T.MeshBasicMaterial({ color, side: T.DoubleSide });
-const armor = (color: number) => new T.MeshStandardMaterial({ color, roughness: 0.58, flatShading: true });
+const armor = (color: number) => texturedSurface(new T.MeshStandardMaterial({
+  color, roughness: 0.55, metalness: 0.14, flatShading: true, bumpScale: 0.65,
+}), 0.37, 8);
 
-const smoothHide = (color: number) => new T.MeshStandardMaterial({ color, roughness: 0.68 });
-
-const featherMaterial = new T.MeshBasicMaterial({ vertexColors: true, side: T.DoubleSide });
+const featherMaterial = texturedSurface(new T.MeshStandardMaterial({
+  vertexColors: true, side: T.DoubleSide, roughness: 0.73, bumpScale: 0.31,
+}), 0.50, 4.3);
 
 export function setFeatherTexture(texture: T.Texture) {
-  featherMaterial.map = texture;
-  featherMaterial.needsUpdate = true;
+  applyRelief(texture, [featherMaterial]);
 }
 
 function plume(parent: T.Group, x: number, y: number, z: number, length: number, width: number,
-  angle: number, rootColor: number, tipColor: number) {
-  const geo = polygon([[0, 0], [-width * 0.45, length * 0.27], [-width * 0.4, length * 0.68],
-    [width * 0.08, length], [width * 0.42, length * 0.62], [width * 0.5, length * 0.28]]);
-  const positions = geo.getAttribute('position');
-  const base = new T.Color(rootColor);
-  const tip = new T.Color(tipColor);
-  const tint = new T.Color();
+  angle: number, rootColor: number, tipColor: number, bandColor = tipColor) {
+  const rows = 12;
+  const across = [-1, -0.56, 0, 0.56, 1];
+  const positions: number[] = [];
   const colors: number[] = [];
   const uv: number[] = [];
-  for (let i = 0; i < positions.count; i++) {
-    const along = positions.getY(i) / length;
-    tint.copy(base).lerp(tip, Math.min(1, along * 1.38));
-    colors.push(tint.r, tint.g, tint.b);
-    uv.push(0.5 + positions.getX(i) / width, along);
+  const indices: number[] = [];
+  const root = new T.Color(rootColor);
+  const band = new T.Color(bandColor);
+  const tip = new T.Color(tipColor);
+  const tint = new T.Color();
+
+  for (let row = 0; row <= rows; row++) {
+    const along = row / rows;
+    const arch = Math.sin(Math.PI * along);
+    const halfWidth = width * (0.012 + 0.51 * arch ** 0.76 * (1.14 - 0.39 * along));
+    for (const edge of across) {
+      const center = 1 - edge ** 2;
+      positions.push(halfWidth * edge + width * 0.25 * along ** 2, length * along,
+        width * (0.15 * arch * center - 0.19 * along ** 2 + 0.09 * edge * along));
+      tint.copy(root).lerp(band, T.MathUtils.smoothstep(along, 0.07, 0.45));
+      tint.lerp(tip, T.MathUtils.smoothstep(along + edge * 0.06, 0.64, 0.86));
+      tint.multiplyScalar(0.61 + 0.38 * center + (edge === 0 ? 0.19 * arch : 0));
+      colors.push(tint.r, tint.g, tint.b);
+      uv.push(edge * 0.49 + 0.5, along);
+    }
   }
-  geo.setAttribute('color', new T.Float32BufferAttribute(colors, 3));
-  geo.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
-  const blade = part(parent, geo, featherMaterial, x, y, z);
+  for (let row = 0; row < rows; row++) {
+    for (let i = 0; i < across.length - 1; i++) {
+      const a = row * across.length + i;
+      indices.push(a, a + 1, a + across.length, a + 1, a + across.length + 1, a + across.length);
+    }
+  }
+
+  const geometry = new T.BufferGeometry();
+  geometry.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new T.Float32BufferAttribute(colors, 3));
+  geometry.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  const blade = part(parent, geometry, featherMaterial, x, y, z);
   blade.rotation.z = angle;
   return blade;
 }
 
+function batchPlumage(parent: T.Group) {
+  const feathers = parent.children.filter((child): child is T.Mesh =>
+    child instanceof T.Mesh && child.material === featherMaterial);
+  if (feathers.length < 2) return;
+  const geometries = feathers.map((feather) => {
+    feather.updateMatrix();
+    return feather.geometry.applyMatrix4(feather.matrix);
+  });
+  const geometry = mergeGeometries(geometries);
+  parent.remove(...feathers);
+  part(parent, geometry, featherMaterial, 0, 0, 0);
+}
+
 export function createRaptorRig() {
   const root = new T.Group();
-  const ochre = 0xe8ae60;
-  const cobalt = 0x658bd2;
-  const umber = 0x633a35;
-  const skin = smoothHide(0x94664e);
-  const shadow = flat(0x36232d);
+  const gold = 0xf4a442;
+  const cobalt = 0x4c78dc;
+  const ink = 0x222946;
+  const rust = 0x8a392c;
+  const skin = hide(0x8e5945);
+  const belly = hide(0xb9825e);
+  skin.bumpScale = belly.bumpScale = 0.48;
   const toes = flat(0xc59067);
   const oval = new T.SphereGeometry(1, 24, 16);
   part(root, oval, skin, 0, 0.02, 0.17).scale.set(0.28, 0.48, 0.21);
-  part(root, oval, smoothHide(0xbb8f65), 0, 0.16, 0.24).scale.set(0.18, 0.32, 0.16);
+  part(root, oval, belly, 0, 0.16, 0.24).scale.set(0.18, 0.32, 0.16);
   for (const side of [-1, 1]) {
     part(root, oval, skin, side * 0.19, -0.19, 0.15).scale.set(0.135, 0.23, 0.12);
     const claw = part(root, polygon([[0.14, -0.18], [0.27, -0.23], [0.32, -0.49],
@@ -57,13 +99,27 @@ export function createRaptorRig() {
   }
 
   const head = pivot(root, 'head', 0, 0.36, 0.23);
-  part(head, oval, skin, 0, 0.12, 0.04).scale.set(0.18, 0.26, 0.14);
-  part(head, oval, shadow, 0, 0.29, 0.025).scale.set(0.12, 0.21, 0.1);
-  part(head, oval, smoothHide(0xcea27b), 0, 0.3, 0.075).scale.set(0.105, 0.2, 0.095);
+  const face = pivot(head, 'raptor_face', 0, 0, 0);
+  face.rotation.set(Math.PI / 2, Math.PI, 0);
+  const jaw = addCreatureFace(face, 'raptor');
   for (const side of [-1, 1]) {
-    part(head, new T.CircleGeometry(0.034, 6), flat(0xffd673), side * 0.118, 0.18, 0.153);
-    plume(head, side * 0.095, 0.12, 0.126, 0.32, 0.09, Math.PI + side * 0.27, umber, ochre);
+    for (let i = 0; i < 3; i++) {
+      const collar = plume(head, side * (0.115 + i * 0.032), 0.015 - i * 0.059, 0.242 - i * 0.034,
+        0.27 - 0.022 * i, 0.072, Math.PI + side * (0.38 + i * 0.2), ink, gold, i % 2 ? rust : cobalt);
+      collar.rotation.x = 0.29;
+    }
+    for (let i = 0; i < 3; i++) {
+      plume(root, side * (0.066 + i * 0.047), 0.29 - i * 0.12, 0.398 - i * 0.025,
+        0.48 - i * 0.027, 0.109, Math.PI + side * (0.12 + i * 0.16), ink, gold, cobalt);
+    }
+    for (let i = 0; i < 4; i++) {
+      const mantle = plume(root, side * (0.047 + i * 0.043), 0.027 - i * 0.049, 0.402 - i * 0.023,
+        0.36 - i * 0.027, 0.106, Math.PI + side * (0.12 + i * 0.19), ink, gold, i % 2 ? cobalt : rust);
+      mantle.rotation.y = side * 0.3;
+    }
   }
+  batchPlumage(root);
+  batchPlumage(head);
 
   const wings = ([-1, 1] as const).map((side) => {
     // The folded fans overlap in projection. Give each wing its own depth band.
@@ -72,30 +128,40 @@ export function createRaptorRig() {
     const fan = pivot(shoulder, side < 0 ? 'fan_L' : 'fan_R', 0, 0, 0);
     fan.scale.x = side;
     part(fan, polygon([[0, 0.12], [0.57, 0.22], [0.89, 0.12], [0.59, -0.21], [0.18, -0.3], [0, -0.2]]),
-      flat(0x9c674a), 0, 0, 0);
+      flat(0x5c3b3b), 0, 0, 0);
     for (let i = 0; i < 4; i++) {
       plume(fan, 0.17 + i * 0.125, 0.12 + i * 0.021, 0.014 + i * 0.007, 0.5 - i * 0.025, 0.18,
-        -2.55 + i * 0.12, umber, i % 2 ? ochre : cobalt);
+        -2.55 + i * 0.12, ink, i % 2 ? cobalt : gold, rust);
     }
     const outer = pivot(fan, side < 0 ? 'wrist_L' : 'wrist_R', 0.57, 0.12, 0.046);
     for (let i = 0; i < 6; i++) {
       plume(outer, 0.035 - i * 0.03, 0.065 - i * 0.049, i * 0.007, 0.91 - i * 0.063, 0.18,
-        -1.53 - i * 0.16, 0x815345, i === 0 || i === 3 || i === 4 ? cobalt : ochre);
+        -1.53 - i * 0.16, ink, gold, cobalt);
     }
+    for (let i = 0; i < 4; i++) {
+      plume(fan, 0.18 + i * 0.16, 0.155 + i * 0.013, 0.11 + i * 0.011, 0.34, 0.123,
+        -1.95 - i * 0.09, rust, gold, gold);
+    }
+    batchPlumage(fan);
+    batchPlumage(outer);
     return { side, shoulder, outer };
   });
 
   const tail = pivot(root, 'tail', 0, -0.34, 0.14);
-  plume(tail, 0, 0, 0, 1.06, 0.23, Math.PI, umber, ochre);
+  plume(tail, 0, 0, 0, 1.06, 0.23, Math.PI, ink, gold, cobalt);
   const vanes = ([-1, 1] as const).map((side) => {
     const vane = pivot(tail, side < 0 ? 'tail_L' : 'tail_R', 0, -0.35, side < 0 ? 0.025 : 0.055);
-    plume(vane, side * 0.05, 0, 0, 0.72, 0.13, Math.PI + side * 0.12, umber, cobalt);
-    plume(vane, side * 0.06, 0.02, -0.01, 0.56, 0.11, Math.PI + side * 0.26, umber, ochre);
+    plume(vane, side * 0.05, 0, 0, 0.72, 0.13, Math.PI + side * 0.12, ink, gold, cobalt);
+    plume(vane, side * 0.06, 0.02, -0.01, 0.56, 0.11, Math.PI + side * 0.26, ink, gold, rust);
+    batchPlumage(vane);
     return { side, vane };
   });
 
   return {
     root,
+    setScaleTexture(texture: T.Texture) {
+      applyRelief(texture, [skin, belly]);
+    },
     pose(age: number) {
       const { pose, progress } = raptorFlight(age);
       const ease = progress * progress * (3 - 2 * progress);
@@ -110,6 +176,7 @@ export function createRaptorRig() {
         outer.rotation.z = -0.52 * tuck + 0.16 * spread;
       }
       head.rotation.x = -0.28 * tuck + 0.16 * spread;
+      jaw.rotation.x = 0.035 + 0.19 * tuck + 0.18 * spread;
       tail.rotation.z = 0.12 * Math.sin(age * 4) * (1 - tuck);
       for (const { side, vane } of vanes) vane.rotation.z = side * (0.08 + 0.52 * spread);
     },
@@ -118,9 +185,9 @@ export function createRaptorRig() {
 
 export function createInterceptorRig(cannonX: number) {
   const root = new T.Group();
-  const steel = armor(0x65768b);
-  const bronze = armor(0xca8454);
-  const darkPlate = armor(0x3a444d);
+  const steel = armor(0x71879e);
+  const bronze = armor(0xc5733f);
+  const darkPlate = armor(0x424751);
   const trim = flat(0xddab78);
   const shadow = flat(0x1c2230);
   const signal = flat(0xfdad66);
@@ -210,53 +277,42 @@ export function createInterceptorRig(cannonX: number) {
 
   const pilot = pivot(cockpit, 'pilot', 0, 0.27, 0.87);
   const oval = new T.SphereGeometry(1, 24, 16);
-  const skin = smoothHide(0xa87e62);
-  const face = smoothHide(0xcead85);
-  const eye = flat(0xffce6c);
-  part(pilot, oval, smoothHide(0x3a444d), 0, 0, 0).scale.set(0.68, 0.39, 0.21);
+  const skin = hide(0xa47d60);
+  part(pilot, oval, armor(0x3a444d), 0, 0, 0).scale.set(0.68, 0.39, 0.21);
   for (const side of [-1, 1]) {
     const strap = part(pilot, new T.BoxGeometry(0.09, 0.38, 0.075), trim, side * 0.34, 0.02, 0.2);
     strap.rotation.z = side * 0.33;
     part(pilot, oval, skin, side * 0.54, -0.01, 0.24).scale.set(0.14, 0.12, 0.11);
   }
-  const neck = pivot(pilot, 'pilot_neck', 0, 0.2, 0.05);
-  neck.scale.setScalar(1.58);
-  part(neck, oval, skin, 0, 0.25, 0).scale.set(0.26, 0.35, 0.2);
-  part(neck, oval, face, 0, 0.18, 0.25).scale.set(0.185, 0.124, 0.35);
-  const jaw = pivot(neck, 'pilot_jaw', 0, 0.068, 0.12);
-  part(jaw, oval, shadow, 0, 0.033, 0.19).scale.set(0.182, 0.043, 0.29);
-  part(jaw, oval, skin, 0, 0, 0.175).scale.set(0.167, 0.055, 0.28);
+  const neck = pivot(pilot, 'pilot_neck', 0, 0.18, 0.05);
+  neck.scale.setScalar(1.7);
+  const jaw = addCreatureFace(neck, 'draconian');
   for (const side of [-1, 1]) {
-    part(neck, new T.CircleGeometry(0.057, 8), shadow, side * 0.174, 0.294, 0.18);
-    part(neck, new T.CircleGeometry(0.038, 8), eye, side * 0.176, 0.291, 0.191);
-    part(neck, new T.PlaneGeometry(0.009, 0.051), shadow, side * 0.172, 0.29, 0.197);
-    const brow = part(neck, new T.BoxGeometry(0.12, 0.043, 0.05), face, side * 0.16, 0.334, 0.179);
-    brow.rotation.z = side * 0.34;
-    part(neck, new T.CircleGeometry(0.024, 6), shadow, side * 0.091, 0.188, 0.537);
-    for (let i = 0; i < 3; i++) {
-      plume(neck, side * (0.19 - i * 0.033), 0.19 - i * 0.053, 0.13,
-        0.18, 0.07, Math.PI + side * (0.36 + i * 0.10), 0x73534a, 0xc3a180);
+    for (let i = 0; i < 4; i++) {
+      const ruff = plume(neck, side * (0.175 + i * 0.022), 0.27 - i * 0.067, 0.04 + i * 0.036,
+        0.32 - i * 0.03, 0.105, Math.PI + side * (0.63 - i * 0.09), 0x402731, 0xe2bc8b, 0x9e694d);
+      ruff.rotation.y = side * 0.34;
+      ruff.rotation.x = -0.19;
     }
   }
-  const crest = pivot(neck, 'pilot_crest', 0, 0.45, 0.01);
-  for (let i = -3; i <= 3; i++) {
-    plume(crest, i * 0.071, -Math.abs(i) * 0.021, 0.013 * (3 - Math.abs(i)),
-      0.43 - Math.abs(i) * 0.052, 0.119, 0.29 - i * 0.15, 0x6d3732, i % 2 ? 0xec9a55 : 0xbf6448);
+  const crest = pivot(neck, 'pilot_crest', 0, 0.46, -0.06);
+  for (let i = -4; i <= 4; i++) {
+    const fan = Math.abs(i);
+    const feather = plume(crest, i * 0.052, -fan * 0.026, -0.035 + 0.03 * fan,
+      0.51 - fan * 0.047, 0.136, 0.12 - i * 0.21, 0x3e2738,
+      i % 2 ? 0xeead65 : 0xd57341, i % 2 ? 0xa14936 : 0x843532);
+    feather.rotation.x = -0.58 - fan * 0.065;
   }
+  batchPlumage(neck);
+  batchPlumage(crest);
 
   return {
     root,
     setArmorTexture(texture: T.Texture) {
-      for (const material of [steel, bronze]) {
-        material.map = texture;
-        material.needsUpdate = true;
-      }
+      applyRelief(texture, [steel, bronze, darkPlate]);
     },
     setScaleTexture(texture: T.Texture) {
-      for (const material of [skin, face]) {
-        material.map = texture;
-        material.needsUpdate = true;
-      }
+      applyRelief(texture, [skin]);
     },
     pose(reveal: number, windup: number, activeX: number, firedX: number, recoil: number) {
       for (const { side, pod, glow } of cannons) {
@@ -266,9 +322,9 @@ export function createInterceptorRig(cannonX: number) {
         glow.material.opacity = Math.min(1, 0.18 + 0.7 * charge + kick);
         glow.scale.setScalar(0.8 + 0.21 * charge + 0.22 * kick);
       }
-      neck.rotation.y = 0.57 + 0.53 * (1 - reveal) + 0.16 * Math.sign(activeX) * windup;
+      neck.rotation.y = 0.42 + 0.52 * (1 - reveal) + 0.16 * Math.sign(activeX) * windup;
       neck.rotation.x = 0.18 * windup + 0.13 * recoil;
-      jaw.rotation.x = 0.07 + 0.12 * windup + 0.28 * recoil;
+      jaw.rotation.x = 0.24 + 0.25 * windup + 0.32 * recoil;
       crest.rotation.x = -0.14 * recoil;
       pilot.position.y = 0.27 - 0.08 * windup;
     },

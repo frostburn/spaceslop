@@ -30,7 +30,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const raptor = createRaptorRig();
   const interceptor = createInterceptorRig(BOSS_CANNON_X);
   const interceptorBurners = shipBurners(interceptor.root);
-  loadEncounterTextures(interceptor);
+  loadEncounterTextures(interceptor, raptor);
   raptor.root.rotation.z = Math.PI;
   const scout = createScoutRig();
   scout.rotation.z = Math.PI;

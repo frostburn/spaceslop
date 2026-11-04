@@ -136,7 +136,7 @@ export class FlightView {
     this.stars = new T.Points(geometry, new T.PointsMaterial({ color: 0x607796, size: 0.07 }));
     this.stars.frustumCulled = false;
     this.boss.root.position.set(0, BOSS_Y, BOSS_DEPTH);
-    loadEncounterTextures(this.boss);
+    loadEncounterTextures(this.boss, this.raptor);
     const scout = createScoutRig();
     this.enemies = Array.from({ length: 12 }, () => {
       const root = scout.clone();
