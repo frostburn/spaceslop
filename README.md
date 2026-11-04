@@ -24,6 +24,10 @@ Enemies can drop wing weapons. Fly through a pickup to equip it. An empty mount 
 
 During boss fights, line a wing up horizontally with the green cannon. Homing missiles steer toward it automatically.
 
+The second wave includes a feathered raptor. Its wings fold before it dives along its lane. At the boss, the draconian ace turns toward the camera, then the active cannon glows during its windup and recoils on the volley.
+
+The graybox rigs live in `src/encounter-rigs.ts`. A future model can use the same local pose and pivot names while the simulation owns movement, attack timing, and hitboxes. The interceptor's `muzzle_L` and `muzzle_R` pivots line up with the existing cannon lanes.
+
 ## Assets and offline play
 
 The entire run plays with procedural shapes and works without media files. Generated media goes through chat review and is uploaded by the owner. See [AGENTS.md](AGENTS.md).

@@ -1,4 +1,6 @@
 import * as T from 'three';
+import { createInterceptorRig, createRaptorRig } from './encounter-rigs';
+import { BOSS_RECOIL_TIME } from './encounters';
 import {
   BOSS_CAMERA_DISTANCE, BOSS_CANNON_RADIUS, BOSS_CANNON_X, BOSS_DEPTH, BOSS_PROJECTION,
   BOSS_Y, Flight, HEIGHT, TRANSITION_TIME, WIDTH,
@@ -10,20 +12,15 @@ const teal = 0x88f2ff;
 const orange = 0xff885d;
 const mint = 0xa1ffc5;
 
-function hull(color: number, body: 'fighter' | 'enemy' | 'boss') {
+function hull(color: number, body: 'fighter' | 'enemy') {
   const model = new T.Group();
   const metal = new T.MeshStandardMaterial({ color, roughness: 0.34, metalness: 0.25, flatShading: true });
-  const core = new T.Mesh(new T.ConeGeometry(body === 'boss' ? 2.2 : 0.44, body === 'boss' ? 3.6 : 1.35, 4), metal);
-  model.add(core);
-  const wing = new T.Mesh(new T.BoxGeometry(body === 'boss' ? 7.6 : 1.45, body === 'boss' ? 0.75 : 0.23, 0.38), metal);
-  model.add(wing);
-  const count = body === 'boss' ? 3 : 1;
+  const core = new T.Mesh(new T.ConeGeometry(0.44, 1.35, 4), metal);
+  const wing = new T.Mesh(new T.BoxGeometry(1.45, 0.23, 0.38), metal);
   const glow = new T.MeshBasicMaterial({ color: body === 'fighter' ? teal : orange });
-  for (let i = 0; i < count; i++) {
-    const lamp = new T.Mesh(new T.OctahedronGeometry(body === 'boss' ? 0.38 : 0.17), glow);
-    lamp.position.set((i - (count - 1) / 2) * BOSS_CANNON_X, body === 'fighter' ? -0.45 : 0, 0.37);
-    model.add(lamp);
-  }
+  const lamp = new T.Mesh(new T.OctahedronGeometry(0.17), glow);
+  lamp.position.set(0, body === 'fighter' ? -0.45 : 0, 0.37);
+  model.add(core, wing, lamp);
   return model;
 }
 
@@ -34,7 +31,8 @@ export class FlightView {
   private ortho = new T.OrthographicCamera(-WIDTH / 2, WIDTH / 2, HEIGHT / 2, -HEIGHT / 2, 0.1, 240);
   private perspective = new T.PerspectiveCamera(38, WIDTH / HEIGHT, 0.1, 240);
   private player = hull(0x44b6d9, 'fighter');
-  private boss = hull(0xa299be, 'boss');
+  private boss = createInterceptorRig(BOSS_CANNON_X);
+  private raptor = createRaptorRig();
   private drone = new T.Group();
   private droneGoal = new T.Mesh(
     new T.RingGeometry(0.31, 0.38, 4),
@@ -106,13 +104,13 @@ export class FlightView {
     geometry.setAttribute('position', new T.Float32BufferAttribute(points, 3));
     this.stars = new T.Points(geometry, new T.PointsMaterial({ color: 0x607796, size: 0.07 }));
     this.stars.frustumCulled = false;
-    this.boss.position.set(0, BOSS_Y, BOSS_DEPTH);
+    this.boss.root.position.set(0, BOSS_Y, BOSS_DEPTH);
     this.drone.add(
       new T.Mesh(new T.OctahedronGeometry(0.22), new T.MeshBasicMaterial({ color: mint })),
       new T.Mesh(new T.RingGeometry(0.29, 0.38, 6), new T.MeshBasicMaterial({ color: 0x60c994 })),
     );
     this.towline.add(this.towlineGlow, this.towlineCore);
-    this.plane.add(this.player, this.drone, this.droneGoal, this.towline, this.boss, this.cannonMarker, this.stars,
+    this.plane.add(this.player, this.drone, this.droneGoal, this.towline, this.boss.root, this.raptor.root, this.cannonMarker, this.stars,
       this.pulse, this.shotMeshes, this.droneShots, this.threatMeshes, ...this.enemies, ...this.markers,
       ...Object.values(this.wingProjectiles), ...this.mounts, ...this.wingLasers, ...this.drops);
   }
@@ -162,16 +160,27 @@ export class FlightView {
     }
     this.cannonMarker.visible = flight.phase === 'boss';
     this.cannonMarker.position.set(flight.exposedCannonX * BOSS_PROJECTION, BOSS_Y * BOSS_PROJECTION, 0);
-    this.boss.visible = this.swing > 0 && flight.bossHealth > 0;
-    this.boss.position.z = BOSS_DEPTH - 70 * (1 - eased);
-    this.boss.rotation.x = 0.9 * (1 - eased);
+    this.boss.root.visible = this.swing > 0 && flight.bossHealth > 0;
+    this.boss.root.position.z = BOSS_DEPTH - 70 * (1 - eased);
+    this.boss.root.rotation.x = 0.9 * (1 - eased);
+    if (this.boss.root.visible) {
+      this.boss.pose(eased, flight.cannonWindup, flight.exposedCannonX, flight.firedCannonX,
+        flight.bossRecoil / BOSS_RECOIL_TIME);
+    }
     this.scroll = flight.phase === 'stage' ? (this.scroll + elapsed * 1.65) % 12 : this.scroll;
     this.stars.position.y = -this.scroll;
 
+    const raptor = flight.enemies.find((enemy) => enemy.raptor);
+    this.raptor.root.visible = Boolean(raptor);
+    if (raptor) {
+      this.raptor.root.position.set(raptor.x, raptor.y, 0);
+      this.raptor.root.rotation.z = Math.PI;
+      this.raptor.pose(raptor.age);
+    }
     for (const [index, model] of this.enemies.entries()) {
       const enemy = flight.enemies[index];
-      model.visible = Boolean(enemy);
-      if (enemy) {
+      model.visible = Boolean(enemy && !enemy.raptor);
+      if (enemy && !enemy.raptor) {
         model.position.set(enemy.x, enemy.y, 0);
         model.rotation.z = Math.PI + 0.3 * Math.cos(enemy.age * 1.55);
       }
