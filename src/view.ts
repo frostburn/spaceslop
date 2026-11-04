@@ -3,6 +3,7 @@ import {
   BOSS_CAMERA_DISTANCE, BOSS_CANNON_RADIUS, BOSS_CANNON_X, BOSS_DEPTH, BOSS_PROJECTION,
   BOSS_Y, Flight, HEIGHT, TRANSITION_TIME, WIDTH,
 } from './game';
+import { wingWeapons, type WingProjectile } from './wing';
 
 const sceneColor = 0x0b1020;
 const teal = 0x88f2ff;
@@ -55,7 +56,24 @@ export class FlightView {
   private enemies = Array.from({ length: 12 }, () => hull(0xb84559, 'enemy'));
   private shotMeshes = this.projectiles(teal);
   private droneShots = this.projectiles(mint);
-  private threatMeshes = this.projectiles(orange);
+  private threatMeshes = this.projectiles(orange, 0.16);
+  private wingProjectiles: Record<WingProjectile, T.InstancedMesh> = {
+    homing: this.projectiles(wingWeapons.homing.color, 0.12),
+    cannon: this.projectiles(wingWeapons.cannon.color),
+    omega: this.projectiles(wingWeapons.omega.color, 0.23),
+  };
+  private mounts = Array.from({ length: 2 }, () => new T.Mesh(
+    new T.BoxGeometry(0.24, 0.43, 0.24),
+    new T.MeshBasicMaterial(),
+  ));
+  private wingLasers = Array.from({ length: 2 }, () => new T.Mesh(
+    new T.PlaneGeometry(0.1, 1),
+    new T.MeshBasicMaterial({ color: wingWeapons.laser.color, transparent: true, opacity: 0.85, depthWrite: false }),
+  ));
+  private drops = Array.from({ length: 12 }, () => new T.Mesh(
+    new T.OctahedronGeometry(0.38),
+    new T.MeshBasicMaterial({ wireframe: true }),
+  ));
   private markers = Array.from({ length: 3 }, () => new T.Mesh(
     new T.RingGeometry(0.53, 0.61, 24),
     new T.MeshBasicMaterial({ color: 0xffcc78, transparent: true, depthWrite: false }),
@@ -95,7 +113,8 @@ export class FlightView {
     );
     this.towline.add(this.towlineGlow, this.towlineCore);
     this.plane.add(this.player, this.drone, this.droneGoal, this.towline, this.boss, this.cannonMarker, this.stars,
-      this.pulse, this.shotMeshes, this.droneShots, this.threatMeshes, ...this.enemies, ...this.markers);
+      this.pulse, this.shotMeshes, this.droneShots, this.threatMeshes, ...this.enemies, ...this.markers,
+      ...Object.values(this.wingProjectiles), ...this.mounts, ...this.wingLasers, ...this.drops);
   }
 
   resize(width: number, height: number) {
@@ -158,8 +177,21 @@ export class FlightView {
       }
     }
 
-    this.drawProjectiles(this.shotMeshes, flight.shots.filter((shot) => !shot.drone));
+    this.drawWings(flight);
+    for (const [index, model] of this.drops.entries()) {
+      const drop = flight.drops[index];
+      model.visible = Boolean(drop);
+      if (drop) {
+        model.position.set(drop.x, drop.y, 0.22);
+        model.rotation.set(flight.time * 2, flight.time * 3, 0.3);
+        model.material.color.setHex(wingWeapons[drop.weapon].color);
+      }
+    }
+    this.drawProjectiles(this.shotMeshes, flight.shots.filter((shot) => !shot.drone && !shot.wing));
     this.drawProjectiles(this.droneShots, flight.shots.filter((shot) => shot.drone));
+    for (const [weapon, mesh] of Object.entries(this.wingProjectiles)) {
+      this.drawProjectiles(mesh, flight.shots.filter((shot) => shot.wing === weapon));
+    }
     this.drawProjectiles(this.threatMeshes, flight.threats);
     for (const [index, ring] of this.markers.entries()) {
       const marker = flight.markers[index];
@@ -177,9 +209,33 @@ export class FlightView {
     this.renderer.render(this.scene, camera);
   }
 
-  private projectiles(color: number) {
+  private drawWings(flight: Flight) {
+    const fighting = flight.phase === 'stage' || flight.phase === 'boss';
+    for (const [index, wing] of flight.wings.entries()) {
+      const mount = this.mounts[index];
+      const laser = this.wingLasers[index];
+      const origin = flight.wingOrigin(wing.side);
+      mount.visible = Boolean(wing.weapon) && this.player.visible;
+      if (wing.weapon) {
+        mount.position.set(origin.x, origin.y, 0.2);
+        const charge = wing.weapon === 'omega' && fighting && wing.cooldown < 0.28;
+        mount.scale.setScalar(charge ? 1.32 : 1);
+        mount.material.color.setHex(charge ? 0xffffdf : wingWeapons[wing.weapon].color);
+      }
+
+      laser.visible = fighting && Boolean(wing.beamEnd);
+      if (wing.beamEnd) {
+        const endY = wing.beamEnd.y;
+        laser.position.set(origin.x, (origin.y + endY) / 2, 0.16);
+        laser.scale.y = Math.abs(endY - origin.y);
+        laser.scale.x = 1 + Math.min(wing.laserHold, 0.85);
+      }
+    }
+  }
+
+  private projectiles(color: number, radius = 0.092) {
     const mesh = new T.InstancedMesh(
-      new T.SphereGeometry(color === orange ? 0.16 : 0.092, 8, 6),
+      new T.SphereGeometry(radius, 8, 6),
       new T.MeshBasicMaterial({ color }),
       128,
     );

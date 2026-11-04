@@ -2,6 +2,7 @@ import { registerSW } from 'virtual:pwa-register';
 import { BOSS_HP, Flight, HEIGHT, STEP, WIDTH } from './game';
 import { setupPilots } from './pilots';
 import { FlightView } from './view';
+import { readWingWeapon, wingWeapons } from './wing';
 import './style.css';
 
 function element<T extends HTMLElement>(id: string) {
@@ -26,6 +27,13 @@ const charges = element('charges');
 const bossHud = element('boss-hud');
 const bossHealth = element<HTMLProgressElement>('boss-health');
 const droneWeapon = element<HTMLSelectElement>('drone-weapon');
+const testingWings = import.meta.env.DEV || new URLSearchParams(location.search).get('testLoadout') === '1';
+element('test-wing-loadout').hidden = !testingWings;
+const wingSelectors = ['left-wing', 'right-wing'].map((id) => element<HTMLSelectElement>(id));
+for (const select of wingSelectors) {
+  select.add(new Option('Empty', ''));
+  for (const [key, weapon] of Object.entries(wingWeapons)) select.add(new Option(weapon.name, key));
+}
 bossHealth.max = BOSS_HP;
 
 const showLoadoutPicker = setupPilots(
@@ -91,6 +99,15 @@ function syncUI() {
   else if (flight.droneWeapon === 'towline') {
     tip = flight.phase === 'boss' ? 'Sweep the arc across the green cannon.' : 'Park the drone · Sweep the arc';
   } else if (flight.phase === 'boss') tip = 'Tap the green cannon. Dodge amber rings.';
+  if (active && flight.pickupTime > 0) {
+    tip = flight.pickupMessage;
+  } else if (active && flight.phase === 'stage') {
+    const wings = flight.wings.flatMap((wing) => wing.weapon
+      ? [`${wing.side < 0 ? 'L' : 'R'} ${wingWeapons[wing.weapon].short}`]
+      : []);
+    if (wings.length) tip = wings.join(' · ');
+    else if (flight.drops.length) tip = 'Fly through the drop to equip it';
+  }
   if (status.textContent !== tip) status.textContent = tip;
 }
 
@@ -123,7 +140,10 @@ function showResults() {
 start.addEventListener('click', () => {
   if (!view || screen === 'active') return;
   if (screen !== 'paused') {
-    flight = new Flight(droneWeapon.value === 'towline' ? 'towline' : 'sentry');
+    flight = new Flight(
+      droneWeapon.value === 'towline' ? 'towline' : 'sentry',
+      testingWings ? wingSelectors.map((select) => readWingWeapon(select.value)) : [],
+    );
   }
   screen = 'active';
   resetInput();

@@ -15,6 +15,15 @@ Tap or click the playfield to send the drone to that point. It parks and fires a
 
 Choose **Sentry** or **Towline** before launch. With Towline equipped, park the drone and drag the ship to sweep the arc through enemy formations. The arc pulses automatically while the drone is parked. Against the boss, sweep the line across the green cannon during a pulse.
 
+Enemies can drop wing weapons. Fly through a pickup to equip it. An empty mount takes priority, and with both occupied the pickup replaces the wing it touches. For testing, expand **Test wing loadout** before launch to equip either wing immediately. The picker is available in Vite dev and on builds opened with `?testLoadout=1`.
+
+- **Homing Cannon** fires weak guided missiles.
+- **Standard Cannon** fires straight down its lane.
+- **Continuous Laser** builds damage while it stays on one target.
+- **Omega Cannon** charges slowly and fires a heavy bolt through multiple enemies.
+
+During boss fights, line a wing up horizontally with the green cannon. Homing missiles steer toward it automatically.
+
 ## Assets and offline play
 
 The entire run plays with procedural shapes and works without media files. Generated media goes through chat review and is uploaded by the owner. See [AGENTS.md](AGENTS.md).

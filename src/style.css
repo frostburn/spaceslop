@@ -100,7 +100,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #pulse b { color: var(--accent); }
 
 #mobile-picker { width: min(100%, 14rem); margin-bottom: .7rem; }
-#mobile-picker:empty, #mobile-picker:has([hidden]) { display: none; }
+#mobile-picker:empty, #mobile-picker:has(> #loadout-picker[hidden]) { display: none; }
 #pilot-picker { min-width: 0; margin: 0; padding: 0; border: 0; }
 #pilot-picker legend {
   width: 100%;
@@ -110,7 +110,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   letter-spacing: .08em;
   text-transform: uppercase;
 }
-.drone-weapon {
+.loadout-field {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -120,9 +120,11 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   font-size: .7rem;
   text-align: start;
 }
-.drone-weapon select {
+.loadout-field select {
   min-height: 44px;
-  padding-inline: .45rem;
+  min-width: 0;
+  max-width: 72%;
+  padding-inline: .35rem;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: #16202f;
@@ -130,7 +132,20 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   font: inherit;
   font-size: .8rem;
 }
-.drone-weapon select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.loadout-field select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.test-wings {
+  margin-top: .35rem;
+  color: var(--muted);
+  font-size: .7rem;
+  text-align: start;
+}
+.test-wings summary {
+  min-height: 44px;
+  padding-block: .85rem;
+  cursor: pointer;
+}
+.test-wings .loadout-field { margin: 0 0 .35rem; }
 
 #pilot-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .35rem; }
 #pilot-choices label { position: relative; cursor: pointer; }

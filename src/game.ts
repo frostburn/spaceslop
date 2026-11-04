@@ -1,3 +1,5 @@
+import { wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
+
 export const WIDTH = 9;
 export const HEIGHT = 16;
 export const STEP = 1 / 60;
@@ -14,8 +16,16 @@ export type DroneWeapon = 'sentry' | 'towline';
 
 type Phase = 'stage' | 'approach' | 'boss' | 'won' | 'lost';
 type Point = { x: number; y: number };
-type Shot = Point & { z: number; vx: number; vy: number; vz: number; drone?: boolean; targetsBoss?: boolean };
-type Enemy = Point & { lane: number; age: number; fire: number; hp: number };
+type Shot = Point & {
+  z: number; vx: number; vy: number; vz: number;
+  drone?: boolean; targetsBoss?: boolean; wing?: WingProjectile; pierced?: Set<Enemy>;
+};
+type Enemy = Point & { lane: number; age: number; fire: number; hp: number; drop?: WingWeapon };
+type Drop = Point & { weapon: WingWeapon };
+type Wing = {
+  side: WingSide; weapon?: WingWeapon; cooldown: number;
+  beamEnd?: Point; laserTarget?: Enemy | number; laserHold: number;
+};
 
 const SHIP_SPEED = 6.5;
 const DRONE_SPEED = 4 * SHIP_SPEED;
@@ -24,12 +34,18 @@ const TOWLINE_INTERVAL = 1.05;
 const TOWLINE_DURATION = 0.2;
 const TOWLINE_DAMAGE = 2;
 
+const wingShots = {
+  homing: { interval: 0.72, damage: 0.5, speed: 11, bossTravel: 0.68 },
+  cannon: { interval: 0.36, damage: 1, speed: 18, bossTravel: 0.32 },
+  omega: { interval: 1.7, damage: 4, speed: 20, bossTravel: 0.36 },
+};
+
 const stageWaves = [
-  { time: 0.6, lanes: [-2.6, 0, 2.6] },
-  { time: 3.6, lanes: [-2, 2] },
-  { time: 6.6, lanes: [-3, 0, 3] },
-  { time: 9.6, lanes: [-1.3, 1.3] },
-];
+  { time: 0.6, lanes: [-2.6, 0, 2.6], carrier: 1, drop: 'homing' },
+  { time: 3.6, lanes: [-2, 2], carrier: 1, drop: 'cannon' },
+  { time: 6.6, lanes: [-3, 0, 3], carrier: 0, drop: 'laser' },
+  { time: 9.6, lanes: [-1.3, 1.3], carrier: 1, drop: 'omega' },
+] satisfies { time: number; lanes: number[]; carrier: number; drop: WingWeapon }[];
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 const near = (a: Point, b: Point, radius: number) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 < radius ** 2;
@@ -78,6 +94,13 @@ export class Flight {
   markers: Point[] = [];
   pulseFlash = 0;
   towlineFlash = 0;
+  drops: Drop[] = [];
+  wings: [Wing, Wing] = [
+    { side: -1, cooldown: 0, laserHold: 0 },
+    { side: 1, cooldown: 0, laserHold: 0 },
+  ];
+  pickupTime = 0;
+  pickupMessage = '';
   private aim?: Point;
   private nextWave = 0;
   private cooldown = 0;
@@ -88,9 +111,13 @@ export class Flight {
 
   readonly droneWeapon: DroneWeapon;
 
-  constructor(droneWeapon: DroneWeapon = 'sentry') {
+  constructor(droneWeapon: DroneWeapon = 'sentry', loadout: readonly (WingWeapon | undefined)[] = []) {
     this.droneWeapon = droneWeapon;
     if (droneWeapon === 'towline') this.droneCooldown = TOWLINE_INTERVAL;
+    for (const [index, wing] of this.wings.entries()) {
+      const weapon = loadout[index];
+      if (weapon) this.equip(wing, weapon);
+    }
   }
 
   get towlineLinked() {
@@ -100,6 +127,10 @@ export class Flight {
 
   get exposedCannonX() {
     return this.volley % 2 === 0 ? -BOSS_CANNON_X : BOSS_CANNON_X;
+  }
+
+  wingOrigin(side: WingSide) {
+    return { x: this.player.x + side * 0.59, y: this.player.y + 0.12 };
   }
 
   deployDrone(x: number, y: number) {
@@ -135,7 +166,9 @@ export class Flight {
     this.pulseFlash = 0.3;
     this.threats = [];
     if (this.phase === 'stage') {
-      this.score += this.enemies.length * 100;
+      for (const enemy of this.enemies) {
+        if (enemy.hp > 0) this.damageEnemy(enemy, enemy.hp);
+      }
       this.enemies = [];
     } else {
       this.damageBoss(6);
@@ -147,6 +180,7 @@ export class Flight {
     this.time += dt;
     this.invulnerable = Math.max(0, this.invulnerable - dt);
     this.pulseFlash = Math.max(0, this.pulseFlash - dt);
+    this.pickupTime = Math.max(0, this.pickupTime - dt);
     if (this.droneTarget && moveToward(this.drone, this.droneTarget, DRONE_SPEED * dt)) {
       this.droneTarget = undefined;
     }
@@ -164,26 +198,34 @@ export class Flight {
     if (boss) this.stepBoss();
     else this.stepStage(dt);
     this.stepDroneWeapon(dt);
+    for (const wing of this.wings) this.stepWing(wing, boss, dt);
 
     this.shots = this.shots.filter((shot) => {
-      const previousY = shot.y;
+      const previous = { x: shot.x, y: shot.y };
+      if (shot.wing === 'homing') this.guideMissile(shot, boss, dt);
       this.advance(shot, dt);
       if (boss) {
         if (shot.z > BOSS_DEPTH) return true;
         const untilImpact = (BOSS_DEPTH - shot.z) / shot.vz;
         const impact = { x: shot.x + shot.vx * untilImpact, y: shot.y + shot.vy * untilImpact };
         if (shot.targetsBoss ||
-          (shot.drone && near(impact, { x: this.exposedCannonX, y: BOSS_Y }, BOSS_CANNON_RADIUS))) {
-          this.damageBoss(1);
+          ((shot.drone || shot.wing) && near(impact, { x: this.exposedCannonX, y: BOSS_Y }, BOSS_CANNON_RADIUS))) {
+          this.damageBoss(shot.wing ? wingShots[shot.wing].damage : 1);
         }
         return false;
       }
-      const enemy = this.enemies.find((target) => target.hp > 0 &&
-        Math.abs(shot.x - target.x) < 0.52 &&
-        shot.y >= target.y - 0.46 && previousY <= target.y + 0.46);
-      if (!enemy) return shot.y < 9;
-      this.damageEnemy(enemy, 1);
-      return false;
+      for (const enemy of this.enemies) {
+        if (enemy.hp <= 0 || shot.pierced?.has(enemy)) continue;
+        const hit = shot.wing === 'homing'
+          ? nearSegment(enemy, previous, shot, 0.52)
+          : Math.abs(shot.x - enemy.x) < 0.52 &&
+            shot.y >= enemy.y - 0.46 && previous.y <= enemy.y + 0.46;
+        if (!hit) continue;
+        this.damageEnemy(enemy, shot.wing ? wingShots[shot.wing].damage : 1);
+        if (!shot.pierced) return false;
+        shot.pierced.add(enemy);
+      }
+      return shot.y < 9 && Math.abs(shot.x) < 5;
     });
     this.enemies = this.enemies.filter((enemy) => enemy.hp > 0 && enemy.y > -9);
 
@@ -201,7 +243,104 @@ export class Flight {
       return Math.abs(shot.x) < 5 && Math.abs(shot.y) < 9;
     });
 
-    if (this.phase === 'stage' && this.time >= 14) this.enter('approach');
+    if (this.phase === 'stage') {
+      this.collectDrops(dt);
+      if (this.time >= 14) this.enter('approach');
+    }
+  }
+
+  private equip(wing: Wing, weapon: WingWeapon) {
+    wing.weapon = weapon;
+    wing.cooldown = weapon === 'omega' ? wingShots.omega.interval : 0;
+    wing.beamEnd = undefined;
+    wing.laserTarget = undefined;
+    wing.laserHold = 0;
+  }
+
+  private collectDrops(dt: number) {
+    this.drops = this.drops.filter((drop) => {
+      drop.y -= 3.35 * dt;
+      if (!near(drop, this.player, 0.78)) return drop.y > -9;
+      const nearbyWing = this.wings[drop.x <= this.player.x ? 0 : 1];
+      const wing = nearbyWing.weapon ? (this.wings.find((slot) => !slot.weapon) ?? nearbyWing) : nearbyWing;
+      this.equip(wing, drop.weapon);
+      this.pickupMessage = `${wing.side < 0 ? 'Left' : 'Right'} wing · ${wingWeapons[drop.weapon].name}`;
+      this.pickupTime = 1.6;
+      return false;
+    });
+  }
+
+  private stepWing(wing: Wing, boss: boolean, dt: number) {
+    if (!wing.weapon || (this.phase !== 'stage' && this.phase !== 'boss')) return;
+    const origin = this.wingOrigin(wing.side);
+    if (wing.weapon === 'laser') {
+      this.stepLaser(wing, origin, boss, dt);
+      return;
+    }
+    wing.cooldown = Math.max(0, wing.cooldown - dt);
+    if (wing.cooldown > 0) return;
+    const spec = wingShots[wing.weapon];
+    wing.cooldown = spec.interval;
+    const duration = spec.bossTravel;
+    this.shots.push({
+      ...origin, z: 0, wing: wing.weapon,
+      vx: boss ? origin.x * (1 / BOSS_PROJECTION - 1) / duration : 0,
+      vy: boss ? (BOSS_Y - origin.y) / duration : spec.speed,
+      vz: boss ? BOSS_DEPTH / duration : 0,
+      pierced: wing.weapon === 'omega' ? new Set<Enemy>() : undefined,
+    });
+  }
+
+  private stepLaser(wing: Wing, origin: Point, boss: boolean, dt: number) {
+    let enemy: Enemy | undefined;
+    let target: Enemy | number | undefined;
+    let endY = 8;
+    if (boss) {
+      endY = BOSS_Y * BOSS_PROJECTION;
+      if (Math.abs(origin.x - this.exposedCannonX * BOSS_PROJECTION) < BOSS_CANNON_RADIUS * BOSS_PROJECTION) {
+        target = this.exposedCannonX;
+      }
+    } else {
+      for (const candidate of this.enemies) {
+        if (candidate.hp > 0 && Math.abs(candidate.x - origin.x) < 0.43 &&
+          candidate.y >= origin.y && (!enemy || candidate.y < enemy.y)) {
+          enemy = candidate;
+        }
+      }
+      target = enemy;
+      if (enemy) endY = enemy.y;
+    }
+    wing.beamEnd = { x: origin.x, y: endY };
+    wing.laserHold = target !== undefined && target === wing.laserTarget ? wing.laserHold + dt : 0;
+    wing.laserTarget = target;
+    const damage = (1 + 2.5 * Math.min(wing.laserHold / 0.85, 1)) * dt;
+    if (enemy) this.damageEnemy(enemy, damage);
+    if (boss && target !== undefined) this.damageBoss(damage);
+  }
+
+  private guideMissile(shot: Shot, boss: boolean, dt: number) {
+    if (boss) {
+      const remaining = Math.max(dt, (BOSS_DEPTH - shot.z) / shot.vz);
+      const steer = Math.min(1, 10 * dt);
+      shot.vx += ((this.exposedCannonX - shot.x) / remaining - shot.vx) * steer;
+      return;
+    }
+
+    let closest: Enemy | undefined;
+    let distance = 36;
+    for (const enemy of this.enemies) {
+      if (enemy.hp <= 0 || enemy.y <= shot.y) continue;
+      const squared = (enemy.x - shot.x) ** 2 + (enemy.y - shot.y) ** 2;
+      if (squared < distance) {
+        closest = enemy;
+        distance = squared;
+      }
+    }
+    const heading = Math.atan2(shot.vx, shot.vy);
+    const target = closest ? Math.atan2(closest.x - shot.x, closest.y - shot.y) : 0;
+    const angle = heading + clamp(target - heading, -4.8 * dt, 4.8 * dt);
+    shot.vx = Math.sin(angle) * wingShots.homing.speed;
+    shot.vy = Math.cos(angle) * wingShots.homing.speed;
   }
 
   private stepDroneWeapon(dt: number) {
@@ -251,7 +390,10 @@ export class Flight {
     if (wave && this.time >= wave.time) {
       this.nextWave++;
       this.enemies.push(...wave.lanes.map((lane, index) =>
-        ({ x: lane, y: 8.6, lane, age: 0, fire: 1.1 + index * 0.28, hp: 2 })));
+        ({
+          x: lane, y: 8.6, lane, age: 0, fire: 1.1 + index * 0.28, hp: 2,
+          drop: index === wave.carrier ? wave.drop : undefined,
+        })));
     }
 
     for (const enemy of this.enemies) {
@@ -317,7 +459,10 @@ export class Flight {
 
   private damageEnemy(enemy: Enemy, damage: number) {
     enemy.hp = Math.max(0, enemy.hp - damage);
-    if (enemy.hp === 0) this.score += 100;
+    if (enemy.hp === 0) {
+      this.score += 100;
+      if (enemy.drop) this.drops.push({ x: enemy.x, y: enemy.y, weapon: enemy.drop });
+    }
   }
 
   private damageBoss(damage: number) {
@@ -343,6 +488,12 @@ export class Flight {
       this.shots = [];
       this.threats = [];
       this.enemies = [];
+      this.drops = [];
+      for (const wing of this.wings) {
+        wing.beamEnd = undefined;
+        wing.laserTarget = undefined;
+        wing.laserHold = 0;
+      }
     }
     if (phase === 'boss') {
       this.cooldown = 0;
