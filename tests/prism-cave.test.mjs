@@ -53,20 +53,20 @@ test('crystal shells have closed root and tip surfaces',()=>{
  }
 });
 
-test('the river excludes projectiles and restores visibility and renderer state after a failed draw',()=>{
- const cave=createPrismScenery(),scene=new T.Scene(),actor=new T.Group(),threat=new T.Group(),light=new T.DirectionalLight();
- scene.add(cave.root,actor,threat,light);cave.root.visible=true;actor.visible=false;cave.setReflectionActors([actor]);cave.prime();
+test('the river includes opted-in projectiles and excludes markers, restoring state after failure',()=>{
+ const cave=createPrismScenery(),scene=new T.Scene(),actor=new T.Group(),threat=new T.Group(),marker=new T.Group(),light=new T.DirectionalLight();
+ scene.add(cave.root,actor,threat,marker,light);cave.root.visible=true;actor.visible=false;cave.setReflectionActors([actor,threat]);cave.prime();
  scene.updateMatrixWorld(true);
  const mirror=cave.root.getObjectByName('prism-live-river'),camera=new T.PerspectiveCamera(39,9/16,.1,240);camera.position.z=32;camera.lookAt(0,0,0);camera.updateMatrixWorld(true);
  const original={tag:'canvas'},viewport=new T.Vector4(2,3,14,16);let target=original,scissor=true,currentViewport=viewport.clone(),draws=0;
  const renderer={xr:{enabled:true},shadowMap:{autoUpdate:true},autoClear:true,state:{buffers:{depth:{setMask(){}}}},
   getRenderTarget:()=>target,setRenderTarget:t=>{target=t;},getViewport:v=>v.copy(currentViewport),setViewport:v=>{currentViewport.copy(v);},
   getScissorTest:()=>scissor,setScissorTest:v=>{scissor=v;},
-  render:()=>{draws++;assert(actor.visible);assert(!threat.visible);assert(light.visible);assert(!mirror.visible);throw Error('mirror interrupted');},
+  render:()=>{draws++;assert(actor.visible);assert(threat.visible);assert(!marker.visible);assert(light.visible);assert(!mirror.visible);throw Error('mirror interrupted');},
  };
  assert.throws(()=>mirror.onBeforeRender(renderer,scene,camera,mirror.geometry,mirror.material,null),/mirror interrupted/);
  assert.equal(draws,1);assert.equal(target,original);assert(currentViewport.equals(viewport));assert(scissor);
- assert(!actor.visible&&threat.visible&&mirror.visible);assert(renderer.xr.enabled&&renderer.shadowMap.autoUpdate);
+ assert(!actor.visible&&threat.visible&&marker.visible&&mirror.visible);assert(renderer.xr.enabled&&renderer.shadowMap.autoUpdate);
 });
 
 
@@ -95,7 +95,7 @@ test('the HDR pass restores the caller target, viewport and scissor after a fail
  assert.equal(target,original);assert(currentViewport.equals(viewport));assert(scissor);
 });
 
-test('camera-driven spectral fans use cave coordinates through the boss pitch',()=>{
+test('camera-driven facet flares use cave coordinates through the boss pitch',()=>{
  const cave=createPrismScenery(),river=cave.root.getObjectByName('prism-live-river'),camera=new T.PerspectiveCamera();
  const parent=new T.Group();parent.rotation.x=-Math.PI/2;parent.add(camera);camera.position.set(9,4,32);
  for(const reveal of [0,.5,1]) {
@@ -104,4 +104,19 @@ test('camera-driven spectral fans use cave coordinates through the boss pitch',(
   assert(river.material.uniforms.caveEye.value.distanceTo(expected)<1e-8);
  }
  camera.position.x=-9;cave.capture({},camera);assert.equal(river.material.uniforms.caveEye.value.x,-9);
+});
+
+
+test('live crystal capture includes bullets, excludes optical surfaces and restores state after failure',async()=>{
+ const {createPrismScene}=await server.ssrLoadModule('/src/prism-scene.ts');
+ const live=createPrismScene(),scene=new T.Scene(),plane=new T.Group(),root=new T.Group(),field=new T.Group();
+ const bullet=new T.Group(),marker=new T.Group(),crystal=new T.Group(),glint=new T.Group();
+ crystal.name='prism-crystals-0';glint.name='prism-facet-glints';field.add(crystal,glint);root.add(field);plane.add(root,bullet,marker);scene.add(plane);live.setActors([bullet]);
+ const original={tag:'canvas'},viewport=new T.Vector4(1,2,17,19),layer={value:0};let target=original,scissor=true,current=viewport.clone();
+ const renderer={getDrawingBufferSize:v=>v.set(600,1800),getRenderTarget:()=>target,setRenderTarget:v=>{target=v;},
+  getViewport:v=>v.copy(current),setViewport:v=>{current.copy(v);},getScissorTest:()=>scissor,setScissorTest:v=>{scissor=v;},
+  render:()=>{assert(bullet.visible&&!marker.visible&&!crystal.visible&&!glint.visible);assert.equal(layer.value,1);assert.equal(target.height,768);throw Error('scene interrupted');}};
+ assert.throws(()=>live.capture(renderer,new T.PerspectiveCamera(),root,field,layer),/scene interrupted/);
+ assert.equal(target,original);assert(current.equals(viewport));assert(scissor);assert.equal(layer.value,0);
+ assert(bullet.visible&&marker.visible&&crystal.visible&&glint.visible);
 });

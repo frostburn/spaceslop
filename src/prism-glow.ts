@@ -25,6 +25,15 @@ export function createPrismGlow(renderer:T.WebGLRenderer) {
     fragmentShader:`${prismSafe}
       uniform sampler2D source,glow;varying vec2 vUv;
       void main(){vec3 c=safeHDR(texture2D(source,vUv).rgb)+safeHDR(texture2D(glow,vUv).rgb)*.42;
+        // Faint lens ghosts mirror the brightest occlusion-tested highlights
+        // across the optical axis. No textures or per-light extra scene renders.
+        vec3 ghosts=vec3(0.0);
+        for(int i=0;i<3;i++){
+          vec2 ghostUv=.5-(vUv-.5)*(0.6+float(i)*.45);
+          if(all(greaterThan(ghostUv,vec2(0.0)))&&all(lessThan(ghostUv,vec2(1.0))))
+            ghosts+=max(safeHDR(texture2D(glow,ghostUv).rgb)-vec3(.35),vec3(0.0))*.055;
+        }
+        c+=ghosts;
         // ACES-style shoulder retains detail in white crystal highlights.
         c=clamp((c*(2.51*c+.03))/(c*(2.43*c+.59)+.14),0.0,1.0);
         gl_FragColor=vec4(safeHDR(c),1.0);

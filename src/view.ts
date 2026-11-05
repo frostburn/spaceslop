@@ -183,7 +183,7 @@ export class FlightView {
       this.hiveBoss.root, ...this.ants.map(({ root }) => root),
       this.pulse, ...this.enemies.map(({ root }) => root), ...this.markers,
       ...ammo, this.combat.root, ...pods, ...this.wingLasers.map(({ root }) => root), ...this.drops.map(({ root }) => root));
-    this.cave.setReflectionActors([this.player.root,this.drone,this.boss.root,...this.enemies.map(e=>e.root),...pods]);
+    this.cave.setReflectionActors([this.player.root,this.drone,this.boss.root,...this.enemies.map(e=>e.root),...pods,...ammo]);
   }
 
   async warmup(signal: AbortSignal, repaint: () => void) {
@@ -231,7 +231,7 @@ export class FlightView {
       await nextFrame();
       if (signal.aborted) return;
       if (objects.includes(this.ice.root)) this.ice.prime();
-      if (objects.includes(this.cave.root)) this.cave.prime();
+      if (objects.includes(this.cave.root)) {for(const batch of Object.values(this.projectiles))batch.prime();this.cave.prime();}
       if (objects === ordnance) {
         for (const batch of Object.values(this.projectiles)) batch.prime();
         this.combat.prime(); this.playerMuzzle.prime(); this.droneMuzzle.prime();
@@ -404,7 +404,7 @@ export class FlightView {
     for (const weapon of ['homing', 'cannon', 'omega'] as const) {
       this.projectiles[weapon].draw(flight.shots.filter((shot) => shot.wing === weapon), this.animationTime);
     }
-    this.projectiles.hostile.draw(flight.level === 'preserve' ? flight.threats : [], this.animationTime);
+    this.projectiles.hostile.draw(flight.level === 'preserve' || flight.level === 'prism' ? flight.threats : [], this.animationTime);
     this.projectiles.brine.draw(flight.level === 'ice' ? flight.threats : [], this.animationTime);
     this.projectiles.spore.draw(flight.level === 'broodlock' ? flight.threats : [], this.animationTime);
     this.drawFeedback(flight, elapsed);

@@ -24,7 +24,7 @@ export function createPrismMirror(root:T.Group,optics:ReturnType<typeof prismOpt
           float shore=smoothstep(2.6,4.1,abs(vRiver.x));
           float stones=caveNoise(roof*8.0);float foam=positivePow(caveNoise(vRiver*vec2(2.0,20.0)+ripple*25.0),6.0);
           vec3 water=vec3(.004,.014,.023)+vec3(.022,.032,.028)*stones*shore;
-          water+=reflection+stellarCaustics(vec3(vRiver+ripple*6.0,-3.8))*(.72+foam*1.5);
+          water+=reflection;
           // Narrow white streaks reveal moving liquid even outside the light fans.
           water+=foam*.006+shore*foam*.06;
           gl_FragColor=vec4(safeHDR(water),1.0);

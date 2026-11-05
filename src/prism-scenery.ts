@@ -1,5 +1,5 @@
 import * as T from 'three';
-import { prismSafe, prismView } from './prism-safe';
+import { prismSafe } from './prism-safe';
 import { prismOptics, caveWallMaterial } from './prism-optics';
 import { createPrismMirror } from './prism-mirror';
 import { prismCrystals, prismCrystalY, prismScroll, PRISM_DURATION, PRISM_PITCH } from './prism-layout';
@@ -31,41 +31,15 @@ function caveGeometry() {
   }
   const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(p,3));geometry.setIndex(ix);return geometry;
 }
-// Bounded additive beam ribbons and analytic glints replace a full-screen bloom
-// chain. They sit below combat geometry and never hide warning markers.
+// Flare seeds sit on facets and brighten near the reflected stellar direction.
 function stellarEffects(uniforms:ReturnType<typeof prismOptics>['uniforms']) {
-  const p:number[]=[],coords:number[]=[],seeds:number[]=[];
-  for(let i=0;i<12;i++) {
-    const y=-20+i*8.0,wide=i%3===0?.22:.065;
-    const a=new T.Vector3(7.5,y+6,-.55),b=new T.Vector3(-5.8,y-3,-2.7),n=new T.Vector3(.55,-.83,0).multiplyScalar(wide);
-    for(const [point,along,across] of [[a.clone().sub(n),0,-1],[b.clone().sub(n),1,-1],[a.clone().add(n),0,1],
-      [a.clone().add(n),0,1],[b.clone().sub(n),1,-1],[b.clone().add(n),1,1]] as [T.Vector3,number,number][]) {
-      p.push(...point.toArray());coords.push(along,across);seeds.push(i);
-    }
-  }
-  const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(p,3));
-  geometry.setAttribute('beamCoord',new T.Float32BufferAttribute(coords,2));geometry.setAttribute('beamSeed',new T.Float32BufferAttribute(seeds,1));
-  const beams=new T.Mesh(geometry,new T.ShaderMaterial({uniforms,transparent:true,depthWrite:false,side:T.DoubleSide,blending:T.AdditiveBlending,
-    vertexShader:`${prismView}
-      uniform float caveScroll;attribute vec2 beamCoord;attribute float beamSeed;varying vec2 vBeam;varying float vSeed;
-      void main(){vec3 p=position;float center=-20.0+beamSeed*8.0;p.y+=mod(center-caveScroll+24.0,96.0)-24.0-center;vec2 anchor=vec2(4.3,mod(center-caveScroll+24.0,96.0)-24.0+3.8);p.xy=anchor+prismTurn(prismSweep(vec3(anchor,0.0)))*(p.xy-anchor);vBeam=beamCoord;vSeed=beamSeed;
-        gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);}`,
-    fragmentShader:`${prismSafe}
-      uniform float caveTime;varying vec2 vBeam;varying float vSeed;
-      void main(){float core=positivePow(1.0-abs(vBeam.y),9.0),halo=positivePow(1.0-abs(vBeam.y),2.0);
-        float fade=smoothstep(0.0,.1,vBeam.x)*(1.0-smoothstep(.8,1.0,vBeam.x));
-        float shimmer=.85+.15*sin(caveTime*.65+vSeed*3.0);
-        gl_FragColor=vec4(vec3(1.0,.94,.82)*(core*4.0+halo*.3)*shimmer,fade*.4);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-      }`}));
-  beams.name='prism-stellar-rays';beams.frustumCulled=false;
   const points=new T.BufferGeometry();points.setAttribute('position',new T.Float32BufferAttribute(new Float32Array(prismCrystals.length*3),3));
   points.setAttribute('glintSeed',new T.Float32BufferAttribute(prismCrystals.map((_,i)=>i),1));
   const glints=new T.Points(points,new T.ShaderMaterial({uniforms,transparent:true,depthWrite:false,blending:T.AdditiveBlending,
     vertexShader:`${prismSafe}
-      uniform float caveTime;attribute float glintSeed;varying float vShine;
-      void main(){vShine=positivePow(.5+.5*sin(caveTime*.65+glintSeed*2.4),8.0);
+      uniform float caveTime;uniform vec3 caveEye;attribute float glintSeed;varying float vShine;
+      void main(){vec3 view=normalize(caveEye-position);vec3 facet=normalize(vec3(sin(glintSeed*2.4)*.6,cos(glintSeed*1.7)*.6,1.0));
+        vShine=positivePow(max(0.0,dot(facet,normalize(view+normalize(vec3(.65,.48,.72))))),60.0);
         vec4 p=modelViewMatrix*vec4(position,1.0);gl_Position=projectionMatrix*p;
         gl_PointSize=clamp((12.0+vShine*24.0)*32.0/max(8.0,-p.z),3.0,64.0);}`,
     fragmentShader:`${prismSafe}
@@ -78,14 +52,14 @@ function stellarEffects(uniforms:ReturnType<typeof prismOptics>['uniforms']) {
         #include <colorspace_fragment>
       }`}));
   glints.name='prism-facet-glints';glints.frustumCulled=false;
-  return {beams,glints};
+  return {glints};
 }
 export function createPrismScenery() {
   const root=new T.Group(),field=new T.Group();root.name='prism-vault';root.visible=false;root.add(field);
   const optics=prismOptics(),wall=new T.Mesh(caveGeometry(),caveWallMaterial(optics.uniforms));wall.frustumCulled=false;wall.name='prism-basalt';field.add(wall);
   const mirror=createPrismMirror(root,optics);field.add(mirror.mirror);
   const bounce=new T.DirectionalLight(0xc4dcff,1.1);bounce.position.set(0,1,-6);field.add(bounce,bounce.target);
-  const effects=stellarEffects(optics.uniforms);field.add(effects.beams,effects.glints);
+  const effects=stellarEffects(optics.uniforms);field.add(effects.glints);
   const tip=new T.Vector3(),transform=new T.Object3D(),inverse=new T.Matrix4(),color=new T.Color(),yAxis=new T.Vector3(0,1,0);
   const batches=Array.from({length:4},(_,variant)=>{
     const recipes=prismCrystals.map((recipe,index)=>({recipe,index})).filter(({recipe})=>recipe.variant===variant);
@@ -102,7 +76,7 @@ export function createPrismScenery() {
     };
     return {mesh,recipes};
   });
-  return {root,ready:Promise.resolve([] as T.Texture[]),setReflectionActors:mirror.setActors,prepareReflection:mirror.prepare,
+  return {root,ready:Promise.resolve([] as T.Texture[]),setReflectionActors(objects:T.Object3D[]){mirror.setActors(objects);optics.live.setActors(objects);},prepareReflection:mirror.prepare,
     update(progress:number,reveal:number,time=progress*PRISM_DURATION) {
       optics.uniforms.caveScroll.value=prismScroll(time);optics.uniforms.caveTime.value=time;
       const angle=-PRISM_PITCH*reveal;field.rotation.x=angle;
@@ -127,6 +101,7 @@ export function createPrismScenery() {
       // Only the main viewing camera steers the glints, never the reflected or depth cameras.
       field.updateWorldMatrix(true,false);camera.updateWorldMatrix(true,false);
       inverse.copy(field.matrixWorld).invert();camera.getWorldPosition(optics.uniforms.caveEye.value).applyMatrix4(inverse);
+      optics.live.capture(renderer,camera,root,field,optics.refraction.uniforms.captureLayer);
       optics.refraction.capture(renderer,camera,root,field);},
     prime(){this.update(0,0);mirror.prime();},
   };
