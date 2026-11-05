@@ -40,7 +40,9 @@ export function createPrismScenery() {
     mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);mesh.setColorAt(0,new T.Color(0xffffff));field.add(mesh);
     mesh.onBeforeRender=(renderer,_scene,camera)=>{
       inverse.copy(field.matrixWorld).invert();optics.uniforms.viewToCave.value.copy(inverse).multiply(camera.matrixWorld);
-      optics.uniforms.caveProjectionInverse.value.copy(camera.projectionMatrixInverse);
+      // Reflector changes its cached camera projection for the boss view and
+      // oblique clip plane without updating that camera's inverse property.
+      optics.uniforms.caveProjectionInverse.value.copy(camera.projectionMatrix).invert();
       const target=renderer.getRenderTarget();if(target)optics.uniforms.iceViewport.value.set(target.width,target.height);else renderer.getDrawingBufferSize(optics.uniforms.iceViewport.value);
     };
     return {mesh,recipes};
