@@ -8,6 +8,7 @@ import {
   BOSS_FIRE_AT, BOSS_RECOIL_TIME, BOSS_VOLLEY_INTERVAL, BOSS_WINDUP_AT, RAPTOR_FLARE_END, raptorFlight,
 } from './encounters';
 import { BOSS_CANNON_X, TRANSITION_TIME } from './game';
+import { createMushroomCluster } from './hive-fungi';
 import { createDroneRig, createFighterRig, createScoutRig } from './ship-rigs';
 import { createWingPod } from './wing-pod';
 import type { WingWeapon } from './wing';
@@ -35,6 +36,8 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const interceptorBurners = shipBurners(interceptor.root);
   const ant = createAntRig();
   ant.root.rotation.z = Math.PI;
+  const soldier = createAntRig('soldier');
+  soldier.root.rotation.z = Math.PI;
   const guardian = createHiveGuardian(BOSS_CANNON_X);
   raptor.root.rotation.z = Math.PI;
   const scout = createScoutRig();
@@ -111,6 +114,16 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
         return windup > 0 ? 'spore windup' : 'scuttle';
       },
     },
+    soldier: {
+      root: soldier.root,
+      duration: 3.1,
+      pose(time: number) {
+        const windup = T.MathUtils.clamp((time - 2.55) / 0.55, 0, 1);
+        soldier.pose(time, windup);
+        return windup > 0 ? 'spore windup' : 'scuttle';
+      },
+    },
+    mushroom: { root: createMushroomCluster(), duration: 0, pose: () => 'rooted' },
     guardian: bossAsset(guardian),
     raptor: {
       root: raptor.root,

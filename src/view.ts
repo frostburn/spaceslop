@@ -227,8 +227,9 @@ export class FlightView {
     const angle = (eased - 1) * Math.PI / 2;
     this.rotation.setFromAxisAngle(this.axis, angle);
     this.plane.quaternion.copy(this.rotation);
-    const camera = this.swing === 0 ? this.ortho : this.perspective;
-    const distance = T.MathUtils.lerp(95, BOSS_CAMERA_DISTANCE, eased);
+    const hive = flight.level === 'broodlock';
+    const camera = this.swing === 0 && !hive ? this.ortho : this.perspective;
+    const distance = T.MathUtils.lerp(hive ? 26 : 95, BOSS_CAMERA_DISTANCE, eased);
     this.perspective.fov = T.MathUtils.radToDeg(2 * Math.atan(HEIGHT / 2 / distance));
     this.perspective.updateProjectionMatrix();
     camera.position.set(0, 0, distance).applyQuaternion(this.rotation);
@@ -305,6 +306,7 @@ export class FlightView {
       ant.root.position.set(enemy.x, enemy.y, 0);
       ant.root.scale.setScalar(enemy.ant === 'soldier' ? 1.03 : 0.8);
       ant.root.rotation.z = Math.PI + 0.15 * Math.cos(enemy.age * 1.55);
+      ant.setKind(enemy.ant === 'soldier' ? 'soldier' : 'worker');
       const windup = enemy.ant === 'soldier' ? T.MathUtils.clamp((enemy.age - enemy.fire + 0.55) / 0.55, 0, 1) : 0;
       ant.pose(enemy.age, windup);
     }
@@ -344,7 +346,7 @@ export class FlightView {
   private drawScenery(flight: Flight, reveal: number, distance: number, elapsed: number, fighterSpeed: number, droneSpeed: number) {
     if (flight.phase === 'stage') this.stageTime = flight.time;
     if (flight.phase === 'approach' || flight.phase === 'boss') this.stageTime = flight.stageDuration;
-    const perspectiveDistance = this.swing === 0 ? undefined : distance;
+    const perspectiveDistance = this.swing === 0 && flight.level !== 'broodlock' ? undefined : distance;
     this.hive.root.visible = flight.level === 'broodlock';
     this.stars.visible = flight.level !== 'broodlock';
     if (this.hive.root.visible) {

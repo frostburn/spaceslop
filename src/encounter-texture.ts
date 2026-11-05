@@ -2,9 +2,10 @@ import { RepeatWrapping, SRGBColorSpace, TextureLoader, type Group, type Texture
 import { setFaceTexture } from './creature-faces';
 import { setFeatherTexture, type createInterceptorRig, type createRaptorRig } from './encounter-rigs';
 import { textureShipAlloy } from './encounter-surfaces';
+import { setAntChitinTexture, setFungusTexture } from './hive-materials';
 
 type EncounterTexture = 'armor' | 'feathers' | 'scales' | 'preserve' | 'shipyard' |
-  'hive' | 'hiveMask' | 'hiveStars' | 'hiveMines';
+  'hive' | 'hiveMask' | 'hiveStars' | 'hiveMines' | 'chitin' | 'fungus';
 declare const __ENCOUNTER_TEXTURES__: Partial<Record<EncounterTexture, string>>;
 
 export async function loadEncounterTexture(
@@ -53,5 +54,7 @@ export function loadEncounterTextures(
       boss.setScaleTexture(texture);
       raptor.setScaleTexture(texture);
     }),
+    loadEncounterTexture('chitin', setAntChitinTexture, 1.2),
+    loadEncounterTexture('fungus', setFungusTexture, 1.1),
   ]);
 }

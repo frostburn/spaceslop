@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { loadEncounterTexture } from './encounter-texture';
 import { HEIGHT, WIDTH } from './game';
+import { createHiveFungi } from './hive-fungi';
 
 function createFallback() {
   const root = new T.Group();
@@ -37,6 +38,7 @@ function createFallback() {
 export function createHiveScenery() {
   const root = new T.Group();
   const fallback = createFallback();
+  const fungi = createHiveFungi();
   const uniforms = {
     foreground: { value: null as T.Texture | null }, mask: { value: null as T.Texture | null },
     stars: { value: null as T.Texture | null }, mines: { value: null as T.Texture | null },
@@ -83,7 +85,7 @@ export function createHiveScenery() {
   });
   const backdrop = new T.Mesh(new T.PlaneGeometry(WIDTH, HEIGHT), material);
   backdrop.position.z = -102;
-  root.add(backdrop, fallback);
+  root.add(backdrop, fallback, fungi.root);
   const ready = Promise.all([
     loadEncounterTexture('hive', (texture) => {
       uniforms.foreground.value = texture;
@@ -123,6 +125,7 @@ export function createHiveScenery() {
       const scale = perspectiveDistance === undefined ? 1 : 1 - fallback.position.z / perspectiveDistance;
       fallback.scale.setScalar(scale);
       fallback.position.y = -(HEIGHT * 2) * uniforms.progress.value * scale;
+      fungi.update(uniforms.progress.value, uniforms.screens.value, perspectiveDistance, Boolean(uniforms.hasForeground.value));
     },
   };
 }

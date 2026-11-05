@@ -24,7 +24,9 @@ Enemies can drop wing weapons. Fly through a pickup to equip a pod that flies al
 
 During boss fights, line a wing up horizontally with the green cannon. Homing missiles steer toward it automatically.
 
-Choose a level before launch. **Broodlock · Ant hive** is the default: a 28-second traversal of the three-screen hive strip, six waves of infected ants, then a placeholder brood guardian. Workers fire aimed spores; larger soldiers charge their amber sacs before a three-spore fan. The guardian uses the existing alternating hardpoint, warning-ring, and volley mechanics. All ants are animated procedural shapes with six legs, antennae, mandibles, and small infection nodules.
+Choose a level before launch. **Broodlock · Ant hive** is the default: a 28-second traversal of the three-screen hive strip, six waves of infected ants, then a brood guardian. Workers fire aimed spores; larger soldiers charge their amber vents before a three-spore fan. The guardian uses the existing alternating hardpoint, warning-ring, and volley mechanics. The procedural ants have textured chitin, segmented abdomens, elbowed antennae, serrated mandibles, compound-eye shapes, and a jointed six-leg gait. Soldiers have broader heads and larger jaws. Small fungal stalks grow from infected abdomens.
+
+Procedural mushrooms attach to fixed coordinates on the hive strip. Their mycelial roots and contact shadows meet the painted pipes and rock, while curved stems extend toward the camera into domed caps with modeled rims and underside gills. The hive uses a shallow perspective view so the caps have foreground parallax while their roots stay on the same source pixels throughout scrolling and the boss approach. These are scenery; combat hitboxes and controls remain independent of them.
 
 **Overgrown preserve** keeps the original four waves and draconian interceptor fight. Its second wave includes a feathered raptor whose wings fold before a dive. Use `?level=preserve` to open that level directly.
 
@@ -32,7 +34,7 @@ The procedural encounter rigs live in `src/encounter-rigs.ts`. A future model ca
 
 ## Asset workshop
 
-Run `npm run dev` and open **Asset workshop** from the game menu or visit `/workshop.html`. Orbit and zoom the raptor, ships, ants, guardian, or wing weapon pods. Switch camera presets, scrub or play the animated rigs, and toggle wireframe. The workshop uses the game rigs and the optional alloy texture.
+Run `npm run dev` and open **Asset workshop** from the game menu or visit `/workshop.html`. Orbit and zoom the raptor, ships, worker and soldier ants, guardian, mushroom cluster, or wing weapon pods. Switch camera presets, scrub or play the animated rigs, and toggle wireframe. The workshop uses the game rigs and textures. Its side view exposes the mushroom roots, projecting stems, cap rim, and gills.
 
 ## Assets and offline play
 
@@ -61,7 +63,11 @@ The encounter textures and backdrops are optional PNGs. Add the reviewed files a
 | `public/encounters/broodlock-mines-mask.png` | Grayscale mask with the exact foreground dimensions and alignment. White reveals mines through the central channel and bridge grating; black reveals stars through exterior holes. Loaded as linear data. |
 | `public/encounters/broodlock-stars.png` | Opaque portrait starfield, fixed in screen space. sRGB; no tiling required. |
 | `public/encounters/broodlock-mines.png` | Opaque portrait dark mine plate, scrolling much more slowly than the hive. sRGB; no tiling required. |
+| `public/encounters/ant-chitin.png` | Optional tileable 512 × 512 RGB albedo for ant shells, limbs, and guardian appendages. sRGB, repeated 1.2 times across the model UVs. |
+| `public/encounters/broodlock-fungus.png` | Optional tileable 512 × 512 RGB albedo for mushroom caps, stems, and ant infection growths. sRGB, repeated 1.1 times across the model UVs. |
 
 The preserve catwalks and orbital shipyard also have procedural scenery that runs without background images.
 
 Broodlock composites the two distant plates under the alpha foreground, using the matching mask to distinguish the central mine channel from the holes into space. Neither plate is baked into the foreground. The scene freezes at the end of the strip for the guardian. Each file is optional: missing plates use code-drawn stars or mine ribs, and a missing foreground uses procedural side rails and brood chambers. Without a mask, a simple central-channel split is used. New hive geometry and textures join the preflight warm-up so the first ant and guardian do not trigger their initial uploads during play.
+
+Ant and mushroom surfaces retain deterministic code-drawn color, bump, and roughness detail without the two new albedo files. The optional PNGs replace color only; keep them opaque and do not import them as normal maps. With no hive foreground, mushrooms anchor to the procedural side rails. Shared mushroom geometry is warmed before launch, including the variants farther up the strip. The models and materials live in `src/ant-rigs.ts`, `src/hive-fungi.ts`, and `src/hive-materials.ts`; no model download is required.
