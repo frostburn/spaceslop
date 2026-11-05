@@ -90,15 +90,27 @@ test('laser damage is distinguished from simultaneous bullets and clamped at dea
 });
 
 test('boss laser damage is tracked through a lethal hit', () => {
-  for (const level of ['preserve', 'broodlock']) {
+  for (const level of ['preserve', 'broodlock', 'ice']) {
     const flight = new Flight('sentry', ['laser'], 'vex', level);
     flight.phase = 'boss'; flight.time = 0.5; flight.cooldown = flight.droneCooldown = 100;
     flight.player.x = flight.exposedCannonX * BOSS_PROJECTION + 1.22;
     flight.step(STEP);
-    assert(Math.abs(30 - flight.bossHealth - flight.bossLaserDamage) < 1e-6);
+    assert(Math.abs(flight.bossMaxHealth - flight.bossHealth - flight.bossLaserDamage) < 1e-6);
     flight.bossHealth = 0.001; const before = flight.bossLaserDamage;
     flight.step(STEP);
     assert.equal(flight.phase, 'won');
     assert(Math.abs(flight.bossLaserDamage - before - 0.001) < 1e-6);
   }
+});
+
+
+test('laser contact follows skinned anatomy after a bone and model both move', () => {
+  const plane=new T.Group(),model=new T.Group();plane.add(model);
+  const geometry=new T.BoxGeometry(1,1,.2),count=geometry.getAttribute('position').count;
+  geometry.setAttribute('skinIndex',new T.Uint16BufferAttribute(new Array(count*4).fill(0),4));
+  geometry.setAttribute('skinWeight',new T.Float32BufferAttribute(Array.from({length:count*4},(_,i)=>i%4===0?1:0),4));
+  const mesh=new T.SkinnedMesh(geometry,solid),bone=new T.Bone();mesh.add(bone);mesh.bind(new T.Skeleton([bone]));model.add(mesh);
+  plane.updateMatrixWorld(true);bone.position.y=1;model.position.y=2;
+  const hit=createLaserContactTrace(plane)({x:0,y:-5},{x:0,y:4},model);
+  assert(Math.abs(hit.y-2.5)<1e-6,'contact uses the posed surface, not its bind-pose box');
 });

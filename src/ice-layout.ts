@@ -6,7 +6,7 @@ export const ICE_TRAVEL = (ICE_SCREENS - 1) * HEIGHT;
 export const ICE_DURATION = 90;
 export const ICE_CAMERA_DISTANCE = 32;
 export const iceSections = ['Outer drift', 'Broken ice', 'Open hunting ground', 'Ice narrows', 'Survey wreck',
-  'Cold passage', 'Scattered flotilla', 'Shattered shelf', 'Last patrol', 'Interceptor arena'] as const;
+  'Cold passage', 'Scattered flotilla', 'Shattered shelf', 'Last patrol', 'Leviathan pursuit'] as const;
 export type IceRock = { x: number; y: number; z: number; radius: number; variant: number; angle: number; solid: boolean };
 export const iceRocks: IceRock[] = [];
 const random = (i: number) => { const n = Math.sin(i * 127.1 + 31.7) * 43758.5453; return n - Math.floor(n); };
@@ -56,7 +56,7 @@ export function iceRockY(index: number, time: number) {
 }
 
 export const ICE_SHIP_Y = -5.3;
-// This forward axis joins the default ship position to the interceptor's center.
+// This forward axis joins the default ship position to the boss's central target.
 export const ICE_CORRIDOR_PITCH = Math.atan2(12, 4.2 - ICE_SHIP_Y);
 export function iceCrossSection(index: number) { return (random(index * 13 + 211) * 2 - 1) * 3.8; }
 export function iceCorridorPoint(point: Vector3, reveal: number, out: Vector3) {

@@ -1,0 +1,185 @@
+import * as T from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { part, pivot } from './rig-geometry';
+import { iceEnvironment } from './ice-surfaces';
+import { leviathanMotion, type MarineKind } from './marine';
+
+type Animal = MarineKind | 'mosasaur';
+const hideMaterials: T.MeshPhysicalMaterial[] = [];
+const skins = new Map<number, T.MeshPhysicalMaterial>();
+let hideTexture: T.Texture | undefined;
+function skin(scales = 0) {
+  if (skins.has(scales)) return skins.get(scales)!;
+  const material = new T.MeshPhysicalMaterial({ vertexColors: true, roughness: .48, metalness: 0,
+    clearcoat: .22, clearcoatRoughness: .3, envMap: iceEnvironment(), envMapIntensity: .35, bumpScale: .025 });
+  material.onBeforeCompile = shader => {
+    shader.vertexShader = 'varying vec3 vHide;\n' + shader.vertexShader;
+    shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvHide=position;');
+    shader.fragmentShader = `varying vec3 vHide;\n` + shader.fragmentShader;
+    shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `#ifdef USE_MAP\n vec3 detail=texture2D(map,vMapUv).rgb;diffuseColor.rgb*=clamp(detail*1.4+0.72,0.8,1.18);\n #endif`);
+    shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+      float mottling = sin(vHide.x*19.0+sin(vHide.y*13.0)*2.0)*sin(vHide.y*23.0+vHide.z*17.0);
+      float broad = sin(vHide.x*7.0+sin(vHide.y*6.0))*sin(vHide.z*9.0+vHide.y*4.0);
+      diffuseColor.rgb *= 0.86 + mottling*0.075 + broad*0.10;
+      ${scales ? `vec2 cell = fract(vec2(vHide.x*69.0+sin(vHide.y*100.0)*.13,vHide.y*100.0));
+      float seam = smoothstep(.38,.49,max(abs(cell.x-.5),abs(cell.y-.5)));
+      diffuseColor.rgb *= 1.0-seam*.13;` : ''}`);
+  };
+  material.customProgramCacheKey = () => `marine-hide-${scales}`;
+  if (hideTexture) { material.map = material.bumpMap = hideTexture; }
+  skins.set(scales, material); hideMaterials.push(material); return material;
+}
+export function setMarineTexture(texture: T.Texture) {
+  hideTexture = texture;
+  texture.wrapS = texture.wrapT = T.RepeatWrapping; texture.repeat.set(2,3);
+  for (const material of hideMaterials) { material.map = material.bumpMap = texture; material.needsUpdate = true; }
+}
+
+const geometryCache = new Map<string,T.BufferGeometry>();
+const dorsal = new T.Color(0x35434a), flank = new T.Color(0x82908c), belly = new T.Color(0xcfc6ac), tint = new T.Color();
+function tintGeometry(geometry: T.BufferGeometry, fin = false) {
+  const positions = geometry.getAttribute('position'), colors: number[] = [];
+  for (let i=0;i<positions.count;i++) {
+    const shade = fin ? T.MathUtils.smoothstep(positions.getZ(i),-.015,.025) : T.MathUtils.smoothstep(positions.getZ(i),-.12,.14);
+    tint.copy(belly).lerp(flank,Math.min(1,shade*2)).lerp(dorsal,Math.max(0,shade*2-1)); colors.push(tint.r,tint.g,tint.b);
+  }
+  geometry.setAttribute('color',new T.Float32BufferAttribute(colors,3)); return geometry;
+}
+const profiles: Record<Animal, number[][]> = {
+  ichthyosaur: [[-1.45,.025,.04],[-1.1,.09,.11],[-.65,.22,.25],[-.15,.35,.34],[.4,.29,.28],[.75,.23,.21],[.93,.12,.10],[1.3,.075,.06],[1.62,.008,.012]],
+  plesiosaur: [[-1.1,.008,.01],[-.8,.18,.12],[-.3,.43,.29],[.25,.4,.30],[.58,.23,.21],[.9,.17,.17],[1.4,.14,.14],[1.85,.13,.12],[2.03,.20,.14],[2.24,.16,.11],[2.42,.018,.025]],
+  mosasaur: [[-4,.02,.04],[-3.4,.12,.17],[-2.6,.25,.3],[-1.7,.49,.47],[-.6,.83,.68],[.2,.78,.65],[.75,.65,.48],[1.12,.57,.33],[1.55,.48,.25],[1.94,.28,.16],[2.10,.07,.06],[2.14,.005,.01]],
+};
+function bodyGeometry(kind: Animal) {
+  if(geometryCache.has(kind))return geometryCache.get(kind)!;
+  const curve = new T.CatmullRomCurve3(profiles[kind].map(([y,w,h])=>new T.Vector3(w,y,h)),false,'centripetal');
+  const p:number[]=[],uv:number[]=[],indices:number[]=[],weights:number[]=[],joints:number[]=[];
+  const rows=80,cols=32;
+  for(let row=0;row<=rows;row++) {
+    const v=curve.getPoint(row/rows), y=v.y;
+    for(let col=0;col<=cols;col++) {
+      const a=col/cols*Math.PI*2;
+      let z=Math.sin(a)*Math.max(.002,v.z);
+      if(kind==='mosasaur' && y>.8)z=Math.max(z,-.025); // upper jaw, with an independent lower jaw below it
+      p.push(Math.cos(a)*Math.max(.002,v.x),y,z); uv.push(col/cols,row/rows);
+      let first=0,second=1,weight=T.MathUtils.clamp((-y-.2)/.5,0,1);
+      if(y<-.7){first=1;second=2;weight=T.MathUtils.clamp((-y-.7)/.9,0,1);}
+      if(kind==='mosasaur'&&y>.5){first=0;second=3;weight=T.MathUtils.clamp((y-.5)/.5,0,1);}
+      if(kind==='plesiosaur'&&y>.5){first=y<1.15?0:y<1.8?3:4;second=first===0?3:first+1;
+        weight=T.MathUtils.clamp((y-(first===0?.5:first===3?1.15:1.8))/.65,0,1);}
+      joints.push(first,second,0,0);weights.push(1-weight,weight,0,0);
+      if(row<rows&&col<cols){const i=row*(cols+1)+col;indices.push(i,i+cols+1,i+1,i+1,i+cols+1,i+cols+2);}
+    }
+  }
+  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(p,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));
+  g.setAttribute('skinIndex',new T.Uint16BufferAttribute(joints,4));g.setAttribute('skinWeight',new T.Float32BufferAttribute(weights,4));g.setIndex(indices);g.computeVertexNormals();
+  // Average UV seam duplicates without smoothing away the body shape.
+  const n=g.getAttribute('normal');for(let row=0;row<=rows;row++){const a=row*(cols+1),b=a+cols;
+    const v=new T.Vector3(n.getX(a)+n.getX(b),n.getY(a)+n.getY(b),n.getZ(a)+n.getZ(b)).normalize();n.setXYZ(a,v.x,v.y,v.z);n.setXYZ(b,v.x,v.y,v.z);}
+  tintGeometry(g);geometryCache.set(kind,g);return g;
+}
+function flipper(length:number,width:number) {
+  const key=`fin-${length}-${width}`;if(geometryCache.has(key))return geometryCache.get(key)!;
+  const p:number[]=[],uv:number[]=[],ix:number[]=[];
+  for(let row=0;row<=16;row++) {
+    const t=row/16, w=width*(.35+.65*Math.sin(Math.PI*Math.min(1,t*1.15))) * Math.sqrt(1-t) + .001;
+    for(let j=0;j<=12;j++){const a=j/12*Math.PI*2;p.push(t*length, -t*t*length*.45 + Math.cos(a)*w,Math.sin(a)*w*.19);uv.push(j/12,t);
+      if(row<16&&j<12){const i=row*13+j;ix.push(i,i+1,i+13,i+1,i+14,i+13);}}
+  }
+  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(p,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(ix);g.computeVertexNormals();tintGeometry(g,true);geometryCache.set(key,g);return g;
+}
+function verticalFin(kind:'dorsal'|'fluke') {
+  if(geometryCache.has(kind))return geometryCache.get(kind)!;
+  const shape=new T.Shape();
+  if(kind==='dorsal'){shape.moveTo(-.5,0);shape.quadraticCurveTo(-.35,.3,-.07,.68);shape.quadraticCurveTo(-.04,.28,.35,0);}
+  else {shape.moveTo(.05,0);shape.quadraticCurveTo(-.1,.32,-.47,.62);shape.quadraticCurveTo(-.3,.22,-.25,0);shape.quadraticCurveTo(-.35,-.26,-.58,-.78);shape.quadraticCurveTo(-.13,-.43,.05,0);}
+  const g=new T.ExtrudeGeometry(shape,{depth:.018,bevelEnabled:true,bevelSize:.018,bevelThickness:.018,bevelSegments:3,steps:1,curveSegments:16});
+  const p=g.getAttribute('position');for(let i=0;i<p.count;i++){const y=p.getX(i),z=p.getY(i),x=p.getZ(i)-.009;p.setXYZ(i,x,y,z);}g.computeVertexNormals();tintGeometry(g);geometryCache.set(kind,g);return g;
+}
+const orb = tintGeometry(new T.SphereGeometry(1,24,16));
+const eyeMaterial = new T.MeshPhysicalMaterial({color:0x060c0d,roughness:.08,clearcoat:1});
+const amber = new T.MeshStandardMaterial({color:0x69533b,roughness:.3});
+const mouthMaterial = new T.MeshStandardMaterial({color:0x30252b,roughness:.63});
+const toothMaterial = new T.MeshStandardMaterial({color:0xe5d7bc,roughness:.35});
+function eyes(parent:T.Object3D,y:number,width:number,z:number,size:number) {
+  for(const side of [-1,1]) {
+    const socket=part(parent,orb,skin(),side*width,y,z);socket.scale.set(size*1.35,size*1.6,size*.7);
+    const iris=part(parent,orb,amber,side*(width+.004),y+size*.08,z+size*.12);iris.scale.set(size*.84,size*1.03,size*.30);
+    const pupil=part(parent,orb,eyeMaterial,side*(width+.006),y+size*.12,z+size*.32);pupil.scale.set(size*.70,size*.90,size*.22);
+  }
+}
+function teeth(parent:T.Object3D,start:number,end:number,width:number,z:number,count:number,down:boolean,size:number) {
+  const pieces:T.BufferGeometry[]=[];
+  for(const side of [-1,1])for(let i=0;i<count;i++) {
+    const t=i/(count-1),y=T.MathUtils.lerp(start,end,t),x=side*width*(1-t*.72);
+    pieces.push(new T.ConeGeometry(size*.23,size,7).rotateX(down?-Math.PI/2:Math.PI/2).translate(x,y,z+(down?-size:size)*.5));
+  }
+  part(parent,mergeGeometries(pieces),toothMaterial,0,0,0);for(const g of pieces)g.dispose();
+}
+function animal(kind:Animal) {
+  const root=new T.Group();root.name=kind;
+  const bones=Array.from({length:6},()=>new T.Bone());
+  bones[0].add(bones[1],bones[3]);bones[1].position.y=-.7;bones[1].add(bones[2]);bones[2].position.y=-.9;
+  bones[3].position.y=.5;bones[3].add(bones[4]);bones[4].position.y=.65;bones[4].add(bones[5]);bones[5].position.y=.65;
+  const body=new T.SkinnedMesh(bodyGeometry(kind),skin(kind==='mosasaur'?1:0));body.name=`${kind}-body`;body.add(bones[0]);body.bind(new T.Skeleton(bones));body.frustumCulled=false;root.add(body);
+  const flippers:T.Group[]=[];
+  const large=kind==='mosasaur';
+  for(const rear of [false,true])for(const side of [-1,1]) {
+    const x=large?(rear?.5:.7):(kind==='plesiosaur'?.34:rear?.19:.27);
+    const y=large?(rear?-1.6:0):(rear?-.55:.25);
+    const fin=pivot(root,`${rear?'rear':'fore'}-flipper-${side<0?'L':'R'}`,side*x,y,-.04);
+    const length=large?(rear?1.15:1.55):kind==='plesiosaur'?(rear?.9:1.1):rear?.32:.65;
+    const mesh=part(fin,flipper(length,large?.36:kind==='plesiosaur'?.22:.14),skin(kind==='plesiosaur'?1:large?1:0),0,0,0);
+    mesh.scale.x=side; // mirror the volume; Three corrects the front-face winding for negative determinants
+    flippers.push(fin);
+  }
+  if(kind==='ichthyosaur')part(root,verticalFin('dorsal'),skin(),0,-.04,.27);
+  if(kind!=='plesiosaur') {
+    const tail=part(bones[2],verticalFin('fluke'),skin(large?1:0),0,large?-2.4:.15,0);
+    tail.name='vertical-tail-fluke';if(large)tail.scale.setScalar(1.5);
+  }
+  const headParent=kind==='plesiosaur'?bones[5]:large?bones[3]:root, offset=kind==='plesiosaur'?1.8:large?.5:0;
+  eyes(headParent,(kind==='plesiosaur'?2.08:large?1.12:.77)-offset,kind==='plesiosaur'?.16:large?.43:.19,large?.20:kind==='plesiosaur'?.085:.10,large?.075:kind==='plesiosaur'?.04:.045);
+  // Mouth seam and nostrils follow the snout, rather than using a generated face decal.
+  const start=kind==='plesiosaur'?2.05:large?.93:.91,end=kind==='plesiosaur'?2.38:large?1.92:1.59;
+  for(const side of [-1,1]) {
+    const w=large?.50:kind==='plesiosaur'?.16:.10;
+    const curve=new T.CatmullRomCurve3([new T.Vector3(side*w,start-offset,-.015),new T.Vector3(side*w*.7,(start+end)*.5-offset,-.025),new T.Vector3(side*.012,end-offset,-.005)]);
+    part(headParent,new T.TubeGeometry(curve,18,large?.012:.006,5,false),mouthMaterial,0,0,0);
+    const nostril=part(headParent,orb,eyeMaterial,side*(large?.12:.035),end-.12-offset,large?.14:.05);nostril.scale.set(large?.028:.012,large?.055:.022,.008);
+  }
+  const glowMaterial=new T.MeshBasicMaterial({color:0xffb65f,transparent:true,opacity:0,depthWrite:false,blending:T.AdditiveBlending});
+  const glow=part(headParent,orb,glowMaterial,0,end-.12-offset,-.03);glow.scale.setScalar(large?.10:.065);glow.name='mouth-charge';
+  let jaw:T.Group|undefined;
+  if(large) {
+    jaw=pivot(headParent,'lower-jaw',0,.75-offset,-.055);
+    const lower=part(jaw,orb,skin(1),0,.55,-.13);lower.scale.set(.46,.72,.15);
+    const lining=part(jaw,orb,mouthMaterial,0,.59,.015);lining.scale.set(.40,.64,.035);
+    const roof=part(headParent,orb,mouthMaterial,0,1.32-offset,-.025);roof.scale.set(.43,.65,.035);
+    teeth(headParent,.91-offset,1.88-offset,.50,-.06,13,true,.14);teeth(jaw,.18,1.15,.40,.04,12,false,.12);
+  }
+  return {root,body,head:headParent,headOffset:offset, pose(time:number,charge=0,jawOpen=.1) {
+    bones[1].rotation.z=Math.sin(time*3.2)*.13;bones[2].rotation.z=Math.sin(time*3.2-.9)*.30;
+    if(large){bones[3].rotation.x=.5;bones[1].rotation.x=-.12;bones[2].rotation.x=-.20;}
+    if(kind==='plesiosaur'){bones[3].rotation.z=Math.sin(time*1.1)*.07;bones[4].rotation.z=Math.sin(time*1.1-.6)*.06;bones[5].rotation.z=-bones[3].rotation.z*.4;}
+    flippers.forEach((fin,i)=>{const side=i%2?1:-1,phase=i<2?0:1.25;
+      fin.rotation.y=side*Math.sin(time*(kind==='plesiosaur'?3:2.5)+phase)*(kind==='plesiosaur'?.5:.25);
+      fin.rotation.z=side*(.08+Math.cos(time*2.5+phase)*.08);});
+    if(jaw)jaw.rotation.x=-jawOpen*.55;
+    glowMaterial.opacity=charge*.4;glow.scale.setScalar((large?.10:.0650)*(1+charge*.8));
+  } };
+}
+export function createMarineRig(kind:MarineKind) {
+  const rig=animal(kind),root=rig.root;root.scale.setScalar(kind==='plesiosaur'?.66:.67);
+  return {...rig,pose(time:number,bank=0,charge=0){root.rotation.y=bank;rig.pose(time,charge);}};
+}
+export function createLeviathan() {
+  const root=new T.Group();root.name='leviathan';const rig=animal('mosasaur');
+  rig.root.rotation.set(-Math.PI/2+.5,0,Math.PI);rig.root.scale.setScalar(2.5);rig.root.position.set(0,.75,-4.2);root.add(rig.root);
+  for(const side of ['L','R'])pivot(rig.head,`laser_contact_${side}`,0,1.65-rig.headOffset,-.10);
+  return {root,pose(reveal:number,_windup:number,_exposed:number,_fired:number,_recoil:number,time=0){
+    const motion=leviathanMotion(time);rig.pose(time,motion.windup,motion.jaw);
+    rig.root.position.z=-4.2+motion.recoil*.40;rig.root.rotation.y=Math.sin(time*.8)*.025;
+    root.scale.setScalar(.7+.3*reveal);
+  }};
+}

@@ -13,10 +13,11 @@ const { asteroidGeometry } = await server.ssrLoadModule('/src/ice-surfaces.ts');
 const { iceIndustry, industryY } = await server.ssrLoadModule('/src/ice-industry.ts');
 const { FIGHTER_HULL, DRONE_HULL } = await server.ssrLoadModule('/src/hive-collision.ts');
 
-test('Frostwake traverses ten screens with a complete original-roster wave schedule', () => {
+test('Frostwake traverses ten screens with a complete marine wave schedule', () => {
   assert.equal(ICE_TRAVEL + 16, ICE_SCREENS * 16);
   assert.equal(ICE_DURATION, 90); assert.equal(iceWaves.length, 20);
-  assert(iceWaves.some(w => w.raptor !== undefined));
+  assert(iceWaves.some(w => w.marine === 'ichthyosaur'));assert(iceWaves.some(w => w.marine === 'plesiosaur'));
+  assert(iceWaves.every(w=>w.marine && w.raptor===undefined));
   assert(iceWaves.every(w => !w.ant));
   assert.equal(new Set(iceWaves.map(w => w.drop).filter(Boolean)).size, 4);
   assert(ICE_DURATION - iceWaves.at(-1).time >= 8);
@@ -48,17 +49,18 @@ test('fast touch movement and drone docking stop at solid ice without hull damag
   assert(!collision.overlaps(f.drone, DRONE_HULL)); assert.equal(f.droneTarget, undefined);
 });
 
-test('a media-free simulation completes the full schedule and reaches the draconian boss', () => {
+test('a media-free simulation completes the full schedule and reaches Leviathan', () => {
   const f = new Flight('sentry', [], 'vex', 'ice');
-  let maxEnemies = 0, sawRaptor = false;
+  let maxEnemies = 0, sawHunter = false, sawSweeper = false;
   for (let i = 0; i < (ICE_DURATION + 1.5) * 60; i++) {
     f.invulnerable = 100; f.step(STEP);
-    maxEnemies = Math.max(maxEnemies, f.enemies.length); sawRaptor ||= f.enemies.some(e => e.raptor);
+    maxEnemies = Math.max(maxEnemies, f.enemies.length); sawHunter ||= f.enemies.some(e => e.marine==='ichthyosaur');sawSweeper ||= f.enemies.some(e=>e.marine==='plesiosaur');
+    assert(f.enemies.filter(e=>e.marine==='plesiosaur').length<=4);
   }
-  assert(sawRaptor); assert(maxEnemies <= 12, `renderer pool exceeded: ${maxEnemies}`);
+  assert(sawHunter&&sawSweeper); assert(maxEnemies <= 12, `renderer pool exceeded: ${maxEnemies}`);
   assert.equal(f.phase, 'boss'); assert.equal(f.enemies.length, 0);
-  assert.equal(f.stageDuration, 90); assert.equal(f.bossHealth, 30);
-  f.pulse(); f.pulse(); assert.equal(f.bossHealth, 18);
+  assert.equal(f.stageDuration, 90); assert.equal(f.bossHealth, 60);
+  f.pulse(); f.pulse(); assert.equal(f.bossHealth, 48);
 });
 
 test('free asteroids visibly tumble on distinct axes while built-on outcrops hold attitude', () => {
@@ -113,7 +115,7 @@ test('fractured asteroids retain smooth regions and sharp rims within collision 
   }
 });
 
-test('the pitched corridor shares the ship forward axis and recedes toward the interceptor', () => {
+test('the pitched corridor shares the ship forward axis and recedes toward Leviathan', () => {
   const origin = new Vector3(0, ICE_SHIP_Y, 0), out = new Vector3();
   assert(iceCorridorPoint(origin, 1, out).distanceTo(origin) < 1e-10);
   const forward = new Vector3(0, Math.cos(ICE_CORRIDOR_PITCH), -Math.sin(ICE_CORRIDOR_PITCH));
@@ -156,4 +158,22 @@ test('refraction captures preserve the rotated flight frame and restore renderer
   assert.equal(root.parent, parent); assert.equal(decoration.visible, false); assert.equal(target,null);
   assert.equal(scissor,true); assert.equal(alpha,.7); assert.equal(clear.getHex(),0x123456);
   assert.equal(optics.uniforms.captureLayer.value,0);
+});
+
+
+test('Leviathan locks a readable mouth volley and central weakpoint before firing', () => {
+  const f=new Flight('sentry',[],'vex','ice');f.phase='boss';f.player.x=1.5;f.invulnerable=100;
+  for(let i=0;i<40;i++)f.step(STEP);
+  assert.equal(f.exposedCannonX,0);assert.equal(f.markers.length,3);assert(f.cannonWindup>0);
+  const locked=f.markers.map(p=>({...p}));f.player.x=-2;
+  for(let i=0;i<60;i++)f.step(STEP);
+  assert(f.threats.length>=3);assert.deepEqual(f.markers,locked);
+  assert(f.threats.every(t=>Number.isFinite(t.vx)&&Number.isFinite(t.vz)&&t.vz>0));
+});
+
+test('marine bodies can be hit at the snout and still release their wing drop', () => {
+  const f=new Flight('towline',[],'vex','ice');f.nextWave=100;f.cooldown=100;f.droneCooldown=100;
+  const enemy={x:1,y:1,lane:1,age:0,fire:100,hp:1,marine:'plesiosaur',drop:'laser'};
+  f.enemies=[enemy];f.shots=[{x:1,y:-.5,z:0,vx:0,vy:15,vz:0}];f.step(STEP);
+  assert.equal(enemy.hp,0);assert.equal(f.drops[0].weapon,'laser');
 });

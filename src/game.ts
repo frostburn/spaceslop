@@ -1,6 +1,7 @@
 import {
   BOSS_FIRE_AT, BOSS_MUZZLE_Z, BOSS_RECOIL_TIME, BOSS_VOLLEY_INTERVAL, BOSS_WINDUP_AT, raptorFlight,
 } from './encounters';
+import { marineMotion, marineSpecs, LEVIATHAN_HP, LEVIATHAN_INTERVAL, LEVIATHAN_WINDUP, LEVIATHAN_FIRE, LEVIATHAN_TRAVEL, type MarineKind } from './marine';
 import { levels, type LevelId } from './levels';
 import { IceCollision } from './ice-collision';
 import { ICE_CAMERA_DISTANCE } from './ice-layout';
@@ -32,7 +33,7 @@ type Shot = Point & {
 };
 type Threat = Shot & { graze?: 'near' | 'counted' };
 type Enemy = Point & {
-  lane: number; age: number; fire: number; hp: number; drop?: WingWeapon; raptor?: boolean; ant?: 'worker' | 'soldier';
+  lane: number; age: number; fire: number; hp: number; drop?: WingWeapon; raptor?: boolean; ant?: 'worker' | 'soldier'; marine?: MarineKind;
   course?: number; courseAt?: number; heading?: number; laserDamage?: number;
 };
 type Drop = Point & { weapon: WingWeapon };
@@ -57,7 +58,7 @@ const wingShots = {
 };
 
 type Wave = { time: number; lanes: number[]; carrier?: number; drop?: WingWeapon;
-  raptor?: number; ant?: 'worker' | 'soldier' };
+  raptor?: number; ant?: 'worker' | 'soldier'; marine?: MarineKind };
 
 const stageWaves: Wave[] = [
   { time: 0.6, lanes: [-2.6, 0, 2.6], carrier: 1, drop: 'homing' },
@@ -77,26 +78,26 @@ const hiveWaves: Wave[] = [
 
 // Ten-screen patrol: varied formations, recovery gaps, and repeat weapon opportunities.
 export const iceWaves: Wave[] = [
-  { time: 1, lanes: [-1.8, 1.8], carrier: 0, drop: 'homing' },
-  { time: 5, lanes: [-2.2, 0, 2.2], carrier: 2, drop: 'cannon' },
-  { time: 9, lanes: [-1.5, 1.5], raptor: 0 },
-  { time: 13, lanes: [-2, 0, 2], carrier: 1, drop: 'laser' },
-  { time: 17, lanes: [-1.5, 1.5], carrier: 1, drop: 'omega' },
-  { time: 22, lanes: [-2, 0, 2] },
-  { time: 26, lanes: [-1.7, 1.7], raptor: 1, carrier: 0, drop: 'homing' },
-  { time: 30, lanes: [-2.2, 0, 2.2], carrier: 0, drop: 'cannon' },
-  { time: 34, lanes: [-1.4, 1.4] },
-  { time: 39, lanes: [-2, 0, 2], carrier: 2, drop: 'laser' },
-  { time: 43, lanes: [-1.7, 1.7], raptor: 0 },
-  { time: 47, lanes: [-2, 0, 2], carrier: 1, drop: 'omega' },
-  { time: 52, lanes: [-1.7, 1.7], carrier: 0, drop: 'homing' },
-  { time: 56, lanes: [-2, 0, 2], carrier: 2, drop: 'cannon' },
-  { time: 60, lanes: [-1.5, 1.5], raptor: 1 },
-  { time: 64, lanes: [-2, 0, 2], carrier: 0, drop: 'laser' },
-  { time: 69, lanes: [-1.5, 1.5], carrier: 1, drop: 'omega' },
-  { time: 73, lanes: [-2.2, 0, 2.2] },
-  { time: 77, lanes: [-1.5, 1.5], raptor: 0, carrier: 1, drop: 'homing' },
-  { time: 81, lanes: [-2, 0, 2], carrier: 1, drop: 'laser' },
+  { marine: 'ichthyosaur', time: 1, lanes: [-1.8, 1.8], carrier: 0, drop: 'homing' },
+  { marine: 'ichthyosaur', time: 5, lanes: [-2.2, 0, 2.2], carrier: 2, drop: 'cannon' },
+  { time: 9, lanes: [0], marine: 'plesiosaur' },
+  { marine: 'ichthyosaur', time: 13, lanes: [-2, 0, 2], carrier: 1, drop: 'laser' },
+  { marine: 'ichthyosaur', time: 17, lanes: [-1.5, 1.5], carrier: 1, drop: 'omega' },
+  { marine: 'ichthyosaur', time: 22, lanes: [-2, 0, 2] },
+  { time: 26, lanes: [-1.4, 1.4], marine: 'plesiosaur', carrier: 0, drop: 'homing' },
+  { marine: 'ichthyosaur', time: 30, lanes: [-2.2, 0, 2.2], carrier: 0, drop: 'cannon' },
+  { marine: 'ichthyosaur', time: 34, lanes: [-1.4, 1.4] },
+  { marine: 'ichthyosaur', time: 39, lanes: [-2, 0, 2], carrier: 2, drop: 'laser' },
+  { time: 43, lanes: [-1.4, 1.4], marine: 'plesiosaur' },
+  { marine: 'ichthyosaur', time: 47, lanes: [-2, 0, 2], carrier: 1, drop: 'omega' },
+  { marine: 'ichthyosaur', time: 52, lanes: [-1.7, 1.7], carrier: 0, drop: 'homing' },
+  { marine: 'ichthyosaur', time: 56, lanes: [-2, 0, 2], carrier: 2, drop: 'cannon' },
+  { time: 60, lanes: [0], marine: 'plesiosaur' },
+  { marine: 'ichthyosaur', time: 64, lanes: [-2, 0, 2], carrier: 0, drop: 'laser' },
+  { marine: 'ichthyosaur', time: 69, lanes: [-1.5, 1.5], carrier: 1, drop: 'omega' },
+  { marine: 'ichthyosaur', time: 73, lanes: [-2.2, 0, 2.2] },
+  { time: 77, lanes: [0], marine: 'plesiosaur', carrier: 0, drop: 'homing' },
+  { marine: 'ichthyosaur', time: 81, lanes: [-2, 0, 2], carrier: 1, drop: 'laser' },
 ];
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
@@ -186,13 +187,15 @@ export class Flight {
     this.droneWeapon = droneWeapon;
     this.pilot = pilot;
     if (level === 'broodlock') this.obstacles = new HiveCollision();
-    if (level === 'ice') this.obstacles = new IceCollision();
+    if (level === 'ice') { this.obstacles = new IceCollision(); this.bossHealth=LEVIATHAN_HP; }
     if (droneWeapon === 'towline') this.droneCooldown = TOWLINE_INTERVAL;
     for (const [index, wing] of this.wings.entries()) {
       const weapon = loadout[index];
       if (weapon) this.equip(wing, weapon);
     }
   }
+
+  get bossMaxHealth() { return this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
 
   get stageDuration() { return levels[this.level].duration; }
 
@@ -229,7 +232,7 @@ export class Flight {
   }
 
   get exposedCannonX() {
-    return this.volley % 2 === 0 ? -BOSS_CANNON_X : BOSS_CANNON_X;
+    return this.level === 'ice' ? 0 : this.volley % 2 === 0 ? -BOSS_CANNON_X : BOSS_CANNON_X;
   }
 
   wingOrigin(side: WingSide) {
@@ -242,8 +245,10 @@ export class Flight {
   }
 
   get cannonWindup() {
-    if (this.phase !== 'boss' || this.volley !== Math.floor(this.time / BOSS_VOLLEY_INTERVAL)) return 0;
-    const elapsed = this.time % BOSS_VOLLEY_INTERVAL;
+    if (this.phase !== 'boss' || this.volley !== Math.floor(this.time / (this.level === 'ice' ? LEVIATHAN_INTERVAL : BOSS_VOLLEY_INTERVAL))) return 0;
+    const interval = this.level === 'ice' ? LEVIATHAN_INTERVAL : BOSS_VOLLEY_INTERVAL;
+    const elapsed = this.time % interval;
+    if(this.level === 'ice') return clamp((elapsed-LEVIATHAN_WINDUP)/(LEVIATHAN_FIRE-LEVIATHAN_WINDUP),0,1);
     return clamp((elapsed - BOSS_WINDUP_AT) / (BOSS_FIRE_AT - BOSS_WINDUP_AT), 0, 1);
   }
 
@@ -361,9 +366,9 @@ export class Flight {
       for (const enemy of this.enemies) {
         if (enemy.hp <= 0 || shot.pierced?.has(enemy)) continue;
         const hit = shot.wing === 'homing'
-          ? nearSegment(enemy, previous, shot, 0.52)
-          : Math.abs(shot.x - enemy.x) < 0.52 &&
-            shot.y >= enemy.y - 0.46 && previous.y <= enemy.y + 0.46;
+          ? nearSegment(enemy, previous, shot, enemy.marine ? marineSpecs[enemy.marine].radius : .52)
+          : Math.abs(shot.x - enemy.x) < (enemy.marine ? marineSpecs[enemy.marine].radius : 0.52) &&
+            shot.y >= enemy.y - (enemy.marine ? marineSpecs[enemy.marine].halfLength : .46) && previous.y <= enemy.y + (enemy.marine ? marineSpecs[enemy.marine].halfLength : .46);
         if (!hit) continue;
         this.damageEnemy(enemy, shot.damage ?? 1);
         if (!shot.pierced) return false;
@@ -491,7 +496,7 @@ export class Flight {
       }
     } else {
       for (const candidate of this.enemies) {
-        if (candidate.hp > 0 && Math.abs(candidate.x - origin.x) < 0.43 &&
+        if (candidate.hp > 0 && Math.abs(candidate.x - origin.x) < (candidate.marine ? marineSpecs[candidate.marine].radius : .43) &&
           candidate.y >= origin.y && (!enemy || candidate.y < enemy.y)) {
           enemy = candidate;
         }
@@ -568,7 +573,7 @@ export class Flight {
     }
     for (const enemy of this.enemies) {
       if (enemy.hp > 0 && !this.towlineEnemies.has(enemy) &&
-        nearSegment(enemy, this.player, this.drone, 0.52)) {
+        nearSegment(enemy, this.player, this.drone, enemy.marine ? marineSpecs[enemy.marine].radius : .52)) {
         this.towlineEnemies.add(enemy);
         this.damageEnemy(enemy, this.towlineDamage);
       }
@@ -581,8 +586,8 @@ export class Flight {
       this.nextWave++;
       this.enemies.push(...wave.lanes.map((lane, index) =>
         ({
-          x: lane, y: 8.6, lane, age: 0, fire: (wave.ant === 'soldier' ? 1.6 : 1.1) + index * 0.28,
-          hp: wave.ant === 'soldier' ? 5 : 2, ant: wave.ant,
+          x: lane, y: 8.6, lane, age: 0, fire: (wave.marine === 'plesiosaur' ? 1.8 : wave.ant === 'soldier' ? 1.6 : 1.1) + index * 0.28,
+          hp: wave.marine ? marineSpecs[wave.marine].hp : wave.ant === 'soldier' ? 5 : 2, ant: wave.ant, marine: wave.marine,
           drop: index === wave.carrier ? wave.drop : undefined,
           raptor: index === wave.raptor,
         })));
@@ -591,28 +596,31 @@ export class Flight {
     for (const enemy of this.enemies) {
       enemy.age += dt;
       const motion = enemy.raptor ? raptorFlight(enemy.age) : undefined;
-      if (enemy.ant && this.obstacles instanceof HiveCollision) steerHiveAnt(enemy, this.obstacles, this.stageDuration, dt);
+      if (enemy.marine) {
+        const swim = marineMotion(enemy.marine,enemy.age,enemy.lane);
+        enemy.x=swim.x; enemy.y-=swim.speed*dt; enemy.heading=swim.heading;
+      } else if (enemy.ant && this.obstacles instanceof HiveCollision) steerHiveAnt(enemy, this.obstacles, this.stageDuration, dt);
       else {
         enemy.y -= (motion?.speed ?? 2.25) * dt;
         if (!motion || motion.pose === 'glide') enemy.x = enemy.lane + Math.sin(enemy.age * 1.55) * 0.46;
       }
       if (this.level === 'ice' && this.obstacles) {
-        const hull = enemy.raptor ? [{ x: 0, y: 0, radius: 1.05 }] : DRONE_HULL;
+        const hull = enemy.marine ? [{x:0,y:0,radius:marineSpecs[enemy.marine].radius}] : enemy.raptor ? [{ x: 0, y: 0, radius: 1.05 }] : DRONE_HULL;
         this.obstacles.move(enemy, 0, 0, hull, { minX: -2.4, maxX: 2.4, minY: -10, maxY: 10 });
       }
       if (!motion && enemy.age >= enemy.fire) {
-        enemy.fire += enemy.ant === 'soldier' ? 3.1 : 2.4;
+        enemy.fire += enemy.marine === 'plesiosaur' ? 3.2 : enemy.ant === 'soldier' ? 3.1 : 2.4;
         const dx = this.player.x - enemy.x;
         const dy = this.player.y - enemy.y;
         const angle = Math.atan2(dx, dy);
-        const speed = enemy.ant ? 4.6 : 5.7;
-        const spread = enemy.ant === 'soldier' ? [-0.24, 0, 0.24] : [0];
+        const speed = enemy.marine ? (enemy.marine === 'plesiosaur' ? 4 : 5) : enemy.ant ? 4.6 : 5.7;
+        const spread = enemy.marine === 'plesiosaur' ? [-.3,-.15,0,.15,.3] : enemy.ant === 'soldier' ? [-0.24, 0, 0.24] : [0];
         for (const offset of spread) {
-          this.threats.push({ x: enemy.x, y: enemy.y, z: 0,
+          this.threats.push({ x: enemy.x, y: enemy.y - (enemy.marine ? marineSpecs[enemy.marine].halfLength : 0), z: 0,
             vx: Math.sin(angle + offset) * speed, vy: Math.cos(angle + offset) * speed, vz: 0 });
         }
       }
-      if (near(enemy, this.player, 0.68)) {
+      if (enemy.marine ? nearSegment(this.player,{x:enemy.x,y:enemy.y-marineSpecs[enemy.marine].halfLength*.7},{x:enemy.x,y:enemy.y+marineSpecs[enemy.marine].halfLength*.5},marineSpecs[enemy.marine].radius*.8+.2) : near(enemy, this.player, 0.68)) {
         enemy.hp = 0;
         this.hit();
       }
@@ -620,6 +628,7 @@ export class Flight {
   }
 
   private stepBoss() {
+    if(this.level === 'ice') { this.stepLeviathan(); return; }
     const elapsed = this.time % BOSS_VOLLEY_INTERVAL;
     const volley = Math.floor(this.time / BOSS_VOLLEY_INTERVAL);
     if (elapsed >= BOSS_WINDUP_AT && this.markers.length === 0 && elapsed < BOSS_FIRE_AT) {
@@ -642,6 +651,22 @@ export class Flight {
       this.volley++;
     }
     if (elapsed >= BOSS_FIRE_AT + BOSS_IMPACT_TRAVEL + 0.02) this.markers = [];
+  }
+
+  private stepLeviathan() {
+    const elapsed=this.time%LEVIATHAN_INTERVAL, volley=Math.floor(this.time/LEVIATHAN_INTERVAL);
+    if(elapsed>=LEVIATHAN_WINDUP && elapsed<LEVIATHAN_FIRE && !this.markers.length) {
+      const x=clamp(this.player.x,-2.6,2.6),y=clamp(this.player.y,-5.9,5.25);
+      this.markers=[-1.35,0,1.35].map(offset=>({x:x+(volley%2===0?offset:0),y:y+(volley%2===0?0:offset)}));
+    }
+    if(elapsed>=LEVIATHAN_FIRE && this.markers.length && this.volley===volley) {
+      const z=BOSS_DEPTH+BOSS_MUZZLE_Z;
+      this.firedCannonX=0;this.bossRecoil=BOSS_RECOIL_TIME;
+      this.threats.push(...this.markers.map(target=>({x:0,y:BOSS_Y,z,
+        vx:target.x/LEVIATHAN_TRAVEL,vy:(target.y-BOSS_Y)/LEVIATHAN_TRAVEL,vz:-z/LEVIATHAN_TRAVEL})));
+      this.volley++;
+    }
+    if(elapsed>LEVIATHAN_FIRE+LEVIATHAN_TRAVEL+.05)this.markers=[];
   }
 
   private fire({ x, y }: Point, drone = false, damage = 1) {

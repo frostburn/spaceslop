@@ -105,6 +105,7 @@ function syncUI() {
   hull.textContent = String(flight.hull).padStart(2, '0');
   charges.textContent = String(flight.charges).padStart(2, '0');
   bossHud.hidden = flight.phase !== 'boss';
+  bossHealth.max = flight.bossMaxHealth;
   bossHealth.value = flight.bossHealth;
   bossName.textContent = levels[flight.level].boss;
   pulse.disabled = !active || !fighting || flight.charges === 0;
@@ -122,8 +123,8 @@ function syncUI() {
   if (preparing) tip = 'Preparing graphics…';
   else if (screen === 'title' && offlineReady) tip = 'Ready offline';
   else if (flight.droneWeapon === 'towline') {
-    tip = flight.phase === 'boss' ? 'Sweep the arc across the green cannon.' : 'Park the drone · Sweep the arc';
-  } else if (flight.phase === 'boss') tip = 'Tap the green cannon. Dodge amber rings.';
+    tip = flight.phase === 'boss' ? (flight.level === 'ice' ? 'Sweep the arc across the mouth marker.' : 'Sweep the arc across the green cannon.') : 'Park the drone · Sweep the arc';
+  } else if (flight.phase === 'boss') tip = flight.level === 'ice' ? 'Tap the mouth marker. Dodge amber rings.' : 'Tap the green cannon. Dodge amber rings.';
   if (active && flight.perkTime > 0) {
     tip = flight.perkMessage;
   } else if (active && flight.pickupTime > 0) {
