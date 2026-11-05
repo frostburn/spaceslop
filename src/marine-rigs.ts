@@ -1,5 +1,6 @@
 import * as T from 'three';
-import { marineJawGeometry, JAW_HINGE_Y, JAW_HINGE_Z } from './marine-jaw';
+import { sealMarineTube } from './marine-geometry';
+import { marineJawGeometry, marineEyeFrame, JAW_HINGE_Y, JAW_HINGE_Z } from './marine-jaw';
 import { part, pivot } from './rig-geometry';
 import { iceEnvironment } from './ice-surfaces';
 import { leviathanMotion, type MarineKind } from './marine';
@@ -94,7 +95,7 @@ function bodyGeometry(kind: Animal) {
     }
   }
   const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(p,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));
-  g.setAttribute('skinIndex',new T.Uint16BufferAttribute(joints,4));g.setAttribute('skinWeight',new T.Float32BufferAttribute(weights,4));g.setIndex(indices);g.computeVertexNormals();
+  g.setAttribute('skinIndex',new T.Uint16BufferAttribute(joints,4));g.setAttribute('skinWeight',new T.Float32BufferAttribute(weights,4));g.setIndex(indices);sealMarineTube(g,rows,cols);g.computeVertexNormals();
   // Average UV seam duplicates without smoothing away the body shape.
   const n=g.getAttribute('normal');for(let row=0;row<=rows;row++){const a=row*(cols+1),b=a+cols;
     const v=new T.Vector3(n.getX(a)+n.getX(b),n.getY(a)+n.getY(b),n.getZ(a)+n.getZ(b)).normalize();n.setXYZ(a,v.x,v.y,v.z);n.setXYZ(b,v.x,v.y,v.z);}
@@ -108,7 +109,7 @@ function flipper(length:number,width:number) {
     for(let j=0;j<=12;j++){const a=j/12*Math.PI*2;p.push(t*length, -t*t*length*.45 + Math.cos(a)*w,Math.sin(a)*w*.19);uv.push(j/12,t);
       if(row<16&&j<12){const i=row*13+j;ix.push(i,i+1,i+13,i+1,i+14,i+13);}}
   }
-  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(p,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(ix);g.computeVertexNormals();tintGeometry(g,true);geometryCache.set(key,g);return g;
+  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(p,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(ix);sealMarineTube(g,16,12,true);g.computeVertexNormals();tintGeometry(g,true);geometryCache.set(key,g);return g;
 }
 function verticalFin(kind:'dorsal'|'fluke') {
   if(geometryCache.has(kind))return geometryCache.get(kind)!;
@@ -162,7 +163,7 @@ function animal(kind:Animal) {
     tail.name='vertical-tail-fluke';if(large)tail.scale.setScalar(1.5);
   }
   const headParent=kind==='plesiosaur'?bones[5]:large?bones[3]:root, offset=kind==='plesiosaur'?1.8:large?.5:0;
-  eyes(headParent,(kind==='plesiosaur'?2.08:large?1.12:.77)-offset,kind==='plesiosaur'?.16:large?.43:.19,large?.20:kind==='plesiosaur'?.085:.10,large?.075:kind==='plesiosaur'?.04:.045);
+  if(!large)eyes(headParent,(kind==='plesiosaur'?2.08:.77)-offset,kind==='plesiosaur'?.16:.19,kind==='plesiosaur'?.085:.10,kind==='plesiosaur'?.04:.045);
   // Mouth seam and nostrils follow the snout, rather than using a generated face decal.
   const start=kind==='plesiosaur'?2.05:large?.93:.91,end=kind==='plesiosaur'?2.38:large?1.92:1.53;
   for(const side of [-1,1]) {
@@ -177,20 +178,29 @@ function animal(kind:Animal) {
   }
   const glowMaterial=new T.MeshBasicMaterial({color:0xffb65f,transparent:true,opacity:0,depthWrite:false,blending:T.AdditiveBlending});
   const glow=part(headParent,orb,glowMaterial,0,end-.12-offset,-.03);glow.scale.setScalar(large?.10:.065);glow.name='mouth-charge';
-  let jaw:T.Group|undefined;
+  let jaw:T.Bone|undefined;
   if(large) {
     const jawParts=marineJawGeometry(tintGeometry);
     part(headParent,jawParts.skull,skin(1,'spots'),0,-offset,0).name='upper-jaw-skin';
-    jaw=pivot(headParent,'lower-jaw',0,JAW_HINGE_Y-offset,JAW_HINGE_Z);
+    jawParts.ridges.forEach((geometry,index)=>{part(headParent,geometry,skin(1,'spots'),0,-offset,0).name=`cranial-ridge-${index}`;});
+    jaw=new T.Bone();jaw.name='lower-jaw';jaw.position.set(0,JAW_HINGE_Y-offset,JAW_HINGE_Z);headParent.add(jaw);
     part(jaw,jawParts.mandible,skin(1,'spots'),0,0,0).name='lower-jaw-skin';
     part(headParent,jawParts.upperPalate,mouthMaterial,0,-offset,0).name='upper-palate';
     part(jaw,jawParts.lowerPalate,mouthMaterial,0,0,0).name='lower-palate';
-    const throat=part(headParent,orb,mouthMaterial,0,.80-offset,-.12);throat.scale.set(.49,.045,.35);
+    const throat=new T.SkinnedMesh(jawParts.throat,[skin(1,'spots'),mouthMaterial]);throat.name='gular-skin';root.add(throat);
+    root.updateMatrixWorld(true);throat.bind(new T.Skeleton([bones[3],jaw]));throat.frustumCulled=false;
     for(const side of [-1,1]) {
       const name=side<0?'L':'R';
       pivot(headParent,`skull-hinge-${name}`,side*.50,JAW_HINGE_Y-offset,JAW_HINGE_Z);
       pivot(jaw,`jaw-hinge-${name}`,side*.50,0,0);
       const cheek=part(headParent,jawParts.hinges[side<0?0:1],skin(1,'spots'),0,-offset,0);cheek.name=`jaw-joint-${name}`;
+      part(headParent,jawParts.socketRims[side<0?0:1],skin(1,'spots'),0,-offset,0).name=`orbital-rim-${name}`;
+      part(headParent,jawParts.socketCups[side<0?0:1],mouthMaterial,0,-offset,0).name=`orbital-cup-${name}`;
+      const frame=marineEyeFrame(side),eye=pivot(headParent,`protected-eye-${name}`,frame.position.x,frame.position.y-offset,frame.position.z);
+      eye.quaternion.copy(frame.rotation);
+      const globe=part(eye,orb,eyeMaterial,0,0,-.038);globe.scale.set(.073,.108,.040);
+      const iris=part(eye,orb,amber,0,0,.004);iris.scale.set(.044,.074,.014);
+      const pupil=part(eye,orb,eyeMaterial,0,0,.017);pupil.scale.set(.014,.058,.009);
     }
     part(headParent,jawParts.upperTeeth,toothMaterial,0,-offset,0).name='upper-dentition';
     part(jaw,jawParts.lowerTeeth,toothMaterial,0,0,0).name='lower-dentition';
@@ -219,6 +229,7 @@ function animal(kind:Animal) {
 }
 export function createMarineRig(kind:MarineKind) {
   const rig=animal(kind),root=rig.root;root.scale.setScalar(kind==='plesiosaur'?.66:.67);
+  root.rotation.order='ZYX'; // Bank around the animal's forward axis before turning into the route.
   return {...rig,pose(time:number,bank=0,charge=0){root.rotation.y=bank;rig.pose(time,charge);}};
 }
 export function createLeviathan() {

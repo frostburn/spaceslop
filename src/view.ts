@@ -371,7 +371,7 @@ export class FlightView {
       const rig=enemy.marine==='ichthyosaur'?this.ichthyosaurs[hunters++]:this.plesiosaurs[sweepers++];
       if(!rig)continue;
       rig.root.visible=true;rig.root.position.set(enemy.x,enemy.y,0);rig.root.rotation.z=Math.PI+(enemy.heading??0);
-      const swim=marineMotion(enemy.marine,enemy.age,enemy.lane);
+      const swim=marineMotion(enemy.marine,enemy.age,enemy.lane,enemy.school);
       const charge=T.MathUtils.clamp(1-(enemy.fire-enemy.age)/.55,0,1);
       rig.pose(enemy.age,swim.bank,charge);this.marineModels[index]=rig.root;
     }
