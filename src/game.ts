@@ -2,7 +2,7 @@ import {
   BOSS_FIRE_AT, BOSS_MUZZLE_Z, BOSS_RECOIL_TIME, BOSS_VOLLEY_INTERVAL, BOSS_WINDUP_AT, raptorFlight,
 } from './encounters';
 import { CLOSE_CALLS_REQUIRED, HOT_DOCK_COOLDOWN, HOT_DOCK_DISTANCE, type PilotId } from './pilot-data';
-import { WING_MOUNT, wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
+import { WING_FLASH_TIME, WING_FORMATION, wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
 
 export const WIDTH = 9;
 export const HEIGHT = 16;
@@ -30,7 +30,7 @@ type Enemy = Point & {
 };
 type Drop = Point & { weapon: WingWeapon };
 type Wing = {
-  side: WingSide; weapon?: WingWeapon; cooldown: number;
+  side: WingSide; weapon?: WingWeapon; cooldown: number; flash: number;
   beamEnd?: Point; laserTarget?: Enemy | number; laserHold: number;
 };
 
@@ -90,7 +90,7 @@ export class Flight {
   phase: Phase = 'stage';
   time = 0;
   player = { x: 0, y: -5.3 };
-  drone = { x: -1.15, y: -5.3 };
+  drone = { x: -1.15, y: -6.15 };
   droneTarget?: Point;
   hull = MAX_HULL;
   invulnerable = 0;
@@ -107,8 +107,8 @@ export class Flight {
   towlineFlash = 0;
   drops: Drop[] = [];
   wings: [Wing, Wing] = [
-    { side: -1, cooldown: 0, laserHold: 0 },
-    { side: 1, cooldown: 0, laserHold: 0 },
+    { side: -1, cooldown: 0, flash: 0, laserHold: 0 },
+    { side: 1, cooldown: 0, flash: 0, laserHold: 0 },
   ];
   pickupTime = 0;
   pickupMessage = '';
@@ -168,7 +168,10 @@ export class Flight {
   }
 
   wingOrigin(side: WingSide) {
-    return { x: this.player.x + side * WING_MOUNT.x, y: this.player.y + WING_MOUNT.y };
+    const desiredX = this.player.x + side * WING_FORMATION.x;
+    const x = clamp(desiredX, -WIDTH / 2 + 0.38, WIDTH / 2 - 0.38);
+    const tuck = Math.abs(desiredX - x);
+    return { x, y: Math.min(HEIGHT / 2 - 0.24, this.player.y + WING_FORMATION.y + tuck * 0.95) };
   }
 
   get cannonWindup() {
@@ -342,6 +345,7 @@ export class Flight {
   private equip(wing: Wing, weapon: WingWeapon) {
     wing.weapon = weapon;
     wing.cooldown = weapon === 'omega' ? wingShots.omega.interval : 0;
+    wing.flash = 0;
     wing.beamEnd = undefined;
     wing.laserTarget = undefined;
     wing.laserHold = 0;
@@ -373,9 +377,11 @@ export class Flight {
       return;
     }
     wing.cooldown = Math.max(0, wing.cooldown - dt);
+    wing.flash = Math.max(0, wing.flash - dt);
     if (wing.cooldown > 0) return;
     const spec = wingShots[wing.weapon];
     wing.cooldown = spec.interval;
+    wing.flash = WING_FLASH_TIME;
     const duration = spec.bossTravel;
     this.shots.push({
       ...origin, z: 0, wing: wing.weapon, damage: spec.damage,
@@ -592,6 +598,7 @@ export class Flight {
       this.enemies = [];
       this.drops = [];
       for (const wing of this.wings) {
+        wing.flash = 0;
         wing.beamEnd = undefined;
         wing.laserTarget = undefined;
         wing.laserHold = 0;

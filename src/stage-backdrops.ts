@@ -11,6 +11,7 @@ export function createStageBackdrops() {
     hasPreserve: { value: 0 },
     hasShipyard: { value: 0 },
     reveal: { value: 0 },
+    edge: { value: 1.24 },
     scroll: { value: 0 },
     tint: { value: new T.Color(0xc6c6c6) },
   };
@@ -28,11 +29,10 @@ export function createStageBackdrops() {
     fragmentShader: `
       uniform sampler2D preserveMap, shipyardMap;
       uniform vec2 preserveCrop, shipyardCrop;
-      uniform float hasPreserve, hasShipyard, reveal, scroll;
+      uniform float hasPreserve, hasShipyard, reveal, scroll, edge;
       uniform vec3 tint;
       varying vec2 vUv;
       void main() {
-        float edge = mix(1.24, -0.24, reveal);
         float opening = smoothstep(edge - 0.23, edge + 0.23, vUv.y);
         float preserveWeight = (1.0 - opening) * hasPreserve;
         float shipyardWeight = opening * hasShipyard;
@@ -82,9 +82,11 @@ export function createStageBackdrops() {
     get hasShipyard() { return Boolean(uniforms.hasShipyard.value); },
     update(reveal: number, scroll: number, perspectiveDistance?: number) {
       uniforms.reveal.value = reveal;
+      uniforms.edge.value = T.MathUtils.lerp(1.24, -0.24, reveal);
       uniforms.scroll.value = scroll / HEIGHT;
       root.visible = (this.hasPreserve && reveal < 1) || (this.hasShipyard && reveal > 0);
       root.scale.setScalar(perspectiveDistance === undefined ? 1 : 1 - root.position.z / perspectiveDistance);
+      return uniforms.edge.value;
     },
   };
 }

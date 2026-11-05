@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { poseBurners, shipBurners } from './burners';
+import { createCorridorBridge } from './corridor-bridge';
 import { createInterceptorRig, createRaptorRig } from './encounter-rigs';
 import { loadEncounterTextures } from './encounter-texture';
 import { BOSS_RECOIL_TIME, raptorFlight } from './encounters';
@@ -11,7 +12,8 @@ import { createPreserveEdges, PRESERVE_LOOP } from './preserve-edges';
 import { createDroneRig, createFighterRig, createScoutRig } from './ship-rigs';
 import { createShipyard } from './shipyard';
 import { createStageBackdrops } from './stage-backdrops';
-import { wingWeapons, type WingProjectile } from './wing';
+import { WING_FLASH_TIME, wingWeapons, type WingProjectile, type WingWeapon } from './wing';
+import { createWingPod } from './wing-pod';
 
 const sceneColor = 0x0b1020;
 const teal = 0x88f2ff;
@@ -48,6 +50,7 @@ export class FlightView {
   private bossBurners = shipBurners(this.boss.root);
   private raptor = createRaptorRig();
   private preserveEdges = createPreserveEdges();
+  private bridge = createCorridorBridge();
   private shipyard = createShipyard();
   private backdrops = createStageBackdrops();
   private drone = createDroneRig();
@@ -78,19 +81,20 @@ export class FlightView {
     cannon: this.projectiles(wingWeapons.cannon.color),
     omega: this.projectiles(wingWeapons.omega.color, 0.23),
   };
-  private mounts = this.player.hardpoints.map((socket) => {
-    const housing = new T.Mesh(new T.BoxGeometry(0.16, 0.28, 0.10),
-      new T.MeshStandardMaterial({ color: 0x364252, roughness: 0.48 }));
-    const stripe = new T.Mesh(new T.BoxGeometry(0.085, 0.20, 0.023), new T.MeshBasicMaterial());
-    stripe.position.z = 0.053;
-    housing.add(stripe);
-    socket.add(housing);
-    return { housing, stripe };
+  private wingPods = Array.from({ length: 2 }, () => (Object.keys(wingWeapons) as WingWeapon[])
+    .map((weapon) => ({ weapon, ...createWingPod(weapon) })));
+  private wingLasers = Array.from({ length: 2 }, () => {
+    const root = new T.Group();
+    const glow = new T.Mesh(new T.PlaneGeometry(0.19, 1), new T.MeshBasicMaterial({
+      color: wingWeapons.laser.color, blending: T.AdditiveBlending, transparent: true, opacity: 0.48, depthWrite: false,
+    }));
+    const core = new T.Mesh(new T.PlaneGeometry(0.052, 1), new T.MeshBasicMaterial({
+      color: 0xffdcf7, transparent: true, opacity: 0.96, depthWrite: false,
+    }));
+    core.position.z = 0.01;
+    root.add(glow, core);
+    return { root, glow };
   });
-  private wingLasers = Array.from({ length: 2 }, () => new T.Mesh(
-    new T.PlaneGeometry(0.1, 1),
-    new T.MeshBasicMaterial({ color: wingWeapons.laser.color, transparent: true, opacity: 0.85, depthWrite: false }),
-  ));
   private drops = Array.from({ length: 12 }, () => new T.Mesh(
     new T.OctahedronGeometry(0.38),
     new T.MeshBasicMaterial({ wireframe: true }),
@@ -137,17 +141,19 @@ export class FlightView {
     this.stars = new T.Points(geometry, new T.PointsMaterial({ color: 0x607796, size: 0.07 }));
     this.stars.frustumCulled = false;
     this.boss.root.position.set(0, BOSS_Y, BOSS_DEPTH);
-    this.texturesReady = Promise.all([this.backdrops.ready, loadEncounterTextures(this.boss, this.raptor)]);
     const scout = createScoutRig();
+    const pods = this.wingPods.flatMap((side) => side.map(({ root }) => root));
+    this.texturesReady = Promise.all([this.backdrops.ready, loadEncounterTextures(this.boss, this.raptor,
+      [this.player.root, scout, this.drone, this.bridge.root, ...pods])]);
     this.enemies = Array.from({ length: 12 }, () => {
       const root = scout.clone();
       return { root, burners: shipBurners(root) };
     });
     this.towline.add(this.towlineGlow, this.towlineCore);
     this.plane.add(this.player.root, this.drone, this.droneGoal, this.towline, this.boss.root, this.raptor.root, this.cannonMarker, this.stars,
-      this.preserveEdges.root, this.shipyard.root, this.backdrops.root,
+      this.preserveEdges.root, this.shipyard.root, this.backdrops.root, this.bridge.root,
       this.pulse, this.shotMeshes, this.droneShots, this.threatMeshes, ...this.enemies.map(({ root }) => root), ...this.markers,
-      ...Object.values(this.wingProjectiles), ...this.wingLasers, ...this.drops);
+      ...Object.values(this.wingProjectiles), ...pods, ...this.wingLasers.map(({ root }) => root), ...this.drops);
   }
 
   async warmup(signal: AbortSignal, repaint: () => void) {
@@ -169,11 +175,12 @@ export class FlightView {
     await compiled;
 
     // Use the actual canvas framebuffer so the draws prime the same programs and buffers as play.
-    const stage: T.Object3D[] = [this.raptor.root];
+    const stage: T.Object3D[] = [this.raptor.root, this.enemies[0].root, this.bridge.root];
     if (this.backdrops.hasPreserve || this.backdrops.hasShipyard) stage.push(this.backdrops.root);
     const boss: T.Object3D[] = [this.boss.root, this.cannonMarker, ...this.markers];
     if (!this.backdrops.hasShipyard) boss.push(this.shipyard.root);
-    for (const objects of [stage, boss]) {
+    const pods = this.wingPods.map((side) => side.map(({ root }) => root));
+    for (const objects of [stage, boss, pods[0], [...pods[1], ...this.wingLasers.map(({ root }) => root)]]) {
       await nextFrame();
       if (signal.aborted) return;
       camera.position.set(0, 0, 95).applyQuaternion(this.plane.quaternion);
@@ -224,7 +231,8 @@ export class FlightView {
     this.player.root.position.set(flight.player.x, flight.player.y, 0);
     this.player.root.rotation.x = -1.18 * eased;
     this.player.root.visible = flight.hull > 0 && Math.floor(flight.invulnerable * 12) % 2 === 0;
-    const fighterSpeed = this.fighterMotion(flight.player, elapsed, newFlight).length();
+    const fighterVelocity = this.fighterMotion(flight.player, elapsed, newFlight);
+    const fighterSpeed = fighterVelocity.length();
     poseBurners(this.playerBurners, this.animationTime, Math.min(1, 0.36 + fighterSpeed * 0.1 + 0.34 * Math.sin(eased * Math.PI)));
     this.drone.position.set(flight.drone.x, flight.drone.y, 0.23);
     this.drone.visible = flight.hull > 0;
@@ -282,7 +290,7 @@ export class FlightView {
       }
     }
 
-    this.drawWings(flight);
+    this.drawWings(flight, eased, fighterVelocity);
     for (const [index, model] of this.drops.entries()) {
       const drop = flight.drops[index];
       model.visible = Boolean(drop);
@@ -318,7 +326,10 @@ export class FlightView {
     if (flight.phase === 'stage') this.stageTime = flight.time;
     const scroll = this.stageTime * 1.65;
     this.stars.position.y = -(scroll % 12) - reveal * 2;
-    this.backdrops.update(reveal, this.stageTime * 1.2 + reveal * 6, this.swing === 0 ? undefined : distance);
+    const backdropScroll = this.stageTime * 1.2 + reveal * 6;
+    const perspectiveDistance = this.swing === 0 ? undefined : distance;
+    const edge = this.backdrops.update(reveal, backdropScroll, perspectiveDistance);
+    this.bridge.update(backdropScroll, edge, reveal, perspectiveDistance);
     this.shipyard.update(reveal, !this.backdrops.hasShipyard);
 
     const wakes = flight.hull > 0 && reveal < 0.7 ? [
@@ -332,24 +343,32 @@ export class FlightView {
     this.preserveEdges.update(scroll % PRESERVE_LOOP, reveal, !this.backdrops.hasPreserve, elapsed, wakes);
   }
 
-  private drawWings(flight: Flight) {
+  private drawWings(flight: Flight, reveal: number, velocity: T.Vector2) {
     const fighting = flight.phase === 'stage' || flight.phase === 'boss';
+    const throttle = Math.min(1, 0.38 + velocity.length() * 0.12 + 0.24 * Math.sin(reveal * Math.PI));
     for (const [index, wing] of flight.wings.entries()) {
-      const { housing, stripe } = this.mounts[index];
       const laser = this.wingLasers[index];
       const origin = flight.wingOrigin(wing.side);
-      housing.visible = Boolean(wing.weapon);
-      if (wing.weapon) {
-        const charge = wing.weapon === 'omega' && fighting && wing.cooldown < 0.28;
-        stripe.material.color.setHex(charge ? 0xffffdf : wingWeapons[wing.weapon].color);
+      for (const pod of this.wingPods[index]) {
+        pod.root.visible = flight.hull > 0 && wing.weapon === pod.weapon;
+        if (!pod.root.visible) continue;
+        const time = this.animationTime + index * 0.47;
+        pod.root.position.set(origin.x, origin.y, 0);
+        pod.root.rotation.set(-1.18 * reveal + 0.09 * Math.sin(time * 6),
+          -0.046 * velocity.x + 0.14 * Math.sin(time * 5), 0.08 * Math.sin(time * 4));
+        const recoil = fighting ? wing.flash / WING_FLASH_TIME : 0;
+        const charge = pod.weapon === 'omega' && fighting ? Math.max(0, 1 - wing.cooldown / 0.28) : 0;
+        const activity = wing.beamEnd && fighting ? 0.55 + 0.13 * Math.sin(time * 31) : Math.max(recoil, charge);
+        pod.pose(time, throttle, activity, recoil);
       }
 
-      laser.visible = fighting && Boolean(wing.beamEnd);
-      if (wing.beamEnd) {
+      laser.root.visible = fighting && flight.hull > 0 && Boolean(wing.beamEnd);
+      if (laser.root.visible && wing.beamEnd) {
         const endY = wing.beamEnd.y;
-        laser.position.set(origin.x, (origin.y + endY) / 2, 0.16);
-        laser.scale.y = Math.abs(endY - origin.y);
-        laser.scale.x = 1 + Math.min(wing.laserHold, 0.85);
+        laser.root.position.set(origin.x, (origin.y + endY) / 2, 0.035);
+        laser.root.scale.y = Math.abs(endY - origin.y);
+        laser.root.scale.x = 1 + Math.min(wing.laserHold, 0.85);
+        laser.glow.material.opacity = 0.36 + 0.12 * Math.sin(this.animationTime * 32);
       }
     }
   }

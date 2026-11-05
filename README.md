@@ -15,7 +15,7 @@ Tap or click the playfield to send the drone to that point. It parks and fires a
 
 Choose **Sentry** or **Towline** before launch. With Towline equipped, park the drone and drag the ship to sweep the arc through enemy formations. The arc pulses automatically while the drone is parked. Against the boss, sweep the line across the green cannon during a pulse.
 
-Enemies can drop wing weapons. Fly through a pickup to equip it. An empty mount takes priority, and with both occupied the pickup replaces the wing it touches. For testing, expand **Test wing loadout** before launch to equip either wing immediately. The picker is available in Vite dev and on builds opened with `?testLoadout=1`.
+Enemies can drop wing weapons. Fly through a pickup to equip a pod that flies alongside your ship. An empty slot takes priority, and with both occupied the pickup replaces the pod on the side where you collected it. For testing, expand **Test wing loadout** before launch to equip either wing immediately. The picker is available in Vite dev and on builds opened with `?testLoadout=1`.
 
 - **Homing Cannon** fires weak guided missiles.
 - **Standard Cannon** fires straight down its lane.
@@ -30,7 +30,7 @@ The procedural encounter rigs live in `src/encounter-rigs.ts`. A future model ca
 
 ## Asset workshop
 
-Run `npm run dev` and open **Asset workshop** from the game menu or visit `/workshop.html`. Orbit and zoom the raptor, fighter, scout, drone, or interceptor. Switch camera presets, scrub or play the animated rigs, and toggle wireframe. The workshop uses the game rigs and the optional alloy texture.
+Run `npm run dev` and open **Asset workshop** from the game menu or visit `/workshop.html`. Orbit and zoom the raptor, ships, or wing weapon pods. Switch camera presets, scrub or play the animated rigs, and toggle wireframe. The workshop uses the game rigs and the optional alloy texture.
 
 ## Assets and offline play
 
@@ -50,7 +50,7 @@ The encounter textures and backdrops are optional PNGs. Add the reviewed files a
 
 | File | Surface |
 | --- | --- |
-| `public/encounters/interceptor-metal.png` | Tileable bronze and slate armor |
+| `public/encounters/interceptor-metal.png` | Tileable brushed metal for ship and pod armor and the corridor bridge |
 | `public/encounters/feather-vane.png` | Raptor wing and tail feathers and the ace's crest. Orient the root down and tip up. |
 | `public/encounters/draconian-scales.png` | Tileable draconian face, snout, and jaw |
 | `public/encounters/preserve-backdrop.png` | Portrait, top-down scenery. It scrolls underneath the procedural ferns. |

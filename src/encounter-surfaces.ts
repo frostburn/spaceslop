@@ -25,3 +25,23 @@ export function applyRelief(texture: T.Texture, materials: readonly T.MeshStanda
     material.needsUpdate = true;
   }
 }
+
+export function shipAlloy(color: number) {
+  const material = texturedSurface(new T.MeshStandardMaterial({
+    color, metalness: 0.16, roughness: 0.53, flatShading: true, bumpScale: 0.56,
+  }), 0.37, 7.5);
+  material.userData.shipAlloy = true;
+  return material;
+}
+
+export function textureShipAlloy(texture: T.Texture, rigs: readonly T.Group[]) {
+  const materials = new Set<T.MeshStandardMaterial>();
+  for (const rig of rigs) {
+    rig.traverse((node) => {
+      if (node instanceof T.Mesh && node.material instanceof T.MeshStandardMaterial && node.material.userData.shipAlloy) {
+        materials.add(node.material);
+      }
+    });
+  }
+  applyRelief(texture, [...materials]);
+}

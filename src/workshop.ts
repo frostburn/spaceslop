@@ -8,6 +8,8 @@ import {
 } from './encounters';
 import { BOSS_CANNON_X, TRANSITION_TIME } from './game';
 import { createDroneRig, createFighterRig, createScoutRig } from './ship-rigs';
+import { createWingPod } from './wing-pod';
+import type { WingWeapon } from './wing';
 import './workshop.css';
 
 function element<T extends HTMLElement>(id: string) {
@@ -30,7 +32,6 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const raptor = createRaptorRig();
   const interceptor = createInterceptorRig(BOSS_CANNON_X);
   const interceptorBurners = shipBurners(interceptor.root);
-  loadEncounterTextures(interceptor, raptor);
   raptor.root.rotation.z = Math.PI;
   const scout = createScoutRig();
   scout.rotation.z = Math.PI;
@@ -50,10 +51,30 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     };
   }
 
+  function weaponAsset(weapon: WingWeapon) {
+    const pod = createWingPod(weapon);
+    return {
+      root: pod.root,
+      duration: 2,
+      pose(time: number) {
+        const recoil = weapon === 'laser' ? 0 : 1 - T.MathUtils.smoothstep(time, 1.3, 1.44);
+        const firing = time >= 1.3 && time < (weapon === 'laser' ? 1.88 : 1.44);
+        const charge = weapon === 'omega' ? T.MathUtils.smoothstep(time, 0.82, 1.3) * recoil : 0;
+        pod.pose(time, 0.38 + 0.52 * Math.sin(time * Math.PI / 2) ** 2,
+          firing ? (weapon === 'laser' ? 0.72 : recoil) : charge, firing ? recoil : 0);
+        return firing ? 'fire' : charge > 0 ? 'charge' : 'cruise';
+      },
+    };
+  }
+
   const assets = {
     fighter: shipAsset(createFighterRig().root),
     scout: shipAsset(scout),
     drone: shipAsset(createDroneRig()),
+    homing: weaponAsset('homing'),
+    cannon: weaponAsset('cannon'),
+    laser: weaponAsset('laser'),
+    omega: weaponAsset('omega'),
     raptor: {
       root: raptor.root,
       duration: RAPTOR_FLARE_END,
@@ -83,6 +104,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
       },
     },
   };
+  void loadEncounterTextures(interceptor, raptor, Object.values(assets).map(({ root }) => root));
   for (const asset of Object.values(assets)) scene.add(asset.root);
   const assetSelect = element<HTMLSelectElement>('asset');
   const timeline = element<HTMLInputElement>('timeline');

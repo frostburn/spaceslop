@@ -1,6 +1,7 @@
-import { RepeatWrapping, SRGBColorSpace, TextureLoader, type Texture } from 'three';
+import { RepeatWrapping, SRGBColorSpace, TextureLoader, type Group, type Texture } from 'three';
 import { setFaceTexture } from './creature-faces';
 import { setFeatherTexture, type createInterceptorRig, type createRaptorRig } from './encounter-rigs';
+import { textureShipAlloy } from './encounter-surfaces';
 
 type EncounterTexture = 'armor' | 'feathers' | 'scales' | 'preserve' | 'shipyard';
 declare const __ENCOUNTER_TEXTURES__: Partial<Record<EncounterTexture, string>>;
@@ -34,9 +35,14 @@ export async function loadEncounterTexture(
   });
 }
 
-export function loadEncounterTextures(boss: ReturnType<typeof createInterceptorRig>, raptor: ReturnType<typeof createRaptorRig>) {
+export function loadEncounterTextures(
+  boss: ReturnType<typeof createInterceptorRig>, raptor: ReturnType<typeof createRaptorRig>, ships: readonly Group[],
+) {
   return Promise.all([
-    loadEncounterTexture('armor', boss.setArmorTexture, 0.55),
+    loadEncounterTexture('armor', (texture) => {
+      boss.setArmorTexture(texture);
+      textureShipAlloy(texture, ships);
+    }, 0.55),
     loadEncounterTexture('feathers', setFeatherTexture),
     loadEncounterTexture('scales', (texture) => {
       // Use a larger scale pattern on screen and keep both UV edges inside the painted image.
