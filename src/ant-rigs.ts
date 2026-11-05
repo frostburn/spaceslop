@@ -2,6 +2,7 @@ import * as T from 'three';
 import { BOSS_MUZZLE_Z } from './encounters';
 import { antEye, antJoint, antSeam, antShell, fungusStem, sporeGlow } from './hive-materials';
 import { part, pivot } from './rig-geometry';
+import { addParasiteCrust, createParasiteColony } from './ant-parasite';
 
 export type AntKind = 'worker' | 'soldier';
 const oval = new T.SphereGeometry(1, 20, 14);
@@ -25,9 +26,6 @@ const antenna = new T.TubeGeometry(new T.CatmullRomCurve3([
   new T.Vector3(), new T.Vector3(0.14, 0.15, 0.025),
   new T.Vector3(0.29, 0.2, 0.08), new T.Vector3(0.22, 0.52, 0.04),
 ]), 10, 0.018, 6, false);
-const fungalStalk = new T.TubeGeometry(new T.CatmullRomCurve3([
-  new T.Vector3(), new T.Vector3(0.02, -0.015, 0.13), new T.Vector3(0.1, -0.045, 0.3),
-]), 7, 0.021, 6, false);
 const guardianArm = new T.TubeGeometry(new T.CatmullRomCurve3([
   new T.Vector3(-1.9, 0.85, 0.34), new T.Vector3(-1.25, 0.7, 0.5),
   new T.Vector3(-0.48, 0.34, 0.65), new T.Vector3(0, 0, BOSS_MUZZLE_Z - 0.1),
@@ -45,6 +43,7 @@ export function createAntRig(kind: AntKind = 'worker') {
   const root = new T.Group();
   const abdomen = pivot(root, 'gaster', 0, -0.56, 0.19);
   part(abdomen, gaster, antShell, 0, 0, 0).scale.z = 0.78;
+  addParasiteCrust(abdomen);
   for (const y of [-0.23, 0.02, 0.21]) {
     const band = part(abdomen, suture, antSeam, 0, y, 0);
     band.scale.set(y > 0.1 ? 0.84 : 1, 1, y > 0.1 ? 0.65 : 0.77);
@@ -88,16 +87,22 @@ export function createAntRig(kind: AntKind = 'worker') {
       vent.scale.set(0.039, 0.065, 0.026);
       vents.push(vent);
     }
-    const infection = pivot(abdomen, 'infection', side * 0.15, -0.28, 0.18);
-    infection.rotation.y = side * 0.35;
-    part(infection, oval, fungusStem, 0, 0, 0).scale.set(0.08, 0.12, 0.05);
-    for (let i = 0; i < 2; i++) {
-      const sprout = pivot(infection, 'fruit', side * 0.05 * i, -0.07 * i, 0);
-      sprout.scale.setScalar(i ? 0.7 : 1);
-      part(sprout, fungalStalk, fungusStem, 0, 0, 0);
-      part(sprout, oval, fungusStem, 0.1, -0.045, 0.3).scale.set(0.059, 0.052, 0.08);
-    }
+    const infection = createParasiteColony();
+    infection.position.set(side * 0.19, -0.3, 0.22);
+    infection.rotation.set(side * 0.15, side * 0.32, side * 0.8);
+    infection.scale.setScalar(side < 0 ? 0.9 : 0.72);
+    abdomen.add(infection);
   }
+  const shoulderGrowth = createParasiteColony();
+  shoulderGrowth.position.set(0.14, 0.05, 0.34);
+  shoulderGrowth.scale.setScalar(0.5);
+  shoulderGrowth.rotation.y = 0.4;
+  root.add(shoulderGrowth);
+  const headGrowth = createParasiteColony();
+  headGrowth.position.set(-0.15, -0.13, 0.15);
+  headGrowth.scale.setScalar(0.38);
+  headGrowth.rotation.y = -0.45;
+  head.add(headGrowth);
 
   function setKind(value: AntKind) {
     head.scale.set(value === 'soldier' ? 1.36 : 1, value === 'soldier' ? 1.13 : 1, value === 'soldier' ? 1.14 : 1);

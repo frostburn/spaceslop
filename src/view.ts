@@ -14,6 +14,7 @@ import { createDroneRig, createFighterRig, createScoutRig } from './ship-rigs';
 import { createShipyard } from './shipyard';
 import { createStageBackdrops } from './stage-backdrops';
 import { createHiveScenery } from './hive-scenery';
+import { HIVE_CAMERA_DISTANCE } from './hive-layout';
 import { WING_FLASH_TIME, wingWeapons, type WingProjectile, type WingWeapon } from './wing';
 import { createWingPod } from './wing-pod';
 
@@ -229,7 +230,7 @@ export class FlightView {
     this.plane.quaternion.copy(this.rotation);
     const hive = flight.level === 'broodlock';
     const camera = this.swing === 0 && !hive ? this.ortho : this.perspective;
-    const distance = T.MathUtils.lerp(hive ? 26 : 95, BOSS_CAMERA_DISTANCE, eased);
+    const distance = T.MathUtils.lerp(hive ? HIVE_CAMERA_DISTANCE : 95, BOSS_CAMERA_DISTANCE, eased);
     this.perspective.fov = T.MathUtils.radToDeg(2 * Math.atan(HEIGHT / 2 / distance));
     this.perspective.updateProjectionMatrix();
     camera.position.set(0, 0, distance).applyQuaternion(this.rotation);
@@ -350,7 +351,7 @@ export class FlightView {
     this.hive.root.visible = flight.level === 'broodlock';
     this.stars.visible = flight.level !== 'broodlock';
     if (this.hive.root.visible) {
-      this.hive.update(this.stageTime / flight.stageDuration, perspectiveDistance);
+      this.hive.update(flight.hiveProgress, perspectiveDistance);
       this.preserveEdges.root.visible = this.shipyard.root.visible = this.backdrops.root.visible = this.bridge.root.visible = false;
       return;
     }

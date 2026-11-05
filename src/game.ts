@@ -2,11 +2,13 @@ import {
   BOSS_FIRE_AT, BOSS_MUZZLE_Z, BOSS_RECOIL_TIME, BOSS_VOLLEY_INTERVAL, BOSS_WINDUP_AT, raptorFlight,
 } from './encounters';
 import { levels, type LevelId } from './levels';
+import { DRONE_HULL, FIGHTER_HULL, HiveCollision, POD_BOUNDS, POD_HULL } from './hive-collision';
+import { HIVE_CAMERA_DISTANCE } from './hive-layout';
+import { HEIGHT, WIDTH } from './playfield';
 import { CLOSE_CALLS_REQUIRED, HOT_DOCK_COOLDOWN, HOT_DOCK_DISTANCE, type PilotId } from './pilot-data';
 import { WING_FLASH_TIME, WING_FORMATION, wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
 
-export const WIDTH = 9;
-export const HEIGHT = 16;
+export { HEIGHT, WIDTH } from './playfield';
 export const STEP = 1 / 60;
 export const BOSS_DEPTH = -12;
 export const BOSS_Y = 4.2;
@@ -129,7 +131,9 @@ export class Flight {
   perkMessage = '';
   private closeCalls = 0;
   private repairUsed = false;
-  private longRedeploy = false;
+  private droneLaunch?: Point;
+  private stageProgress = 0;
+  private fungi?: HiveCollision;
   private hotDockReady = false;
   private hotDockCooldown = 0;
   private towlineDamage = TOWLINE_DAMAGE;
@@ -152,6 +156,7 @@ export class Flight {
   ) {
     this.droneWeapon = droneWeapon;
     this.pilot = pilot;
+    if (level === 'broodlock') this.fungi = new HiveCollision();
     if (droneWeapon === 'towline') this.droneCooldown = TOWLINE_INTERVAL;
     for (const [index, wing] of this.wings.entries()) {
       const weapon = loadout[index];
@@ -160,6 +165,19 @@ export class Flight {
   }
 
   get stageDuration() { return levels[this.level].duration; }
+
+  get hiveProgress() {
+    if (this.phase === 'stage') return clamp(this.time / this.stageDuration, 0, 1);
+    if (this.phase === 'approach' || this.phase === 'boss' || this.phase === 'won') return 1;
+    return this.stageProgress;
+  }
+
+  private prepareFungi() {
+    if (!this.fungi) return;
+    const reveal = this.phase === 'stage' ? 0 : this.phase === 'approach' ? clamp(this.time / TRANSITION_TIME, 0, 1) : 1;
+    const eased = reveal * reveal * (3 - 2 * reveal);
+    this.fungi.update(this.hiveProgress, HIVE_CAMERA_DISTANCE + (BOSS_CAMERA_DISTANCE - HIVE_CAMERA_DISTANCE) * eased);
+  }
 
   get perkReadout() {
     switch (this.pilot) {
@@ -187,7 +205,9 @@ export class Flight {
     const desiredX = this.player.x + side * WING_FORMATION.x;
     const x = clamp(desiredX, -WIDTH / 2 + 0.38, WIDTH / 2 - 0.38);
     const tuck = Math.abs(desiredX - x);
-    return { x, y: Math.min(HEIGHT / 2 - 0.24, this.player.y + WING_FORMATION.y + tuck * 0.95) };
+    const origin = { x, y: Math.min(HEIGHT / 2 - 0.24, this.player.y + WING_FORMATION.y + tuck * 0.95) };
+    this.fungi?.move(origin, 0, 0, POD_HULL, POD_BOUNDS);
+    return origin;
   }
 
   get cannonWindup() {
@@ -200,7 +220,7 @@ export class Flight {
     const target = { x: 0, y: 0 };
     moveWithinField(target, x, y);
     this.droneTarget = target;
-    this.longRedeploy = this.pilot === 'glint' && !near(this.drone, target, HOT_DOCK_DISTANCE);
+    this.droneLaunch = { ...this.drone };
   }
 
   aimBy(dx: number, dy: number) {
@@ -213,15 +233,23 @@ export class Flight {
   }
 
   steer(x: number, y: number, dt: number) {
+    this.prepareFungi();
     const maxStep = SHIP_SPEED * dt;
     const direction = Math.hypot(x, y);
     if (direction > 0) {
       this.clearAim();
-      moveWithinField(this.player, x / direction * maxStep, y / direction * maxStep);
+      if (this.fungi) this.fungi.move(this.player, x / direction * maxStep, y / direction * maxStep, FIGHTER_HULL);
+      else moveWithinField(this.player, x / direction * maxStep, y / direction * maxStep);
       return;
     }
 
-    if (this.aim && moveToward(this.player, this.aim, maxStep)) this.clearAim();
+    if (this.aim) {
+      const next = { ...this.player };
+      const reached = moveToward(next, this.aim, maxStep);
+      const blocked = this.fungi?.move(this.player, next.x - this.player.x, next.y - this.player.y, FIGHTER_HULL);
+      if (!this.fungi) Object.assign(this.player, next);
+      if (reached || blocked) this.clearAim();
+    }
   }
 
   pulse() {
@@ -242,19 +270,32 @@ export class Flight {
   step(dt: number) {
     if (this.phase === 'won' || this.phase === 'lost') return;
     this.time += dt;
+    if (this.phase === 'stage') this.stageProgress = this.hiveProgress;
+    this.prepareFungi();
+    if (this.fungi?.move(this.player, 0, 0, FIGHTER_HULL)) this.clearAim();
+    this.fungi?.move(this.drone, 0, 0, DRONE_HULL);
     this.invulnerable = Math.max(0, this.invulnerable - dt);
     this.pulseFlash = Math.max(0, this.pulseFlash - dt);
     this.pickupTime = Math.max(0, this.pickupTime - dt);
     this.bossRecoil = Math.max(0, this.bossRecoil - dt);
     this.perkTime = Math.max(0, this.perkTime - dt);
     this.hotDockCooldown = Math.max(0, this.hotDockCooldown - dt);
-    if (this.droneTarget && moveToward(this.drone, this.droneTarget, DRONE_SPEED * dt)) {
+    let droneDone = false;
+    if (this.droneTarget) {
+      const next = { ...this.drone };
+      droneDone = moveToward(next, this.droneTarget, DRONE_SPEED * dt);
+      const blocked = this.fungi?.move(this.drone, next.x - this.drone.x, next.y - this.drone.y, DRONE_HULL);
+      if (!this.fungi) Object.assign(this.drone, next);
+      droneDone ||= Boolean(blocked);
+    }
+    if (droneDone) {
       this.droneTarget = undefined;
-      if (this.longRedeploy && !this.hotDockReady && this.hotDockCooldown === 0) {
+      if (this.pilot === 'glint' && this.droneLaunch && !near(this.drone, this.droneLaunch, HOT_DOCK_DISTANCE) &&
+        !this.hotDockReady && this.hotDockCooldown === 0) {
         this.hotDockReady = true;
         this.announcePerk('Hot Dock ready');
       }
-      this.longRedeploy = false;
+      this.droneLaunch = undefined;
     }
     if (this.phase === 'approach') {
       if (this.time >= TRANSITION_TIME) this.enter('boss');

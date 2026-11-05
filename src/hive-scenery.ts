@@ -2,6 +2,7 @@ import * as T from 'three';
 import { loadEncounterTexture } from './encounter-texture';
 import { HEIGHT, WIDTH } from './game';
 import { createHiveFungi } from './hive-fungi';
+import { HIVE_SCREENS } from './hive-layout';
 
 function createFallback() {
   const root = new T.Group();
@@ -12,11 +13,11 @@ function createFallback() {
   const rim = new T.RingGeometry(0.55, 0.66, 6);
   const egg = new T.SphereGeometry(1, 8, 6);
   for (const side of [-1, 1]) {
-    const wall = new T.Mesh(new T.BoxGeometry(1.35, HEIGHT * 3, 0.2), metal);
-    wall.position.set(side * 4.22, HEIGHT, 0);
+    const wall = new T.Mesh(new T.BoxGeometry(1.9, HEIGHT * HIVE_SCREENS, 0.2), metal);
+    wall.position.set(side * 4, HEIGHT, 0);
     root.add(wall);
     const pipe = new T.Mesh(rail, frame);
-    pipe.position.set(side * 3.43, HEIGHT, 0.22);
+    pipe.position.set(side * 3.05, HEIGHT, 0.22);
     root.add(pipe);
     for (let i = 0; i < 14; i++) {
       const y = -6.5 + i * 3.35;
@@ -44,7 +45,7 @@ export function createHiveScenery() {
     stars: { value: null as T.Texture | null }, mines: { value: null as T.Texture | null },
     hasForeground: { value: 0 }, hasMask: { value: 0 }, hasStars: { value: 0 }, hasMines: { value: 0 },
     starCrop: { value: new T.Vector2(1, 1) }, mineCrop: { value: new T.Vector2(1, 1) },
-    progress: { value: 0 }, screens: { value: 3 },
+    progress: { value: 0 }, screens: { value: HIVE_SCREENS },
   };
   const material = new T.ShaderMaterial({
     uniforms, depthWrite: false,
@@ -89,8 +90,6 @@ export function createHiveScenery() {
   const ready = Promise.all([
     loadEncounterTexture('hive', (texture) => {
       uniforms.foreground.value = texture;
-      const image = texture.image as HTMLImageElement;
-      uniforms.screens.value = Math.max(1, image.height / image.width * WIDTH / HEIGHT);
       uniforms.hasForeground.value = 1;
     }),
     loadEncounterTexture('hiveMask', (texture) => {
@@ -125,7 +124,7 @@ export function createHiveScenery() {
       const scale = perspectiveDistance === undefined ? 1 : 1 - fallback.position.z / perspectiveDistance;
       fallback.scale.setScalar(scale);
       fallback.position.y = -(HEIGHT * 2) * uniforms.progress.value * scale;
-      fungi.update(uniforms.progress.value, uniforms.screens.value, perspectiveDistance, Boolean(uniforms.hasForeground.value));
+      fungi.update(uniforms.progress.value, perspectiveDistance);
     },
   };
 }
