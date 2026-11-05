@@ -24,6 +24,8 @@ Enemies can drop wing weapons. Fly through a pickup to equip a pod that flies al
 
 During boss fights, line a wing up horizontally with the green cannon. Homing missiles steer toward it automatically.
 
+Each gun has its own projectile silhouette and trail: cyan ship darts, mint drone pulses, finned homing missiles, cannon tracers, and gold omega lances. Enemy plasma and hive spores have bright centers and dark rims. Lasers ripple along their length and flare at contact. Muzzle flashes, hit sparks, and collection bursts give immediate feedback. Wing pickups use metal badges with matching colors and distinct weapon icons, rotating beacons, and a short arrival animation. These effects use shared geometry and pooled instances, are warmed before launch, and need no new asset files.
+
 Choose a level before launch. **Broodlock · Ant hive** is the default: a 28-second traversal of the three-screen hive strip, six waves of infected ants, then a brood guardian. Workers fire aimed spores; larger soldiers charge their amber vents before a three-spore fan. The guardian uses the existing alternating hardpoint, warning-ring, and volley mechanics. The procedural ants have textured chitin, segmented abdomens, elbowed antennae, serrated mandibles, and a jointed six-leg gait. Soldiers have broader heads and larger jaws. Their eyes are cloudy and pale, a long fruiting stalk emerges from the head, and branching parasite colonies and crust spread across their bodies. Five soft mold sprites coat the abdomen, thorax, and head. These planes always face the camera, including while orbiting in the workshop, and leave the amber attack vents readable.
 
 Procedural mushrooms attach to fixed coordinates on the hive strip. Their mycelial roots and contact shadows meet the painted pipes and rock, while tapered stems bend sideways and return toward the camera. Caps follow the direction of each neck, with modeled rims and underside gills. The hive uses a shallow perspective view so the caps have foreground parallax while their roots stay on the same source pixels throughout scrolling and the boss approach.
@@ -40,7 +42,7 @@ Run `npm test` for the hive movement regression checks: keyboard and touch conta
 
 ## Asset workshop
 
-Run `npm run dev` and open **Asset workshop** from the game menu or visit `/workshop.html`. Orbit and zoom the raptor, ships, worker and soldier ants, guardian, mushroom cluster, or wing weapon pods. Switch camera presets, scrub or play the animated rigs, and toggle wireframe. The workshop uses the game rigs and textures. Its side view exposes the mushroom roots, projecting stems, cap rim, and gills.
+Run `npm run dev` and open **Asset workshop** from the game menu or visit `/workshop.html`. Orbit and zoom the raptor, ships, worker and soldier ants, guardian, mushroom cluster, wing weapon pods, ammunition, or powerups. Switch camera presets, scrub or play the animated rigs and effects, and toggle wireframe. The workshop uses the game rigs and textures. Its side view exposes the mushroom roots, projecting stems, cap rim, and gills.
 
 ## Assets and offline play
 

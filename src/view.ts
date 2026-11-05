@@ -4,7 +4,7 @@ import { poseBurners, shipBurners } from './burners';
 import { createCorridorBridge } from './corridor-bridge';
 import { createInterceptorRig, createRaptorRig } from './encounter-rigs';
 import { loadEncounterTextures } from './encounter-texture';
-import { BOSS_RECOIL_TIME, raptorFlight } from './encounters';
+import { BOSS_MUZZLE_Z, BOSS_RECOIL_TIME, raptorFlight } from './encounters';
 import {
   BOSS_CAMERA_DISTANCE, BOSS_CANNON_RADIUS, BOSS_CANNON_X, BOSS_DEPTH, BOSS_PROJECTION,
   BOSS_Y, Flight, HEIGHT, TRANSITION_TIME, WIDTH,
@@ -16,8 +16,11 @@ import { createStageBackdrops } from './stage-backdrops';
 import { createHiveScenery } from './hive-scenery';
 import { HIVE_CAMERA_DISTANCE } from './hive-layout';
 import { antScales } from './ant-navigation';
-import { WING_FLASH_TIME, wingWeapons, type WingProjectile, type WingWeapon } from './wing';
+import { WING_FLASH_TIME, wingWeapons, type WingWeapon } from './wing';
 import { createWingPod } from './wing-pod';
+import { createCombatEffects } from './combat-effects';
+import { createPowerupGraphic } from './powerup-graphics';
+import { createContinuousLaser, createMuzzleFlash, createProjectileBatch, projectileKinds, type ProjectileKind } from './projectile-graphics';
 
 const sceneColor = 0x0b1020;
 const teal = 0x88f2ff;
@@ -80,32 +83,15 @@ export class FlightView {
     new T.MeshBasicMaterial({ color: mint, depthTest: false }),
   );
   private enemies: { root: T.Group; burners: T.Mesh[] }[];
-  private shotMeshes = this.projectiles(teal);
-  private droneShots = this.projectiles(mint);
-  private threatMeshes = this.projectiles(orange, 0.16);
-  private wingProjectiles: Record<WingProjectile, T.InstancedMesh> = {
-    homing: this.projectiles(wingWeapons.homing.color, 0.12),
-    cannon: this.projectiles(wingWeapons.cannon.color),
-    omega: this.projectiles(wingWeapons.omega.color, 0.23),
-  };
+  private projectiles = Object.fromEntries(projectileKinds.map((kind) => [kind, createProjectileBatch(kind)])) as
+    Record<ProjectileKind, ReturnType<typeof createProjectileBatch>>;
+  private playerMuzzle = createMuzzleFlash(teal);
+  private droneMuzzle = createMuzzleFlash(mint);
+  private combat = createCombatEffects();
   private wingPods = Array.from({ length: 2 }, () => (Object.keys(wingWeapons) as WingWeapon[])
     .map((weapon) => ({ weapon, ...createWingPod(weapon) })));
-  private wingLasers = Array.from({ length: 2 }, () => {
-    const root = new T.Group();
-    const glow = new T.Mesh(new T.PlaneGeometry(0.19, 1), new T.MeshBasicMaterial({
-      color: wingWeapons.laser.color, blending: T.AdditiveBlending, transparent: true, opacity: 0.48, depthWrite: false,
-    }));
-    const core = new T.Mesh(new T.PlaneGeometry(0.052, 1), new T.MeshBasicMaterial({
-      color: 0xffdcf7, transparent: true, opacity: 0.96, depthWrite: false,
-    }));
-    core.position.z = 0.01;
-    root.add(glow, core);
-    return { root, glow };
-  });
-  private drops = Array.from({ length: 12 }, () => new T.Mesh(
-    new T.OctahedronGeometry(0.38),
-    new T.MeshBasicMaterial({ wireframe: true }),
-  ));
+  private wingLasers = Array.from({ length: 2 }, createContinuousLaser);
+  private drops = Array.from({ length: 12 }, createPowerupGraphic);
   private markers = Array.from({ length: 3 }, () => new T.Mesh(
     new T.RingGeometry(0.53, 0.61, 24),
     new T.MeshBasicMaterial({ color: 0xffcc78, transparent: true, depthWrite: false }),
@@ -122,11 +108,13 @@ export class FlightView {
   private lastFlight?: Flight;
   private fighterMotion = trackMotion();
   private droneMotion = trackMotion();
-  private matrix = new T.Matrix4();
-  private shotPosition = new T.Vector3();
-  private shotRotation = new T.Quaternion();
-  private shotScale = new T.Vector3(1, 1.85, 1);
-  private forwardAxis = new T.Vector3(0, 0, 1);
+  private seenShots = new WeakSet<Flight['shots'][number]>();
+  private seenDrops = new WeakMap<Flight['drops'][number], number>();
+  private previousDrops: Flight['drops'] = [];
+  private enemyVitals = new Map<Flight['enemies'][number], { hp: number; at: number }>();
+  private previousBossHealth = 30;
+  private previousHull = 4;
+  private bossHitAt = -1;
   private rotation = new T.Quaternion();
   private axis = new T.Vector3(1, 0, 0);
 
@@ -150,18 +138,23 @@ export class FlightView {
     this.boss.root.position.set(0, BOSS_Y, BOSS_DEPTH);
     const scout = createScoutRig();
     const pods = this.wingPods.flatMap((side) => side.map(({ root }) => root));
+    const ammo = Object.values(this.projectiles).map(({ root }) => root);
     this.texturesReady = Promise.all([this.backdrops.ready, this.hive.ready, loadEncounterTextures(this.boss, this.raptor,
-      [this.player.root, scout, this.drone, this.bridge.root, ...pods])]);
+      [this.player.root, scout, this.drone, this.bridge.root, ...pods, ...ammo, ...this.drops.map(({ root }) => root)])]);
     this.enemies = Array.from({ length: 12 }, () => {
       const root = scout.clone();
       return { root, burners: shipBurners(root) };
     });
     this.towline.add(this.towlineGlow, this.towlineCore);
+    this.playerMuzzle.root.position.set(0, 0.89, 0.045);
+    this.droneMuzzle.root.position.set(0, 0.31, 0.06);
+    this.player.root.add(this.playerMuzzle.root);
+    this.drone.add(this.droneMuzzle.root);
     this.plane.add(this.player.root, this.drone, this.droneGoal, this.towline, this.boss.root, this.raptor.root, this.cannonMarker, this.stars,
       this.preserveEdges.root, this.shipyard.root, this.backdrops.root, this.bridge.root, this.hive.root,
       this.hiveBoss.root, ...this.ants.map(({ root }) => root),
-      this.pulse, this.shotMeshes, this.droneShots, this.threatMeshes, ...this.enemies.map(({ root }) => root), ...this.markers,
-      ...Object.values(this.wingProjectiles), ...pods, ...this.wingLasers.map(({ root }) => root), ...this.drops);
+      this.pulse, ...this.enemies.map(({ root }) => root), ...this.markers,
+      ...ammo, this.combat.root, ...pods, ...this.wingLasers.map(({ root }) => root), ...this.drops.map(({ root }) => root));
   }
 
   async warmup(signal: AbortSignal, repaint: () => void) {
@@ -188,10 +181,19 @@ export class FlightView {
     const boss: T.Object3D[] = [this.boss.root, this.cannonMarker, ...this.markers];
     if (!this.backdrops.hasShipyard) boss.push(this.shipyard.root);
     const pods = this.wingPods.map((side) => side.map(({ root }) => root));
+    const ordnance = [this.player.root, this.drone, ...Object.values(this.projectiles).map(({ root }) => root), this.combat.root,
+      this.playerMuzzle.root, this.droneMuzzle.root, ...this.drops.slice(0, 4).map(({ root }) => root)];
     for (const objects of [stage, boss, [this.hive.root, this.ants[0].root, this.hiveBoss.root],
-      pods[0], [...pods[1], ...this.wingLasers.map(({ root }) => root)]]) {
+      pods[0], [...pods[1], ...this.wingLasers.map(({ root }) => root)], ordnance]) {
       await nextFrame();
       if (signal.aborted) return;
+      if (objects === ordnance) {
+        for (const batch of Object.values(this.projectiles)) batch.prime();
+        this.combat.prime(); this.playerMuzzle.prime(); this.droneMuzzle.prime();
+        (Object.keys(wingWeapons) as WingWeapon[]).forEach((weapon, i) => this.drops[i].pose(weapon, 0));
+      } else if (objects.includes(this.wingLasers[0].root)) {
+        for (const laser of this.wingLasers) laser.prime();
+      }
       camera.position.set(0, 0, 95).applyQuaternion(this.plane.quaternion);
       camera.up.set(0, 1, 0).applyQuaternion(this.plane.quaternion);
       camera.lookAt(0, 0, 0);
@@ -222,6 +224,11 @@ export class FlightView {
     const newFlight = flight !== this.lastFlight;
     this.lastFlight = flight;
     this.animationTime = newFlight ? 0 : this.animationTime + elapsed;
+    if (newFlight) {
+      this.seenShots = new WeakSet(); this.seenDrops = new WeakMap(); this.previousDrops = [];
+      this.enemyVitals.clear(); this.combat.clear(); this.playerMuzzle.clear(); this.droneMuzzle.clear();
+      this.previousBossHealth = flight.bossHealth; this.previousHull = flight.hull; this.bossHitAt = -1;
+    }
     if (flight.phase === 'stage') this.swing = 0;
     if (flight.phase === 'approach') this.swing = Math.min(flight.time / TRANSITION_TIME, 1);
     if (flight.phase === 'boss') this.swing = 1;
@@ -316,19 +323,21 @@ export class FlightView {
     this.drawWings(flight, eased, fighterVelocity);
     for (const [index, model] of this.drops.entries()) {
       const drop = flight.drops[index];
-      model.visible = Boolean(drop);
+      model.root.visible = Boolean(drop);
       if (drop) {
-        model.position.set(drop.x, drop.y, 0.22);
-        model.rotation.set(flight.time * 2, flight.time * 3, 0.3);
-        model.material.color.setHex(wingWeapons[drop.weapon].color);
+        if (!this.seenDrops.has(drop)) this.seenDrops.set(drop, this.animationTime);
+        model.root.position.set(drop.x, drop.y, 0.22 + Math.sin(this.animationTime * 3) * 0.05);
+        model.pose(drop.weapon, this.animationTime, (this.animationTime - this.seenDrops.get(drop)!) / 0.22);
       }
     }
-    this.drawProjectiles(this.shotMeshes, flight.shots.filter((shot) => !shot.drone && !shot.wing));
-    this.drawProjectiles(this.droneShots, flight.shots.filter((shot) => shot.drone));
-    for (const [weapon, mesh] of Object.entries(this.wingProjectiles)) {
-      this.drawProjectiles(mesh, flight.shots.filter((shot) => shot.wing === weapon));
+    this.projectiles.ship.draw(flight.shots.filter((shot) => !shot.drone && !shot.wing), this.animationTime);
+    this.projectiles.drone.draw(flight.shots.filter((shot) => shot.drone), this.animationTime);
+    for (const weapon of ['homing', 'cannon', 'omega'] as const) {
+      this.projectiles[weapon].draw(flight.shots.filter((shot) => shot.wing === weapon), this.animationTime);
     }
-    this.drawProjectiles(this.threatMeshes, flight.threats);
+    this.projectiles.hostile.draw(flight.level === 'broodlock' ? [] : flight.threats, this.animationTime);
+    this.projectiles.spore.draw(flight.level === 'broodlock' ? flight.threats : [], this.animationTime);
+    this.drawFeedback(flight, elapsed);
     for (const [index, ring] of this.markers.entries()) {
       const marker = flight.markers[index];
       ring.visible = Boolean(marker) && flight.phase === 'boss';
@@ -395,35 +404,44 @@ export class FlightView {
 
       laser.root.visible = fighting && flight.hull > 0 && Boolean(wing.beamEnd);
       if (laser.root.visible && wing.beamEnd) {
-        const endY = wing.beamEnd.y;
-        laser.root.position.set(origin.x, (origin.y + endY) / 2, 0.035);
-        laser.root.scale.y = Math.abs(endY - origin.y);
-        laser.root.scale.x = 1 + Math.min(wing.laserHold, 0.85);
-        laser.glow.material.opacity = 0.36 + 0.12 * Math.sin(this.animationTime * 32);
+        laser.draw(origin, wing.beamEnd, wing.laserHold, this.animationTime, wing.laserTarget !== undefined);
       }
     }
   }
 
-  private projectiles(color: number, radius = 0.092) {
-    const mesh = new T.InstancedMesh(
-      new T.SphereGeometry(radius, 8, 6),
-      new T.MeshBasicMaterial({ color }),
-      128,
-    );
-    mesh.frustumCulled = false;
-    mesh.count = 0;
-    return mesh;
-  }
-
-  private drawProjectiles(mesh: T.InstancedMesh, shots: Flight['shots']) {
-    mesh.count = Math.min(shots.length, 128);
-    for (let i = 0; i < mesh.count; i++) {
-      const shot = shots[i];
-      this.shotPosition.set(shot.x, shot.y, shot.z + 0.12);
-      this.shotRotation.setFromAxisAngle(this.forwardAxis, Math.atan2(-shot.vx, shot.vy));
-      this.matrix.compose(this.shotPosition, this.shotRotation, this.shotScale);
-      mesh.setMatrixAt(i, this.matrix);
+  private drawFeedback(flight: Flight, elapsed: number) {
+    this.combat.update(elapsed);
+    let shipFired = false, droneFired = false, emitted = false;
+    for (const shot of flight.shots) {
+      if (this.seenShots.has(shot)) continue;
+      this.seenShots.add(shot);
+      if (!shot.wing) { if (shot.drone) droneFired = true; else shipFired = true; }
     }
-    mesh.instanceMatrix.needsUpdate = true;
+    this.playerMuzzle.update(elapsed, shipFired);
+    this.droneMuzzle.update(elapsed, droneFired);
+    for (const [enemy, previous] of this.enemyVitals) {
+      if (enemy.hp < previous.hp && (enemy.hp === 0 || this.animationTime - previous.at > 0.07)) {
+        this.combat.emit(enemy.hp === 0 ? 'kill' : 'hit', enemy, enemy.hp === 0 ? orange : teal);
+        previous.at = this.animationTime; emitted = true;
+      }
+      previous.hp = enemy.hp;
+      if (!flight.enemies.includes(enemy)) this.enemyVitals.delete(enemy);
+    }
+    for (const enemy of flight.enemies) if (!this.enemyVitals.has(enemy)) this.enemyVitals.set(enemy, { hp: enemy.hp, at: -1 });
+    if (flight.bossHealth < this.previousBossHealth && this.animationTime - this.bossHitAt > 0.07) {
+      this.combat.emit(flight.bossHealth === 0 ? 'kill' : 'hit', { x: flight.exposedCannonX, y: BOSS_Y, z: BOSS_DEPTH + BOSS_MUZZLE_Z }, teal);
+      this.bossHitAt = this.animationTime; emitted = true;
+    }
+    if (flight.hull < this.previousHull) {
+      this.combat.emit(flight.hull === 0 ? 'kill' : 'hit', flight.player, orange); emitted = true;
+    }
+    if (flight.phase === 'stage') for (const drop of this.previousDrops) {
+      if (!flight.drops.includes(drop) && drop.y > -8.5 && Math.hypot(drop.x - flight.player.x, drop.y - flight.player.y) < 1.6) {
+        this.combat.emit('pickup', drop, wingWeapons[drop.weapon].color); emitted = true;
+      }
+    }
+    this.previousDrops = flight.drops;
+    this.previousBossHealth = flight.bossHealth; this.previousHull = flight.hull;
+    if (emitted) this.combat.update(0);
   }
 }
