@@ -9,6 +9,8 @@ import {
 } from './encounters';
 import { BOSS_CANNON_X, TRANSITION_TIME } from './game';
 import { createMushroomCluster } from './hive-fungi';
+import { createIceScenery } from './ice-scenery';
+import { ICE_DURATION, iceSection } from './ice-layout';
 import { createDroneRig, createFighterRig, createScoutRig } from './ship-rigs';
 import { createWingPod } from './wing-pod';
 import type { WingWeapon } from './wing';
@@ -112,8 +114,12 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     return { root: pickup.root, duration: 3, pose(time: number) { pickup.pose(weapon, time); return 'beacon'; } };
   }
   const beam = createContinuousLaser();
+  const iceField = createIceScenery();
 
   const assets = {
+    ice_field: { root: iceField.root, duration: ICE_DURATION,
+      bounds: new T.Box3(new T.Vector3(-7, -8, -7), new T.Vector3(7, 8, 3)),
+      pose(time: number) { iceField.update(time / ICE_DURATION, 0); return iceSection(time / ICE_DURATION); } },
     fighter: shipAsset(createFighterRig().root),
     scout: shipAsset(scout),
     drone: shipAsset(createDroneRig()),

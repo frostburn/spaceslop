@@ -1,6 +1,6 @@
 # Spaceslop
 
-Vibe-coded vertical shooter for the browser (PWA), with selectable preserve and ant hive prototype levels, scrolling waves, a camera transition, and a head-on boss fight.
+Vibe-coded vertical shooter for the browser (PWA), with a production-length ice field and selectable preserve and ant hive prototype levels, scrolling waves, a camera transition, and a head-on boss fight.
 
 ## Play locally
 
@@ -30,7 +30,11 @@ Ineffective boss laser hits show expanding blue shield ripples at the beam endpo
 
 Wing pickups use metal badges with matching colors and distinct weapon icons, rotating beacons, and a short arrival animation. The homing icon is a fixed crosshair with two shrinking lock-on circles. Muzzle flashes and collection bursts give immediate feedback. These effects use shared geometry and pooled instances, are warmed before launch, and need no new asset files.
 
-Choose a level before launch. **Broodlock · Ant hive** is the default: a 28-second traversal of the three-screen hive strip, six waves of infected ants, then a brood guardian. Workers fire aimed spores; larger soldiers charge their amber vents before a three-spore fan. The guardian uses the existing alternating hardpoint, warning-ring, and volley mechanics. The procedural ants have textured chitin, segmented abdomens, elbowed antennae, serrated mandibles, and a jointed six-leg gait. Soldiers have broader heads and larger jaws. Their eyes are cloudy and pale, a long fruiting stalk emerges from the head, and branching parasite colonies and crust spread across their bodies. Five soft mold sprites coat the abdomen, thorax, and head. These planes always face the camera, including while orbiting in the workshop, and leave the amber attack vents readable.
+Choose a level before launch. **Frostwake · Ice field** is the default: a ten-screen route with a 90-second traversal, twenty authored waves, repeat weapon drops, and the original draconian interceptor boss. Scouts and feathered raptors stand in for the planned marine creatures. The ten sections move through open drift, ice passages, survey wreckage, and a clear boss arena. The sector readout shows progress from 1/10 to 10/10. Use `?level=ice` to select it directly.
+
+Frostwake is assembled from six shared procedural asteroid shapes, three wreckage modules, and an optional distant-cluster sprite. A fixed starfield, far clusters, background rocks, solid outcrops, and foreground rocks have distinct real depths. The foreground slides aside during the boss approach while the final arena stays in place. Nothing uses a mirrored or repeating long backdrop. Pale outcrops with paired amber markers obstruct the fighter, drone, and wing pods without damaging hull; the central escape lane stays open and the last screen has no solid outcrops. Enemy paths stay clear of the solids. Dark distant rocks and unmarked foreground fragments are decorative. Layout is deterministic and shared with collision, so optional media cannot change the route.
+
+**Broodlock · Ant hive** keeps its prototype: a 28-second traversal of the three-screen hive strip, six waves of infected ants, then a brood guardian. Workers fire aimed spores; larger soldiers charge their amber vents before a three-spore fan. The guardian uses the existing alternating hardpoint, warning-ring, and volley mechanics. The procedural ants have textured chitin, segmented abdomens, elbowed antennae, serrated mandibles, and a jointed six-leg gait. Soldiers have broader heads and larger jaws. Their eyes are cloudy and pale, a long fruiting stalk emerges from the head, and branching parasite colonies and crust spread across their bodies. Five soft mold sprites coat the abdomen, thorax, and head. These planes always face the camera, including while orbiting in the workshop, and leave the amber attack vents readable.
 
 Procedural mushrooms attach to fixed coordinates on the hive strip. Their mycelial roots and contact shadows meet the painted pipes and rock, while tapered stems bend sideways and return toward the camera. Caps follow the direction of each neck, with modeled rims and underside gills. The hive uses a shallow perspective view so the caps have foreground parallax while their roots stay on the same source pixels throughout scrolling and the boss approach.
 
@@ -42,11 +46,11 @@ Ants look ahead along their path and steer into clear lanes before reaching a fr
 
 The procedural encounter rigs live in `src/encounter-rigs.ts`. A future model can use the same local pose and pivot names while the simulation owns movement, attack timing, and hitboxes. The interceptor's `muzzle_L` and `muzzle_R` pivots line up with the existing cannon lanes. Both bosses also expose `laser_contact_L` and `laser_contact_R` anchors on their visible muzzle faces for cosmetic laser contact.
 
-Run `npm test` for the hive movement regression checks: keyboard and touch contact, fast movement, scrolling edge traps, drone docking, the open boss lane, and ant detours across the scrolling strip.
+Run `npm test` for Frostwake route length, wave coverage, obstacle contact, scrolling edge recovery, the boss approach, and the hive movement regression checks: keyboard and touch contact, fast movement, scrolling edge traps, drone docking, the open boss lane, and ant detours across the scrolling strip.
 
 ## Asset workshop
 
-Run `npm run dev` and open **Asset workshop** from the game menu or visit `/workshop.html`. Orbit and zoom the raptor, ships, worker and soldier ants, guardian, mushroom cluster, wing weapon pods, ammunition, or powerups. Switch camera presets, scrub or play the animated rigs and effects, and toggle wireframe. The workshop uses the game rigs and textures. Its side view exposes the mushroom roots, projecting stems, cap rim, and gills.
+Run `npm run dev` and open **Asset workshop** from the game menu or visit `/workshop.html`. Orbit and zoom the raptor, ships, worker and soldier ants, guardian, mushroom cluster, wing weapon pods, ammunition, or powerups. Switch camera presets, scrub or play the animated rigs and effects, and toggle wireframe. Frostwake scenery can also be scrubbed across its full route and inspected from the side. The workshop uses the game rigs and textures. Its side view exposes the mushroom roots, projecting stems, cap rim, and gills.
 
 ## Assets and offline play
 
@@ -66,6 +70,9 @@ The encounter textures and backdrops are optional PNGs. Add the reviewed files a
 
 | File | Surface |
 | --- | --- |
+| `public/encounters/frostwake-ice.png` | Optional tileable opaque ice albedo, recommended 512 × 512, sRGB. The shader combines it with rock detail using procedural frost coverage. |
+| `public/encounters/frostwake-rock.png` | Optional tileable opaque dark-rock albedo, recommended 512 × 512, sRGB. |
+| `public/encounters/frostwake-distant.png` | Optional isolated distant asteroid cluster, recommended 512 × 512 RGBA. Preserve alpha; sRGB and clamp-to-edge. Sparse planes sit behind the 3D scenery and never collide. |
 | `public/encounters/interceptor-metal.png` | Tileable brushed metal for ship and pod armor and the corridor bridge |
 | `public/encounters/feather-vane.png` | Raptor wing and tail feathers and the ace's crest. Orient the root down and tip up. |
 | `public/encounters/draconian-scales.png` | Tileable draconian face, snout, and jaw |
@@ -84,3 +91,5 @@ The preserve catwalks and orbital shipyard also have procedural scenery that run
 Broodlock composites the two distant plates under the alpha foreground, using the matching mask to distinguish the central mine channel from the holes into space. Neither plate is baked into the foreground. The scene freezes at the end of the strip for the guardian. Each file is optional: missing plates use code-drawn stars or mine ribs, and a missing foreground uses procedural side rails and brood chambers. Without a mask, a simple central-channel split is used. New hive geometry and textures join the preflight warm-up so the first ant and guardian do not trigger their initial uploads during play.
 
 Ant and mushroom surfaces retain deterministic code-drawn color, bump, and roughness detail without the chitin and fungus albedo files. Those two optional PNGs replace color only; keep them opaque and do not import them as normal maps. The mold patch instead needs alpha, and has a procedural fuzzy fallback when absent or unreadable. Its sprites share materials, blend over the shell, and do not write depth. With no hive foreground, procedural side rails meet the same mushroom roots; positions and collision remain identical. The prototype strip always spans three screens. Shared mushroom, parasite, and mold rendering is warmed before launch, including the variants farther up the strip. Layout and collision live in `src/hive-layout.ts` and `src/hive-collision.ts`, ant avoidance in `src/ant-navigation.ts`, meshes in `src/hive-fungi.ts`, `src/ant-rigs.ts`, and `src/ant-parasite.ts`, and mold sprites in `src/ant-mold.ts`; no model download is required.
+
+Frostwake art is delivered through chat for owner upload. All three files are optional and are precached when present at build time. Without them, modeled frost colors and mineral variation keep the asteroids readable and procedural distant rocks preserve the depth layers. Wrecks reuse the existing optional metal texture. New scenery geometry, materials, sprite buffers, and textures join preflight warm-up before launch; modules farther along the route are warmed too.

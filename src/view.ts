@@ -14,6 +14,8 @@ import { createDroneRig, createFighterRig, createScoutRig } from './ship-rigs';
 import { createShipyard } from './shipyard';
 import { createStageBackdrops } from './stage-backdrops';
 import { createHiveScenery } from './hive-scenery';
+import { createIceScenery } from './ice-scenery';
+import { ICE_CAMERA_DISTANCE } from './ice-layout';
 import { HIVE_CAMERA_DISTANCE } from './hive-layout';
 import { antScales } from './ant-navigation';
 import { WING_FLASH_TIME, wingWeapons, type WingWeapon } from './wing';
@@ -64,6 +66,7 @@ export class FlightView {
   private shipyard = createShipyard();
   private backdrops = createStageBackdrops();
   private hive = createHiveScenery();
+  private ice = createIceScenery();
   private drone = createDroneRig();
   private droneBurners = shipBurners(this.drone);
   private droneGoal = new T.Mesh(
@@ -146,8 +149,8 @@ export class FlightView {
     const scout = createScoutRig();
     const pods = this.wingPods.flatMap((side) => side.map(({ root }) => root));
     const ammo = Object.values(this.projectiles).map(({ root }) => root);
-    this.texturesReady = Promise.all([this.backdrops.ready, this.hive.ready, loadEncounterTextures(this.boss, this.raptor,
-      [this.player.root, scout, this.drone, this.bridge.root, ...pods, ...ammo, ...this.drops.map(({ root }) => root)])]);
+    this.texturesReady = Promise.all([this.backdrops.ready, this.hive.ready, this.ice.ready, loadEncounterTextures(this.boss, this.raptor,
+      [this.player.root, scout, this.drone, this.bridge.root, this.ice.root, ...pods, ...ammo, ...this.drops.map(({ root }) => root)])]);
     this.enemies = Array.from({ length: 12 }, () => {
       const root = scout.clone();
       return { root, burners: shipBurners(root) };
@@ -158,7 +161,7 @@ export class FlightView {
     this.player.root.add(this.playerMuzzle.root);
     this.drone.add(this.droneMuzzle.root);
     this.plane.add(this.player.root, this.drone, this.droneGoal, this.towline, this.boss.root, this.raptor.root, this.cannonMarker, this.stars,
-      this.preserveEdges.root, this.shipyard.root, this.backdrops.root, this.bridge.root, this.hive.root,
+      this.preserveEdges.root, this.shipyard.root, this.backdrops.root, this.bridge.root, this.hive.root, this.ice.root,
       this.hiveBoss.root, ...this.ants.map(({ root }) => root),
       this.pulse, ...this.enemies.map(({ root }) => root), ...this.markers,
       ...ammo, this.combat.root, ...pods, ...this.wingLasers.map(({ root }) => root), ...this.drops.map(({ root }) => root));
@@ -202,9 +205,10 @@ export class FlightView {
     const ordnance = [this.player.root, this.drone, ...Object.values(this.projectiles).map(({ root }) => root), this.combat.root,
       this.playerMuzzle.root, this.droneMuzzle.root, ...this.drops.slice(0, 4).map(({ root }) => root)];
     for (const objects of [stage, boss, [this.hive.root, this.ants[0].root, this.hiveBoss.root],
-      pods[0], [...pods[1], ...this.wingLasers.map(({ root }) => root)], ordnance]) {
+      [this.ice.root], pods[0], [...pods[1], ...this.wingLasers.map(({ root }) => root)], ordnance]) {
       await nextFrame();
       if (signal.aborted) return;
+      if (objects.includes(this.ice.root)) this.ice.prime();
       if (objects === ordnance) {
         for (const batch of Object.values(this.projectiles)) batch.prime();
         this.combat.prime(); this.playerMuzzle.prime(); this.droneMuzzle.prime();
@@ -255,9 +259,11 @@ export class FlightView {
     const angle = (eased - 1) * Math.PI / 2;
     this.rotation.setFromAxisAngle(this.axis, angle);
     this.plane.quaternion.copy(this.rotation);
+    (this.scene.background as T.Color).setHex(flight.level === 'ice' ? 0x03060c : sceneColor);
     const hive = flight.level === 'broodlock';
-    const camera = this.swing === 0 && !hive ? this.ortho : this.perspective;
-    const distance = T.MathUtils.lerp(hive ? HIVE_CAMERA_DISTANCE : 95, BOSS_CAMERA_DISTANCE, eased);
+    const stageDistance = hive ? HIVE_CAMERA_DISTANCE : flight.level === 'ice' ? ICE_CAMERA_DISTANCE : 95;
+    const camera = this.swing === 0 && flight.level === 'preserve' ? this.ortho : this.perspective;
+    const distance = T.MathUtils.lerp(stageDistance, BOSS_CAMERA_DISTANCE, eased);
     this.perspective.fov = T.MathUtils.radToDeg(2 * Math.atan(HEIGHT / 2 / distance));
     this.perspective.updateProjectionMatrix();
     camera.position.set(0, 0, distance).applyQuaternion(this.rotation);
@@ -376,7 +382,14 @@ export class FlightView {
   private drawScenery(flight: Flight, reveal: number, distance: number, elapsed: number, fighterSpeed: number, droneSpeed: number) {
     if (flight.phase === 'stage') this.stageTime = flight.time;
     if (flight.phase === 'approach' || flight.phase === 'boss') this.stageTime = flight.stageDuration;
-    const perspectiveDistance = this.swing === 0 && flight.level !== 'broodlock' ? undefined : distance;
+    const perspectiveDistance = this.swing === 0 && flight.level === 'preserve' ? undefined : distance;
+    this.ice.root.visible = flight.level === 'ice';
+    if (this.ice.root.visible) {
+      this.ice.update(flight.hiveProgress, reveal);
+      this.stars.visible = true; this.stars.position.y = 0;
+      this.preserveEdges.root.visible = this.shipyard.root.visible = this.backdrops.root.visible = this.bridge.root.visible = this.hive.root.visible = false;
+      return;
+    }
     this.hive.root.visible = flight.level === 'broodlock';
     this.stars.visible = flight.level !== 'broodlock';
     if (this.hive.root.visible) {
@@ -429,7 +442,7 @@ export class FlightView {
           const index = flight.enemies.indexOf(target);
           if (index >= 0) model = target.raptor ? this.raptor.root : target.ant ? this.ants[index].root : this.enemies[index].root;
         }
-        const end = typeof target === 'number' ? this.bossLaserContact[flight.level](target, distance ?? BOSS_CAMERA_DISTANCE)
+        const end = typeof target === 'number' ? this.bossLaserContact[flight.level === 'broodlock' ? 'broodlock' : 'preserve'](target, distance ?? BOSS_CAMERA_DISTANCE)
           : model ? this.laserContact(origin, wing.beamEnd, model, distance) : wing.beamEnd;
         laser.draw(origin, end, wing.laserHold, this.animationTime, typeof target === 'number' || Boolean(model),
           flight.phase === 'boss' && target === undefined);

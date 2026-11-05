@@ -3,6 +3,7 @@ import { BOSS_HP, Flight, HEIGHT, STEP, WIDTH } from './game';
 import { setupPilots } from './pilots';
 import { FlightView } from './view';
 import { levels, readLevel } from './levels';
+import { iceSection } from './ice-layout';
 import { readWingWeapon, wingWeapons } from './wing';
 import './style.css';
 
@@ -97,7 +98,9 @@ function syncUI() {
   const label = {
     stage: levels[flight.level].sector, approach: 'CONTACT', boss: 'BOSS', won: 'CLEAR', lost: 'SIGNAL LOST',
   }[flight.phase];
-  sector.textContent = label;
+  sector.textContent = flight.level === 'ice' && flight.phase === 'stage'
+    ? `${label} · ${Math.min(10, Math.floor(flight.hiveProgress * 10) + 1)}/10` : label;
+  sector.title = flight.level === 'ice' ? iceSection(flight.hiveProgress) : levels[flight.level].name;
   score.textContent = String(flight.score).padStart(6, '0');
   hull.textContent = String(flight.hull).padStart(2, '0');
   charges.textContent = String(flight.charges).padStart(2, '0');
