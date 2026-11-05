@@ -6,14 +6,19 @@ import { setAntChitinTexture, setFungusTexture } from './hive-materials';
 import { setAntMoldTexture } from './ant-mold';
 
 type EncounterTexture = 'armor' | 'feathers' | 'scales' | 'preserve' | 'shipyard' |
-  'hive' | 'hiveMask' | 'hiveStars' | 'hiveMines' | 'chitin' | 'fungus' | 'mold' | 'ice' | 'rock' | 'galaxy' | 'marine';
+  'hive' | 'hiveMask' | 'hiveStars' | 'hiveMines' | 'chitin' | 'fungus' | 'mold' | 'ice' | 'rock' | 'galaxy' | 'marine' | 'titan';
 declare const __ENCOUNTER_TEXTURES__: Partial<Record<EncounterTexture, string>>;
+
+export function encounterTextureUrl(name: EncounterTexture) {
+  const path = __ENCOUNTER_TEXTURES__[name];
+  return path ? import.meta.env.BASE_URL + path : undefined;
+}
 
 export async function loadEncounterTexture(
   name: EncounterTexture, apply: (texture: Texture) => void, repeat?: number,
 ) {
-  const path = __ENCOUNTER_TEXTURES__[name];
-  if (!path) return;
+  const url = encounterTextureUrl(name);
+  if (!url) return;
   return new Promise<Texture | undefined>((resolve) => {
     let pending = true;
     const finish = (texture?: Texture) => {
@@ -22,7 +27,7 @@ export async function loadEncounterTexture(
       resolve(texture);
     };
     const deadline = window.setTimeout(() => finish(), 2500);
-    new TextureLoader().load(import.meta.env.BASE_URL + path, (texture) => {
+    new TextureLoader().load(url, (texture) => {
       if (!pending) {
         texture.dispose();
         return;

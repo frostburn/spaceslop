@@ -100,6 +100,14 @@ export const iceWaves: Wave[] = [
   { marine: 'ichthyosaur', time: 81, formation: 'chevron', mirror: 1, lanes: [-1.8, 0, 1.8], carrier: 1, drop: 'laser' },
 ];
 
+// Prototype scout patrols carry all four accessories through the ten-screen route.
+// The final gap lets the last wave leave before the ground-level pass ends.
+export const titanWaves: Wave[] = Array.from({ length: 20 }, (_, i) => {
+  const lanes = [[-2.6, 0, 2.6], [-1.6, 1.6], [-3, -.8, 1.6], [-2.2, .2, 2.6]][i % 4];
+  return { time: 1 + i * 4.2, lanes, carrier: i % lanes.length,
+    drop: (['homing', 'cannon', 'laser', 'omega'] as const)[i % 4] };
+});
+
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 const near = (a: Point, b: Point, radius: number) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 < radius ** 2;
 
@@ -397,7 +405,7 @@ export class Flight {
 
     if (this.phase === 'stage') {
       this.collectDrops(dt);
-      if (this.time >= this.stageDuration) this.enter('approach');
+      if (this.time >= this.stageDuration) this.enter(this.level === 'titan' ? 'won' : 'approach');
     }
   }
 
@@ -581,7 +589,7 @@ export class Flight {
   }
 
   private stepStage(dt: number) {
-    const wave = (this.level === 'broodlock' ? hiveWaves : this.level === 'ice' ? iceWaves : stageWaves)[this.nextWave];
+    const wave = (this.level === 'broodlock' ? hiveWaves : this.level === 'ice' ? iceWaves : this.level === 'titan' ? titanWaves : stageWaves)[this.nextWave];
     if (wave && this.time >= wave.time) {
       this.nextWave++;
       this.enemies.push(...wave.lanes.map((lane, index) => {
@@ -728,7 +736,7 @@ export class Flight {
   private enter(phase: Phase) {
     this.phase = phase;
     this.time = 0;
-    if (phase === 'approach') {
+    if (phase === 'approach' || (phase === 'won' && this.level === 'titan')) {
       this.shots = [];
       this.threats = [];
       this.enemies = [];

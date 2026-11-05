@@ -1,6 +1,6 @@
 # Spaceslop
 
-Vibe-coded vertical shooter for the browser (PWA), with a production-length ice field and selectable preserve and ant hive prototype levels, scrolling waves, a camera transition, and a head-on boss fight.
+Vibe-coded vertical shooter for the browser (PWA), with production-length ice and Titan routes and selectable preserve and ant hive prototype levels, scrolling waves, a camera transition, and a head-on boss fight.
 
 ## Play locally
 
@@ -31,6 +31,8 @@ Each gun has its own projectile silhouette and trail: cyan ship darts, mint dron
 Ineffective boss laser hits show expanding blue shield ripples at the beam endpoint. Ablation flames and sparks appear only while the beam deals damage.
 
 Wing pickups use metal badges with matching colors and distinct weapon icons, rotating beacons, and a short arrival animation. The homing icon is a fixed crosshair with two shrinking lock-on circles. Muzzle flashes and collection bursts give immediate feedback. These effects use shared geometry and pooled instances, are warmed before launch, and need no new asset files.
+
+**Titan · Research station** (`?level=titan`) is a 90-second, ten-screen ground-level pass. Twenty prototype scout-ship waves carry repeat drops of all four wing accessories. The camera stays overhead and the run goes directly to results without a boss. The dev boss shortcut is hidden for this route. The uploaded `public/encounters/titan-research-ground-10screens.png` scrolls once, from the outer sampling grounds at its bottom to the disrupted core at its top; it is never mirrored or repeated. Selected ground lamps blink independently, cyan contents move through the glass pipe, and the dark river has a restrained flowing shimmer. Animation masks are built in-engine from feature coordinates and the decoded artwork, so there is no mask asset to upload. Preflight slices the tall plate into ten screen-sized textures with neighboring filtering gutters, then uploads them before launch. A procedural ground/river/station fallback preserves the same playable route when the optional plate is missing or fails to load. The PWA caches the owner-uploaded plate for offline runs.
 
 Choose a level before launch. **Frostwake · Ice field** is the default: a ten-screen route with a 90-second traversal, twenty authored waves, repeat weapon drops, and the mosasaur boss **Leviathan**. Ichthyosaur hunting packs and four-flipper plesiosaur sweepers replace the borrowed scout/raptor roster. Hunters alternate weaving chevrons, paired pincers, delayed slalom trains and five-member lines that complete a full loop before diving out; later loops reverse direction. The ten sections move through open drift, ice passages, survey wreckage, and a clear boss arena. The sector readout shows progress from 1/10 to 10/10. Use `?level=ice` to select it directly.
 
@@ -78,6 +80,7 @@ The encounter textures and backdrops are optional PNGs. Add the reviewed files a
 
 | File | Surface |
 | --- | --- |
+| `public/encounters/titan-research-ground-10screens.png` | Optional opaque sRGB 720 × 12800 ten-screen strip, opening at the bottom and core at the top. Keep its orientation and full extent. Runtime slicing and procedural masks require no companion image. |
 | `public/encounters/frostwake-galaxy.png` | Optional opaque sRGB galactic plate. A 3:8 image (e.g. 768 × 2048) spans 1.5 portrait screens; other aspect ratios are cropped automatically without stretching stars. Preserve the full image and rebuild after upload. |
 | `public/encounters/frostwake-ice.png` | Optional tileable opaque ice albedo, recommended 512 × 512, sRGB. The shader combines it with rock detail using procedural frost coverage. |
 | `public/encounters/marine-hide.png` | Optional seamless opaque grayscale marine-hide detail, recommended 512 × 512, sRGB. Shared albedo/bump detail; shader countershading, stripes, mottled spots and localized scales remain separate. Delivered in chat for owner upload. |
