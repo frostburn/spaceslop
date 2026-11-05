@@ -1,30 +1,10 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadEncounterTexture } from './encounter-texture';
-import { shipAlloy } from './encounter-surfaces';
-import { iceRocks, iceWrecks, iceTravel, iceRockY, iceOrientation, ICE_DURATION } from './ice-layout';
-
-function asteroidGeometry(seed: number) {
-  const geometry = new T.IcosahedronGeometry(1, 2), positions = geometry.getAttribute('position');
-  const colors: number[] = [], frost: number[] = [], point = new T.Vector3(), color = new T.Color();
-  const stone = new T.Color(0x344352), ice = new T.Color(0xb4d3df);
-  for (let i = 0; i < positions.count; i++) {
-    point.fromBufferAttribute(positions, i);
-    const noise = Math.sin(point.x * 7 + seed) * Math.sin(point.y * 5 - seed) * Math.cos(point.z * 8 + seed);
-    const ridge = Math.sin(point.x * 3 + point.y * 4 + seed) * 0.06;
-    const radius = 0.84 + noise * 0.1 + ridge;
-    const cover = T.MathUtils.smoothstep(point.z + Math.sin(point.x * 6 + seed) * 0.24 + noise * 0.2, -0.3, 0.35);
-    point.multiplyScalar(radius);
-    point.x = Math.min(0.74 + seed * 0.018, Math.max(-0.81, point.x));
-    point.y *= 0.86 + Math.sin(seed * 2.1) * 0.1;
-    positions.setXYZ(i, point.x, point.y, point.z);
-    color.copy(stone).lerp(ice, cover).multiplyScalar(0.88 + noise * 0.18);
-    colors.push(color.r, color.g, color.b); frost.push(cover);
-  }
-  geometry.setAttribute('color', new T.Float32BufferAttribute(colors, 3));
-  geometry.setAttribute('frost', new T.Float32BufferAttribute(frost, 1));
-  geometry.computeVertexNormals(); return geometry;
-}
+import { asteroidGeometry, asteroidRelief, weatheredMetal } from './ice-surfaces';
+import { iceRocks, iceWrecks, iceTravel, iceRockY, iceOrientation, ICE_DURATION, ICE_CAMERA_DISTANCE, ICE_CORRIDOR_PITCH, ICE_SHIP_Y, iceCrossSection } from './ice-layout';
+import { iceIndustry, industryY, industrialGeometry } from './ice-industry';
+import { createGalacticBackdrop } from './galactic-backdrop';
 
 function wreckGeometry(kind: number) {
   const pieces: T.BufferGeometry[] = [];
@@ -47,14 +27,13 @@ function wreckGeometry(kind: number) {
 
 export function createIceScenery() {
   const root = new T.Group(); root.name = 'frostwake-scenery'; root.visible = false;
-  const starPositions = Array.from({ length: 720 }, (_, i) => [((i * 67 % 727) / 727 - 0.5) * 28,
-    ((i * 131 % 733) / 733 - 0.5) * 48, -25 - i % 11]).flat();
-  const stars = new T.Points(new T.BufferGeometry().setAttribute('position', new T.Float32BufferAttribute(starPositions, 3)),
-    new T.PointsMaterial({ color: 0x9aafc2, size: 0.07 }));
-  root.add(stars);
+  const field = new T.Group(); field.name = 'asteroid-corridor'; root.add(field);
+  const galaxy = createGalacticBackdrop(); root.add(galaxy.root);
   const uniforms = { iceMap: { value: null as T.Texture | null }, rockMap: { value: null as T.Texture | null },
     hasIce: { value: 0 }, hasRock: { value: 0 } };
-  const surface = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0.02 });
+  const relief = asteroidRelief();
+  const surface = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.94, metalness: 0.02,
+    normalMap: relief.normal, normalScale: new T.Vector2(0.65, 0.65), roughnessMap: relief.roughness });
   surface.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = 'attribute float frost; varying float vFrost; varying vec2 vIceUv;\n' + shader.vertexShader;
@@ -72,16 +51,16 @@ export function createIceScenery() {
     const rocks = iceRocks.map((rock, index) => ({ rock, index })).filter(({ rock }) => rock.variant === variant);
     const mesh = new T.InstancedMesh(asteroidGeometry(variant), surface, rocks.length);
     mesh.name = `ice-rocks-${variant}`; mesh.count = 0; mesh.frustumCulled = false;
-    mesh.instanceMatrix.setUsage(T.DynamicDrawUsage); mesh.setColorAt(0, color.setHex(0xffffff)); root.add(mesh);
+    mesh.instanceMatrix.setUsage(T.DynamicDrawUsage); mesh.setColorAt(0, color.setHex(0xffffff)); field.add(mesh);
     return { rocks, mesh };
   });
-  const metal = shipAlloy(0x7d898e);
+  const metal = weatheredMetal();
   const wrecks = iceWrecks.map((recipe) => {
     const mesh = new T.Mesh(wreckGeometry(recipe.kind), metal);
-    mesh.rotation.set(0.12, -0.18, recipe.angle); root.add(mesh); return { recipe, mesh };
+    mesh.rotation.set(0.12, -0.18, recipe.angle); field.add(mesh); return { recipe, mesh };
   });
   const beacon = new T.InstancedMesh(new T.OctahedronGeometry(0.045), new T.MeshBasicMaterial({ color: 0xffc47a }), 36);
-  beacon.count = 0; beacon.frustumCulled = false; beacon.instanceMatrix.setUsage(T.DynamicDrawUsage); root.add(beacon);
+  beacon.count = 0; beacon.frustumCulled = false; beacon.instanceMatrix.setUsage(T.DynamicDrawUsage); field.add(beacon);
   // Compact outposts explain why these particular asteroids hold their lane attitude.
   const stationGeometry = mergeGeometries([
     new T.BoxGeometry(0.82, 0.74, 0.09),
@@ -95,7 +74,7 @@ export function createIceScenery() {
   ]);
   const buildings = new T.InstancedMesh(stationGeometry, metal, 18);
   buildings.name = 'stabilized-outposts'; buildings.count = 0; buildings.frustumCulled = false;
-  buildings.instanceMatrix.setUsage(T.DynamicDrawUsage); root.add(buildings);
+  buildings.instanceMatrix.setUsage(T.DynamicDrawUsage); field.add(buildings);
   const lightGeometry = mergeGeometries([
     new T.BoxGeometry(0.2, 0.018, 0.045).translate(-0.14, -0.205, 0.17),
     ...[-1, 1].map(side => new T.ConeGeometry(0.045, 0.18, 5).rotateZ(-side * Math.PI / 2)
@@ -103,30 +82,42 @@ export function createIceScenery() {
   ]);
   const jets = new T.InstancedMesh(lightGeometry, new T.MeshBasicMaterial({ color: 0x83dfed }), 18);
   jets.name = 'outpost-attitude-jets'; jets.count = 0; jets.frustumCulled = false;
-  jets.instanceMatrix.setUsage(T.DynamicDrawUsage); root.add(jets);
+  jets.instanceMatrix.setUsage(T.DynamicDrawUsage); field.add(jets);
+  const factories = Array.from({ length: 4 }, (_, kind) => {
+    const recipes = iceIndustry.filter(recipe => recipe.kind === kind);
+    const mesh = new T.InstancedMesh(industrialGeometry(kind), metal, recipes.length);
+    mesh.name = `industry-${kind}`; mesh.count = 0; mesh.frustumCulled = false;
+    mesh.instanceMatrix.setUsage(T.DynamicDrawUsage); field.add(mesh); return { recipes, mesh };
+  });
   const ready = Promise.all([
+    galaxy.ready, Promise.resolve(relief.normal), Promise.resolve(relief.roughness),
     loadEncounterTexture('ice', (texture) => { uniforms.iceMap.value = texture; uniforms.hasIce.value = 1; }, 1),
     loadEncounterTexture('rock', (texture) => { uniforms.rockMap.value = texture; uniforms.hasRock.value = 1; }, 1),
   ]);
   return {
     root, ready,
-    update(progress: number, reveal: number, time = progress * ICE_DURATION) {
-      const scroll = iceTravel(time);
+    update(progress: number, reveal: number, time = progress * ICE_DURATION, distance = ICE_CAMERA_DISTANCE) {
+      const scroll = iceTravel(time), angle = -ICE_CORRIDOR_PITCH * reveal;
+      field.rotation.x = angle;
+      field.position.set(0, ICE_SHIP_Y * (1 - Math.cos(angle)), -ICE_SHIP_Y * Math.sin(angle));
+      galaxy.update(reveal, distance);
+      const reach = 24 + reveal * 48;
       let lights = 0, stations = 0;
       for (const { rocks, mesh } of batches) {
         let count = 0;
         for (const { rock, index } of rocks) {
           const y = iceRockY(index, time);
-          if (Math.abs(y) > 24) continue;
+          if (y < -24 || y > reach) continue;
           // Foreground is kept outside the shooting lane, then leaves before the boss reveal.
-          transform.position.set(rock.x + (rock.z > 0 ? Math.sign(rock.x) * reveal * 8 : 0), y, rock.z);
+          transform.position.set(rock.x + (rock.z > 0 ? Math.sign(rock.x) * reveal * 1.5 : 0), y,
+            T.MathUtils.lerp(rock.z, rock.solid ? rock.z : iceCrossSection(index), reveal));
           iceOrientation(index, time, transform.quaternion);
           transform.scale.set(rock.radius, rock.radius, rock.radius * (rock.solid ? 0.55 : 0.8));
           transform.updateMatrix(); mesh.setMatrixAt(count, transform.matrix);
           color.setHex(rock.solid || rock.z > 0 ? 0xffffff : 0x6c8296); mesh.setColorAt(count++, color);
           if (rock.solid) {
             transform.position.set(rock.x - Math.sign(rock.x) * rock.radius * 0.25, y, 0.23);
-            transform.rotation.set(0, 0, rock.angle); transform.scale.setScalar(rock.radius); transform.updateMatrix();
+            transform.rotation.set(0, 0, rock.angle); transform.scale.setScalar(rock.radius * (0.48 + Math.min(1, rock.y / 144) * 0.52)); transform.updateMatrix();
             buildings.setMatrixAt(stations, transform.matrix); jets.setMatrixAt(stations++, transform.matrix);
           }
           if (rock.solid && reveal === 0) for (const side of [-1, 1]) {
@@ -142,13 +133,24 @@ export function createIceScenery() {
       buildings.instanceMatrix.needsUpdate = jets.instanceMatrix.needsUpdate = true;
       for (const { recipe, mesh } of wrecks) {
         mesh.position.set(recipe.x, recipe.y - scroll, recipe.z);
-        mesh.visible = Math.abs(mesh.position.y) < 22;
+        mesh.visible = mesh.position.y > -24 && mesh.position.y < reach;
       }
-
+      for (const { recipes, mesh } of factories) {
+        let count = 0;
+        for (const recipe of recipes) {
+          const y = industryY(recipe, time);
+          if (y < -24 || y > reach) continue;
+          transform.position.set(recipe.x, y, T.MathUtils.lerp(recipe.z, 0, reveal));
+          transform.rotation.set(0, 0, recipe.angle); transform.scale.setScalar(recipe.scale);
+          transform.updateMatrix(); mesh.setMatrixAt(count++, transform.matrix);
+        }
+        mesh.count = count; mesh.instanceMatrix.needsUpdate = true;
+      }
     },
     prime() {
       this.update(0, 0);
       // Prime every geometry, including wrecks and outpost materials used later in the route.
+      for (const { mesh } of factories) { mesh.count = 1; mesh.setMatrixAt(0, new T.Matrix4()); mesh.instanceMatrix.needsUpdate = true; }
       for (const { mesh } of batches) { mesh.count = Math.max(1, mesh.count); }
       for (const { mesh } of wrecks) { mesh.visible = true; mesh.position.set(0, 0, -4); }
     },

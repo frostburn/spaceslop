@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { createServer } from 'vite';
-import { Quaternion } from 'three';
+import { Quaternion, Vector3 } from 'three';
 const server = await createServer({ root: new URL('..', import.meta.url).pathname, configFile: false,
   server: { middlewareMode: true, hmr: false, ws: false }, optimizeDeps: { noDiscovery: true, entries: [] }, appType: 'custom' });
 after(() => server.close());
 const { Flight, STEP, iceWaves } = await server.ssrLoadModule('/src/game.ts');
 const { IceCollision } = await server.ssrLoadModule('/src/ice-collision.ts');
-const { ICE_DURATION, ICE_TRAVEL, ICE_SCREENS, iceSolids, iceRocks, iceMotions, iceOrientation, iceRockY, iceTravel } = await server.ssrLoadModule('/src/ice-layout.ts');
+const { ICE_DURATION, ICE_TRAVEL, ICE_SCREENS, iceSolids, iceRocks, iceMotions, iceOrientation, iceRockY, iceTravel, iceCorridorPoint, ICE_CORRIDOR_PITCH, ICE_SHIP_Y } = await server.ssrLoadModule('/src/ice-layout.ts');
+const { asteroidGeometry } = await server.ssrLoadModule('/src/ice-surfaces.ts');
+const { iceIndustry, industryY } = await server.ssrLoadModule('/src/ice-industry.ts');
 const { FIGHTER_HULL, DRONE_HULL } = await server.ssrLoadModule('/src/hive-collision.ts');
 
 test('Frostwake traverses ten screens with a complete original-roster wave schedule', () => {
@@ -89,5 +91,41 @@ test('boss pursuit continues forward and only decorative rocks recycle outside t
       if (rock.solid) assert.equal(y, rock.y - iceTravel(time));
     }
     assert(visible > 8, `field became empty during pursuit at ${time}`);
+  }
+});
+
+test('rounded asteroids share smooth normals across the UV seam and stay within collision envelopes', () => {
+  for (let seed = 0; seed < 6; seed++) {
+    const geo = asteroidGeometry(seed), p = geo.getAttribute('position'), n = geo.getAttribute('normal');
+    const shared = new Map(); let duplicates = 0;
+    for (let i = 0; i < p.count; i++) {
+      const v = new Vector3().fromBufferAttribute(p, i), normal = new Vector3().fromBufferAttribute(n, i);
+      assert(v.length() < 1.04); assert(Math.abs(normal.length() - 1) < 1e-5);
+      const key = v.toArray().map(x => Math.round(x * 1e5)).join('/');
+      if (shared.has(key)) { assert(normal.distanceTo(shared.get(key)) < 1e-5); duplicates++; }
+      else shared.set(key, normal);
+    }
+    assert(duplicates > 30); geo.dispose();
+  }
+});
+
+test('the pitched corridor shares the ship forward axis and recedes toward the interceptor', () => {
+  const origin = new Vector3(0, ICE_SHIP_Y, 0), out = new Vector3();
+  assert(iceCorridorPoint(origin, 1, out).distanceTo(origin) < 1e-10);
+  const forward = new Vector3(0, Math.cos(ICE_CORRIDOR_PITCH), -Math.sin(ICE_CORRIDOR_PITCH));
+  const target = new Vector3(0, 4.2 - ICE_SHIP_Y, -12);
+  const point = iceCorridorPoint(origin.clone().add(new Vector3(0, target.length(), 0)), 1, out);
+  assert(point.distanceTo(new Vector3(0, 4.2, -12)) < 1e-10);
+  assert(target.normalize().distanceTo(forward) < 1e-10);
+  assert(iceCorridorPoint(new Vector3(5, 4, -2), 0, out).distanceTo(new Vector3(5, 4, -2)) < 1e-10);
+});
+
+test('industry density builds along the route and pursuit modules recycle beyond the view', () => {
+  const early = iceIndustry.filter(p => !p.loop && p.y < 48).length;
+  const late = iceIndustry.filter(p => !p.loop && p.y > 112).length;
+  assert(late > early * 2);
+  for (let time = 80; time < 500; time += .2) for (const recipe of iceIndustry.filter(p => p.loop)) {
+    const y = industryY(recipe, time), next = industryY(recipe, time + .1);
+    if (y > -22 && y < 72) assert(Math.abs(y - next - .16) < 1e-6, 'visible industry jumped');
   }
 });

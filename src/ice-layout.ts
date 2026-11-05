@@ -54,3 +54,14 @@ export function iceRockY(index: number, time: number) {
   const length = ICE_SCREENS * HEIGHT;
   return rock.solid ? y : ((y + 24) % length + length) % length - 24;
 }
+
+export const ICE_SHIP_Y = -5.3;
+// This forward axis joins the default ship position to the interceptor's center.
+export const ICE_CORRIDOR_PITCH = Math.atan2(12, 4.2 - ICE_SHIP_Y);
+export function iceCrossSection(index: number) { return (random(index * 13 + 211) * 2 - 1) * 3.8; }
+export function iceCorridorPoint(point: Vector3, reveal: number, out: Vector3) {
+  const angle = -ICE_CORRIDOR_PITCH * Math.max(0, Math.min(1, reveal));
+  const y = point.y - ICE_SHIP_Y;
+  return out.set(point.x, ICE_SHIP_Y + Math.cos(angle) * y - Math.sin(angle) * point.z,
+    Math.sin(angle) * y + Math.cos(angle) * point.z);
+}

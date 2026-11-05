@@ -15,7 +15,7 @@ import { createShipyard } from './shipyard';
 import { createStageBackdrops } from './stage-backdrops';
 import { createHiveScenery } from './hive-scenery';
 import { createIceScenery } from './ice-scenery';
-import { ICE_CAMERA_DISTANCE } from './ice-layout';
+import { ICE_CAMERA_DISTANCE, ICE_CORRIDOR_PITCH } from './ice-layout';
 import { HIVE_CAMERA_DISTANCE } from './hive-layout';
 import { antScales } from './ant-navigation';
 import { WING_FLASH_TIME, wingWeapons, type WingWeapon } from './wing';
@@ -273,11 +273,12 @@ export class FlightView {
     camera.lookAt(0, 0, 0);
 
     this.player.root.position.set(flight.player.x, flight.player.y, 0);
-    this.player.root.rotation.x = -1.18 * eased;
+    this.player.root.rotation.x = -(flight.level === 'ice' ? ICE_CORRIDOR_PITCH : 1.18) * eased;
     this.player.root.visible = flight.hull > 0 && Math.floor(flight.invulnerable * 12) % 2 === 0;
     const fighterVelocity = this.fighterMotion(flight.player, elapsed, newFlight);
     const fighterSpeed = fighterVelocity.length();
     poseBurners(this.playerBurners, this.animationTime, Math.min(1, 0.36 + fighterSpeed * 0.1 + 0.34 * Math.sin(eased * Math.PI)));
+    this.drone.rotation.x = flight.level === 'ice' ? -ICE_CORRIDOR_PITCH * eased : 0;
     this.drone.position.set(flight.drone.x, flight.drone.y, 0.23);
     this.drone.visible = flight.hull > 0;
     const droneVelocity = this.droneMotion(flight.drone, elapsed, newFlight);
@@ -390,8 +391,8 @@ export class FlightView {
       if (flight.phase === 'stage') this.iceTime = flight.time;
       if (flight.phase === 'approach') this.iceTime = flight.stageDuration + flight.time;
       if (flight.phase === 'boss') this.iceTime = flight.stageDuration + TRANSITION_TIME + flight.time;
-      this.ice.update(flight.hiveProgress, reveal, this.iceTime);
-      this.stars.visible = true; this.stars.position.y = 0;
+      this.ice.update(flight.hiveProgress, reveal, this.iceTime, distance);
+      this.stars.visible = false; this.stars.position.y = 0;
       this.preserveEdges.root.visible = this.shipyard.root.visible = this.backdrops.root.visible = this.bridge.root.visible = this.hive.root.visible = false;
       return;
     }
@@ -431,7 +432,7 @@ export class FlightView {
         if (!pod.root.visible) continue;
         const time = this.animationTime + index * 0.47;
         pod.root.position.set(origin.x, origin.y, 0);
-        pod.root.rotation.set(-1.18 * reveal + 0.09 * Math.sin(time * 6),
+        pod.root.rotation.set(-(flight.level === 'ice' ? ICE_CORRIDOR_PITCH : 1.18) * reveal + 0.09 * Math.sin(time * 6),
           -0.046 * velocity.x + 0.14 * Math.sin(time * 5), 0.08 * Math.sin(time * 4));
         const recoil = fighting ? wing.flash / WING_FLASH_TIME : 0;
         const charge = pod.weapon === 'omega' && fighting ? Math.max(0, 1 - wing.cooldown / 0.28) : 0;

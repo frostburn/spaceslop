@@ -31,6 +31,7 @@ const encounterTextures = Object.fromEntries(Object.entries({
   mold: 'encounters/ant-mold.png',
   ice: 'encounters/frostwake-ice.png',
   rock: 'encounters/frostwake-rock.png',
+  galaxy: 'encounters/frostwake-galaxy.png',
 }).filter(([, src]) => existsSync(new URL(`./public/${src}`, import.meta.url))));
 
 export default defineConfig({
