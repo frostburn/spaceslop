@@ -1,0 +1,332 @@
+import * as T from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { addBurner, burnerMaterial } from './burners';
+import { addCreatureFace } from './creature-faces';
+import { applyRelief, hide, texturedSurface } from './encounter-surfaces';
+import { BOSS_MUZZLE_Z, raptorFlight } from './encounters';
+import { part, pivot, plating, polygon } from './rig-geometry';
+
+const flat = (color: number) => new T.MeshBasicMaterial({ color, side: T.DoubleSide });
+const armor = (color: number) => texturedSurface(new T.MeshStandardMaterial({
+  color, roughness: 0.55, metalness: 0.14, flatShading: true, bumpScale: 0.65,
+}), 0.37, 8);
+
+const featherMaterial = texturedSurface(new T.MeshStandardMaterial({
+  vertexColors: true, side: T.DoubleSide, roughness: 0.73, bumpScale: 0.31,
+}), 0.50, 4.3);
+
+export function setFeatherTexture(texture: T.Texture) {
+  applyRelief(texture, [featherMaterial]);
+}
+
+function plume(parent: T.Group, x: number, y: number, z: number, length: number, width: number,
+  angle: number, rootColor: number, tipColor: number, bandColor = tipColor) {
+  const rows = 12;
+  const across = [-1, -0.56, 0, 0.56, 1];
+  const positions: number[] = [];
+  const colors: number[] = [];
+  const uv: number[] = [];
+  const indices: number[] = [];
+  const root = new T.Color(rootColor);
+  const band = new T.Color(bandColor);
+  const tip = new T.Color(tipColor);
+  const tint = new T.Color();
+
+  for (let row = 0; row <= rows; row++) {
+    const along = row / rows;
+    const arch = Math.sin(Math.PI * along);
+    const halfWidth = width * (0.012 + 0.51 * arch ** 0.76 * (1.14 - 0.39 * along));
+    for (const edge of across) {
+      const center = 1 - edge ** 2;
+      positions.push(halfWidth * edge + width * 0.25 * along ** 2, length * along,
+        width * (0.15 * arch * center - 0.19 * along ** 2 + 0.09 * edge * along));
+      tint.copy(root).lerp(band, T.MathUtils.smoothstep(along, 0.07, 0.45));
+      tint.lerp(tip, T.MathUtils.smoothstep(along + edge * 0.06, 0.64, 0.86));
+      tint.multiplyScalar(0.61 + 0.38 * center + (edge === 0 ? 0.19 * arch : 0));
+      colors.push(tint.r, tint.g, tint.b);
+      uv.push(edge * 0.49 + 0.5, along);
+    }
+  }
+  for (let row = 0; row < rows; row++) {
+    for (let i = 0; i < across.length - 1; i++) {
+      const a = row * across.length + i;
+      indices.push(a, a + 1, a + across.length, a + 1, a + across.length + 1, a + across.length);
+    }
+  }
+
+  const geometry = new T.BufferGeometry();
+  geometry.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new T.Float32BufferAttribute(colors, 3));
+  geometry.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  const blade = part(parent, geometry, featherMaterial, x, y, z);
+  blade.rotation.z = angle;
+  return blade;
+}
+
+function batchPlumage(parent: T.Group) {
+  const feathers = parent.children.filter((child): child is T.Mesh =>
+    child instanceof T.Mesh && child.material === featherMaterial);
+  if (feathers.length < 2) return;
+  const geometries = feathers.map((feather) => {
+    feather.updateMatrix();
+    return feather.geometry.applyMatrix4(feather.matrix);
+  });
+  const geometry = mergeGeometries(geometries);
+  parent.remove(...feathers);
+  part(parent, geometry, featherMaterial, 0, 0, 0);
+}
+
+export function createRaptorRig() {
+  const root = new T.Group();
+  const gold = 0xf4a442;
+  const cobalt = 0x4c78dc;
+  const ink = 0x222946;
+  const rust = 0x8a392c;
+  const skin = hide(0x8e5945);
+  const belly = hide(0xb9825e);
+  skin.bumpScale = belly.bumpScale = 0.48;
+  const toes = flat(0xc59067);
+  const oval = new T.SphereGeometry(1, 24, 16);
+  part(root, oval, skin, 0, 0.02, 0.17).scale.set(0.28, 0.48, 0.21);
+  part(root, oval, belly, 0, 0.16, 0.24).scale.set(0.18, 0.32, 0.16);
+  for (const side of [-1, 1]) {
+    part(root, oval, skin, side * 0.19, -0.19, 0.15).scale.set(0.135, 0.23, 0.12);
+    const claw = part(root, polygon([[0.14, -0.18], [0.27, -0.23], [0.32, -0.49],
+      [0.25, -0.43], [0.24, -0.57], [0.18, -0.44], [0.15, -0.50], [0.17, -0.32]]), toes, 0, 0, 0.17);
+    claw.scale.x = side;
+  }
+
+  const head = pivot(root, 'head', 0, 0.36, 0.23);
+  const face = pivot(head, 'raptor_face', 0, 0, 0);
+  face.rotation.set(Math.PI / 2, Math.PI, 0);
+  const jaw = addCreatureFace(face, 'raptor');
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 3; i++) {
+      const collar = plume(head, side * (0.115 + i * 0.032), 0.015 - i * 0.059, 0.242 - i * 0.034,
+        0.27 - 0.022 * i, 0.072, Math.PI + side * (0.38 + i * 0.2), ink, gold, i % 2 ? rust : cobalt);
+      collar.rotation.x = 0.29;
+    }
+    for (let i = 0; i < 3; i++) {
+      plume(root, side * (0.066 + i * 0.047), 0.29 - i * 0.12, 0.398 - i * 0.025,
+        0.48 - i * 0.027, 0.109, Math.PI + side * (0.12 + i * 0.16), ink, gold, cobalt);
+    }
+    for (let i = 0; i < 4; i++) {
+      const mantle = plume(root, side * (0.047 + i * 0.043), 0.027 - i * 0.049, 0.402 - i * 0.023,
+        0.36 - i * 0.027, 0.106, Math.PI + side * (0.12 + i * 0.19), ink, gold, i % 2 ? cobalt : rust);
+      mantle.rotation.y = side * 0.3;
+    }
+  }
+  batchPlumage(root);
+  batchPlumage(head);
+
+  const wings = ([-1, 1] as const).map((side) => {
+    // The folded fans overlap in projection. Give each wing its own depth band.
+    const depth = side < 0 ? 0.14 : 0.25;
+    const shoulder = pivot(root, side < 0 ? 'shoulder_L' : 'shoulder_R', side * 0.19, 0.17, depth);
+    const fan = pivot(shoulder, side < 0 ? 'fan_L' : 'fan_R', 0, 0, 0);
+    fan.scale.x = side;
+    part(fan, polygon([[0, 0.12], [0.57, 0.22], [0.89, 0.12], [0.59, -0.21], [0.18, -0.3], [0, -0.2]]),
+      flat(0x5c3b3b), 0, 0, 0);
+    for (let i = 0; i < 4; i++) {
+      plume(fan, 0.17 + i * 0.125, 0.12 + i * 0.021, 0.014 + i * 0.007, 0.5 - i * 0.025, 0.18,
+        -2.55 + i * 0.12, ink, i % 2 ? cobalt : gold, rust);
+    }
+    const outer = pivot(fan, side < 0 ? 'wrist_L' : 'wrist_R', 0.57, 0.12, 0.046);
+    for (let i = 0; i < 6; i++) {
+      plume(outer, 0.035 - i * 0.03, 0.065 - i * 0.049, i * 0.007, 0.91 - i * 0.063, 0.18,
+        -1.53 - i * 0.16, ink, gold, cobalt);
+    }
+    for (let i = 0; i < 4; i++) {
+      plume(fan, 0.18 + i * 0.16, 0.155 + i * 0.013, 0.11 + i * 0.011, 0.34, 0.123,
+        -1.95 - i * 0.09, rust, gold, gold);
+    }
+    batchPlumage(fan);
+    batchPlumage(outer);
+    return { side, shoulder, outer };
+  });
+
+  const tail = pivot(root, 'tail', 0, -0.34, 0.14);
+  plume(tail, 0, 0, 0, 1.06, 0.23, Math.PI, ink, gold, cobalt);
+  const vanes = ([-1, 1] as const).map((side) => {
+    const vane = pivot(tail, side < 0 ? 'tail_L' : 'tail_R', 0, -0.35, side < 0 ? 0.025 : 0.055);
+    plume(vane, side * 0.05, 0, 0, 0.72, 0.13, Math.PI + side * 0.12, ink, gold, cobalt);
+    plume(vane, side * 0.06, 0.02, -0.01, 0.56, 0.11, Math.PI + side * 0.26, ink, gold, rust);
+    batchPlumage(vane);
+    return { side, vane };
+  });
+
+  return {
+    root,
+    setScaleTexture(texture: T.Texture) {
+      applyRelief(texture, [skin, belly]);
+    },
+    pose(age: number) {
+      const { pose, progress } = raptorFlight(age);
+      const ease = progress * progress * (3 - 2 * progress);
+      let tuck = 0;
+      if (pose === 'fold') tuck = ease;
+      else if (pose === 'dive') tuck = 1;
+      else if (pose === 'flare') tuck = 1 - ease;
+      const spread = pose === 'flare' ? Math.sin(progress * Math.PI) : 0;
+      for (const { side, shoulder, outer } of wings) {
+        shoulder.rotation.z = -side * (0.1 + 1.15 * tuck - 0.26 * spread);
+        shoulder.rotation.y = -side * (0.13 * Math.sin(age * 6) * (1 - tuck));
+        outer.rotation.z = -0.52 * tuck + 0.16 * spread;
+      }
+      head.rotation.x = -0.28 * tuck + 0.16 * spread;
+      jaw.rotation.x = 0.035 + 0.19 * tuck + 0.18 * spread;
+      tail.rotation.z = 0.12 * Math.sin(age * 4) * (1 - tuck);
+      for (const { side, vane } of vanes) vane.rotation.z = side * (0.08 + 0.52 * spread);
+    },
+  };
+}
+
+export function createInterceptorRig(cannonX: number) {
+  const root = new T.Group();
+  const steel = armor(0x71879e);
+  const bronze = armor(0xc5733f);
+  const darkPlate = armor(0x424751);
+  const trim = flat(0xddab78);
+  const shadow = flat(0x1c2230);
+  const signal = flat(0xfdad66);
+  const insignia = flat(0xe0c89f);
+  const jet = burnerMaterial(0xff773f);
+  part(root, plating([[-1.39, 0.87], [-0.7, 1.57], [0.7, 1.57], [1.39, 0.87],
+    [1.45, -0.52], [0, -1.72], [-1.45, -0.52]], 0.45), steel, 0, 0, -0.86);
+  part(root, plating([[-0.56, 1.79], [-0.33, 2.16], [0.33, 2.16], [0.56, 1.79]], 0.27, 0.037),
+    darkPlate, 0, 0, -0.23);
+  part(root, plating([[-2.23, 0.92], [-1.96, 2.78], [-0.97, 3.94], [0.97, 3.94],
+    [1.96, 2.78], [2.23, 0.92], [1.86, -0.91], [0, -3.28], [-1.86, -0.91]], 0.58),
+    darkPlate, 0, 0, -0.36);
+  part(root, plating([[-1.67, 0.12], [-0.85, -0.02], [0, -0.48], [0.85, -0.02],
+    [1.67, 0.12], [1.68, -0.85], [0, -3.09], [-1.68, -0.85]], 0.21), bronze, 0, 0, 0.26);
+  part(root, polygon([[-0.09, -0.58], [0.17, -0.66], [0.14, -2.51], [0, -2.88], [-0.12, -2.44]]),
+    trim, 0, 0, 0.56);
+  for (const side of [-1, 1]) {
+    const cheek = part(root, plating([[0.83, -0.27], [1.62, -0.08], [1.51, -0.77], [0.69, -1.59]],
+      0.13, 0.03), steel, 0, 0, 0.46);
+    cheek.scale.x = side;
+    const intake = part(root, new T.BoxGeometry(0.34, 0.085, 0.045), signal, side * 1.25, -0.55, 0.653);
+    intake.rotation.z = side * 0.76;
+  }
+
+  const cockpit = pivot(root, 'cockpit', 0, 0.35, 0.08);
+  cockpit.scale.set(1.65, 1.91, 1.11);
+  const canopyFrame: [number, number][] = [[-1.23, 0.24], [-1.34, 0.91], [-0.84, 1.79],
+    [0.85, 1.79], [1.34, 0.91], [1.23, 0.24], [0.74, -0.03], [-0.74, -0.03]];
+  part(cockpit, plating(canopyFrame, 0.16), bronze, 0, 0, 0.43);
+  const interior = part(cockpit, polygon(canopyFrame), shadow, 0, 0.1, 0.68);
+  interior.scale.set(0.88, 0.85, 1);
+  part(cockpit, polygon([[-0.89, 0.25], [-0.63, 0.34], [0.63, 0.34], [0.89, 0.25], [0.67, 0.04], [-0.67, 0.04]]),
+    steel, 0, 0, 1.13);
+  for (let i = -2; i <= 2; i++) {
+    part(cockpit, new T.BoxGeometry(0.045, 0.053, 0.025), signal, i * 0.14, 0.21, 1.145);
+  }
+
+  const cannons = ([-1, 1] as const).map((side) => {
+    const wing = pivot(root, side < 0 ? 'wing_L' : 'wing_R', 0, 0, 0);
+    wing.scale.x = side;
+    part(wing, plating([[1.2, 0.8], [3.89, 2.22], [5.51, 3.45], [4.93, 0.8], [3.12, -0.34], [1.2, -0.51]],
+      0.22), darkPlate, 0, 0, -0.51);
+    part(wing, plating([[1.13, 0.86], [3.51, 2.32], [5.83, 4.91], [5.17, 1.63], [4.08, 0.32],
+      [3.25, -0.29], [2.57, -0.57], [1.13, -0.54]], 0.29), steel, 0, 0, -0.25);
+    part(wing, plating([[3.29, 1.92], [5.63, 4.54], [5.0, 1.63], [4.19, 0.83]],
+      0.09, 0.039), bronze, 0, 0, 0.07);
+    part(wing, polygon([[4.36, 1.56], [5.48, 3.81], [5.24, 2.68], [4.86, 1.67]]),
+      flat(0xa14e39), 0, 0, 0.22);
+    part(wing, plating([[1.3, 0.43], [4.15, 1.13], [3.77, 0.67], [2.85, 0.26], [1.35, -0.07]], 0.09),
+      bronze, 0, 0, 0.08);
+    part(wing, plating([[1.3, 0.64], [2.57, 0.94], [3.24, 0.99], [2.49, 0.75], [1.44, 0.44]],
+      0.066, 0.022), steel, 0, 0, 0.23);
+    part(wing, plating([[2.88, 0.05], [3.53, 0.25], [3.81, 0.42], [3.53, -0.08],
+      [3.03, -0.32]], 0.092, 0.028), darkPlate, 0, 0, 0.11);
+    part(wing, polygon([[2.68, 0.54], [3.91, 1.01], [3.5, 0.79], [2.74, 0.49]]), insignia, 0, 0, 0.25);
+    for (let i = 0; i < 4; i++) {
+      part(wing, polygon([[2.78 + i * 0.22, 0.53 + i * 0.081],
+        [2.63 + i * 0.25, 0.75 + i * 0.075], [2.99 + i * 0.21, 0.62 + i * 0.079]]),
+        insignia, 0, 0, 0.25);
+    }
+    for (const y of [-0.24, -0.36]) {
+      const slit = part(wing, new T.BoxGeometry(0.43, 0.045, 0.03), signal, 3.16, y, 0.14);
+      slit.rotation.z = 0.21;
+    }
+    const nozzle = addBurner(wing, jet, 4.5, 0.66, -0.37, 0.26, 2.2);
+    nozzle.rotation.set(0.79, 0, 0.54, 'ZYX');
+    part(nozzle, new T.CylinderGeometry(0.29, 0.25, 0.24, 8), darkPlate, 0, 0.12, 0);
+
+    const pod = pivot(root, side < 0 ? 'cannon_L' : 'cannon_R', side * cannonX, 0, 0);
+    part(pod, plating([[-0.59, 0.21], [-0.44, 0.43], [0.44, 0.43], [0.59, 0.21],
+      [0.51, -0.36], [-0.51, -0.36]], 0.52), darkPlate, 0, 0, 0.04);
+    const barrel = part(pod, new T.CylinderGeometry(0.32, 0.38, 0.57, 8), bronze, 0, 0, BOSS_MUZZLE_Z - 0.285);
+    barrel.rotation.x = Math.PI / 2;
+    const sleeve = part(pod, new T.CylinderGeometry(0.34, 0.39, 0.15, 8), steel,
+      0, 0, BOSS_MUZZLE_Z - 0.17);
+    sleeve.rotation.x = Math.PI / 2;
+    for (const x of [-0.43, 0.43]) {
+      part(pod, new T.BoxGeometry(0.085, 0.36, 0.14), steel, x, 0, 0.57);
+    }
+    const muzzle = pivot(pod, side < 0 ? 'muzzle_L' : 'muzzle_R', 0, 0, BOSS_MUZZLE_Z);
+    part(muzzle, new T.CircleGeometry(0.246, 8), shadow, 0, 0, 0.005);
+    part(muzzle, new T.RingGeometry(0.234, 0.282, 8), trim, 0, 0, 0.012);
+    const glow = part(muzzle, new T.CircleGeometry(0.22, 10),
+      new T.MeshBasicMaterial({ color: 0xff9251, transparent: true, depthWrite: false }), 0, 0, 0.021);
+    return { side, pod, glow };
+  });
+
+  const pilot = pivot(cockpit, 'pilot', 0, 0.27, 0.87);
+  const oval = new T.SphereGeometry(1, 24, 16);
+  const skin = hide(0xa47d60);
+  part(pilot, oval, armor(0x3a444d), 0, 0, 0).scale.set(0.68, 0.39, 0.21);
+  for (const side of [-1, 1]) {
+    const strap = part(pilot, new T.BoxGeometry(0.09, 0.38, 0.075), trim, side * 0.34, 0.02, 0.2);
+    strap.rotation.z = side * 0.33;
+    part(pilot, oval, skin, side * 0.54, -0.01, 0.24).scale.set(0.14, 0.12, 0.11);
+  }
+  const neck = pivot(pilot, 'pilot_neck', 0, 0.18, 0.05);
+  neck.scale.setScalar(1.7);
+  const jaw = addCreatureFace(neck, 'draconian');
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 4; i++) {
+      const ruff = plume(neck, side * (0.175 + i * 0.022), 0.27 - i * 0.067, 0.04 + i * 0.036,
+        0.32 - i * 0.03, 0.105, Math.PI + side * (0.63 - i * 0.09), 0x402731, 0xe2bc8b, 0x9e694d);
+      ruff.rotation.y = side * 0.34;
+      ruff.rotation.x = -0.19;
+    }
+  }
+  const crest = pivot(neck, 'pilot_crest', 0, 0.46, -0.06);
+  for (let i = -4; i <= 4; i++) {
+    const fan = Math.abs(i);
+    const feather = plume(crest, i * 0.052, -fan * 0.026, -0.035 + 0.03 * fan,
+      0.51 - fan * 0.047, 0.136, 0.12 - i * 0.21, 0x3e2738,
+      i % 2 ? 0xeead65 : 0xd57341, i % 2 ? 0xa14936 : 0x843532);
+    feather.rotation.x = -0.58 - fan * 0.065;
+  }
+  batchPlumage(neck);
+  batchPlumage(crest);
+
+  return {
+    root,
+    setArmorTexture(texture: T.Texture) {
+      applyRelief(texture, [steel, bronze, darkPlate]);
+    },
+    setScaleTexture(texture: T.Texture) {
+      applyRelief(texture, [skin]);
+    },
+    pose(reveal: number, windup: number, activeX: number, firedX: number, recoil: number) {
+      for (const { side, pod, glow } of cannons) {
+        const kick = side === Math.sign(firedX) ? recoil : 0;
+        const charge = side === Math.sign(activeX) ? windup : 0;
+        pod.position.z = -0.29 * kick;
+        glow.material.opacity = Math.min(1, 0.18 + 0.7 * charge + kick);
+        glow.scale.setScalar(0.8 + 0.21 * charge + 0.22 * kick);
+      }
+      neck.rotation.y = 0.42 + 0.52 * (1 - reveal) + 0.16 * Math.sign(activeX) * windup;
+      neck.rotation.x = 0.18 * windup + 0.13 * recoil;
+      jaw.rotation.x = 0.24 + 0.25 * windup + 0.32 * recoil;
+      crest.rotation.x = -0.14 * recoil;
+      pilot.position.y = 0.27 - 0.08 * windup;
+    },
+  };
+}

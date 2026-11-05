@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Asset Workshop · Spaceslop</title>
+  </head>
+  <body>
+    <header class="workshop-header">
+      <h1>Asset workshop</h1>
+      <a href="./">Back to Spaceslop</a>
+    </header>
+    <main class="workshop">
+      <section id="viewport" aria-label="3D asset preview">
+        <canvas id="preview" aria-label="Orbitable 3D model"></canvas>
+        <p id="viewer-error" hidden>WebGL 2 is required for the 3D preview.</p>
+      </section>
+      <aside class="tools" aria-label="Asset inspection controls">
+        <label for="asset">Asset</label>
+        <select id="asset">
+          <option value="raptor">Feathered raptor</option>
+          <option value="interceptor">Draconian interceptor</option>
+          <option value="fighter">Player fighter</option>
+          <option value="scout">Enemy scout</option>
+          <option value="drone">Support drone</option>
+          <option value="homing">Homing cannon pod</option>
+          <option value="cannon">Standard cannon pod</option>
+          <option value="laser">Continuous laser pod</option>
+          <option value="omega">Omega cannon pod</option>
+        </select>
+        <fieldset>
+          <legend>Camera</legend>
+          <div class="camera-views">
+            <button id="game-view" type="button">Game</button>
+            <button id="angle-view" type="button">¾</button>
+            <button id="side-view" type="button">Side</button>
+          </div>
+          <p>Drag to orbit. Scroll or pinch to zoom.</p>
+        </fieldset>
+        <fieldset id="motion-controls">
+          <legend>Motion</legend>
+          <div class="motion">
+            <button id="play" type="button">Play</button>
+            <output id="pose" for="timeline"></output>
+          </div>
+          <input id="timeline" type="range" min="0" value="0" step="any" aria-label="Animation time">
+        </fieldset>
+        <label class="toggle"><input id="wireframe" type="checkbox"> Wireframe</label>
+      </aside>
+    </main>
+    <script type="module" src="/src/workshop.ts"></script>
+  </body>
+</html>

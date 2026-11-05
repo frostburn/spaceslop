@@ -1,3 +1,6 @@
+export const WING_FORMATION = { x: 1.22, y: 0.32 };
+export const WING_FLASH_TIME = 0.14;
+
 export const wingWeapons = {
   homing: { name: 'Homing Cannon', short: 'Homing', color: 0xc4ed74 },
   cannon: { name: 'Standard Cannon', short: 'Cannon', color: 0x77caff },

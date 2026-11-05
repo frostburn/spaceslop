@@ -16,12 +16,23 @@ const portraits = existsSync(pilotDir)
     .map((entry) => `pilots/${entry.name}`)
   : [];
 
+const encounterTextures = Object.fromEntries(Object.entries({
+  armor: 'encounters/interceptor-metal.png',
+  feathers: 'encounters/feather-vane.png',
+  scales: 'encounters/draconian-scales.png',
+  preserve: 'encounters/preserve-backdrop.png',
+  shipyard: 'encounters/shipyard-backdrop.png',
+}).filter(([, src]) => existsSync(new URL(`./public/${src}`, import.meta.url))));
+
 export default defineConfig({
-  define: { __PILOT_PORTRAITS__: JSON.stringify(portraits) },
+  define: {
+    __PILOT_PORTRAITS__: JSON.stringify(portraits),
+    __ENCOUNTER_TEXTURES__: JSON.stringify(encounterTextures),
+  },
   plugins: [
     VitePWA({
       registerType: 'prompt',
-      includeAssets: portraits,
+      includeAssets: [...portraits, ...Object.values(encounterTextures)],
       manifest: {
         name: 'Spaceslop',
         short_name: 'Spaceslop',

@@ -1,5 +1,8 @@
+import {
+  BOSS_FIRE_AT, BOSS_MUZZLE_Z, BOSS_RECOIL_TIME, BOSS_VOLLEY_INTERVAL, BOSS_WINDUP_AT, raptorFlight,
+} from './encounters';
 import { CLOSE_CALLS_REQUIRED, HOT_DOCK_COOLDOWN, HOT_DOCK_DISTANCE, type PilotId } from './pilot-data';
-import { wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
+import { WING_FLASH_TIME, WING_FORMATION, wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
 
 export const WIDTH = 9;
 export const HEIGHT = 16;
@@ -22,10 +25,12 @@ type Shot = Point & {
   drone?: boolean; targetsBoss?: boolean; wing?: WingProjectile; pierced?: Set<Enemy>; damage?: number;
 };
 type Threat = Shot & { graze?: 'near' | 'counted' };
-type Enemy = Point & { lane: number; age: number; fire: number; hp: number; drop?: WingWeapon };
+type Enemy = Point & {
+  lane: number; age: number; fire: number; hp: number; drop?: WingWeapon; raptor?: boolean;
+};
 type Drop = Point & { weapon: WingWeapon };
 type Wing = {
-  side: WingSide; weapon?: WingWeapon; cooldown: number;
+  side: WingSide; weapon?: WingWeapon; cooldown: number; flash: number;
   beamEnd?: Point; laserTarget?: Enemy | number; laserHold: number;
 };
 
@@ -36,6 +41,7 @@ const DRONE_FIRE_INTERVAL = 0.44;
 const TOWLINE_INTERVAL = 1.05;
 const TOWLINE_DURATION = 0.2;
 const TOWLINE_DAMAGE = 2;
+const BOSS_IMPACT_TRAVEL = 0.48;
 
 const wingShots = {
   homing: { interval: 0.72, damage: 0.5, speed: 11, bossTravel: 0.68 },
@@ -45,10 +51,10 @@ const wingShots = {
 
 const stageWaves = [
   { time: 0.6, lanes: [-2.6, 0, 2.6], carrier: 1, drop: 'homing' },
-  { time: 3.6, lanes: [-2, 2], carrier: 1, drop: 'cannon' },
+  { time: 3.6, lanes: [-2, 2], raptor: 0, carrier: 1, drop: 'cannon' },
   { time: 6.6, lanes: [-3, 0, 3], carrier: 0, drop: 'laser' },
   { time: 9.6, lanes: [-1.3, 1.3], carrier: 1, drop: 'omega' },
-] satisfies { time: number; lanes: number[]; carrier: number; drop: WingWeapon }[];
+] satisfies { time: number; lanes: number[]; carrier: number; drop: WingWeapon; raptor?: number }[];
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 const near = (a: Point, b: Point, radius: number) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 < radius ** 2;
@@ -84,13 +90,15 @@ export class Flight {
   phase: Phase = 'stage';
   time = 0;
   player = { x: 0, y: -5.3 };
-  drone = { x: -1.15, y: -5.3 };
+  drone = { x: -1.15, y: -6.15 };
   droneTarget?: Point;
   hull = MAX_HULL;
   invulnerable = 0;
   charges = 2;
   score = 0;
   bossHealth = BOSS_HP;
+  firedCannonX = 0;
+  bossRecoil = 0;
   enemies: Enemy[] = [];
   shots: Shot[] = [];
   threats: Threat[] = [];
@@ -99,8 +107,8 @@ export class Flight {
   towlineFlash = 0;
   drops: Drop[] = [];
   wings: [Wing, Wing] = [
-    { side: -1, cooldown: 0, laserHold: 0 },
-    { side: 1, cooldown: 0, laserHold: 0 },
+    { side: -1, cooldown: 0, flash: 0, laserHold: 0 },
+    { side: 1, cooldown: 0, flash: 0, laserHold: 0 },
   ];
   pickupTime = 0;
   pickupMessage = '';
@@ -160,7 +168,16 @@ export class Flight {
   }
 
   wingOrigin(side: WingSide) {
-    return { x: this.player.x + side * 0.59, y: this.player.y + 0.12 };
+    const desiredX = this.player.x + side * WING_FORMATION.x;
+    const x = clamp(desiredX, -WIDTH / 2 + 0.38, WIDTH / 2 - 0.38);
+    const tuck = Math.abs(desiredX - x);
+    return { x, y: Math.min(HEIGHT / 2 - 0.24, this.player.y + WING_FORMATION.y + tuck * 0.95) };
+  }
+
+  get cannonWindup() {
+    if (this.phase !== 'boss' || this.volley !== Math.floor(this.time / BOSS_VOLLEY_INTERVAL)) return 0;
+    const elapsed = this.time % BOSS_VOLLEY_INTERVAL;
+    return clamp((elapsed - BOSS_WINDUP_AT) / (BOSS_FIRE_AT - BOSS_WINDUP_AT), 0, 1);
   }
 
   deployDrone(x: number, y: number) {
@@ -212,6 +229,7 @@ export class Flight {
     this.invulnerable = Math.max(0, this.invulnerable - dt);
     this.pulseFlash = Math.max(0, this.pulseFlash - dt);
     this.pickupTime = Math.max(0, this.pickupTime - dt);
+    this.bossRecoil = Math.max(0, this.bossRecoil - dt);
     this.perkTime = Math.max(0, this.perkTime - dt);
     this.hotDockCooldown = Math.max(0, this.hotDockCooldown - dt);
     if (this.droneTarget && moveToward(this.drone, this.droneTarget, DRONE_SPEED * dt)) {
@@ -327,6 +345,7 @@ export class Flight {
   private equip(wing: Wing, weapon: WingWeapon) {
     wing.weapon = weapon;
     wing.cooldown = weapon === 'omega' ? wingShots.omega.interval : 0;
+    wing.flash = 0;
     wing.beamEnd = undefined;
     wing.laserTarget = undefined;
     wing.laserHold = 0;
@@ -358,9 +377,11 @@ export class Flight {
       return;
     }
     wing.cooldown = Math.max(0, wing.cooldown - dt);
+    wing.flash = Math.max(0, wing.flash - dt);
     if (wing.cooldown > 0) return;
     const spec = wingShots[wing.weapon];
     wing.cooldown = spec.interval;
+    wing.flash = WING_FLASH_TIME;
     const duration = spec.bossTravel;
     this.shots.push({
       ...origin, z: 0, wing: wing.weapon, damage: spec.damage,
@@ -474,14 +495,16 @@ export class Flight {
         ({
           x: lane, y: 8.6, lane, age: 0, fire: 1.1 + index * 0.28, hp: 2,
           drop: index === wave.carrier ? wave.drop : undefined,
+          raptor: index === wave.raptor,
         })));
     }
 
     for (const enemy of this.enemies) {
       enemy.age += dt;
-      enemy.y -= 2.25 * dt;
-      enemy.x = enemy.lane + Math.sin(enemy.age * 1.55) * 0.46;
-      if (enemy.age >= enemy.fire) {
+      const motion = enemy.raptor ? raptorFlight(enemy.age) : undefined;
+      enemy.y -= (motion?.speed ?? 2.25) * dt;
+      if (!motion || motion.pose === 'glide') enemy.x = enemy.lane + Math.sin(enemy.age * 1.55) * 0.46;
+      if (!motion && enemy.age >= enemy.fire) {
         enemy.fire += 2.4;
         const dx = this.player.x - enemy.x;
         const dy = this.player.y - enemy.y;
@@ -496,24 +519,28 @@ export class Flight {
   }
 
   private stepBoss() {
-    const elapsed = this.time % 2;
-    const volley = Math.floor(this.time / 2);
-    if (elapsed >= 0.45 && this.markers.length === 0 && elapsed < 1.18) {
+    const elapsed = this.time % BOSS_VOLLEY_INTERVAL;
+    const volley = Math.floor(this.time / BOSS_VOLLEY_INTERVAL);
+    if (elapsed >= BOSS_WINDUP_AT && this.markers.length === 0 && elapsed < BOSS_FIRE_AT) {
       const { x, y } = this.player;
       this.markers = [-1.35, 0, 1.35].map((offset) => ({
         x: clamp(x, -2.6, 2.6) + (this.volley % 2 === 0 ? offset : 0),
         y: clamp(y, -5.9, 5.25) + (this.volley % 2 === 0 ? 0 : offset),
       }));
     }
-    if (elapsed >= 1.18 && this.markers.length && this.volley === volley) {
-      const duration = 0.48;
+    if (elapsed >= BOSS_FIRE_AT && this.markers.length && this.volley === volley) {
+      const x = this.exposedCannonX;
+      const z = BOSS_DEPTH + BOSS_MUZZLE_Z;
+      this.firedCannonX = x;
+      this.bossRecoil = BOSS_RECOIL_TIME;
       this.threats.push(...this.markers.map((target) => ({
-        x: 0, y: BOSS_Y, z: BOSS_DEPTH,
-        vx: target.x / duration, vy: (target.y - BOSS_Y) / duration, vz: -BOSS_DEPTH / duration,
+        x, y: BOSS_Y, z,
+        vx: (target.x - x) / BOSS_IMPACT_TRAVEL, vy: (target.y - BOSS_Y) / BOSS_IMPACT_TRAVEL,
+        vz: -z / BOSS_IMPACT_TRAVEL,
       })));
       this.volley++;
     }
-    if (elapsed >= 1.68) this.markers = [];
+    if (elapsed >= BOSS_FIRE_AT + BOSS_IMPACT_TRAVEL + 0.02) this.markers = [];
   }
 
   private fire({ x, y }: Point, drone = false, damage = 1) {
@@ -571,6 +598,7 @@ export class Flight {
       this.enemies = [];
       this.drops = [];
       for (const wing of this.wings) {
+        wing.flash = 0;
         wing.beamEnd = undefined;
         wing.laserTarget = undefined;
         wing.laserHold = 0;
