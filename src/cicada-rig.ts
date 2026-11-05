@@ -39,9 +39,9 @@ export function createCicada() {
     link(new T.Vector3(side*.48,.6,.6),new T.Vector3(side*.75,1.45,.55),.055,rim,head);
     link(new T.Vector3(side*.75,1.45,.55),new T.Vector3(side*1.3,1.75,.48),.029,chitin,head);
   }
-  // Broad ridged clypeus over a folded piercing rostrum, rather than a jaw.
+  // Paired vertical rows of clypeal ribs; these are cuticular ridges, not jaws.
   volume(head,rim,0,-.15,.76,.55,.6,.27);
-  for(let j=0;j<5;j++)volume(head,chitin,0,.14-j*.15,1.015,.46-Math.abs(2-j)*.045,.025,.025);
+  for(const side of [-1,1])for(let j=0;j<7;j++){const rib=volume(head,rim,side*(.23+Math.sin(j/6*Math.PI)*.11),.29-j*.125,1.01,.15,.052,.105);rib.rotation.z=side*(.28+j*.025);}
   for(const [x,y] of [[0,.58],[-.29,.3],[.29,.3]])volume(head,eye,x,y,.86,.15,.15,.11);
   const rostrum=volume(head,rim,0,-.68,.87,.17,.67,.15,new T.ConeGeometry(1,2,14));rostrum.rotation.z=Math.PI;
   const vents:T.Mesh[]=[];
@@ -70,13 +70,25 @@ export function createCicada() {
         const a=middle.clone().lerp(end,j/4),b=a.clone().add(new T.Vector3(side*.22,-.13,.004));vein([a,b],.011);
       }
     }
-    wing.add(new T.Mesh(mergeGeometries(lines),rim));for(const g of lines)g.dispose();
+    // Clip whole vein triangles against the actual membrane outline, including
+    // the tube radius and mirrored/rotated hindwing transforms.
+    const veins=mergeGeometries(lines),positions=veins.attributes.position,triangles:T.Triangle[]=[],q=new T.Vector3();
+    const surface=geometry.attributes.position,faces=geometry.index!;
+    for(let i=0;i<faces.count;i+=3)triangles.push(new T.Triangle(new T.Vector3().fromBufferAttribute(surface,faces.getX(i)),new T.Vector3().fromBufferAttribute(surface,faces.getX(i+1)),new T.Vector3().fromBufferAttribute(surface,faces.getX(i+2))));
+    const covered=Array.from({length:positions.count},(_,i)=>{q.fromBufferAttribute(positions,i).setZ(0);return triangles.some(t=>t.containsPoint(q));});
+    const ix=veins.index!,kept:number[]=[];for(let i=0;i<ix.count;i+=3){const a=ix.getX(i),b=ix.getX(i+1),c=ix.getX(i+2);if(covered[a]&&covered[b]&&covered[c])kept.push(a,b,c);}
+    veins.setIndex(kept);veins.name='clipped-wing-veins';wing.add(new T.Mesh(veins,rim));for(const g of lines)g.dispose();
   }
   const legs:T.Group[]=[];
   for(const side of [-1,1])for(let i=0;i<3;i++){
     const leg=new T.Group();leg.name=`leg-${side}-${i}`;leg.position.set(side*.85,.3-i*.65,.3);root.add(leg);legs.push(leg);
     const a=new T.Vector3(),b=new T.Vector3(side*(1.5+i*.12),-.8-i*.13,.65),c=new T.Vector3(side*(1.4+i*.24),-1.9-i*.25,1.1),d=new T.Vector3(side*(1.15+i*.27),-2.35-i*.3,1.15);
-    link(a,b,.23,chitin,leg);link(b,c,.16,rim,leg);link(c,d,.075,dark,leg);volume(leg,chitin,b.x,b.y,b.z,.2,.2,.2);
+    link(a,b,.23,chitin,leg);link(b,c,.16,rim,leg);link(c,d,.075,dark,leg);
+    for(let j=0;j<5;j++){
+      const base=b.clone().lerp(c,(j+.8)/6),tip=base.clone().add(new T.Vector3(side*(.2+j*.025),-.13,.1));
+      const spine=link(base,tip,.065,dark,leg);spine.geometry.dispose();spine.geometry=new T.ConeGeometry(.085,base.distanceTo(tip),8);spine.name='tibial-spine';
+    }
+    volume(leg,chitin,b.x,b.y,b.z,.2,.2,.2);
   }
   return {root,pose(_reveal:number,charge:number,exposed:number,_fired:number,recoil:number,time=0){
     head.rotation.y=Math.sin(time*.75)*.09;head.rotation.z=Math.sin(time*.47)*.035;

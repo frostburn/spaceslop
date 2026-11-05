@@ -1,3 +1,4 @@
+import { titanBossPoint, titanFrame, TITAN_PITCH } from './titan-frame';
 import { createCicada } from './cicada-rig';
 import { createTitanScenery } from './titan-scenery';
 import * as T from 'three';
@@ -338,6 +339,11 @@ export class FlightView {
     activeBoss.root.visible = this.swing > 0 && flight.bossHealth > 0;
     activeBoss.root.position.set(0, BOSS_Y, BOSS_DEPTH - 70 * (1 - eased));
     activeBoss.root.rotation.x = 0.9 * (1 - eased);
+    if(flight.level==='titan'){
+      const point=titanBossPoint(eased);this.cicada.root.visible=flight.bossHealth>0;
+      this.cicada.root.position.set(0,point.y,point.z);
+      this.cicada.root.rotation.x=TITAN_PITCH-titanFrame(eased).pitch;
+    }
     if (activeBoss.root.visible) {
       if(activeBoss === this.leviathan) this.leviathan.pose(eased,flight.cannonWindup,0,0,flight.bossRecoil / BOSS_RECOIL_TIME,flight.phase==='boss'?flight.time:Math.max(0,this.iceTime-flight.stageDuration-TRANSITION_TIME));
       else if(activeBoss===this.cicada)this.cicada.pose(eased,flight.cannonWindup,flight.exposedCannonX,flight.firedCannonX,flight.bossRecoil/BOSS_RECOIL_TIME,flight.phase==='boss'?flight.time:flight.phase==='approach'?flight.time:0);
