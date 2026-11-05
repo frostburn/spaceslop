@@ -1,3 +1,5 @@
+import { createPrismScenery } from './prism-scenery';
+import { PRISM_DURATION } from './prism-layout';
 import { createMarineRig, createLeviathan, setMarineTexture } from './marine-rigs';
 import { marineMotion, leviathanMotion, LEVIATHAN_INTERVAL } from './marine';
 import { loadEncounterTexture } from './encounter-texture';
@@ -118,10 +120,14 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   }
   const beam = createContinuousLaser();
   const iceField = createIceScenery();
+  const cave = createPrismScenery();
 
   const hunter=createMarineRig('ichthyosaur'),sweeper=createMarineRig('plesiosaur'),leviathan=createLeviathan();
   hunter.root.rotation.z=sweeper.root.rotation.z=Math.PI;
   const assets = {
+    prism_vault: {root:cave.root,duration:PRISM_DURATION+20,
+      bounds:new T.Box3(new T.Vector3(-7,-8,-8),new T.Vector3(7,8,3)),
+      pose(time:number){const reveal=T.MathUtils.smoothstep(time,PRISM_DURATION,PRISM_DURATION+TRANSITION_TIME);cave.update(Math.min(1,time/PRISM_DURATION),reveal,time);return reveal>0?'Mirror chamber':'Prismatic corridor';}},
     ichthyosaur: {root:hunter.root,duration:5,pose(time:number){hunter.pose(time,marineMotion('ichthyosaur',time,0).bank);return time>1.25?'hunting bank':'cruise';}},
     plesiosaur: {root:sweeper.root,duration:5,pose(time:number){sweeper.pose(time,marineMotion('plesiosaur',time,0).bank,Math.max(0,1-Math.abs(time-1.8)/.55));return 'four-flipper stroke';}},
     leviathan: {root:leviathan.root,duration:LEVIATHAN_INTERVAL*2,pose(time:number){leviathan.pose(1,0,0,0,0,time);return leviathanMotion(time).windup>0?'jaw windup':'pursuit';}},
@@ -270,6 +276,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     previous = now;
     controls.update();
     if(iceField.root.visible)iceField.capture(renderer,camera);
+    if(cave.root.visible)cave.capture(renderer,camera);
     renderer.render(scene, camera);
   });
 }

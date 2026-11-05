@@ -1,6 +1,8 @@
+import { PRISM_DURATION } from './prism-layout';
 import { ICE_DURATION } from './ice-layout';
 
 export const levels = {
+  prism: { name: 'Prism vault · Cave prototype', sector: 'PRISM VAULT', boss: 'INTERCEPTOR', duration: PRISM_DURATION },
   ice: { name: 'Frostwake · Ice field', sector: 'FROSTWAKE', boss: 'LEVIATHAN', duration: ICE_DURATION },
   preserve: { name: 'Overgrown preserve', sector: 'SECTOR 01', boss: 'INTERCEPTOR', duration: 14 },
   broodlock: { name: 'Broodlock · Ant hive', sector: 'BROODLOCK', boss: 'BROOD GUARDIAN', duration: 28 },

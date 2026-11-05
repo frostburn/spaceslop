@@ -1,13 +1,16 @@
 import type { HullCircle } from './hive-collision';
-import { iceScroll, iceSolids } from './ice-layout';
+import { ICE_TRAVEL, iceSolids } from './ice-layout';
 
 type Point = { x: number; y: number };
 const flightBounds = { minX: -3.95, maxX: 3.95, minY: -7.1, maxY: 6.6 };
 export class IceCollision {
-  private solids = iceSolids.map((rock) => ({ x: rock.x, y: rock.y, radius: rock.radius * 1.04 }));
+  private solids: {x:number;y:number;radius:number}[];
+  constructor(private rocks:readonly {x:number;y:number;radius:number}[]=iceSolids,private travel=ICE_TRAVEL) {
+    this.solids=rocks.map(rock=>({x:rock.x,y:rock.y,radius:rock.radius*1.04}));
+  }
   update(progress: number, _distance?: number) {
-    const scroll = iceScroll(progress);
-    this.solids.forEach((solid, i) => { solid.y = iceSolids[i].y - scroll; });
+    const scroll = Math.max(0,Math.min(1,progress))*this.travel;
+    this.solids.forEach((solid, i) => { solid.y = this.rocks[i].y - scroll; });
   }
   overlaps(point: Point, hull: readonly HullCircle[]) {
     return this.solids.some((solid) => Math.abs(solid.y - point.y) < 3 && hull.some((circle) =>

@@ -16,6 +16,8 @@ import { createDroneRig, createFighterRig, createScoutRig } from './ship-rigs';
 import { createShipyard } from './shipyard';
 import { createStageBackdrops } from './stage-backdrops';
 import { createHiveScenery } from './hive-scenery';
+import { createPrismScenery } from './prism-scenery';
+import { PRISM_DURATION, PRISM_CAMERA_DISTANCE } from './prism-layout';
 import { createIceScenery } from './ice-scenery';
 import { ICE_CAMERA_DISTANCE, ICE_CORRIDOR_PITCH } from './ice-layout';
 import { HIVE_CAMERA_DISTANCE } from './hive-layout';
@@ -73,6 +75,8 @@ export class FlightView {
   private backdrops = createStageBackdrops();
   private hive = createHiveScenery();
   private ice = createIceScenery();
+  private cave = createPrismScenery();
+  private caveTime = 0;
   private drone = createDroneRig();
   private droneBurners = shipBurners(this.drone);
   private droneGoal = new T.Mesh(
@@ -103,6 +107,7 @@ export class FlightView {
   private wingLasers = Array.from({ length: 2 }, createContinuousLaser);
   private laserContact = createLaserContactTrace(this.plane);
   private bossLaserContact = {
+    prism: createBossLaserContact(this.plane, this.boss.root),
     preserve: createBossLaserContact(this.plane, this.boss.root),
     broodlock: createBossLaserContact(this.plane, this.hiveBoss.root),
     ice: createBossLaserContact(this.plane, this.leviathan.root),
@@ -157,7 +162,7 @@ export class FlightView {
     const scout = createScoutRig();
     const pods = this.wingPods.flatMap((side) => side.map(({ root }) => root));
     const ammo = Object.values(this.projectiles).map(({ root }) => root);
-    this.texturesReady = Promise.all([this.backdrops.ready, this.hive.ready, this.ice.ready,
+    this.texturesReady = Promise.all([this.backdrops.ready, this.hive.ready, this.ice.ready, this.cave.ready,
       Promise.all([loadEncounterTexture('marine', setMarineTexture, 1)]), loadEncounterTextures(this.boss, this.raptor,
       [this.player.root, scout, this.drone, this.bridge.root, this.ice.root, ...pods, ...ammo, ...this.drops.map(({ root }) => root)])]);
     this.enemies = Array.from({ length: 12 }, () => {
@@ -170,11 +175,12 @@ export class FlightView {
     this.player.root.add(this.playerMuzzle.root);
     this.drone.add(this.droneMuzzle.root);
     this.plane.add(this.player.root, this.drone, this.droneGoal, this.towline, this.boss.root, this.raptor.root, this.cannonMarker, this.stars,
-      this.preserveEdges.root, this.shipyard.root, this.backdrops.root, this.bridge.root, this.hive.root, this.ice.root,
+      this.preserveEdges.root, this.shipyard.root, this.backdrops.root, this.bridge.root, this.hive.root, this.ice.root, this.cave.root,
       this.leviathan.root, ...this.ichthyosaurs.map(r=>r.root), ...this.plesiosaurs.map(r=>r.root),
       this.hiveBoss.root, ...this.ants.map(({ root }) => root),
       this.pulse, ...this.enemies.map(({ root }) => root), ...this.markers,
       ...ammo, this.combat.root, ...pods, ...this.wingLasers.map(({ root }) => root), ...this.drops.map(({ root }) => root));
+    this.cave.setReflectionActors([this.player.root,this.drone,this.boss.root,...this.enemies.map(e=>e.root),...pods]);
   }
 
   async warmup(signal: AbortSignal, repaint: () => void) {
@@ -194,6 +200,7 @@ export class FlightView {
       this.renderer.initTexture(texture);
     }
     await compiled;
+    await this.cave.prepareReflection(this.renderer,camera,signal);
 
     // Cache silhouette bounds before the first laser hit, spread across small preflight batches.
     const contactModels = [this.raptor.root, this.enemies[0].root, this.boss.root, this.hiveBoss.root, this.leviathan.root, ...this.ichthyosaurs.map(r=>r.root), ...this.plesiosaurs.map(r=>r.root),
@@ -217,10 +224,11 @@ export class FlightView {
     const marine = [...this.ichthyosaurs, ...this.plesiosaurs].map(r=>r.root);
     const marineBatches = Array.from({length:Math.ceil(marine.length/3)},(_,i)=>marine.slice(i*3,i*3+3));
     for (const objects of [stage, boss, ...marineBatches, [this.hive.root, this.ants[0].root, this.hiveBoss.root],
-      [this.ice.root], pods[0], [...pods[1], ...this.wingLasers.map(({ root }) => root)], ordnance]) {
+      [this.ice.root], [this.cave.root], pods[0], [...pods[1], ...this.wingLasers.map(({ root }) => root)], ordnance]) {
       await nextFrame();
       if (signal.aborted) return;
       if (objects.includes(this.ice.root)) this.ice.prime();
+      if (objects.includes(this.cave.root)) this.cave.prime();
       if (objects === ordnance) {
         for (const batch of Object.values(this.projectiles)) batch.prime();
         this.combat.prime(); this.playerMuzzle.prime(); this.droneMuzzle.prime();
@@ -239,6 +247,7 @@ export class FlightView {
       this.renderer.setScissorTest(true);
       try {
         this.ice.capture(this.renderer, camera);
+        this.cave.capture(this.renderer, camera);
         this.renderer.render(this.scene, camera);
       } finally {
         objects.forEach((object, index) => { object.visible = visible[index]; });
@@ -260,7 +269,7 @@ export class FlightView {
     this.lastFlight = flight;
     this.animationTime = newFlight ? 0 : this.animationTime + elapsed;
     if (newFlight) {
-      this.iceTime = 0;
+      this.iceTime = 0; this.caveTime = 0;
       this.seenShots = new WeakSet(); this.seenDrops = new WeakMap(); this.previousDrops = [];
       this.enemyVitals.clear(); this.combat.clear(); this.playerMuzzle.clear(); this.droneMuzzle.clear();
       this.previousBossHealth = flight.bossHealth; this.previousBossLaserDamage = flight.bossLaserDamage;
@@ -273,9 +282,9 @@ export class FlightView {
     const angle = (eased - 1) * Math.PI / 2;
     this.rotation.setFromAxisAngle(this.axis, angle);
     this.plane.quaternion.copy(this.rotation);
-    (this.scene.background as T.Color).setHex(flight.level === 'ice' ? 0x03060c : sceneColor);
+    (this.scene.background as T.Color).setHex(flight.level === 'ice' ? 0x03060c : flight.level === 'prism' ? 0x03020a : sceneColor);
     const hive = flight.level === 'broodlock';
-    const stageDistance = hive ? HIVE_CAMERA_DISTANCE : flight.level === 'ice' ? ICE_CAMERA_DISTANCE : 95;
+    const stageDistance = hive ? HIVE_CAMERA_DISTANCE : flight.level === 'ice' ? ICE_CAMERA_DISTANCE : flight.level === 'prism' ? PRISM_CAMERA_DISTANCE : 95;
     const camera = this.swing === 0 && flight.level === 'preserve' ? this.ortho : this.perspective;
     const distance = T.MathUtils.lerp(stageDistance, BOSS_CAMERA_DISTANCE, eased);
     this.perspective.fov = T.MathUtils.radToDeg(2 * Math.atan(HEIGHT / 2 / distance));
@@ -285,7 +294,7 @@ export class FlightView {
     camera.lookAt(0, 0, 0);
 
     this.player.root.position.set(flight.player.x, flight.player.y, 0);
-    this.player.root.rotation.x = -(flight.level === 'ice' ? ICE_CORRIDOR_PITCH : 1.18) * eased;
+    this.player.root.rotation.x = -(flight.level === 'ice' || flight.level === 'prism' ? ICE_CORRIDOR_PITCH : 1.18) * eased;
     this.player.root.visible = flight.hull > 0 && Math.floor(flight.invulnerable * 12) % 2 === 0;
     const fighterVelocity = this.fighterMotion(flight.player, elapsed, newFlight);
     const fighterSpeed = fighterVelocity.length();
@@ -409,6 +418,7 @@ export class FlightView {
     this.pulse.scale.setScalar(1 + (0.3 - flight.pulseFlash) * 25);
     this.pulse.material.opacity = flight.pulseFlash / 0.3;
     this.ice.capture(this.renderer, camera);
+    this.cave.capture(this.renderer, camera);
     this.renderer.render(this.scene, camera);
   }
 
@@ -417,6 +427,15 @@ export class FlightView {
     if (flight.phase === 'approach' || flight.phase === 'boss') this.stageTime = flight.stageDuration;
     const perspectiveDistance = this.swing === 0 && flight.level === 'preserve' ? undefined : distance;
     this.ice.root.visible = flight.level === 'ice';
+    this.cave.root.visible = flight.level === 'prism';
+    if(this.cave.root.visible) {
+      if(flight.phase==='stage')this.caveTime=flight.time;
+      if(flight.phase==='approach')this.caveTime=PRISM_DURATION+flight.time;
+      if(flight.phase==='boss')this.caveTime=PRISM_DURATION+TRANSITION_TIME+flight.time;
+      this.cave.update(flight.hiveProgress,reveal,this.caveTime);
+      this.stars.visible=this.preserveEdges.root.visible=this.shipyard.root.visible=this.backdrops.root.visible=this.bridge.root.visible=this.hive.root.visible=false;
+      return;
+    }
     if (this.ice.root.visible) {
       if (flight.phase === 'stage') this.iceTime = flight.time;
       if (flight.phase === 'approach') this.iceTime = flight.stageDuration + flight.time;
@@ -462,7 +481,7 @@ export class FlightView {
         if (!pod.root.visible) continue;
         const time = this.animationTime + index * 0.47;
         pod.root.position.set(origin.x, origin.y, 0);
-        pod.root.rotation.set(-(flight.level === 'ice' ? ICE_CORRIDOR_PITCH : 1.18) * reveal + 0.09 * Math.sin(time * 6),
+        pod.root.rotation.set(-(flight.level === 'ice' || flight.level === 'prism' ? ICE_CORRIDOR_PITCH : 1.18) * reveal + 0.09 * Math.sin(time * 6),
           -0.046 * velocity.x + 0.14 * Math.sin(time * 5), 0.08 * Math.sin(time * 4));
         const recoil = fighting ? wing.flash / WING_FLASH_TIME : 0;
         const charge = pod.weapon === 'omega' && fighting ? Math.max(0, 1 - wing.cooldown / 0.28) : 0;
