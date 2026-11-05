@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { createAntRig, createHiveGuardian } from './ant-rigs';
 import { poseBurners, shipBurners } from './burners';
 import { createCorridorBridge } from './corridor-bridge';
 import { createInterceptorRig, createRaptorRig } from './encounter-rigs';
@@ -12,6 +13,7 @@ import { createPreserveEdges, PRESERVE_LOOP } from './preserve-edges';
 import { createDroneRig, createFighterRig, createScoutRig } from './ship-rigs';
 import { createShipyard } from './shipyard';
 import { createStageBackdrops } from './stage-backdrops';
+import { createHiveScenery } from './hive-scenery';
 import { WING_FLASH_TIME, wingWeapons, type WingProjectile, type WingWeapon } from './wing';
 import { createWingPod } from './wing-pod';
 
@@ -46,6 +48,8 @@ export class FlightView {
   private perspective = new T.PerspectiveCamera(38, WIDTH / HEIGHT, 0.1, 240);
   private player = createFighterRig();
   private boss = createInterceptorRig(BOSS_CANNON_X);
+  private hiveBoss = createHiveGuardian(BOSS_CANNON_X);
+  private ants = Array.from({ length: 12 }, () => createAntRig());
   private playerBurners = shipBurners(this.player.root);
   private bossBurners = shipBurners(this.boss.root);
   private raptor = createRaptorRig();
@@ -53,6 +57,7 @@ export class FlightView {
   private bridge = createCorridorBridge();
   private shipyard = createShipyard();
   private backdrops = createStageBackdrops();
+  private hive = createHiveScenery();
   private drone = createDroneRig();
   private droneBurners = shipBurners(this.drone);
   private droneGoal = new T.Mesh(
@@ -143,7 +148,7 @@ export class FlightView {
     this.boss.root.position.set(0, BOSS_Y, BOSS_DEPTH);
     const scout = createScoutRig();
     const pods = this.wingPods.flatMap((side) => side.map(({ root }) => root));
-    this.texturesReady = Promise.all([this.backdrops.ready, loadEncounterTextures(this.boss, this.raptor,
+    this.texturesReady = Promise.all([this.backdrops.ready, this.hive.ready, loadEncounterTextures(this.boss, this.raptor,
       [this.player.root, scout, this.drone, this.bridge.root, ...pods])]);
     this.enemies = Array.from({ length: 12 }, () => {
       const root = scout.clone();
@@ -151,7 +156,8 @@ export class FlightView {
     });
     this.towline.add(this.towlineGlow, this.towlineCore);
     this.plane.add(this.player.root, this.drone, this.droneGoal, this.towline, this.boss.root, this.raptor.root, this.cannonMarker, this.stars,
-      this.preserveEdges.root, this.shipyard.root, this.backdrops.root, this.bridge.root,
+      this.preserveEdges.root, this.shipyard.root, this.backdrops.root, this.bridge.root, this.hive.root,
+      this.hiveBoss.root, ...this.ants.map(({ root }) => root),
       this.pulse, this.shotMeshes, this.droneShots, this.threatMeshes, ...this.enemies.map(({ root }) => root), ...this.markers,
       ...Object.values(this.wingProjectiles), ...pods, ...this.wingLasers.map(({ root }) => root), ...this.drops);
   }
@@ -180,7 +186,8 @@ export class FlightView {
     const boss: T.Object3D[] = [this.boss.root, this.cannonMarker, ...this.markers];
     if (!this.backdrops.hasShipyard) boss.push(this.shipyard.root);
     const pods = this.wingPods.map((side) => side.map(({ root }) => root));
-    for (const objects of [stage, boss, pods[0], [...pods[1], ...this.wingLasers.map(({ root }) => root)]]) {
+    for (const objects of [stage, boss, [this.hive.root, this.ants[0].root, this.hiveBoss.root],
+      pods[0], [...pods[1], ...this.wingLasers.map(({ root }) => root)]]) {
       await nextFrame();
       if (signal.aborted) return;
       camera.position.set(0, 0, 95).applyQuaternion(this.plane.quaternion);
@@ -263,13 +270,15 @@ export class FlightView {
     }
     this.cannonMarker.visible = flight.phase === 'boss';
     this.cannonMarker.position.set(flight.exposedCannonX * BOSS_PROJECTION, BOSS_Y * BOSS_PROJECTION, 0);
-    this.boss.root.visible = this.swing > 0 && flight.bossHealth > 0;
-    this.boss.root.position.z = BOSS_DEPTH - 70 * (1 - eased);
-    this.boss.root.rotation.x = 0.9 * (1 - eased);
-    if (this.boss.root.visible) {
-      this.boss.pose(eased, flight.cannonWindup, flight.exposedCannonX, flight.firedCannonX,
+    const activeBoss = flight.level === 'broodlock' ? this.hiveBoss : this.boss;
+    this.boss.root.visible = this.hiveBoss.root.visible = false;
+    activeBoss.root.visible = this.swing > 0 && flight.bossHealth > 0;
+    activeBoss.root.position.set(0, BOSS_Y, BOSS_DEPTH - 70 * (1 - eased));
+    activeBoss.root.rotation.x = 0.9 * (1 - eased);
+    if (activeBoss.root.visible) {
+      activeBoss.pose(eased, flight.cannonWindup, flight.exposedCannonX, flight.firedCannonX,
         flight.bossRecoil / BOSS_RECOIL_TIME);
-      poseBurners(this.bossBurners, this.animationTime, 0.42 + 0.48 * Math.sin(eased * Math.PI));
+      if (activeBoss === this.boss) poseBurners(this.bossBurners, this.animationTime, 0.42 + 0.48 * Math.sin(eased * Math.PI));
     }
     this.drawScenery(flight, eased, distance, newFlight ? 2 : elapsed, fighterSpeed, droneSpeed);
 
@@ -282,12 +291,22 @@ export class FlightView {
     }
     for (const [index, { root, burners }] of this.enemies.entries()) {
       const enemy = flight.enemies[index];
-      root.visible = Boolean(enemy && !enemy.raptor);
-      if (enemy && !enemy.raptor) {
+      root.visible = Boolean(enemy && !enemy.raptor && !enemy.ant);
+      if (root.visible && enemy) {
         root.position.set(enemy.x, enemy.y, 0);
         root.rotation.z = Math.PI + 0.3 * Math.cos(enemy.age * 1.55);
         poseBurners(burners, enemy.age + index * 0.27, 0.55 + 0.16 * Math.sin(enemy.age * 4 + index));
       }
+    }
+    for (const [index, ant] of this.ants.entries()) {
+      const enemy = flight.enemies[index];
+      ant.root.visible = Boolean(enemy?.ant);
+      if (!ant.root.visible || !enemy) continue;
+      ant.root.position.set(enemy.x, enemy.y, 0);
+      ant.root.scale.setScalar(enemy.ant === 'soldier' ? 1.03 : 0.8);
+      ant.root.rotation.z = Math.PI + 0.15 * Math.cos(enemy.age * 1.55);
+      const windup = enemy.ant === 'soldier' ? T.MathUtils.clamp((enemy.age - enemy.fire + 0.55) / 0.55, 0, 1) : 0;
+      ant.pose(enemy.age, windup);
     }
 
     this.drawWings(flight, eased, fighterVelocity);
@@ -324,10 +343,18 @@ export class FlightView {
 
   private drawScenery(flight: Flight, reveal: number, distance: number, elapsed: number, fighterSpeed: number, droneSpeed: number) {
     if (flight.phase === 'stage') this.stageTime = flight.time;
+    if (flight.phase === 'approach' || flight.phase === 'boss') this.stageTime = flight.stageDuration;
+    const perspectiveDistance = this.swing === 0 ? undefined : distance;
+    this.hive.root.visible = flight.level === 'broodlock';
+    this.stars.visible = flight.level !== 'broodlock';
+    if (this.hive.root.visible) {
+      this.hive.update(this.stageTime / flight.stageDuration, perspectiveDistance);
+      this.preserveEdges.root.visible = this.shipyard.root.visible = this.backdrops.root.visible = this.bridge.root.visible = false;
+      return;
+    }
     const scroll = this.stageTime * 1.65;
     this.stars.position.y = -(scroll % 12) - reveal * 2;
     const backdropScroll = this.stageTime * 1.2 + reveal * 6;
-    const perspectiveDistance = this.swing === 0 ? undefined : distance;
     const edge = this.backdrops.update(reveal, backdropScroll, perspectiveDistance);
     this.bridge.update(backdropScroll, edge, reveal, perspectiveDistance);
     this.shipyard.update(reveal, !this.backdrops.hasShipyard);

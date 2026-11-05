@@ -3,7 +3,8 @@ import { setFaceTexture } from './creature-faces';
 import { setFeatherTexture, type createInterceptorRig, type createRaptorRig } from './encounter-rigs';
 import { textureShipAlloy } from './encounter-surfaces';
 
-type EncounterTexture = 'armor' | 'feathers' | 'scales' | 'preserve' | 'shipyard';
+type EncounterTexture = 'armor' | 'feathers' | 'scales' | 'preserve' | 'shipyard' |
+  'hive' | 'hiveMask' | 'hiveStars' | 'hiveMines';
 declare const __ENCOUNTER_TEXTURES__: Partial<Record<EncounterTexture, string>>;
 
 export async function loadEncounterTexture(

@@ -1,6 +1,6 @@
 # Spaceslop
 
-Vibe-coded vertical shooter for the browser (PWA). The first playable slice has four scrolling waves, a camera transition, and a head-on interceptor fight.
+Vibe-coded vertical shooter for the browser (PWA), with selectable preserve and ant hive prototype levels, scrolling waves, a camera transition, and a head-on boss fight.
 
 ## Play locally
 
@@ -24,13 +24,15 @@ Enemies can drop wing weapons. Fly through a pickup to equip a pod that flies al
 
 During boss fights, line a wing up horizontally with the green cannon. Homing missiles steer toward it automatically.
 
-The second wave includes a feathered raptor. Its wings fold before it dives along its lane. At the boss, the draconian ace turns toward the camera, then the active cannon glows during its windup and recoils on the volley.
+Choose a level before launch. **Broodlock · Ant hive** is the default: a 28-second traversal of the three-screen hive strip, six waves of infected ants, then a placeholder brood guardian. Workers fire aimed spores; larger soldiers charge their amber sacs before a three-spore fan. The guardian uses the existing alternating hardpoint, warning-ring, and volley mechanics. All ants are animated procedural shapes with six legs, antennae, mandibles, and small infection nodules.
+
+**Overgrown preserve** keeps the original four waves and draconian interceptor fight. Its second wave includes a feathered raptor whose wings fold before a dive. Use `?level=preserve` to open that level directly.
 
 The procedural encounter rigs live in `src/encounter-rigs.ts`. A future model can use the same local pose and pivot names while the simulation owns movement, attack timing, and hitboxes. The interceptor's `muzzle_L` and `muzzle_R` pivots line up with the existing cannon lanes.
 
 ## Asset workshop
 
-Run `npm run dev` and open **Asset workshop** from the game menu or visit `/workshop.html`. Orbit and zoom the raptor, ships, or wing weapon pods. Switch camera presets, scrub or play the animated rigs, and toggle wireframe. The workshop uses the game rigs and the optional alloy texture.
+Run `npm run dev` and open **Asset workshop** from the game menu or visit `/workshop.html`. Orbit and zoom the raptor, ships, ants, guardian, or wing weapon pods. Switch camera presets, scrub or play the animated rigs, and toggle wireframe. The workshop uses the game rigs and the optional alloy texture.
 
 ## Assets and offline play
 
@@ -55,5 +57,11 @@ The encounter textures and backdrops are optional PNGs. Add the reviewed files a
 | `public/encounters/draconian-scales.png` | Tileable draconian face, snout, and jaw |
 | `public/encounters/preserve-backdrop.png` | Portrait, top-down scenery. It scrolls underneath the procedural ferns. |
 | `public/encounters/shipyard-backdrop.png` | Portrait backdrop for the boss approach and fight. |
+| `public/encounters/broodlock-foreground.png` | RGBA 720 × 3840 three-screen hive strip. Preserve its alpha and orientation; it traverses bottom to top once, without mirroring or repeating. |
+| `public/encounters/broodlock-mines-mask.png` | Grayscale mask with the exact foreground dimensions and alignment. White reveals mines through the central channel and bridge grating; black reveals stars through exterior holes. Loaded as linear data. |
+| `public/encounters/broodlock-stars.png` | Opaque portrait starfield, fixed in screen space. sRGB; no tiling required. |
+| `public/encounters/broodlock-mines.png` | Opaque portrait dark mine plate, scrolling much more slowly than the hive. sRGB; no tiling required. |
 
 The preserve catwalks and orbital shipyard also have procedural scenery that runs without background images.
+
+Broodlock composites the two distant plates under the alpha foreground, using the matching mask to distinguish the central mine channel from the holes into space. Neither plate is baked into the foreground. The scene freezes at the end of the strip for the guardian. Each file is optional: missing plates use code-drawn stars or mine ribs, and a missing foreground uses procedural side rails and brood chambers. Without a mask, a simple central-channel split is used. New hive geometry and textures join the preflight warm-up so the first ant and guardian do not trigger their initial uploads during play.
