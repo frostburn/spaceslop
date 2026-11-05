@@ -2,6 +2,7 @@ import * as T from 'three';
 import { encounterTextureUrl, loadEncounterTexture } from './encounter-texture';
 import {TITAN_DURATION,TITAN_SCREENS,titanTileY} from './titan-layout';
 import {titanMask} from './titan-mask';
+import {createTitanClouds} from './titan-clouds';
 import {createTitanAmbient} from './titan-ambient';
 
 export function createTitanScenery(){
@@ -9,11 +10,11 @@ export function createTitanScenery(){
  const tiles:T.Mesh<T.PlaneGeometry,T.ShaderMaterial>[]=[],textures:T.Texture[]=[];
  const clock={value:0};
  const geometry=new T.PlaneGeometry(9,16);
- const ambient=createTitanAmbient();root.add(ambient.root);
+ const ambient=createTitanAmbient(),clouds=createTitanClouds();root.add(ambient.root,clouds.root);
  for(let i=0;i<TITAN_SCREENS;i++){
-  const material=new T.ShaderMaterial({uniforms:{map:{value:null},mask:{value:null},hasMap:{value:0},clock,tile:{value:i},crop:{value:new T.Vector2(2/1284,1280/1284)}},
+  const material=new T.ShaderMaterial({transparent:true,uniforms:{map:{value:null},mask:{value:null},hasMap:{value:0},ascent:{value:0},clock,tile:{value:i},crop:{value:new T.Vector2(2/1284,1280/1284)}},
    vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
-   fragmentShader:`uniform sampler2D map,mask;uniform float hasMap,clock,tile;uniform vec2 crop;varying vec2 vUv;
+   fragmentShader:`uniform sampler2D map,mask;uniform float hasMap,clock,tile,ascent;uniform vec2 crop;varying vec2 vUv;
     void main(){float y=(tile+1.0-vUv.y)/10.0;
      vec2 uv=vec2(vUv.x,crop.x+vUv.y*crop.y);vec3 m=texture2D(mask,uv).rgb;
      vec3 c=vec3(.052,.039,.027);
@@ -32,7 +33,10 @@ export function createTitanScenery(){
       c=mix(c,vec3(.13,.14,.14),block*.7);
       c+=vec3(.025,.11,.15)*block*pow(max(0.0,sin(y*1400.0-clock*3.0)),18.0)*.3;
      }
-     gl_FragColor=vec4(max(c,vec3(0.0)),1.0);
+     float edge=smoothstep(0.0,.16,vUv.x)*(1.0-smoothstep(.84,1.0,vUv.x));
+     if(tile<.5)edge*=1.0-smoothstep(.8,1.0,vUv.y);
+     float fade=(1.0-smoothstep(.06,.66,ascent))*mix(1.0,edge,smoothstep(0.0,.2,ascent));
+     gl_FragColor=vec4(max(c,vec3(0.0)),fade);
      #include <colorspace_fragment>
     }`});
   const mesh=new T.Mesh(geometry,material);mesh.position.z=-4;mesh.frustumCulled=false;root.add(mesh);tiles.push(mesh);
@@ -69,7 +73,7 @@ export function createTitanScenery(){
   image.src=url;
  });
  const ready=Promise.all([backdropReady,loadEncounterTexture('titanRobot',ambient.setRobotTexture).then(texture=>texture?[texture]:[])]).then(parts=>parts.flat());
- return{root,ready,get hasArt(){return hasArt;},update(progress:number,time=progress*TITAN_DURATION){clock.value=time;ambient.update(progress,time);
-  tiles.forEach((mesh,i)=>{mesh.position.y=titanTileY(i,progress);mesh.visible=Math.abs(mesh.position.y)<16.01;});
+ return{root,ready,get hasArt(){return hasArt;},update(progress:number,time=progress*TITAN_DURATION,ascent=0,distance=95){clock.value=time;ambient.update(progress,time);ambient.root.visible=ascent<.28;clouds.update(time,ascent,distance);
+  tiles.forEach((mesh,i)=>{mesh.material.uniforms.ascent.value=ascent;mesh.scale.setScalar(1-ascent*.45);mesh.position.y=titanTileY(i,progress)-ascent*10;mesh.visible=ascent<.67&&Math.abs(mesh.position.y)<20;});
  }};
 }

@@ -111,7 +111,7 @@ function syncUI() {
   const active = screen === 'active';
   const fighting = flight.phase === 'stage' || flight.phase === 'boss';
   const label = {
-    stage: levels[flight.level].sector, approach: 'CONTACT', boss: 'BOSS', won: 'CLEAR', lost: 'SIGNAL LOST',
+    stage: levels[flight.level].sector, approach: flight.level==='titan'?'ASCENT':'CONTACT', boss: 'BOSS', won: 'CLEAR', lost: 'SIGNAL LOST',
   }[flight.phase];
   sector.textContent = (flight.level === 'ice' || flight.level === 'titan') && flight.phase === 'stage'
     ? `${label} · ${Math.min(10, Math.floor(flight.hiveProgress * 10) + 1)}/10` : label;
@@ -129,7 +129,8 @@ function syncUI() {
   const betweenRuns = screen === 'title' || screen === 'results';
   if (import.meta.env.DEV) {
     const bossStart = element<HTMLButtonElement>('dev-boss');
-    bossStart.hidden = !betweenRuns || flight.level === 'titan';
+    bossStart.hidden = !betweenRuns;
+    bossStart.textContent=flight.level==='titan'?'Launch at transition':'Launch at boss';
     bossStart.disabled = start.disabled || !view;
   }
   pilotPicker.setVisible(betweenRuns);
@@ -143,8 +144,8 @@ function syncUI() {
   if (preparing) tip = 'Preparing graphics…';
   else if (screen === 'title' && offlineReady) tip = 'Ready offline';
   else if (flight.droneWeapon === 'towline') {
-    tip = flight.phase === 'boss' ? (flight.level === 'ice' ? 'Sweep the arc across the mouth marker.' : 'Sweep the arc across the green cannon.') : 'Park the drone · Sweep the arc';
-  } else if (flight.phase === 'boss') tip = flight.level === 'ice' ? 'Tap the mouth marker. Dodge amber rings.' : 'Tap the green cannon. Dodge amber rings.';
+    tip = flight.phase === 'boss' ? (flight.level === 'ice' ? 'Sweep the arc across the mouth marker.' : flight.level==='titan'?'Sweep the arc across the glowing thorax vent.':'Sweep the arc across the green cannon.') : 'Park the drone · Sweep the arc';
+  } else if (flight.phase === 'boss') tip = flight.level === 'ice' ? 'Tap the mouth marker. Dodge amber rings.' : flight.level==='titan'?'Tap the glowing thorax vent. Dodge amber rings.':'Tap the green cannon. Dodge amber rings.';
   if (active && flight.perkTime > 0) {
     tip = flight.perkMessage;
   } else if (active && flight.pickupTime > 0) {
@@ -214,7 +215,7 @@ start.addEventListener('click', () => {
       pilotPicker.selectedId,
       readLevel(levelSelector.value),
     );
-    if (import.meta.env.DEV && devBossLaunch && flight.level !== 'titan') {
+    if (import.meta.env.DEV && devBossLaunch) {
       // Enter the normal approach through the simulation, preserving level
       // progress, the selected loadout and the full camera transition.
       flight.time = flight.stageDuration;

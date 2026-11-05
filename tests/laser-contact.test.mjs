@@ -90,7 +90,7 @@ test('laser damage is distinguished from simultaneous bullets and clamped at dea
 });
 
 test('boss laser damage is tracked through a lethal hit', () => {
-  for (const level of ['preserve', 'broodlock', 'ice']) {
+  for (const level of ['preserve', 'broodlock', 'ice', 'titan']) {
     const flight = new Flight('sentry', ['laser'], 'vex', level);
     flight.phase = 'boss'; flight.time = 0.5; flight.cooldown = flight.droneCooldown = 100;
     flight.player.x = flight.exposedCannonX * BOSS_PROJECTION + 1.22;

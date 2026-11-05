@@ -19,7 +19,7 @@ test('the ten-screen plate scrolls bottom to top with uninterrupted viewport cov
   }
 });
 
-test('prototype patrols span the route, repeat all accessories and end without a boss', () => {
+test('prototype patrols span the route, repeat all accessories and lead into the cicada ascent', () => {
   assert.equal(TITAN_DURATION, 90);
   assert.equal(titanWaves.length, 20);
   for (const kind of ['homing','cannon','laser','omega']) assert(titanWaves.filter(w => w.drop === kind).length > 1);
@@ -33,14 +33,19 @@ test('prototype patrols span the route, repeat all accessories and end without a
       assert(!enemy.raptor && !enemy.ant && !enemy.marine);
       if (enemy.drop) observed.add(enemy.drop);
     }
-    assert(!['approach','boss'].includes(f.phase));
+    assert.notEqual(f.phase,'boss');
     maxEnemies = Math.max(maxEnemies, f.enemies.length);
   }
   assert(maxEnemies > 0 && maxEnemies <= 12);
-  assert.equal(observed.size, 4); assert.equal(f.phase, 'won'); assert.equal(f.hiveProgress, 1);
+  assert.equal(observed.size, 4); assert.equal(f.phase, 'approach'); assert.equal(f.hiveProgress, 1);
   assert.equal(f.enemies.length + f.shots.length + f.threats.length + f.drops.length + f.markers.length, 0);
   for (const wing of f.wings) assert.equal(wing.beamEnd, undefined);
-  const score = f.score; f.step(10); assert.equal(f.score, score); assert.equal(f.hiveProgress, 1);
+  assert.equal(f.transitionDuration,7);
+  for(let i=0;i<420;i++){f.invulnerable=100;f.step(STEP);}
+  assert.equal(f.phase,'boss');assert.equal(f.bossMaxHealth,80);
+  for(let i=0;i<2400&&f.phase==='boss';i++){f.invulnerable=100;f.step(STEP);}
+  assert.equal(f.phase,'won');assert.equal(f.bossHealth,0);
+  const score=f.score;f.step(10);assert.equal(f.score,score);assert.equal(f.hiveProgress,1);
 });
 
 test('a failed Titan run retains its position and a new flight starts at the opening', () => {
@@ -67,4 +72,19 @@ test('procedural mask retains pipe and lamp animation with no river channel', ()
   const [lx,ly] = titanLights[0], lamp = new Uint8ClampedArray(w*32*4);
   lamp.set([190,225,250,255], (16*w+lx)*4);
   assert(titanMask(lamp,w,32,ly-16,12800)[(16*w+lx)*4+2] > 200);
+});
+
+
+test('Titan ascent is quiet and its boss locks warnings before alternating vents fire',()=>{
+ const f=new Flight('sentry',['laser'],'vex','titan');f.time=f.stageDuration;f.step(0);
+ for(let i=0;i<410;i++)f.step(STEP);
+ assert.equal(f.phase,'approach');assert.equal(f.threats.length+f.shots.length,0);
+ for(let i=0;i<12;i++)f.step(STEP);
+ assert.equal(f.phase,'boss');const first=f.exposedCannonX;f.invulnerable=100;
+ for(let i=0;i<48;i++)f.step(STEP);
+ assert.equal(f.markers.length,3);assert(f.cannonWindup>0);
+ const locked=f.markers.map(p=>({...p}));f.player.x=2.5;
+ for(let i=0;i<48;i++)f.step(STEP);
+ assert.deepEqual(f.markers,locked);assert.equal(f.threats.length,3);assert.equal(f.exposedCannonX,-first);
+ assert(f.threats.every(p=>p.vz>0&&Number.isFinite(p.vx)));
 });

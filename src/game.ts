@@ -1,3 +1,4 @@
+import { CICADA_HP, TITAN_ASCENT, CICADA_INTERVAL, CICADA_WINDUP, CICADA_FIRE, CICADA_TRAVEL } from './cicada';
 import {
   BOSS_FIRE_AT, BOSS_MUZZLE_Z, BOSS_RECOIL_TIME, BOSS_VOLLEY_INTERVAL, BOSS_WINDUP_AT, raptorFlight,
 } from './encounters';
@@ -194,6 +195,7 @@ export class Flight {
   ) {
     this.droneWeapon = droneWeapon;
     this.pilot = pilot;
+    if (level === 'titan') this.bossHealth=CICADA_HP;
     if (level === 'broodlock') this.obstacles = new HiveCollision();
     if (level === 'ice') { this.obstacles = new IceCollision(); this.bossHealth=LEVIATHAN_HP; }
     if (droneWeapon === 'towline') this.droneCooldown = TOWLINE_INTERVAL;
@@ -203,7 +205,9 @@ export class Flight {
     }
   }
 
-  get bossMaxHealth() { return this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
+  get transitionDuration() { return this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
+
+  get bossMaxHealth() { return this.level === 'titan' ? CICADA_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
 
   get stageDuration() { return levels[this.level].duration; }
 
@@ -253,9 +257,10 @@ export class Flight {
   }
 
   get cannonWindup() {
-    if (this.phase !== 'boss' || this.volley !== Math.floor(this.time / (this.level === 'ice' ? LEVIATHAN_INTERVAL : BOSS_VOLLEY_INTERVAL))) return 0;
-    const interval = this.level === 'ice' ? LEVIATHAN_INTERVAL : BOSS_VOLLEY_INTERVAL;
+    if (this.phase !== 'boss' || this.volley !== Math.floor(this.time / (this.level === 'titan' ? CICADA_INTERVAL : this.level === 'ice' ? LEVIATHAN_INTERVAL : BOSS_VOLLEY_INTERVAL))) return 0;
+    const interval = this.level === 'titan' ? CICADA_INTERVAL : this.level === 'ice' ? LEVIATHAN_INTERVAL : BOSS_VOLLEY_INTERVAL;
     const elapsed = this.time % interval;
+    if(this.level === 'titan') return clamp((elapsed-CICADA_WINDUP)/(CICADA_FIRE-CICADA_WINDUP),0,1);
     if(this.level === 'ice') return clamp((elapsed-LEVIATHAN_WINDUP)/(LEVIATHAN_FIRE-LEVIATHAN_WINDUP),0,1);
     return clamp((elapsed - BOSS_WINDUP_AT) / (BOSS_FIRE_AT - BOSS_WINDUP_AT), 0, 1);
   }
@@ -342,7 +347,7 @@ export class Flight {
       this.droneLaunch = undefined;
     }
     if (this.phase === 'approach') {
-      if (this.time >= TRANSITION_TIME) this.enter('boss');
+      if (this.time >= this.transitionDuration) this.enter('boss');
       return;
     }
 
@@ -405,7 +410,7 @@ export class Flight {
 
     if (this.phase === 'stage') {
       this.collectDrops(dt);
-      if (this.time >= this.stageDuration) this.enter(this.level === 'titan' ? 'won' : 'approach');
+      if (this.time >= this.stageDuration) this.enter('approach');
     }
   }
 
@@ -642,6 +647,7 @@ export class Flight {
   }
 
   private stepBoss() {
+    if(this.level === 'titan') { this.stepCicada(); return; }
     if(this.level === 'ice') { this.stepLeviathan(); return; }
     const elapsed = this.time % BOSS_VOLLEY_INTERVAL;
     const volley = Math.floor(this.time / BOSS_VOLLEY_INTERVAL);
@@ -665,6 +671,21 @@ export class Flight {
       this.volley++;
     }
     if (elapsed >= BOSS_FIRE_AT + BOSS_IMPACT_TRAVEL + 0.02) this.markers = [];
+  }
+
+  private stepCicada() {
+    const elapsed=this.time%CICADA_INTERVAL, volley=Math.floor(this.time/CICADA_INTERVAL);
+    if(elapsed>=CICADA_WINDUP && elapsed<CICADA_FIRE && !this.markers.length){
+      const x=clamp(this.player.x,-2.5,2.5),y=clamp(this.player.y,-5.8,5.1);
+      this.markers=[-1.4,0,1.4].map(offset=>({x:x+(volley%2===0?offset:0),y:y+(volley%2===0?0:offset)}));
+    }
+    if(elapsed>=CICADA_FIRE && this.markers.length && this.volley===volley){
+      const x=this.exposedCannonX,z=BOSS_DEPTH+BOSS_MUZZLE_Z;
+      this.firedCannonX=x;this.bossRecoil=BOSS_RECOIL_TIME;
+      this.threats.push(...this.markers.map(target=>({x,y:BOSS_Y,z,vx:(target.x-x)/CICADA_TRAVEL,vy:(target.y-BOSS_Y)/CICADA_TRAVEL,vz:-z/CICADA_TRAVEL})));
+      this.volley++;
+    }
+    if(elapsed>CICADA_FIRE+CICADA_TRAVEL+.05)this.markers=[];
   }
 
   private stepLeviathan() {
@@ -736,7 +757,7 @@ export class Flight {
   private enter(phase: Phase) {
     this.phase = phase;
     this.time = 0;
-    if (phase === 'approach' || (phase === 'won' && this.level === 'titan')) {
+    if (phase === 'approach' || phase === 'won') {
       this.shots = [];
       this.threats = [];
       this.enemies = [];
