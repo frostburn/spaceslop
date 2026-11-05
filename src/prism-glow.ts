@@ -1,29 +1,33 @@
 import * as T from 'three';
+import { prismSafe } from './prism-safe';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 
 // Cave-only linear HDR rendering, two quarter-resolution bloom blurs, then
 // highlight roll-off. Fixed pass count and capped targets bound phone fill cost.
 export function createPrismGlow(renderer:T.WebGLRenderer) {
   const target=()=>new T.WebGLRenderTarget(1,1,{type:T.HalfFloatType,minFilter:T.LinearFilter,magFilter:T.LinearFilter,depthBuffer:false});
-  const sceneTarget=target();sceneTarget.depthBuffer=true;sceneTarget.samples=Math.min(4,renderer.capabilities.maxSamples);
+  const sceneTarget=target();sceneTarget.depthBuffer=true;sceneTarget.samples=0; // Avoid driver-dependent half-float MSAA resolves.
   const bright=target(),blurX=target(),blurY=target();
   const vertexShader='varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0,1);}';
   const extract=new T.ShaderMaterial({uniforms:{source:{value:sceneTarget.texture}},depthTest:false,depthWrite:false,vertexShader,
-    fragmentShader:`uniform sampler2D source;varying vec2 vUv;
-      void main(){vec3 c=texture2D(source,vUv).rgb;float peak=max(c.r,max(c.g,c.b));
+    fragmentShader:`${prismSafe}
+      uniform sampler2D source;varying vec2 vUv;
+      void main(){vec3 c=safeHDR(texture2D(source,vUv).rgb);float peak=max(c.r,max(c.g,c.b));
         gl_FragColor=vec4(c*smoothstep(.9,2.0,peak),1.0);}`});
   const blur=new T.ShaderMaterial({uniforms:{source:{value:bright.texture},stepSize:{value:new T.Vector2()}},depthTest:false,depthWrite:false,vertexShader,
-    fragmentShader:`uniform sampler2D source;uniform vec2 stepSize;varying vec2 vUv;
-      void main(){vec3 c=texture2D(source,vUv).rgb*.227027;
-        c+=(texture2D(source,vUv+stepSize*1.384615).rgb+texture2D(source,vUv-stepSize*1.384615).rgb)*.316216;
-        c+=(texture2D(source,vUv+stepSize*3.230769).rgb+texture2D(source,vUv-stepSize*3.230769).rgb)*.070270;
-        gl_FragColor=vec4(c,1.0);}`});
+    fragmentShader:`${prismSafe}
+      uniform sampler2D source;uniform vec2 stepSize;varying vec2 vUv;
+      void main(){vec3 c=safeHDR(texture2D(source,vUv).rgb)*.227027;
+        c+=(safeHDR(texture2D(source,vUv+stepSize*1.384615).rgb)+safeHDR(texture2D(source,vUv-stepSize*1.384615).rgb))*.316216;
+        c+=(safeHDR(texture2D(source,vUv+stepSize*3.230769).rgb)+safeHDR(texture2D(source,vUv-stepSize*3.230769).rgb))*.070270;
+        gl_FragColor=vec4(safeHDR(c),1.0);}`});
   const composite=new T.ShaderMaterial({uniforms:{source:{value:sceneTarget.texture},glow:{value:blurY.texture}},depthTest:false,depthWrite:false,vertexShader,
-    fragmentShader:`uniform sampler2D source,glow;varying vec2 vUv;
-      void main(){vec3 c=texture2D(source,vUv).rgb+texture2D(glow,vUv).rgb*.42;
+    fragmentShader:`${prismSafe}
+      uniform sampler2D source,glow;varying vec2 vUv;
+      void main(){vec3 c=safeHDR(texture2D(source,vUv).rgb)+safeHDR(texture2D(glow,vUv).rgb)*.42;
         // ACES-style shoulder retains detail in white crystal highlights.
         c=clamp((c*(2.51*c+.03))/(c*(2.43*c+.59)+.14),0.0,1.0);
-        gl_FragColor=vec4(c,1.0);
+        gl_FragColor=vec4(safeHDR(c),1.0);
         #include <colorspace_fragment>
       }`});
   const quad=new FullScreenQuad(extract),size=new T.Vector2(),viewport=new T.Vector4();

@@ -1,6 +1,8 @@
+import { prismSafe, prismView } from './prism-safe';
 // Shared, world-anchored illumination for rock, water and crystal interiors.
 // White stellar shafts split at bank-side prisms into bounded spectral fans.
-export const prismLight = `
+export const prismLight = `${prismSafe}
+${prismView}
  uniform float caveScroll,caveTime;
  float caveHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
  float caveNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
@@ -21,19 +23,20 @@ export const prismLight = `
      vec2 q=vec2(p.x-side*(4.3+sin(k*7.0)*.25),y);
      vec2 ray=normalize(vec2(-.82,-.57));
      if(side<0.0)ray=normalize(vec2(.78,-.62));
+     ray=prismTurn(prismSweep(vec3(side*4.3,point.y-y,0.0)))*ray;
      float along=dot(q,ray),across=dot(q,vec2(-ray.y,ray.x));
      float width=.18+max(along,0.0)*.19;
      float t=(across+.035*sin(p.y*4.7+p.x*8.0)+.03*sin(p.y*15.0))/(width*2.0)+.5;
      float mask=smoothstep(-.3,.35,along)*(1.0-smoothstep(7.0,10.0,along));
      float envelope=smoothstep(0.0,.06,t)*(1.0-smoothstep(.94,1.0,t));
      float ripple=caveNoise(vec2(p.x*3.0+p.y*.9,p.y*15.0-caveTime*.8));
-     float focus=pow(smoothstep(.25,.8,ripple),2.0);
-     float filament=pow(.5+.5*sin(t*55.0+caveNoise(p*7.0)*8.0),18.0);
+     float focus=positivePow(smoothstep(.25,.8,ripple),2.0);
+     float filament=positivePow(.5+.5*sin(t*55.0+caveNoise(p*7.0)*8.0),18.0);
      light+=spectrum(t)*mask*envelope*(.16+focus*2.6+filament*.35);
    }
    vec2 flow=p*vec2(3.6,5.3)+riverCurrent(point.xy)*8.0;
    float net=abs(sin(flow.x+sin(flow.y*.71))*.55+sin(flow.y+sin(flow.x*.63))*.45);
-   float lace=pow(max(0.0,1.0-net),22.0);
+   float lace=positivePow(max(0.0,1.0-net),22.0);
    float edge=smoothstep(2.4,4.4,abs(p.x));
    return light+lace*edge*vec3(1.1,.65,.19)*.25;
  }
@@ -43,7 +46,7 @@ export const prismLight = `
    vec2 tile=vec2(p.x*.95,p.y*.42);vec2 f=fract(tile)-.5;
    float shard=max(abs(f.x)*1.5,abs(f.y)*.85+abs(f.x)*.55);
    float crystal=(1.0-smoothstep(.18,.23,shard))*step(.52,caveHash(floor(tile)));
-   float facet=.18+pow(.5+.5*sin(f.x*24.0+f.y*8.0),10.0)*2.7;
+   float facet=.18+positivePow(.5+.5*sin(f.x*24.0+f.y*8.0),10.0)*2.7;
    color+=crystal*vec3(.31,.43,.56)*facet;
    return color;
  }

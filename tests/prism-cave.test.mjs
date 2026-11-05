@@ -94,3 +94,14 @@ test('the HDR pass restores the caller target, viewport and scissor after a fail
  assert.throws(()=>glow.render(new T.Scene(),new T.PerspectiveCamera()),/HDR interrupted/);
  assert.equal(target,original);assert(currentViewport.equals(viewport));assert(scissor);
 });
+
+test('camera-driven spectral fans use cave coordinates through the boss pitch',()=>{
+ const cave=createPrismScenery(),river=cave.root.getObjectByName('prism-live-river'),camera=new T.PerspectiveCamera();
+ const parent=new T.Group();parent.rotation.x=-Math.PI/2;parent.add(camera);camera.position.set(9,4,32);
+ for(const reveal of [0,.5,1]) {
+  cave.update(1,reveal,30);cave.capture({},camera);
+  const expected=camera.getWorldPosition(new T.Vector3()).applyMatrix4(river.parent.matrixWorld.clone().invert());
+  assert(river.material.uniforms.caveEye.value.distanceTo(expected)<1e-8);
+ }
+ camera.position.x=-9;cave.capture({},camera);assert.equal(river.material.uniforms.caveEye.value.x,-9);
+});

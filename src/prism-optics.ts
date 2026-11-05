@@ -8,7 +8,7 @@ export const caveSampling = `${prismLight}
    vec3 p=point+vec3(0,caveScroll,0);
    float stone=caveNoise(vec2(p.x+p.z*.37,p.y)*1.8);
    float grain=caveHash(floor(p.xy*90.0));
-   float joint=pow(1.0-abs(sin(p.x*6.0+p.y*2.0+floor(p.y*1.3)*1.7)),26.0);
+   float joint=positivePow(1.0-abs(sin(p.x*6.0+p.y*2.0+floor(p.y*1.3)*1.7)),26.0);
    vec3 rock=mix(vec3(.014,.020,.027),vec3(.09,.098,.10),stone*stone);
    rock*=.7+grain*.45;rock*=1.0-joint*.7;
    return rock+stellarCaustics(point)*(.17+stone*.25);
@@ -28,7 +28,7 @@ export const caveSampling = `${prismLight}
 `;
 export function prismOptics() {
   const refraction=iceRefraction('prism-crystals-');
-  const uniforms={caveScroll:{value:0},caveTime:{value:0},iceViewport:{value:new T.Vector2(1,1)},
+  const uniforms={caveScroll:{value:0},caveTime:{value:0},caveEye:{value:new T.Vector3(0,0,32)},iceViewport:{value:new T.Vector2(1,1)},
     viewToCave:{value:new T.Matrix4()},caveProjectionInverse:{value:new T.Matrix4()}};
   const surface=new T.MeshPhysicalMaterial({color:0xffffff,roughness:.035,metalness:0,flatShading:true,
     ior:1.54,specularIntensity:1.3,envMap:iceEnvironment(),envMapIntensity:1.6});
@@ -59,13 +59,14 @@ export function prismOptics() {
       vec3 transmitted=vec3(iceBehind(uv+red).r,iceBehind(uv+green).g,iceBehind(uv+blue).b);
       vec3 localNormal=normalize(mat3(viewToCave)*normal);
       vec3 reflected=caveRay(vCavePosition,normalize(mat3(viewToCave)*reflect(incident,normal)));
-      float fresnel=.045+.955*pow(1.0-clamp(dot(normal,-incident),0.0,1.0),5.0);
-      float fracture=pow(1.0-abs(sin(vCrystalPosition.y*39.0+vCrystalPosition.x*17.0+vRockId*37.0)),80.0)*.045;
-      float star=pow(max(0.0,dot(localNormal,normalize(vec3(.65,.48,.72)))),24.0)*1.5;
+      float fresnel=.045+.955*positivePow(1.0-clamp(dot(normal,-incident),0.0,1.0),5.0);
+      float fracture=positivePow(1.0-abs(sin(vCrystalPosition.y*39.0+vCrystalPosition.x*17.0+vRockId*37.0)),80.0)*.045;
+      float star=positivePow(max(0.0,dot(localNormal,normalize(vec3(.65,.48,.72)))),24.0)*1.5;
       vec3 dispersion=stellarCaustics(vCavePosition);
       outgoingLight=transmitted*(1.0-fresnel)*.97+reflected*(.15+fresnel*.85)
         +(reflectedLight.directSpecular+reflectedLight.indirectSpecular)*1.5
         +vec3(star+fracture)+dispersion*(.12+fresnel*.3);
+      outgoingLight=safeHDR(outgoingLight);
       #include <opaque_fragment>
       if(captureLayer>.5)gl_FragColor.a=vRockId;`);
   };
@@ -81,7 +82,7 @@ export function caveWallMaterial(uniforms:ReturnType<typeof prismOptics>['unifor
     fragmentShader:`${caveSampling}
       varying vec3 vCavePosition;
       void main(){vec3 n=normalize(cross(dFdx(vCavePosition),dFdy(vCavePosition)));float light=.5+.5*abs(dot(n,normalize(vec3(.65,.48,.72))));
-      gl_FragColor=vec4(cavePaint(vCavePosition)*light,1.0);
+      gl_FragColor=vec4(safeHDR(cavePaint(vCavePosition)*light),1.0);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
       }`});

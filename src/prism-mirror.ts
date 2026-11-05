@@ -11,7 +11,7 @@ export function createPrismMirror(root:T.Group,optics:ReturnType<typeof prismOpt
   const geometry=new T.PlaneGeometry(2,124,1,124);geometry.translate(0,38,0);
   const mirror=new Reflector(geometry,{textureWidth:384,textureHeight:768,multisample:0,clipBias:.003,
     shader:{name:'prism-live-river',uniforms:{tDiffuse:{value:null},color:{value:new T.Color()},textureMatrix:{value:new T.Matrix4()},
-      caveScroll:optics.uniforms.caveScroll,caveTime:optics.uniforms.caveTime},
+      caveScroll:optics.uniforms.caveScroll,caveTime:optics.uniforms.caveTime,caveEye:optics.uniforms.caveEye},
       vertexShader:`uniform mat4 textureMatrix;uniform float caveScroll;varying vec4 vProject;varying vec2 vRiver;
         void main(){vec3 p=position;float y=p.y+caveScroll;p.x*=3.8+sin(y*.31)*.28+sin(y*.83)*.12;
           vProject=textureMatrix*vec4(p,1.0);vRiver=p.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);}`,
@@ -22,17 +22,18 @@ export function createPrismMirror(root:T.Group,optics:ReturnType<typeof prismOpt
           vec2 roof=vRiver+vec2(0,caveScroll)+ripple*7.0;
           vec3 reflection=caveRoof(roof)*.22+live*.90;
           float shore=smoothstep(2.6,4.1,abs(vRiver.x));
-          float stones=caveNoise(roof*8.0);float foam=pow(caveNoise(vRiver*vec2(2.0,20.0)+ripple*25.0),6.0);
+          float stones=caveNoise(roof*8.0);float foam=positivePow(caveNoise(vRiver*vec2(2.0,20.0)+ripple*25.0),6.0);
           vec3 water=vec3(.004,.014,.023)+vec3(.022,.032,.028)*stones*shore;
           water+=reflection+stellarCaustics(vec3(vRiver+ripple*6.0,-3.8))*(.72+foam*1.5);
           // Narrow white streaks reveal moving liquid even outside the light fans.
           water+=foam*.006+shore*foam*.06;
-          gl_FragColor=vec4(water,1.0);
+          gl_FragColor=vec4(safeHDR(water),1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }`}});
   (mirror.material as T.ShaderMaterial).uniforms.caveScroll=optics.uniforms.caveScroll;
   (mirror.material as T.ShaderMaterial).uniforms.caveTime=optics.uniforms.caveTime;
+  (mirror.material as T.ShaderMaterial).uniforms.caveEye=optics.uniforms.caveEye;
   mirror.name='prism-live-river';mirror.position.z=-3.8;mirror.frustumCulled=false;
   const draw=mirror.onBeforeRender;
   let actors:T.Object3D[]=[],priming=false,reflecting=false;
