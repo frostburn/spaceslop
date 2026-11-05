@@ -272,6 +272,7 @@ export function createInterceptorRig(cannonX: number) {
     part(muzzle, new T.RingGeometry(0.234, 0.282, 8), trim, 0, 0, 0.012);
     const glow = part(muzzle, new T.CircleGeometry(0.22, 10),
       new T.MeshBasicMaterial({ color: 0xff9251, transparent: true, depthWrite: false }), 0, 0, 0.021);
+    pivot(glow, side < 0 ? 'laser_contact_L' : 'laser_contact_R', 0, 0, 0.01);
     return { side, pod, glow };
   });
 

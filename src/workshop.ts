@@ -12,6 +12,8 @@ import { createMushroomCluster } from './hive-fungi';
 import { createDroneRig, createFighterRig, createScoutRig } from './ship-rigs';
 import { createWingPod } from './wing-pod';
 import type { WingWeapon } from './wing';
+import { createPowerupGraphic } from './powerup-graphics';
+import { createContinuousLaser, createProjectileBatch, projectileNames, type ProjectileKind } from './projectile-graphics';
 import './workshop.css';
 
 function element<T extends HTMLElement>(id: string) {
@@ -97,6 +99,20 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     };
   }
 
+  function projectileAsset(kind: ProjectileKind) {
+    const batch = createProjectileBatch(kind);
+    return { root: batch.root, duration: 2, pose(time: number) {
+      batch.draw([{ x: 0, y: 0, z: 0, vx: 0, vy: 15, vz: 0 }], time);
+      return projectileNames[kind];
+    } };
+  }
+
+  function pickupAsset(weapon: WingWeapon) {
+    const pickup = createPowerupGraphic();
+    return { root: pickup.root, duration: 3, pose(time: number) { pickup.pose(weapon, time); return 'beacon'; } };
+  }
+  const beam = createContinuousLaser();
+
   const assets = {
     fighter: shipAsset(createFighterRig().root),
     scout: shipAsset(scout),
@@ -105,6 +121,14 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     cannon: weaponAsset('cannon'),
     laser: weaponAsset('laser'),
     omega: weaponAsset('omega'),
+    ammo_ship: projectileAsset('ship'), ammo_drone: projectileAsset('drone'),
+    ammo_homing: projectileAsset('homing'), ammo_cannon: projectileAsset('cannon'),
+    ammo_omega: projectileAsset('omega'), ammo_hostile: projectileAsset('hostile'), ammo_spore: projectileAsset('spore'),
+    beam_laser: { root: beam.root, duration: 2, pose(time: number) {
+      beam.root.visible = true; beam.draw({ x: 0, y: -1 }, { x: 0, y: 1 }, 0.8, time, true); return 'contact';
+    } },
+    pickup_homing: pickupAsset('homing'), pickup_cannon: pickupAsset('cannon'),
+    pickup_laser: pickupAsset('laser'), pickup_omega: pickupAsset('omega'),
     ant: {
       root: ant.root,
       duration: 3.1,
