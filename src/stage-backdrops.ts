@@ -64,12 +64,12 @@ export function createStageBackdrops() {
     const aspect = (width / height) / (WIDTH / HEIGHT);
     crop.set(Math.min(1, 1 / aspect), Math.min(1, aspect));
   }
-  loadEncounterTexture('preserve', (texture) => {
+  const preserveReady = loadEncounterTexture('preserve', (texture) => {
     cropToField(texture, uniforms.preserveCrop.value);
     uniforms.preserveMap.value = texture;
     uniforms.hasPreserve.value = 1;
   });
-  loadEncounterTexture('shipyard', (texture) => {
+  const shipyardReady = loadEncounterTexture('shipyard', (texture) => {
     cropToField(texture, uniforms.shipyardCrop.value);
     uniforms.shipyardMap.value = texture;
     uniforms.hasShipyard.value = 1;
@@ -77,6 +77,7 @@ export function createStageBackdrops() {
 
   return {
     root,
+    ready: Promise.all([preserveReady, shipyardReady]),
     get hasPreserve() { return Boolean(uniforms.hasPreserve.value); },
     get hasShipyard() { return Boolean(uniforms.hasShipyard.value); },
     update(reveal: number, scroll: number, perspectiveDistance?: number) {

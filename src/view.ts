@@ -104,6 +104,7 @@ export class FlightView {
     new T.MeshBasicMaterial({ color: teal, transparent: true, depthWrite: false }),
   );
   private stars: T.Points;
+  private texturesReady: Promise<(T.Texture | undefined)[][]>;
   private swing = 0;
   private stageTime = 0;
   private animationTime = 0;
@@ -136,7 +137,7 @@ export class FlightView {
     this.stars = new T.Points(geometry, new T.PointsMaterial({ color: 0x607796, size: 0.07 }));
     this.stars.frustumCulled = false;
     this.boss.root.position.set(0, BOSS_Y, BOSS_DEPTH);
-    loadEncounterTextures(this.boss, this.raptor);
+    this.texturesReady = Promise.all([this.backdrops.ready, loadEncounterTextures(this.boss, this.raptor)]);
     const scout = createScoutRig();
     this.enemies = Array.from({ length: 12 }, () => {
       const root = scout.clone();
@@ -147,6 +148,52 @@ export class FlightView {
       this.preserveEdges.root, this.shipyard.root, this.backdrops.root,
       this.pulse, this.shotMeshes, this.droneShots, this.threatMeshes, ...this.enemies.map(({ root }) => root), ...this.markers,
       ...Object.values(this.wingProjectiles), ...this.wingLasers, ...this.drops);
+  }
+
+  async warmup(signal: AbortSignal, repaint: () => void) {
+    const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    const textures = (await this.texturesReady).flat();
+    await nextFrame();
+    if (signal.aborted) return;
+
+    const camera = new T.OrthographicCamera(-24, 24, 24, -24, 0.1, 240);
+    // Without parallel compilation, let each small draw compile its own shaders.
+    const compiled = this.renderer.extensions.has('KHR_parallel_shader_compile')
+      ? this.renderer.compileAsync(this.scene, camera) : undefined;
+    for (const texture of textures) {
+      if (!texture) continue;
+      await nextFrame();
+      if (signal.aborted) return;
+      this.renderer.initTexture(texture);
+    }
+    await compiled;
+
+    // Use the actual canvas framebuffer so the draws prime the same programs and buffers as play.
+    const stage: T.Object3D[] = [this.raptor.root];
+    if (this.backdrops.hasPreserve || this.backdrops.hasShipyard) stage.push(this.backdrops.root);
+    const boss: T.Object3D[] = [this.boss.root, this.cannonMarker, ...this.markers];
+    if (!this.backdrops.hasShipyard) boss.push(this.shipyard.root);
+    for (const objects of [stage, boss]) {
+      await nextFrame();
+      if (signal.aborted) return;
+      camera.position.set(0, 0, 95).applyQuaternion(this.plane.quaternion);
+      camera.up.set(0, 1, 0).applyQuaternion(this.plane.quaternion);
+      camera.lookAt(0, 0, 0);
+      const visible = objects.map((object) => object.visible);
+      const viewport = this.renderer.getViewport(new T.Vector4());
+      for (const object of objects) object.visible = true;
+      this.renderer.setViewport(0, 0, 16, 16);
+      this.renderer.setScissor(0, 0, 16, 16);
+      this.renderer.setScissorTest(true);
+      try {
+        this.renderer.render(this.scene, camera);
+      } finally {
+        objects.forEach((object, index) => { object.visible = visible[index]; });
+        this.renderer.setScissorTest(false);
+        this.renderer.setViewport(viewport);
+        repaint();
+      }
+    }
   }
 
   resize(width: number, height: number) {

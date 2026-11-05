@@ -67,6 +67,7 @@ let pointer: { id: number; x: number; y: number; dragging: boolean } | undefined
 let pendingUpdate = false;
 let offlineReady = false;
 let view: FlightView | undefined;
+let preparing: AbortController | undefined;
 
 try {
   view = new FlightView(canvas);
@@ -110,7 +111,8 @@ function syncUI() {
   selectedPortrait.classList.toggle('perk-flash', active && flight.perkTime > 1.15);
   update.hidden = !pendingUpdate || !betweenRuns;
   let tip = 'Tap for drone · Drag to steer';
-  if (screen === 'title' && offlineReady) tip = 'Ready offline';
+  if (preparing) tip = 'Preparing graphics…';
+  else if (screen === 'title' && offlineReady) tip = 'Ready offline';
   else if (flight.droneWeapon === 'towline') {
     tip = flight.phase === 'boss' ? 'Sweep the arc across the green cannon.' : 'Park the drone · Sweep the arc';
   } else if (flight.phase === 'boss') tip = 'Tap the green cannon. Dodge amber rings.';
@@ -126,6 +128,26 @@ function syncUI() {
     else if (flight.drops.length) tip = 'Fly through the drop to equip it';
   }
   if (status.textContent !== tip) status.textContent = tip;
+}
+
+async function prepareGraphics() {
+  if (!view) return;
+  const controller = new AbortController();
+  preparing = controller;
+  start.disabled = true;
+  syncUI();
+  try {
+    const currentView = view;
+    await currentView.warmup(controller.signal, () => currentView.render(flight));
+  } catch (error) {
+    console.warn('Graphics warm-up did not complete.', error);
+  } finally {
+    if (preparing === controller) {
+      preparing = undefined;
+      start.disabled = false;
+      syncUI();
+    }
+  }
 }
 
 function resetInput() {
@@ -155,7 +177,7 @@ function showResults() {
 }
 
 start.addEventListener('click', () => {
-  if (!view || screen === 'active') return;
+  if (!view || start.disabled || screen === 'active') return;
   if (screen !== 'paused') {
     flight = new Flight(
       droneWeapon.value === 'towline' ? 'towline' : 'sentry',
@@ -187,12 +209,14 @@ window.addEventListener('blur', pauseFlight);
 window.addEventListener('pagehide', pauseFlight);
 canvas.addEventListener('webglcontextlost', (event) => {
   event.preventDefault();
+  preparing?.abort();
+  preparing = undefined;
   pauseFlight();
   start.disabled = true;
+  syncUI();
 });
 canvas.addEventListener('webglcontextrestored', () => {
-  start.disabled = false;
-  requestAnimationFrame(() => view?.render(flight));
+  void prepareGraphics();
 });
 
 canvas.addEventListener('pointerdown', (event) => {
@@ -276,4 +300,5 @@ function frame(now: number) {
   requestAnimationFrame(frame);
 }
 syncUI();
+void prepareGraphics();
 requestAnimationFrame(frame);
