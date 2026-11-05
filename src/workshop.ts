@@ -117,9 +117,10 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const iceField = createIceScenery();
 
   const assets = {
-    ice_field: { root: iceField.root, duration: ICE_DURATION,
+    ice_field: { root: iceField.root, duration: ICE_DURATION + 30,
       bounds: new T.Box3(new T.Vector3(-7, -8, -7), new T.Vector3(7, 8, 3)),
-      pose(time: number) { iceField.update(time / ICE_DURATION, 0); return iceSection(time / ICE_DURATION); } },
+      pose(time: number) { iceField.update(Math.min(1, time / ICE_DURATION), time > ICE_DURATION ? 1 : 0, time);
+        return time > ICE_DURATION ? 'Boss pursuit' : iceSection(time / ICE_DURATION); } },
     fighter: shipAsset(createFighterRig().root),
     scout: shipAsset(scout),
     drone: shipAsset(createDroneRig()),

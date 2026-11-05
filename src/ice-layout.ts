@@ -1,3 +1,4 @@
+import { Euler, Quaternion, Vector3 } from 'three';
 import { HEIGHT } from './playfield';
 
 export const ICE_SCREENS = 10;
@@ -31,3 +32,25 @@ export const iceWrecks = [
 ] as const;
 export function iceScroll(progress: number) { return Math.max(0, Math.min(1, progress)) * ICE_TRAVEL; }
 export function iceSection(progress: number) { return iceSections[Math.min(9, Math.floor(Math.max(0, progress) * 10))]; }
+
+// Constant angular velocities model residual spin; all motion is sampled from flight time.
+// Built-on outcrops alone keep a fixed orientation relative to the lane.
+export const iceMotions = iceRocks.map((rock, i) => {
+  const z = random(i * 7 + 101) * 2 - 1, azimuth = random(i * 7 + 103) * Math.PI * 2;
+  const radial = Math.sqrt(1 - z * z);
+  return { axis: new Vector3(radial * Math.cos(azimuth), radial * Math.sin(azimuth), z),
+    rate: rock.solid ? 0 : 0.012 + random(i * 7 + 107) * 0.035,
+    initial: new Quaternion().setFromEuler(new Euler(rock.solid ? 0 : random(i * 7 + 109) * Math.PI * 2,
+      rock.solid ? 0 : random(i * 7 + 113) * Math.PI * 2, rock.angle)) };
+});
+export function iceOrientation(index: number, time: number, out: Quaternion) {
+  const motion = iceMotions[index];
+  return out.setFromAxisAngle(motion.axis, Math.max(0, time) * motion.rate).multiply(motion.initial);
+}
+export function iceTravel(time: number) { return Math.max(0, time) * ICE_TRAVEL / ICE_DURATION; }
+export function iceRockY(index: number, time: number) {
+  const rock = iceRocks[index], y = rock.y - iceTravel(time);
+  // Only decorative rocks recycle, beyond the visible region. Solid stations pass once.
+  const length = ICE_SCREENS * HEIGHT;
+  return rock.solid ? y : ((y + 24) % length + length) % length - 24;
+}

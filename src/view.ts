@@ -113,6 +113,7 @@ export class FlightView {
   private texturesReady: Promise<(T.Texture | undefined)[][]>;
   private swing = 0;
   private stageTime = 0;
+  private iceTime = 0;
   private animationTime = 0;
   private lastFlight?: Flight;
   private fighterMotion = trackMotion();
@@ -247,6 +248,7 @@ export class FlightView {
     this.lastFlight = flight;
     this.animationTime = newFlight ? 0 : this.animationTime + elapsed;
     if (newFlight) {
+      this.iceTime = 0;
       this.seenShots = new WeakSet(); this.seenDrops = new WeakMap(); this.previousDrops = [];
       this.enemyVitals.clear(); this.combat.clear(); this.playerMuzzle.clear(); this.droneMuzzle.clear();
       this.previousBossHealth = flight.bossHealth; this.previousBossLaserDamage = flight.bossLaserDamage;
@@ -385,7 +387,10 @@ export class FlightView {
     const perspectiveDistance = this.swing === 0 && flight.level === 'preserve' ? undefined : distance;
     this.ice.root.visible = flight.level === 'ice';
     if (this.ice.root.visible) {
-      this.ice.update(flight.hiveProgress, reveal);
+      if (flight.phase === 'stage') this.iceTime = flight.time;
+      if (flight.phase === 'approach') this.iceTime = flight.stageDuration + flight.time;
+      if (flight.phase === 'boss') this.iceTime = flight.stageDuration + TRANSITION_TIME + flight.time;
+      this.ice.update(flight.hiveProgress, reveal, this.iceTime);
       this.stars.visible = true; this.stars.position.y = 0;
       this.preserveEdges.root.visible = this.shipyard.root.visible = this.backdrops.root.visible = this.bridge.root.visible = this.hive.root.visible = false;
       return;
