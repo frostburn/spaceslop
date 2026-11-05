@@ -9,12 +9,12 @@ export const marineSpecs = {
 export function marineMotion(kind: MarineKind, age: number, lane: number) {
   const sweep = kind === 'plesiosaur';
   const hunt = sweep ? 0 : Math.max(0, Math.min(1, (age - 1.25) / .7));
-  const frequency = sweep ? 1.1 : 1.7;
-  const amplitude = sweep ? .7 : .55;
+  const frequency = sweep ? .75 : 1.7;
+  const amplitude = sweep ? .35 : .55;
   const wave = Math.sin(age * frequency);
   return { x: lane + wave * amplitude, speed: marineSpecs[kind].speed + hunt * 1.15,
     heading: -Math.atan2(Math.cos(age * frequency) * amplitude * frequency, marineSpecs[kind].speed + hunt * 1.15),
-    bank: Math.cos(age * frequency) * (sweep ? .16 : .65), hunt };
+    bank: Math.cos(age * frequency) * (sweep ? .055 : .65), hunt };
 }
 
 export const LEVIATHAN_HP = 60;
@@ -27,5 +27,5 @@ export function leviathanMotion(time: number) {
   const windup = Math.max(0,Math.min(1,(elapsed - LEVIATHAN_WINDUP) / (LEVIATHAN_FIRE - LEVIATHAN_WINDUP)));
   const recoil = elapsed < LEVIATHAN_FIRE ? 0 : Math.max(0,1-(elapsed-LEVIATHAN_FIRE)/.45);
   return { windup: elapsed < LEVIATHAN_FIRE ? windup : 0, recoil,
-    jaw: elapsed < LEVIATHAN_FIRE ? .12 + windup * .7 : .12 + recoil * .78 };
+    jaw: elapsed < LEVIATHAN_FIRE ? .02 + windup * .88 : .02 + recoil * .90 };
 }
