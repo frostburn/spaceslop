@@ -3,6 +3,7 @@ import {
 } from './encounters';
 import { marineMotion, marineSpecs, marineBodyHit, schoolDelay, type MarineSchool, type MarineFormation, LEVIATHAN_HP, LEVIATHAN_INTERVAL, LEVIATHAN_WINDUP, LEVIATHAN_FIRE, LEVIATHAN_TRAVEL, type MarineKind } from './marine';
 import { levels, type LevelId } from './levels';
+import { prismSolids, PRISM_TRAVEL } from './prism-layout';
 import { IceCollision } from './ice-collision';
 import { ICE_CAMERA_DISTANCE } from './ice-layout';
 import { DRONE_HULL, FIGHTER_HULL, HiveCollision, POD_BOUNDS, POD_HULL } from './hive-collision';
@@ -65,6 +66,15 @@ const stageWaves: Wave[] = [
   { time: 3.6, lanes: [-2, 2], raptor: 0, carrier: 1, drop: 'cannon' },
   { time: 6.6, lanes: [-3, 0, 3], carrier: 0, drop: 'laser' },
   { time: 9.6, lanes: [-1.3, 1.3], carrier: 1, drop: 'omega' },
+];
+
+export const prismWaves: Wave[] = [
+  {time:.6,lanes:[-2,0,2],carrier:0,drop:'homing'},
+  {time:3.8,lanes:[-1.4,1.4],carrier:1,drop:'cannon'},
+  {time:7.2,lanes:[-2.2,0,2.2],carrier:1,drop:'laser'},
+  {time:10.8,lanes:[-1.8,1.8],carrier:0,drop:'omega'},
+  {time:14.8,lanes:[-2,0,2],carrier:2,drop:'homing'},
+  {time:18.2,lanes:[-1.3,1.3],carrier:0,drop:'laser'},
 ];
 
 const hiveWaves: Wave[] = [
@@ -186,6 +196,7 @@ export class Flight {
   ) {
     this.droneWeapon = droneWeapon;
     this.pilot = pilot;
+    if (level === 'prism') this.obstacles = new IceCollision(prismSolids,PRISM_TRAVEL);
     if (level === 'broodlock') this.obstacles = new HiveCollision();
     if (level === 'ice') { this.obstacles = new IceCollision(); this.bossHealth=LEVIATHAN_HP; }
     if (droneWeapon === 'towline') this.droneCooldown = TOWLINE_INTERVAL;
@@ -209,7 +220,7 @@ export class Flight {
     if (!this.obstacles) return;
     const reveal = this.phase === 'stage' ? 0 : this.phase === 'approach' ? clamp(this.time / TRANSITION_TIME, 0, 1) : 1;
     const eased = reveal * reveal * (3 - 2 * reveal);
-    const distance = this.level === 'ice' ? ICE_CAMERA_DISTANCE : HIVE_CAMERA_DISTANCE;
+    const distance = this.level === 'ice' || this.level === 'prism' ? ICE_CAMERA_DISTANCE : HIVE_CAMERA_DISTANCE;
     this.obstacles.update(this.hiveProgress, distance + (BOSS_CAMERA_DISTANCE - distance) * eased);
   }
 
@@ -581,7 +592,7 @@ export class Flight {
   }
 
   private stepStage(dt: number) {
-    const wave = (this.level === 'broodlock' ? hiveWaves : this.level === 'ice' ? iceWaves : stageWaves)[this.nextWave];
+    const wave = (this.level === 'broodlock' ? hiveWaves : this.level === 'ice' ? iceWaves : this.level === 'prism' ? prismWaves : stageWaves)[this.nextWave];
     if (wave && this.time >= wave.time) {
       this.nextWave++;
       this.enemies.push(...wave.lanes.map((lane, index) => {
@@ -609,7 +620,7 @@ export class Flight {
         enemy.y -= (motion?.speed ?? 2.25) * dt;
         if (!motion || motion.pose === 'glide') enemy.x = enemy.lane + Math.sin(enemy.age * 1.55) * 0.46;
       }
-      if (this.level === 'ice' && this.obstacles && enemy.y < 9) {
+      if ((this.level === 'ice' || this.level === 'prism') && this.obstacles && enemy.y < 9) {
         const hull = enemy.marine ? [{x:0,y:0,radius:marineSpecs[enemy.marine].radius}] : enemy.raptor ? [{ x: 0, y: 0, radius: 1.05 }] : DRONE_HULL;
         this.obstacles.move(enemy, 0, 0, hull, { minX: -2.4, maxX: 2.4, minY: -10, maxY: 10 });
       }

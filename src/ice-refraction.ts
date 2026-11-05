@@ -3,7 +3,7 @@ import * as T from 'three';
 // Three nearest asteroid surfaces, each with a depth and stable body ID. Captures
 // use the sky-only ice shader; the final pass can look past itself and foreground
 // objects without recursive framebuffer feedback. No actors enter these buffers.
-export function iceRefraction() {
+export function iceRefraction(batchPrefix = 'ice-rocks-') {
   const layers = Array.from({ length: 3 }, () => new T.WebGLRenderTarget(1, 1, {
     type: T.HalfFloatType, minFilter: T.NearestFilter, magFilter: T.NearestFilter,
     depthTexture: new T.DepthTexture(1, 1, T.UnsignedIntType),
@@ -25,7 +25,7 @@ export function iceRefraction() {
     // Bound mobile fill cost; all bodies remain instanced in six shared batches.
     const scale = Math.min(0.5, 512 / size.y), width = Math.max(1, Math.round(size.x * scale)), height = Math.max(1, Math.round(size.y * scale));
     for (const layer of layers) if (layer.width !== width || layer.height !== height) layer.setSize(width, height);
-    decorations ??= [ ...field.children.filter(child => !child.name.startsWith('ice-rocks-')), ...root.children.filter(child => child !== field) ];
+    decorations ??= [ ...field.children.filter(child => !child.name.startsWith(batchPrefix)), ...root.children.filter(child => child !== field) ];
     decorations.forEach((child, i) => { visible[i] = child.visible; child.visible = false; });
     const parent = root.parent, target = renderer.getRenderTarget(), alpha = renderer.getClearAlpha();
     const scissor = renderer.getScissorTest(); renderer.getClearColor(clear);
