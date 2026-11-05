@@ -31,7 +31,7 @@ type Shot = Point & {
 type Threat = Shot & { graze?: 'near' | 'counted' };
 type Enemy = Point & {
   lane: number; age: number; fire: number; hp: number; drop?: WingWeapon; raptor?: boolean; ant?: 'worker' | 'soldier';
-  course?: number; courseAt?: number; heading?: number;
+  course?: number; courseAt?: number; heading?: number; laserDamage?: number;
 };
 type Drop = Point & { weapon: WingWeapon };
 type Wing = {
@@ -114,6 +114,7 @@ export class Flight {
   charges = 2;
   score = 0;
   bossHealth = BOSS_HP;
+  bossLaserDamage = 0;
   firedCannonX = 0;
   bossRecoil = 0;
   enemies: Enemy[] = [];
@@ -474,8 +475,8 @@ export class Flight {
     wing.laserHold = target !== undefined && target === wing.laserTarget ? wing.laserHold + dt : 0;
     wing.laserTarget = target;
     const damage = (1 + 2.5 * Math.min(wing.laserHold / 0.85, 1)) * dt;
-    if (enemy) this.damageEnemy(enemy, damage);
-    if (boss && target !== undefined) this.damageBoss(damage);
+    if (enemy) this.damageEnemy(enemy, damage, true);
+    if (boss && target !== undefined) this.damageBoss(damage, true);
   }
 
   private guideMissile(shot: Shot, boss: boolean, dt: number) {
@@ -633,17 +634,21 @@ export class Flight {
     shot.z += shot.vz * dt;
   }
 
-  private damageEnemy(enemy: Enemy, damage: number) {
+  private damageEnemy(enemy: Enemy, damage: number, laser = false) {
+    const before = enemy.hp;
     enemy.hp = Math.max(0, enemy.hp - damage);
+    if (laser) enemy.laserDamage = (enemy.laserDamage ?? 0) + before - enemy.hp;
     if (enemy.hp === 0) {
       this.score += 100;
       if (enemy.drop) this.drops.push({ x: enemy.x, y: enemy.y, weapon: enemy.drop });
     }
   }
 
-  private damageBoss(damage: number) {
+  private damageBoss(damage: number, laser = false) {
     if (this.phase !== 'boss') return;
+    const before = this.bossHealth;
     this.bossHealth = Math.max(0, this.bossHealth - damage);
+    if (laser) this.bossLaserDamage += before - this.bossHealth;
     if (this.bossHealth === 0) {
       this.score += 1000;
       this.enter('won');

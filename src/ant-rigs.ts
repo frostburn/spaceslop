@@ -155,6 +155,7 @@ export function createHiveGuardian(cannonX: number) {
     lip.rotation.x = Math.PI / 2;
     const glow = part(pod, oval, sporeGlow, 0, 0, BOSS_MUZZLE_Z);
     glow.scale.setScalar(0.19);
+    pivot(glow, side < 0 ? 'laser_contact_L' : 'laser_contact_R', 0, 0, 1.05);
     return { side, pod, glow };
   });
   return {

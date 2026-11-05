@@ -5,6 +5,19 @@ const epsilon = 1e-7;
 const axes = ['x', 'y'] as const;
 const opaque = (material: T.Material) => material.visible && material.depthWrite && !material.transparent;
 
+// Boss damage belongs to the exposed muzzle, not the nearest edge of the whole hull.
+// Use the posed model anchor so recoil and the guardian's expanding vent stay aligned.
+export function createBossLaserContact(plane: T.Object3D, model: T.Object3D) {
+  const left = model.getObjectByName('laser_contact_L')!, right = model.getObjectByName('laser_contact_R')!;
+  const point = new T.Vector3(), result = new T.Vector2();
+  return (cannonX: number, distance: number) => {
+    (cannonX < 0 ? left : right).getWorldPosition(point);
+    plane.worldToLocal(point);
+    const projection = distance / (distance - point.z);
+    return result.set(point.x * projection, point.y * projection);
+  };
+}
+
 // Clip the screen-space beam against opaque model triangles. A ray at the simulation's
 // z=0 would pass underneath raised shells; bounding boxes alone would hit empty space.
 export function createLaserContactTrace(plane: T.Object3D) {

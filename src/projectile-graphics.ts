@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { shipAlloy } from './encounter-surfaces';
 import type { Flight } from './game';
 import { wingWeapons } from './wing';
+import { createLaserAblation } from './laser-ablation';
 
 type Shot = Flight['shots'][number];
 export const projectileKinds = ['ship', 'drone', 'homing', 'cannon', 'omega', 'hostile', 'spore'] as const;
@@ -179,29 +180,16 @@ export function createContinuousLaser() {
   });
   beam.add(new T.Mesh(new T.PlaneGeometry(0.24, 1), material),
     new T.Mesh(new T.PlaneGeometry(0.043, 1), new T.MeshBasicMaterial({ color: 0xffe8fc, transparent: true, opacity: 0.94, depthWrite: false })));
-  const impact = new T.Group(); impact.name = 'laser-contact'; impact.renderOrder = 21;
-  const glint = new T.Mesh(new T.PlaneGeometry(0.38, 0.038), new T.MeshBasicMaterial({
-    color: 0xffdbf7, transparent: true, depthTest: false, depthWrite: false, blending: T.AdditiveBlending }));
-  const cross = glint.clone(); cross.rotation.z = Math.PI / 2;
-  const halo = new T.Mesh(new T.RingGeometry(0.11, 0.15, 20), new T.MeshBasicMaterial({
-    color: wingWeapons.laser.color, transparent: true, opacity: 0.75, depthTest: false, depthWrite: false,
-    blending: T.AdditiveBlending }));
-  const core = new T.Mesh(new T.OctahedronGeometry(0.085), new T.MeshBasicMaterial({
-    color: 0xfff5fc, transparent: true, depthTest: false, depthWrite: false }));
-  impact.add(glint, cross, halo, core);
-  for (const mesh of impact.children) mesh.renderOrder = 21;
-  root.add(beam, impact);
+  const ablation = createLaserAblation();
+  root.add(beam, ablation.root);
   root.visible = false;
   function draw(origin: { x: number; y: number }, end: { x: number; y: number }, hold: number, time: number, contact: boolean) {
     const dx = end.x - origin.x, dy = end.y - origin.y;
-    beam.position.set((origin.x + end.x) / 2, (origin.y + end.y) / 2, 0.055);
+    beam.position.set((origin.x + end.x) / 2, (origin.y + end.y) / 2, 0);
     beam.rotation.z = Math.atan2(-dx, dy);
     beam.scale.set(1 + Math.min(hold, 0.85) * 0.75, Math.hypot(dx, dy), 1);
     material.uniforms.clock.value = time;
-    impact.visible = contact;
-    impact.position.set(end.x, end.y, 0.11);
-    impact.rotation.z = time * 8;
-    impact.scale.setScalar(0.65 + Math.min(hold, 0.85) * 0.55 + Math.sin(time * 36) * 0.08);
+    ablation.draw(origin, end, hold, time, contact);
   }
   return { root, draw, prime() { root.visible = true; draw({ x: 0, y: 0 }, { x: 0, y: 4 }, 1, 0, true); } };
 }

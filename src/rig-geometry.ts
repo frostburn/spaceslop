@@ -9,7 +9,7 @@ export function part<M extends T.Material>(
   return mesh;
 }
 
-export function pivot(parent: T.Group, name: string, x: number, y: number, z: number) {
+export function pivot(parent: T.Object3D, name: string, x: number, y: number, z: number) {
   const group = new T.Group();
   group.name = name;
   group.position.set(x, y, z);

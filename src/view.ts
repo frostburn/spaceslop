@@ -19,7 +19,7 @@ import { antScales } from './ant-navigation';
 import { WING_FLASH_TIME, wingWeapons, type WingWeapon } from './wing';
 import { createWingPod } from './wing-pod';
 import { createCombatEffects } from './combat-effects';
-import { createLaserContactTrace } from './laser-contact';
+import { createBossLaserContact, createLaserContactTrace } from './laser-contact';
 import { createPowerupGraphic } from './powerup-graphics';
 import { createContinuousLaser, createMuzzleFlash, createProjectileBatch, projectileKinds, type ProjectileKind } from './projectile-graphics';
 
@@ -93,6 +93,10 @@ export class FlightView {
     .map((weapon) => ({ weapon, ...createWingPod(weapon) })));
   private wingLasers = Array.from({ length: 2 }, createContinuousLaser);
   private laserContact = createLaserContactTrace(this.plane);
+  private bossLaserContact = {
+    preserve: createBossLaserContact(this.plane, this.boss.root),
+    broodlock: createBossLaserContact(this.plane, this.hiveBoss.root),
+  };
   private drops = Array.from({ length: 12 }, createPowerupGraphic);
   private markers = Array.from({ length: 3 }, () => new T.Mesh(
     new T.RingGeometry(0.53, 0.61, 24),
@@ -113,8 +117,9 @@ export class FlightView {
   private seenShots = new WeakSet<Flight['shots'][number]>();
   private seenDrops = new WeakMap<Flight['drops'][number], number>();
   private previousDrops: Flight['drops'] = [];
-  private enemyVitals = new Map<Flight['enemies'][number], { hp: number; at: number }>();
+  private enemyVitals = new Map<Flight['enemies'][number], { hp: number; laserDamage: number; at: number }>();
   private previousBossHealth = 30;
+  private previousBossLaserDamage = 0;
   private previousHull = 4;
   private bossHitAt = -1;
   private rotation = new T.Quaternion();
@@ -240,7 +245,8 @@ export class FlightView {
     if (newFlight) {
       this.seenShots = new WeakSet(); this.seenDrops = new WeakMap(); this.previousDrops = [];
       this.enemyVitals.clear(); this.combat.clear(); this.playerMuzzle.clear(); this.droneMuzzle.clear();
-      this.previousBossHealth = flight.bossHealth; this.previousHull = flight.hull; this.bossHitAt = -1;
+      this.previousBossHealth = flight.bossHealth; this.previousBossLaserDamage = flight.bossLaserDamage;
+      this.previousHull = flight.hull; this.bossHitAt = -1;
     }
     if (flight.phase === 'stage') this.swing = 0;
     if (flight.phase === 'approach') this.swing = Math.min(flight.time / TRANSITION_TIME, 1);
@@ -419,13 +425,13 @@ export class FlightView {
       if (laser.root.visible && wing.beamEnd) {
         const target = wing.laserTarget;
         let model: T.Object3D | undefined;
-        if (typeof target === 'number') model = flight.level === 'broodlock' ? this.hiveBoss.root : this.boss.root;
-        else if (target) {
+        if (target && typeof target !== 'number') {
           const index = flight.enemies.indexOf(target);
           if (index >= 0) model = target.raptor ? this.raptor.root : target.ant ? this.ants[index].root : this.enemies[index].root;
         }
-        const end = model ? this.laserContact(origin, wing.beamEnd, model, distance) : wing.beamEnd;
-        laser.draw(origin, end, wing.laserHold, this.animationTime, target !== undefined);
+        const end = typeof target === 'number' ? this.bossLaserContact[flight.level](target, distance ?? BOSS_CAMERA_DISTANCE)
+          : model ? this.laserContact(origin, wing.beamEnd, model, distance) : wing.beamEnd;
+        laser.draw(origin, end, wing.laserHold, this.animationTime, typeof target === 'number' || Boolean(model));
       }
     }
   }
@@ -441,15 +447,19 @@ export class FlightView {
     this.playerMuzzle.update(elapsed, shipFired);
     this.droneMuzzle.update(elapsed, droneFired);
     for (const [enemy, previous] of this.enemyVitals) {
-      if (enemy.hp < previous.hp && (enemy.hp === 0 || this.animationTime - previous.at > 0.07)) {
+      const laserDamage = (enemy.laserDamage ?? 0) - previous.laserDamage;
+      if (previous.hp - enemy.hp - laserDamage > 1e-6 && (enemy.hp === 0 || this.animationTime - previous.at > 0.07)) {
         this.combat.emit(enemy.hp === 0 ? 'kill' : 'hit', enemy, enemy.hp === 0 ? orange : teal);
         previous.at = this.animationTime; emitted = true;
       }
       previous.hp = enemy.hp;
+      previous.laserDamage = enemy.laserDamage ?? 0;
       if (!flight.enemies.includes(enemy)) this.enemyVitals.delete(enemy);
     }
-    for (const enemy of flight.enemies) if (!this.enemyVitals.has(enemy)) this.enemyVitals.set(enemy, { hp: enemy.hp, at: -1 });
-    if (flight.bossHealth < this.previousBossHealth && this.animationTime - this.bossHitAt > 0.07) {
+    for (const enemy of flight.enemies) if (!this.enemyVitals.has(enemy)) this.enemyVitals.set(enemy,
+      { hp: enemy.hp, laserDamage: enemy.laserDamage ?? 0, at: -1 });
+    const bossLaserDamage = flight.bossLaserDamage - this.previousBossLaserDamage;
+    if (this.previousBossHealth - flight.bossHealth - bossLaserDamage > 1e-6 && this.animationTime - this.bossHitAt > 0.07) {
       this.combat.emit(flight.bossHealth === 0 ? 'kill' : 'hit', { x: flight.exposedCannonX, y: BOSS_Y, z: BOSS_DEPTH + BOSS_MUZZLE_Z }, teal);
       this.bossHitAt = this.animationTime; emitted = true;
     }
@@ -463,6 +473,7 @@ export class FlightView {
     }
     this.previousDrops = flight.drops;
     this.previousBossHealth = flight.bossHealth; this.previousHull = flight.hull;
+    this.previousBossLaserDamage = flight.bossLaserDamage;
     if (emitted) this.combat.update(0);
   }
 }
