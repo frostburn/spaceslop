@@ -227,6 +227,7 @@ export class FlightView {
       this.renderer.setScissor(0, 0, 16, 16);
       this.renderer.setScissorTest(true);
       try {
+        this.ice.capture(this.renderer, camera);
         this.renderer.render(this.scene, camera);
       } finally {
         objects.forEach((object, index) => { object.visible = visible[index]; });
@@ -379,6 +380,7 @@ export class FlightView {
     this.pulse.position.copy(this.player.root.position);
     this.pulse.scale.setScalar(1 + (0.3 - flight.pulseFlash) * 25);
     this.pulse.material.opacity = flight.pulseFlash / 0.3;
+    this.ice.capture(this.renderer, camera);
     this.renderer.render(this.scene, camera);
   }
 

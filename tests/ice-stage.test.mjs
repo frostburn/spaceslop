@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { createServer } from 'vite';
-import { Quaternion, Vector3 } from 'three';
+import { Quaternion, Vector3, Group, Scene, Color } from 'three';
 const server = await createServer({ root: new URL('..', import.meta.url).pathname, configFile: false,
   server: { middlewareMode: true, hmr: false, ws: false }, optimizeDeps: { noDiscovery: true, entries: [] }, appType: 'custom' });
 after(() => server.close());
 const { Flight, STEP, iceWaves } = await server.ssrLoadModule('/src/game.ts');
 const { IceCollision } = await server.ssrLoadModule('/src/ice-collision.ts');
 const { ICE_DURATION, ICE_TRAVEL, ICE_SCREENS, iceSolids, iceRocks, iceMotions, iceOrientation, iceRockY, iceTravel, iceCorridorPoint, ICE_CORRIDOR_PITCH, ICE_SHIP_Y } = await server.ssrLoadModule('/src/ice-layout.ts');
+const { iceRefraction } = await server.ssrLoadModule('/src/ice-refraction.ts');
 const { asteroidGeometry } = await server.ssrLoadModule('/src/ice-surfaces.ts');
 const { iceIndustry, industryY } = await server.ssrLoadModule('/src/ice-industry.ts');
 const { FIGHTER_HULL, DRONE_HULL } = await server.ssrLoadModule('/src/hive-collision.ts');
@@ -131,4 +132,28 @@ test('industry density builds along the route and pursuit modules recycle beyond
     const y = industryY(recipe, time), next = industryY(recipe, time + .1);
     if (y > -22 && y < 72) assert(Math.abs(y - next - .16) < 1e-6, 'visible industry jumped');
   }
+});
+
+
+test('refraction captures preserve the rotated flight frame and restore renderer state after failure', () => {
+  const parent = new Scene(), root = new Group(), field = new Group(), rock = new Group(), decoration = new Group();
+  parent.rotation.x = -Math.PI / 2; parent.add(root); root.add(field, decoration); field.add(rock); rock.name = 'ice-rocks-0';
+  decoration.visible = false; parent.updateMatrixWorld(true);
+  const expected = root.matrixWorld.clone(), optics = iceRefraction();
+  let target = null, scissor = true, alpha = .7, clear = new Color(0x123456), calls = 0;
+  const renderer = {
+    getDrawingBufferSize: v => v.set(1080,1920), getRenderTarget: () => target,
+    getClearAlpha: () => alpha, getClearColor: v => v.copy(clear), getScissorTest: () => scissor,
+    setScissorTest: v => { scissor = v; }, setClearColor: (v,a) => { clear.set(v); alpha = a; },
+    setRenderTarget: v => { target = v; }, render: scene => {
+      scene.updateMatrixWorld(true); assert.deepEqual(root.matrixWorld.elements, expected.elements);
+      assert(target.height <= 512); assert(!decoration.visible);
+      for (const [name, uniform] of Object.entries(optics.uniforms)) if (name !== 'captureLayer') assert.notEqual(uniform.value, target.texture);
+      if (++calls === 2) throw new Error('capture interrupted');
+    },
+  };
+  assert.throws(() => optics.capture(renderer, {}, root, field), /capture interrupted/);
+  assert.equal(root.parent, parent); assert.equal(decoration.visible, false); assert.equal(target,null);
+  assert.equal(scissor,true); assert.equal(alpha,.7); assert.equal(clear.getHex(),0x123456);
+  assert.equal(optics.uniforms.captureLayer.value,0);
 });

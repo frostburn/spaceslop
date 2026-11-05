@@ -30,12 +30,16 @@ export function createIceScenery() {
   const root = new T.Group(); root.name = 'frostwake-scenery'; root.visible = false;
   const field = new T.Group(); field.name = 'asteroid-corridor'; root.add(field);
   const galaxy = createGalacticBackdrop(); root.add(galaxy.root);
-  const { surface, uniforms, textures } = iceOptics(galaxy);
+  const { surface, uniforms, textures, capture } = iceOptics(galaxy);
   const transform = new T.Object3D(), color = new T.Color();
   const batches = Array.from({ length: 6 }, (_, variant) => {
     const rocks = iceRocks.map((rock, index) => ({ rock, index })).filter(({ rock }) => rock.variant === variant);
     const mesh = new T.InstancedMesh(asteroidGeometry(variant), surface, rocks.length);
-    mesh.onBeforeRender = renderer => { renderer.getDrawingBufferSize(uniforms.iceViewport.value); };
+    mesh.geometry.setAttribute('rockId', new T.InstancedBufferAttribute(new Float32Array(rocks.length), 1).setUsage(T.DynamicDrawUsage));
+    mesh.onBeforeRender = renderer => { const target = renderer.getRenderTarget();
+      if (target) uniforms.iceViewport.value.set(target.width, target.height);
+      else renderer.getDrawingBufferSize(uniforms.iceViewport.value);
+    };
     mesh.name = `ice-rocks-${variant}`; mesh.count = 0; mesh.frustumCulled = false;
     mesh.instanceMatrix.setUsage(T.DynamicDrawUsage); mesh.setColorAt(0, color.setHex(0xffffff)); field.add(mesh);
     return { rocks, mesh };
@@ -82,6 +86,7 @@ export function createIceScenery() {
   ]);
   return {
     root, ready,
+    capture(renderer: T.WebGLRenderer, camera: T.Camera) { capture(renderer, camera, root, field); },
     update(progress: number, reveal: number, time = progress * ICE_DURATION, distance = ICE_CAMERA_DISTANCE) {
       const scroll = iceTravel(time), angle = -ICE_CORRIDOR_PITCH * reveal;
       field.rotation.x = angle;
@@ -100,6 +105,7 @@ export function createIceScenery() {
           iceOrientation(index, time, transform.quaternion);
           transform.scale.set(rock.radius, rock.radius, rock.radius * (rock.solid ? 0.55 : 0.8));
           transform.updateMatrix(); mesh.setMatrixAt(count, transform.matrix);
+          mesh.geometry.getAttribute('rockId').setX(count, (index + 1) / 255);
           color.setHex(rock.solid || rock.z > 0 ? 0xffffff : 0xb4bec6); mesh.setColorAt(count++, color);
           if (rock.solid) {
             transform.position.set(rock.x - Math.sign(rock.x) * rock.radius * 0.25, y, 0.23);
@@ -112,6 +118,7 @@ export function createIceScenery() {
             beacon.setMatrixAt(lights++, transform.matrix);
           }
         }
+        mesh.geometry.getAttribute('rockId').needsUpdate = true;
         mesh.count = count; mesh.instanceMatrix.needsUpdate = true; mesh.instanceColor!.needsUpdate = true;
       }
       beacon.count = lights; beacon.instanceMatrix.needsUpdate = true;
