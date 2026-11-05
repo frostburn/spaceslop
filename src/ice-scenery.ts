@@ -1,7 +1,8 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadEncounterTexture } from './encounter-texture';
-import { asteroidGeometry, asteroidRelief, weatheredMetal } from './ice-surfaces';
+import { asteroidGeometry, weatheredMetal } from './ice-surfaces';
+import { iceOptics } from './ice-optics';
 import { iceRocks, iceWrecks, iceTravel, iceRockY, iceOrientation, ICE_DURATION, ICE_CAMERA_DISTANCE, ICE_CORRIDOR_PITCH, ICE_SHIP_Y, iceCrossSection } from './ice-layout';
 import { iceIndustry, industryY, industrialGeometry } from './ice-industry';
 import { createGalacticBackdrop } from './galactic-backdrop';
@@ -29,27 +30,12 @@ export function createIceScenery() {
   const root = new T.Group(); root.name = 'frostwake-scenery'; root.visible = false;
   const field = new T.Group(); field.name = 'asteroid-corridor'; root.add(field);
   const galaxy = createGalacticBackdrop(); root.add(galaxy.root);
-  const uniforms = { iceMap: { value: null as T.Texture | null }, rockMap: { value: null as T.Texture | null },
-    hasIce: { value: 0 }, hasRock: { value: 0 } };
-  const relief = asteroidRelief();
-  const surface = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.94, metalness: 0.02,
-    normalMap: relief.normal, normalScale: new T.Vector2(0.65, 0.65), roughnessMap: relief.roughness });
-  surface.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, uniforms);
-    shader.vertexShader = 'attribute float frost; varying float vFrost; varying vec2 vIceUv;\n' + shader.vertexShader;
-    shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvFrost = frost; vIceUv = uv * 2.0;');
-    shader.fragmentShader = 'uniform sampler2D iceMap, rockMap; uniform float hasIce, hasRock; varying float vFrost; varying vec2 vIceUv;\n' + shader.fragmentShader;
-    shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-      vec3 iceGrain = vec3(1.0), rockGrain = vec3(1.0);
-      if (hasIce > 0.5) iceGrain = clamp(texture2D(iceMap, vIceUv).rgb * 1.8 + 0.25, 0.5, 1.4);
-      if (hasRock > 0.5) rockGrain = clamp(texture2D(rockMap, vIceUv).rgb * 4.0 + 0.5, 0.5, 1.3);
-      diffuseColor.rgb *= mix(rockGrain, iceGrain, vFrost);`);
-  };
-  surface.customProgramCacheKey = () => 'frostwake-surface-v1';
+  const { surface, uniforms, textures } = iceOptics(galaxy);
   const transform = new T.Object3D(), color = new T.Color();
   const batches = Array.from({ length: 6 }, (_, variant) => {
     const rocks = iceRocks.map((rock, index) => ({ rock, index })).filter(({ rock }) => rock.variant === variant);
     const mesh = new T.InstancedMesh(asteroidGeometry(variant), surface, rocks.length);
+    mesh.onBeforeRender = renderer => { renderer.getDrawingBufferSize(uniforms.iceViewport.value); };
     mesh.name = `ice-rocks-${variant}`; mesh.count = 0; mesh.frustumCulled = false;
     mesh.instanceMatrix.setUsage(T.DynamicDrawUsage); mesh.setColorAt(0, color.setHex(0xffffff)); field.add(mesh);
     return { rocks, mesh };
@@ -90,7 +76,7 @@ export function createIceScenery() {
     mesh.instanceMatrix.setUsage(T.DynamicDrawUsage); field.add(mesh); return { recipes, mesh };
   });
   const ready = Promise.all([
-    galaxy.ready, Promise.resolve(relief.normal), Promise.resolve(relief.roughness),
+    galaxy.ready, ...textures.map(texture => Promise.resolve(texture)),
     loadEncounterTexture('ice', (texture) => { uniforms.iceMap.value = texture; uniforms.hasIce.value = 1; }, 1),
     loadEncounterTexture('rock', (texture) => { uniforms.rockMap.value = texture; uniforms.hasRock.value = 1; }, 1),
   ]);
@@ -114,7 +100,7 @@ export function createIceScenery() {
           iceOrientation(index, time, transform.quaternion);
           transform.scale.set(rock.radius, rock.radius, rock.radius * (rock.solid ? 0.55 : 0.8));
           transform.updateMatrix(); mesh.setMatrixAt(count, transform.matrix);
-          color.setHex(rock.solid || rock.z > 0 ? 0xffffff : 0x6c8296); mesh.setColorAt(count++, color);
+          color.setHex(rock.solid || rock.z > 0 ? 0xffffff : 0xb4bec6); mesh.setColorAt(count++, color);
           if (rock.solid) {
             transform.position.set(rock.x - Math.sign(rock.x) * rock.radius * 0.25, y, 0.23);
             transform.rotation.set(0, 0, rock.angle); transform.scale.setScalar(rock.radius * (0.48 + Math.min(1, rock.y / 144) * 0.52)); transform.updateMatrix();

@@ -39,7 +39,7 @@ export const iceMotions = iceRocks.map((rock, i) => {
   const z = random(i * 7 + 101) * 2 - 1, azimuth = random(i * 7 + 103) * Math.PI * 2;
   const radial = Math.sqrt(1 - z * z);
   return { axis: new Vector3(radial * Math.cos(azimuth), radial * Math.sin(azimuth), z),
-    rate: rock.solid ? 0 : 0.012 + random(i * 7 + 107) * 0.035,
+    rate: rock.solid ? 0 : 0.07 + random(i * 7 + 107) * 0.11,
     initial: new Quaternion().setFromEuler(new Euler(rock.solid ? 0 : random(i * 7 + 109) * Math.PI * 2,
       rock.solid ? 0 : random(i * 7 + 113) * Math.PI * 2, rock.angle)) };
 });

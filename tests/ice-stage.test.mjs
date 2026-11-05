@@ -60,15 +60,15 @@ test('a media-free simulation completes the full schedule and reaches the dracon
   f.pulse(); f.pulse(); assert.equal(f.bossHealth, 18);
 });
 
-test('free asteroids have distinct slow residual spins while built-on outcrops hold attitude', () => {
+test('free asteroids visibly tumble on distinct axes while built-on outcrops hold attitude', () => {
   const axes = new Set();
   for (const [i, rock] of iceRocks.entries()) {
     const motion = iceMotions[i], before = iceOrientation(i, 0, new Quaternion()), after = iceOrientation(i, 30, new Quaternion());
     assert(Math.abs(motion.axis.length() - 1) < 1e-10);
     if (rock.solid) assert(before.angleTo(after) < 1e-7);
     else {
-      assert(motion.rate >= 0.012 && motion.rate < 0.047);
-      assert(before.angleTo(after) > 0.3);
+      assert(motion.rate >= 0.07 && motion.rate < 0.18);
+      assert(before.angleTo(iceOrientation(i, 5, new Quaternion())) > 0.34);
       axes.add(motion.axis.toArray().map(x => x.toFixed(4)).join(','));
     }
     const again = iceOrientation(i, 30, new Quaternion());
@@ -94,18 +94,21 @@ test('boss pursuit continues forward and only decorative rocks recycle outside t
   }
 });
 
-test('rounded asteroids share smooth normals across the UV seam and stay within collision envelopes', () => {
+test('fractured asteroids retain smooth regions and sharp rims within collision envelopes', () => {
   for (let seed = 0; seed < 6; seed++) {
     const geo = asteroidGeometry(seed), p = geo.getAttribute('position'), n = geo.getAttribute('normal');
-    const shared = new Map(); let duplicates = 0;
+    const shared = new Map(); let smooth = 0, creased = 0;
     for (let i = 0; i < p.count; i++) {
       const v = new Vector3().fromBufferAttribute(p, i), normal = new Vector3().fromBufferAttribute(n, i);
       assert(v.length() < 1.04); assert(Math.abs(normal.length() - 1) < 1e-5);
       const key = v.toArray().map(x => Math.round(x * 1e5)).join('/');
-      if (shared.has(key)) { assert(normal.distanceTo(shared.get(key)) < 1e-5); duplicates++; }
+      if (shared.has(key)) {
+        if (normal.distanceTo(shared.get(key)) < 1e-5) smooth++;
+        if (normal.dot(shared.get(key)) < 0.94) creased++;
+      }
       else shared.set(key, normal);
     }
-    assert(duplicates > 30); geo.dispose();
+    assert(smooth > 100); assert(creased > 20); geo.dispose();
   }
 });
 
