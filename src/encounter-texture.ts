@@ -6,7 +6,7 @@ import { setAntChitinTexture, setFungusTexture } from './hive-materials';
 import { setAntMoldTexture } from './ant-mold';
 
 type EncounterTexture = 'armor' | 'feathers' | 'scales' | 'preserve' | 'shipyard' |
-  'hive' | 'hiveMask' | 'hiveStars' | 'hiveMines' | 'chitin' | 'fungus' | 'mold' | 'ice' | 'rock' | 'galaxy' | 'marine' | 'titan';
+  'hive' | 'hiveMask' | 'hiveStars' | 'hiveMines' | 'chitin' | 'fungus' | 'mold' | 'ice' | 'rock' | 'galaxy' | 'marine' | 'titan' | 'titanRobot';
 declare const __ENCOUNTER_TEXTURES__: Partial<Record<EncounterTexture, string>>;
 
 export function encounterTextureUrl(name: EncounterTexture) {

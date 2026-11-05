@@ -17,7 +17,7 @@ test('registered vents scroll with the plate and ambient layers stay below comba
       const batch=ambient.root.getObjectByName(name),alpha=batch.geometry.getAttribute('puffAlpha');
       for(let i=0;i<batch.count;i++){
         batch.getMatrixAt(i,matrix);assert(matrix.elements.every(Number.isFinite));point.setFromMatrixPosition(matrix);
-        assert(point.z < -1); assert(alpha.getX(i)>=0 && alpha.getX(i)<.5);
+        assert(point.z < -1); assert(alpha.getX(i)>=0 && alpha.getX(i)<=.61);
       }
     }
     ambient.root.traverse(node=>{

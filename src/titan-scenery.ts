@@ -1,5 +1,5 @@
 import * as T from 'three';
-import { encounterTextureUrl } from './encounter-texture';
+import { encounterTextureUrl, loadEncounterTexture } from './encounter-texture';
 import {TITAN_DURATION,TITAN_SCREENS,titanTileY} from './titan-layout';
 import {titanMask} from './titan-mask';
 import {createTitanAmbient} from './titan-ambient';
@@ -38,7 +38,7 @@ export function createTitanScenery(){
   const mesh=new T.Mesh(geometry,material);mesh.position.z=-4;mesh.frustumCulled=false;root.add(mesh);tiles.push(mesh);
  }
  let hasArt=false;
- const ready=new Promise<T.Texture[]>(resolve=>{
+ const backdropReady=new Promise<T.Texture[]>(resolve=>{
   const url=encounterTextureUrl('titan');if(!url){resolve(textures);return;}
   const image=new Image();let pending=true;
   const deadline=window.setTimeout(()=>{pending=false;image.onload=null;image.onerror=null;resolve(textures);},20000);
@@ -68,6 +68,7 @@ export function createTitanScenery(){
   };
   image.src=url;
  });
+ const ready=Promise.all([backdropReady,loadEncounterTexture('titanRobot',ambient.setRobotTexture).then(texture=>texture?[texture]:[])]).then(parts=>parts.flat());
  return{root,ready,get hasArt(){return hasArt;},update(progress:number,time=progress*TITAN_DURATION){clock.value=time;ambient.update(progress,time);
   tiles.forEach((mesh,i)=>{mesh.position.y=titanTileY(i,progress);mesh.visible=Math.abs(mesh.position.y)<16.01;});
  }};
