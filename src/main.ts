@@ -3,6 +3,7 @@ import { BOSS_HP, Flight, HEIGHT, STEP, WIDTH } from './game';
 import { setupPilots } from './pilots';
 import { FlightView } from './view';
 import { levels, readLevel } from './levels';
+import { iceSection } from './ice-layout';
 import { readWingWeapon, wingWeapons } from './wing';
 import './style.css';
 
@@ -14,7 +15,21 @@ function element<T extends HTMLElement>(id: string) {
 
 const canvas = element<HTMLCanvasElement>('field');
 const panel = element('panel');
+let devBossLaunch = false;
 if (import.meta.env.DEV) {
+  const bossStart = document.createElement('button');
+  bossStart.id = 'dev-boss';
+  bossStart.type = 'button';
+  bossStart.textContent = 'Launch at boss';
+  bossStart.style.marginTop = '.75rem';
+  bossStart.disabled = true;
+  bossStart.addEventListener('click', () => {
+    if (screen !== 'title' && screen !== 'results') return;
+    devBossLaunch = true;
+    start.click();
+    devBossLaunch = false;
+  });
+  panel.append(bossStart);
   const workshop = document.createElement('a');
   workshop.href = import.meta.env.BASE_URL + 'workshop.html';
   workshop.textContent = 'Asset workshop';
@@ -97,17 +112,25 @@ function syncUI() {
   const label = {
     stage: levels[flight.level].sector, approach: 'CONTACT', boss: 'BOSS', won: 'CLEAR', lost: 'SIGNAL LOST',
   }[flight.phase];
-  sector.textContent = label;
+  sector.textContent = flight.level === 'ice' && flight.phase === 'stage'
+    ? `${label} · ${Math.min(10, Math.floor(flight.hiveProgress * 10) + 1)}/10` : label;
+  sector.title = flight.level === 'ice' ? iceSection(flight.hiveProgress) : levels[flight.level].name;
   score.textContent = String(flight.score).padStart(6, '0');
   hull.textContent = String(flight.hull).padStart(2, '0');
   charges.textContent = String(flight.charges).padStart(2, '0');
   bossHud.hidden = flight.phase !== 'boss';
+  bossHealth.max = flight.bossMaxHealth;
   bossHealth.value = flight.bossHealth;
   bossName.textContent = levels[flight.level].boss;
   pulse.disabled = !active || !fighting || flight.charges === 0;
   pause.hidden = !active;
   panel.hidden = active;
   const betweenRuns = screen === 'title' || screen === 'results';
+  if (import.meta.env.DEV) {
+    const bossStart = element<HTMLButtonElement>('dev-boss');
+    bossStart.hidden = !betweenRuns;
+    bossStart.disabled = start.disabled || !view;
+  }
   pilotPicker.setVisible(betweenRuns);
   perkReadout.hidden = betweenRuns;
   if (!betweenRuns && perkReadout.textContent !== flight.perkReadout) {
@@ -119,8 +142,8 @@ function syncUI() {
   if (preparing) tip = 'Preparing graphics…';
   else if (screen === 'title' && offlineReady) tip = 'Ready offline';
   else if (flight.droneWeapon === 'towline') {
-    tip = flight.phase === 'boss' ? 'Sweep the arc across the green cannon.' : 'Park the drone · Sweep the arc';
-  } else if (flight.phase === 'boss') tip = 'Tap the green cannon. Dodge amber rings.';
+    tip = flight.phase === 'boss' ? (flight.level === 'ice' ? 'Sweep the arc across the mouth marker.' : 'Sweep the arc across the green cannon.') : 'Park the drone · Sweep the arc';
+  } else if (flight.phase === 'boss') tip = flight.level === 'ice' ? 'Tap the mouth marker. Dodge amber rings.' : 'Tap the green cannon. Dodge amber rings.';
   if (active && flight.perkTime > 0) {
     tip = flight.perkMessage;
   } else if (active && flight.pickupTime > 0) {
@@ -190,6 +213,12 @@ start.addEventListener('click', () => {
       pilotPicker.selectedId,
       readLevel(levelSelector.value),
     );
+    if (import.meta.env.DEV && devBossLaunch) {
+      // Enter the normal approach through the simulation, preserving level
+      // progress, the selected loadout and the full camera transition.
+      flight.time = flight.stageDuration;
+      flight.step(0);
+    }
   }
   screen = 'active';
   resetInput();

@@ -1,3 +1,6 @@
+import { createMarineRig, createLeviathan, setMarineTexture } from './marine-rigs';
+import { marineMotion, leviathanMotion, LEVIATHAN_INTERVAL } from './marine';
+import { loadEncounterTexture } from './encounter-texture';
 import * as T from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createAntRig, createHiveGuardian } from './ant-rigs';
@@ -9,6 +12,8 @@ import {
 } from './encounters';
 import { BOSS_CANNON_X, TRANSITION_TIME } from './game';
 import { createMushroomCluster } from './hive-fungi';
+import { createIceScenery } from './ice-scenery';
+import { ICE_DURATION, iceSection } from './ice-layout';
 import { createDroneRig, createFighterRig, createScoutRig } from './ship-rigs';
 import { createWingPod } from './wing-pod';
 import type { WingWeapon } from './wing';
@@ -112,8 +117,18 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     return { root: pickup.root, duration: 3, pose(time: number) { pickup.pose(weapon, time); return 'beacon'; } };
   }
   const beam = createContinuousLaser();
+  const iceField = createIceScenery();
 
+  const hunter=createMarineRig('ichthyosaur'),sweeper=createMarineRig('plesiosaur'),leviathan=createLeviathan();
+  hunter.root.rotation.z=sweeper.root.rotation.z=Math.PI;
   const assets = {
+    ichthyosaur: {root:hunter.root,duration:5,pose(time:number){hunter.pose(time,marineMotion('ichthyosaur',time,0).bank);return time>1.25?'hunting bank':'cruise';}},
+    plesiosaur: {root:sweeper.root,duration:5,pose(time:number){sweeper.pose(time,marineMotion('plesiosaur',time,0).bank,Math.max(0,1-Math.abs(time-1.8)/.55));return 'four-flipper stroke';}},
+    leviathan: {root:leviathan.root,duration:LEVIATHAN_INTERVAL*2,pose(time:number){leviathan.pose(1,0,0,0,0,time);return leviathanMotion(time).windup>0?'jaw windup':'pursuit';}},
+    ice_field: { root: iceField.root, duration: ICE_DURATION + 30,
+      bounds: new T.Box3(new T.Vector3(-7, -8, -7), new T.Vector3(7, 8, 3)),
+      pose(time: number) { iceField.update(Math.min(1, time / ICE_DURATION), time > ICE_DURATION ? 1 : 0, time);
+        return time > ICE_DURATION ? 'Boss pursuit' : iceSection(time / ICE_DURATION); } },
     fighter: shipAsset(createFighterRig().root),
     scout: shipAsset(scout),
     drone: shipAsset(createDroneRig()),
@@ -123,7 +138,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     omega: weaponAsset('omega'),
     ammo_ship: projectileAsset('ship'), ammo_drone: projectileAsset('drone'),
     ammo_homing: projectileAsset('homing'), ammo_cannon: projectileAsset('cannon'),
-    ammo_omega: projectileAsset('omega'), ammo_hostile: projectileAsset('hostile'), ammo_spore: projectileAsset('spore'),
+    ammo_omega: projectileAsset('omega'), ammo_hostile: projectileAsset('hostile'), ammo_spore: projectileAsset('spore'), ammo_brine: projectileAsset('brine'),
     beam_laser: { root: beam.root, duration: 2, pose(time: number) {
       beam.root.visible = true; beam.draw({ x: 0, y: -1 }, { x: 0, y: 1 }, 0.8, time, true); return 'contact';
     } },
@@ -159,6 +174,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     },
     interceptor: bossAsset(interceptor, interceptorBurners),
   };
+  void loadEncounterTexture('marine',setMarineTexture,1);
   void loadEncounterTextures(interceptor, raptor, Object.values(assets).map(({ root }) => root));
   for (const asset of Object.values(assets)) scene.add(asset.root);
   const assetSelect = element<HTMLSelectElement>('asset');
@@ -253,6 +269,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     }
     previous = now;
     controls.update();
+    if(iceField.root.visible)iceField.capture(renderer,camera);
     renderer.render(scene, camera);
   });
 }

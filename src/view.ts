@@ -3,7 +3,9 @@ import { createAntRig, createHiveGuardian } from './ant-rigs';
 import { poseBurners, shipBurners } from './burners';
 import { createCorridorBridge } from './corridor-bridge';
 import { createInterceptorRig, createRaptorRig } from './encounter-rigs';
-import { loadEncounterTextures } from './encounter-texture';
+import { createMarineRig, createLeviathan, setMarineTexture } from './marine-rigs';
+import { marineMotion } from './marine';
+import { loadEncounterTexture, loadEncounterTextures } from './encounter-texture';
 import { BOSS_MUZZLE_Z, BOSS_RECOIL_TIME, raptorFlight } from './encounters';
 import {
   BOSS_CAMERA_DISTANCE, BOSS_CANNON_RADIUS, BOSS_CANNON_X, BOSS_DEPTH, BOSS_PROJECTION,
@@ -14,6 +16,8 @@ import { createDroneRig, createFighterRig, createScoutRig } from './ship-rigs';
 import { createShipyard } from './shipyard';
 import { createStageBackdrops } from './stage-backdrops';
 import { createHiveScenery } from './hive-scenery';
+import { createIceScenery } from './ice-scenery';
+import { ICE_CAMERA_DISTANCE, ICE_CORRIDOR_PITCH } from './ice-layout';
 import { HIVE_CAMERA_DISTANCE } from './hive-layout';
 import { antScales } from './ant-navigation';
 import { WING_FLASH_TIME, wingWeapons, type WingWeapon } from './wing';
@@ -54,6 +58,10 @@ export class FlightView {
   private perspective = new T.PerspectiveCamera(38, WIDTH / HEIGHT, 0.1, 240);
   private player = createFighterRig();
   private boss = createInterceptorRig(BOSS_CANNON_X);
+  private leviathan = createLeviathan();
+  private ichthyosaurs = Array.from({ length: 12 }, () => createMarineRig('ichthyosaur'));
+  private plesiosaurs = Array.from({ length: 4 }, () => createMarineRig('plesiosaur'));
+  private marineModels: (T.Object3D | undefined)[] = [];
   private hiveBoss = createHiveGuardian(BOSS_CANNON_X);
   private ants = Array.from({ length: 12 }, () => createAntRig());
   private playerBurners = shipBurners(this.player.root);
@@ -64,6 +72,7 @@ export class FlightView {
   private shipyard = createShipyard();
   private backdrops = createStageBackdrops();
   private hive = createHiveScenery();
+  private ice = createIceScenery();
   private drone = createDroneRig();
   private droneBurners = shipBurners(this.drone);
   private droneGoal = new T.Mesh(
@@ -96,6 +105,7 @@ export class FlightView {
   private bossLaserContact = {
     preserve: createBossLaserContact(this.plane, this.boss.root),
     broodlock: createBossLaserContact(this.plane, this.hiveBoss.root),
+    ice: createBossLaserContact(this.plane, this.leviathan.root),
   };
   private drops = Array.from({ length: 12 }, createPowerupGraphic);
   private markers = Array.from({ length: 3 }, () => new T.Mesh(
@@ -110,6 +120,7 @@ export class FlightView {
   private texturesReady: Promise<(T.Texture | undefined)[][]>;
   private swing = 0;
   private stageTime = 0;
+  private iceTime = 0;
   private animationTime = 0;
   private lastFlight?: Flight;
   private fighterMotion = trackMotion();
@@ -146,8 +157,9 @@ export class FlightView {
     const scout = createScoutRig();
     const pods = this.wingPods.flatMap((side) => side.map(({ root }) => root));
     const ammo = Object.values(this.projectiles).map(({ root }) => root);
-    this.texturesReady = Promise.all([this.backdrops.ready, this.hive.ready, loadEncounterTextures(this.boss, this.raptor,
-      [this.player.root, scout, this.drone, this.bridge.root, ...pods, ...ammo, ...this.drops.map(({ root }) => root)])]);
+    this.texturesReady = Promise.all([this.backdrops.ready, this.hive.ready, this.ice.ready,
+      Promise.all([loadEncounterTexture('marine', setMarineTexture, 1)]), loadEncounterTextures(this.boss, this.raptor,
+      [this.player.root, scout, this.drone, this.bridge.root, this.ice.root, ...pods, ...ammo, ...this.drops.map(({ root }) => root)])]);
     this.enemies = Array.from({ length: 12 }, () => {
       const root = scout.clone();
       return { root, burners: shipBurners(root) };
@@ -158,7 +170,8 @@ export class FlightView {
     this.player.root.add(this.playerMuzzle.root);
     this.drone.add(this.droneMuzzle.root);
     this.plane.add(this.player.root, this.drone, this.droneGoal, this.towline, this.boss.root, this.raptor.root, this.cannonMarker, this.stars,
-      this.preserveEdges.root, this.shipyard.root, this.backdrops.root, this.bridge.root, this.hive.root,
+      this.preserveEdges.root, this.shipyard.root, this.backdrops.root, this.bridge.root, this.hive.root, this.ice.root,
+      this.leviathan.root, ...this.ichthyosaurs.map(r=>r.root), ...this.plesiosaurs.map(r=>r.root),
       this.hiveBoss.root, ...this.ants.map(({ root }) => root),
       this.pulse, ...this.enemies.map(({ root }) => root), ...this.markers,
       ...ammo, this.combat.root, ...pods, ...this.wingLasers.map(({ root }) => root), ...this.drops.map(({ root }) => root));
@@ -183,7 +196,7 @@ export class FlightView {
     await compiled;
 
     // Cache silhouette bounds before the first laser hit, spread across small preflight batches.
-    const contactModels = [this.raptor.root, this.enemies[0].root, this.boss.root, this.hiveBoss.root,
+    const contactModels = [this.raptor.root, this.enemies[0].root, this.boss.root, this.hiveBoss.root, this.leviathan.root, ...this.ichthyosaurs.map(r=>r.root), ...this.plesiosaurs.map(r=>r.root),
       ...this.ants.map(({ root }) => root)];
     for (let i = 0; i < contactModels.length; i += 3) {
       await nextFrame();
@@ -196,15 +209,18 @@ export class FlightView {
     // Use the actual canvas framebuffer so the draws prime the same programs and buffers as play.
     const stage: T.Object3D[] = [this.raptor.root, this.enemies[0].root, this.bridge.root];
     if (this.backdrops.hasPreserve || this.backdrops.hasShipyard) stage.push(this.backdrops.root);
-    const boss: T.Object3D[] = [this.boss.root, this.cannonMarker, ...this.markers];
+    const boss: T.Object3D[] = [this.leviathan.root, this.boss.root, this.cannonMarker, ...this.markers];
     if (!this.backdrops.hasShipyard) boss.push(this.shipyard.root);
     const pods = this.wingPods.map((side) => side.map(({ root }) => root));
     const ordnance = [this.player.root, this.drone, ...Object.values(this.projectiles).map(({ root }) => root), this.combat.root,
       this.playerMuzzle.root, this.droneMuzzle.root, ...this.drops.slice(0, 4).map(({ root }) => root)];
-    for (const objects of [stage, boss, [this.hive.root, this.ants[0].root, this.hiveBoss.root],
-      pods[0], [...pods[1], ...this.wingLasers.map(({ root }) => root)], ordnance]) {
+    const marine = [...this.ichthyosaurs, ...this.plesiosaurs].map(r=>r.root);
+    const marineBatches = Array.from({length:Math.ceil(marine.length/3)},(_,i)=>marine.slice(i*3,i*3+3));
+    for (const objects of [stage, boss, ...marineBatches, [this.hive.root, this.ants[0].root, this.hiveBoss.root],
+      [this.ice.root], pods[0], [...pods[1], ...this.wingLasers.map(({ root }) => root)], ordnance]) {
       await nextFrame();
       if (signal.aborted) return;
+      if (objects.includes(this.ice.root)) this.ice.prime();
       if (objects === ordnance) {
         for (const batch of Object.values(this.projectiles)) batch.prime();
         this.combat.prime(); this.playerMuzzle.prime(); this.droneMuzzle.prime();
@@ -222,6 +238,7 @@ export class FlightView {
       this.renderer.setScissor(0, 0, 16, 16);
       this.renderer.setScissorTest(true);
       try {
+        this.ice.capture(this.renderer, camera);
         this.renderer.render(this.scene, camera);
       } finally {
         objects.forEach((object, index) => { object.visible = visible[index]; });
@@ -243,6 +260,7 @@ export class FlightView {
     this.lastFlight = flight;
     this.animationTime = newFlight ? 0 : this.animationTime + elapsed;
     if (newFlight) {
+      this.iceTime = 0;
       this.seenShots = new WeakSet(); this.seenDrops = new WeakMap(); this.previousDrops = [];
       this.enemyVitals.clear(); this.combat.clear(); this.playerMuzzle.clear(); this.droneMuzzle.clear();
       this.previousBossHealth = flight.bossHealth; this.previousBossLaserDamage = flight.bossLaserDamage;
@@ -255,9 +273,11 @@ export class FlightView {
     const angle = (eased - 1) * Math.PI / 2;
     this.rotation.setFromAxisAngle(this.axis, angle);
     this.plane.quaternion.copy(this.rotation);
+    (this.scene.background as T.Color).setHex(flight.level === 'ice' ? 0x03060c : sceneColor);
     const hive = flight.level === 'broodlock';
-    const camera = this.swing === 0 && !hive ? this.ortho : this.perspective;
-    const distance = T.MathUtils.lerp(hive ? HIVE_CAMERA_DISTANCE : 95, BOSS_CAMERA_DISTANCE, eased);
+    const stageDistance = hive ? HIVE_CAMERA_DISTANCE : flight.level === 'ice' ? ICE_CAMERA_DISTANCE : 95;
+    const camera = this.swing === 0 && flight.level === 'preserve' ? this.ortho : this.perspective;
+    const distance = T.MathUtils.lerp(stageDistance, BOSS_CAMERA_DISTANCE, eased);
     this.perspective.fov = T.MathUtils.radToDeg(2 * Math.atan(HEIGHT / 2 / distance));
     this.perspective.updateProjectionMatrix();
     camera.position.set(0, 0, distance).applyQuaternion(this.rotation);
@@ -265,11 +285,12 @@ export class FlightView {
     camera.lookAt(0, 0, 0);
 
     this.player.root.position.set(flight.player.x, flight.player.y, 0);
-    this.player.root.rotation.x = -1.18 * eased;
+    this.player.root.rotation.x = -(flight.level === 'ice' ? ICE_CORRIDOR_PITCH : 1.18) * eased;
     this.player.root.visible = flight.hull > 0 && Math.floor(flight.invulnerable * 12) % 2 === 0;
     const fighterVelocity = this.fighterMotion(flight.player, elapsed, newFlight);
     const fighterSpeed = fighterVelocity.length();
     poseBurners(this.playerBurners, this.animationTime, Math.min(1, 0.36 + fighterSpeed * 0.1 + 0.34 * Math.sin(eased * Math.PI)));
+    this.drone.rotation.x = flight.level === 'ice' ? -ICE_CORRIDOR_PITCH * eased : 0;
     this.drone.position.set(flight.drone.x, flight.drone.y, 0.23);
     this.drone.visible = flight.hull > 0;
     const droneVelocity = this.droneMotion(flight.drone, elapsed, newFlight);
@@ -299,16 +320,17 @@ export class FlightView {
     }
     this.cannonMarker.visible = flight.phase === 'boss';
     this.cannonMarker.position.set(flight.exposedCannonX * BOSS_PROJECTION, BOSS_Y * BOSS_PROJECTION, 0);
-    const activeBoss = flight.level === 'broodlock' ? this.hiveBoss : this.boss;
-    this.boss.root.visible = this.hiveBoss.root.visible = false;
+    const activeBoss = flight.level === 'ice' ? this.leviathan : flight.level === 'broodlock' ? this.hiveBoss : this.boss;
+    this.leviathan.root.visible = this.boss.root.visible = this.hiveBoss.root.visible = false;
     activeBoss.root.visible = this.swing > 0 && flight.bossHealth > 0;
     activeBoss.root.position.set(0, BOSS_Y, BOSS_DEPTH - 70 * (1 - eased));
     activeBoss.root.rotation.x = 0.9 * (1 - eased);
     if (activeBoss.root.visible) {
-      activeBoss.pose(eased, flight.cannonWindup, flight.exposedCannonX, flight.firedCannonX,
-        flight.bossRecoil / BOSS_RECOIL_TIME);
+      if(activeBoss === this.leviathan) this.leviathan.pose(eased,flight.cannonWindup,0,0,flight.bossRecoil / BOSS_RECOIL_TIME,flight.phase==='boss'?flight.time:Math.max(0,this.iceTime-flight.stageDuration-TRANSITION_TIME));
+      else activeBoss.pose(eased, flight.cannonWindup, flight.exposedCannonX, flight.firedCannonX,flight.bossRecoil / BOSS_RECOIL_TIME);
       if (activeBoss === this.boss) poseBurners(this.bossBurners, this.animationTime, 0.42 + 0.48 * Math.sin(eased * Math.PI));
     }
+    if(flight.level==='ice'&&this.cannonMarker.visible){const contact=this.bossLaserContact.ice(0,distance);this.cannonMarker.position.set(contact.x,contact.y,0);}
     this.drawScenery(flight, eased, distance, newFlight ? 2 : elapsed, fighterSpeed, droneSpeed);
 
     const raptor = flight.enemies.find((enemy) => enemy.raptor);
@@ -320,7 +342,7 @@ export class FlightView {
     }
     for (const [index, { root, burners }] of this.enemies.entries()) {
       const enemy = flight.enemies[index];
-      root.visible = Boolean(enemy && !enemy.raptor && !enemy.ant);
+      root.visible = Boolean(enemy && !enemy.raptor && !enemy.ant && !enemy.marine);
       if (root.visible && enemy) {
         root.position.set(enemy.x, enemy.y, 0);
         root.rotation.z = Math.PI + 0.3 * Math.cos(enemy.age * 1.55);
@@ -339,6 +361,21 @@ export class FlightView {
       ant.pose(enemy.age, windup);
     }
 
+    for(const rig of this.ichthyosaurs)rig.root.visible=false;
+    for(const rig of this.plesiosaurs)rig.root.visible=false;
+    this.marineModels.length=flight.enemies.length;
+    let hunters=0,sweepers=0;
+    for(const [index,enemy] of flight.enemies.entries()) {
+      this.marineModels[index]=undefined;
+      if(!enemy.marine)continue;
+      const rig=enemy.marine==='ichthyosaur'?this.ichthyosaurs[hunters++]:this.plesiosaurs[sweepers++];
+      if(!rig)continue;
+      rig.root.visible=true;rig.root.position.set(enemy.x,enemy.y,0);rig.root.rotation.z=Math.PI+(enemy.heading??0);
+      const swim=marineMotion(enemy.marine,enemy.age,enemy.lane,enemy.school);
+      const charge=T.MathUtils.clamp(1-(enemy.fire-enemy.age)/.55,0,1);
+      rig.pose(enemy.age,swim.bank,charge);this.marineModels[index]=rig.root;
+    }
+
     this.drawWings(flight, eased, fighterVelocity, camera === this.ortho ? undefined : distance);
     for (const [index, model] of this.drops.entries()) {
       const drop = flight.drops[index];
@@ -354,7 +391,8 @@ export class FlightView {
     for (const weapon of ['homing', 'cannon', 'omega'] as const) {
       this.projectiles[weapon].draw(flight.shots.filter((shot) => shot.wing === weapon), this.animationTime);
     }
-    this.projectiles.hostile.draw(flight.level === 'broodlock' ? [] : flight.threats, this.animationTime);
+    this.projectiles.hostile.draw(flight.level === 'preserve' ? flight.threats : [], this.animationTime);
+    this.projectiles.brine.draw(flight.level === 'ice' ? flight.threats : [], this.animationTime);
     this.projectiles.spore.draw(flight.level === 'broodlock' ? flight.threats : [], this.animationTime);
     this.drawFeedback(flight, elapsed);
     for (const [index, ring] of this.markers.entries()) {
@@ -370,13 +408,24 @@ export class FlightView {
     this.pulse.position.copy(this.player.root.position);
     this.pulse.scale.setScalar(1 + (0.3 - flight.pulseFlash) * 25);
     this.pulse.material.opacity = flight.pulseFlash / 0.3;
+    this.ice.capture(this.renderer, camera);
     this.renderer.render(this.scene, camera);
   }
 
   private drawScenery(flight: Flight, reveal: number, distance: number, elapsed: number, fighterSpeed: number, droneSpeed: number) {
     if (flight.phase === 'stage') this.stageTime = flight.time;
     if (flight.phase === 'approach' || flight.phase === 'boss') this.stageTime = flight.stageDuration;
-    const perspectiveDistance = this.swing === 0 && flight.level !== 'broodlock' ? undefined : distance;
+    const perspectiveDistance = this.swing === 0 && flight.level === 'preserve' ? undefined : distance;
+    this.ice.root.visible = flight.level === 'ice';
+    if (this.ice.root.visible) {
+      if (flight.phase === 'stage') this.iceTime = flight.time;
+      if (flight.phase === 'approach') this.iceTime = flight.stageDuration + flight.time;
+      if (flight.phase === 'boss') this.iceTime = flight.stageDuration + TRANSITION_TIME + flight.time;
+      this.ice.update(flight.hiveProgress, reveal, this.iceTime, distance);
+      this.stars.visible = false; this.stars.position.y = 0;
+      this.preserveEdges.root.visible = this.shipyard.root.visible = this.backdrops.root.visible = this.bridge.root.visible = this.hive.root.visible = false;
+      return;
+    }
     this.hive.root.visible = flight.level === 'broodlock';
     this.stars.visible = flight.level !== 'broodlock';
     if (this.hive.root.visible) {
@@ -413,7 +462,7 @@ export class FlightView {
         if (!pod.root.visible) continue;
         const time = this.animationTime + index * 0.47;
         pod.root.position.set(origin.x, origin.y, 0);
-        pod.root.rotation.set(-1.18 * reveal + 0.09 * Math.sin(time * 6),
+        pod.root.rotation.set(-(flight.level === 'ice' ? ICE_CORRIDOR_PITCH : 1.18) * reveal + 0.09 * Math.sin(time * 6),
           -0.046 * velocity.x + 0.14 * Math.sin(time * 5), 0.08 * Math.sin(time * 4));
         const recoil = fighting ? wing.flash / WING_FLASH_TIME : 0;
         const charge = pod.weapon === 'omega' && fighting ? Math.max(0, 1 - wing.cooldown / 0.28) : 0;
@@ -427,7 +476,7 @@ export class FlightView {
         let model: T.Object3D | undefined;
         if (target && typeof target !== 'number') {
           const index = flight.enemies.indexOf(target);
-          if (index >= 0) model = target.raptor ? this.raptor.root : target.ant ? this.ants[index].root : this.enemies[index].root;
+          if (index >= 0) model = target.marine ? this.marineModels[index] : target.raptor ? this.raptor.root : target.ant ? this.ants[index].root : this.enemies[index].root;
         }
         const end = typeof target === 'number' ? this.bossLaserContact[flight.level](target, distance ?? BOSS_CAMERA_DISTANCE)
           : model ? this.laserContact(origin, wing.beamEnd, model, distance) : wing.beamEnd;

@@ -1,7 +1,7 @@
 import * as T from 'three';
 
 export function part<M extends T.Material>(
-  parent: T.Group, geometry: T.BufferGeometry, material: M, x: number, y: number, z: number,
+  parent: T.Object3D, geometry: T.BufferGeometry, material: M, x: number, y: number, z: number,
 ) {
   const mesh = new T.Mesh(geometry, material);
   mesh.position.set(x, y, z);

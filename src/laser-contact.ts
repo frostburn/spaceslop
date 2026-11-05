@@ -24,11 +24,13 @@ export function createLaserContactTrace(plane: T.Object3D) {
   const projection = new T.Matrix4(), relative = new T.Matrix4(), inverse = new T.Matrix4();
   const bounds = new T.Box3(), a = new T.Vector3(), b = new T.Vector3(), c = new T.Vector3();
   const result = new T.Vector2();
+  const posed = new WeakMap<T.SkinnedMesh,Float32Array>();
   return (origin: Point, end: Point, model: T.Object3D, distance?: number) => {
     result.set(end.x, end.y);
     const dx = end.x - origin.x, dy = end.y - origin.y, lengthSquared = dx * dx + dy * dy;
     if (lengthSquared < epsilon || !model.visible) return result;
-    model.updateWorldMatrix(true, true);
+    model.updateWorldMatrix(true, false);
+    model.updateMatrixWorld(true);
     inverse.copy(plane.matrixWorld).invert();
     // The camera always looks along the flight plane's local -Z axis. Project onto
     // its z=0 plane, including the hive perspective and the boss camera distance.
@@ -41,7 +43,11 @@ export function createLaserContactTrace(plane: T.Object3D) {
       if (!geometry.boundingBox) geometry.computeBoundingBox();
       if (!geometry.boundingBox) return;
       relative.copy(projection).multiply(inverse).multiply(object.matrixWorld);
-      bounds.copy(geometry.boundingBox).applyMatrix4(relative);
+      bounds.copy(geometry.boundingBox);
+      // Animated marine tails/necks may leave the bind-pose bounds. Exact vertices
+      // below are skinned; this conservative envelope only avoids premature rejection.
+      if(object instanceof T.SkinnedMesh)bounds.expandByScalar(1.6);
+      bounds.applyMatrix4(relative);
       let low = 0, high = nearest;
       for (const axis of axes) {
         const delta = axis === 'x' ? dx : dy;
@@ -56,10 +62,19 @@ export function createLaserContactTrace(plane: T.Object3D) {
       const positions = geometry.getAttribute('position'), indices = geometry.index;
       const start = geometry.drawRange.start, count = indices?.count ?? positions.count;
       const stop = Math.min(count, start + geometry.drawRange.count);
+      let deformed: Float32Array | undefined;
+      if(object instanceof T.SkinnedMesh) {
+        deformed=posed.get(object);
+        if(!deformed || deformed.length!==positions.count*3){deformed=new Float32Array(positions.count*3);posed.set(object,deformed);}
+        // Transform each unique vertex once, rather than once for every indexed
+        // triangle using it. The scratch buffer persists across laser frames.
+        for(let i=0;i<positions.count;i++){object.getVertexPosition(i,a);deformed[i*3]=a.x;deformed[i*3+1]=a.y;deformed[i*3+2]=a.z;}
+      }
       for (let i = start; i + 2 < stop; i += 3) {
-        a.fromBufferAttribute(positions, indices ? indices.getX(i) : i).applyMatrix4(relative);
-        b.fromBufferAttribute(positions, indices ? indices.getX(i + 1) : i + 1).applyMatrix4(relative);
-        c.fromBufferAttribute(positions, indices ? indices.getX(i + 2) : i + 2).applyMatrix4(relative);
+        const ia=indices?indices.getX(i):i,ib=indices?indices.getX(i+1):i+1,ic=indices?indices.getX(i+2):i+2;
+        if(deformed){a.fromArray(deformed,ia*3);b.fromArray(deformed,ib*3);c.fromArray(deformed,ic*3);}
+        else {object.getVertexPosition(ia,a);object.getVertexPosition(ib,b);object.getVertexPosition(ic,c);}
+        a.applyMatrix4(relative);b.applyMatrix4(relative);c.applyMatrix4(relative);
         let first = Infinity, last = -Infinity;
         for (let edge = 0; edge < 3; edge++) {
           const p = edge === 0 ? a : edge === 1 ? b : c, q = edge === 0 ? b : edge === 1 ? c : a;

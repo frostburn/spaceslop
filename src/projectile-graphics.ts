@@ -6,14 +6,14 @@ import { wingWeapons } from './wing';
 import { createLaserAblation, createLaserShield } from './laser-ablation';
 
 type Shot = Flight['shots'][number];
-export const projectileKinds = ['ship', 'drone', 'homing', 'cannon', 'omega', 'hostile', 'spore'] as const;
+export const projectileKinds = ['ship', 'drone', 'homing', 'cannon', 'omega', 'hostile', 'spore', 'brine'] as const;
 export type ProjectileKind = typeof projectileKinds[number];
 export const projectileNames: Record<ProjectileKind, string> = {
   ship: 'Ship pulse', drone: 'Drone pulse', homing: 'Homing missile', cannon: 'Cannon tracer',
-  omega: 'Omega lance', hostile: 'Hostile plasma', spore: 'Hive spore',
+  omega: 'Omega lance', hostile: 'Hostile plasma', spore: 'Hive spore', brine: 'Marine ice volley',
 };
 const colors = { ship: 0x88f2ff, drone: 0xa1ffc5, homing: wingWeapons.homing.color,
-  cannon: wingWeapons.cannon.color, omega: wingWeapons.omega.color, hostile: 0xff7749, spore: 0xfaa04c };
+  cannon: wingWeapons.cannon.color, omega: wingWeapons.omega.color, hostile: 0xff7749, spore: 0xfaa04c, brine: 0xffb965 };
 const pulse = new T.LatheGeometry([[0, -0.35], [0.6, -0.28], [1, 0.06], [0.55, 0.38], [0, 0.6]]
   .map(([r, y]) => new T.Vector2(r, y)), 10);
 const slug = new T.LatheGeometry([[0, -0.45], [0.95, -0.45], [0.95, 0.18], [0.7, 0.38], [0, 0.52]]
@@ -91,10 +91,10 @@ function trailMaterial(color: number) {
 export function createProjectileBatch(kind: ProjectileKind) {
   const root = new T.Group();
   root.name = `projectiles-${kind}`;
-  const danger = kind === 'hostile' || kind === 'spore';
+  const danger = kind === 'hostile' || kind === 'spore' || kind === 'brine';
   const material = kind === 'homing' ? shipAlloy(0xb7c9cc) : energyMaterial(colors[kind], danger);
   if (kind === 'homing') material.side = T.DoubleSide;
-  const geometry = kind === 'homing' ? missile : kind === 'hostile' ? orb : kind === 'spore' ? seed : kind === 'cannon' ? slug : pulse;
+  const geometry = kind === 'homing' ? missile : kind === 'hostile' ? orb : (kind === 'spore' || kind === 'brine') ? seed : kind === 'cannon' ? slug : pulse;
   const body = new T.InstancedMesh(geometry, material, 128);
   const glowMaterial = trailMaterial(colors[kind]);
   const trails = new T.InstancedMesh(tail, glowMaterial, 128);
