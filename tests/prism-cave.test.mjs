@@ -57,16 +57,17 @@ test('the river includes opted-in projectiles and excludes markers, restoring st
  const cave=createPrismScenery(),scene=new T.Scene(),actor=new T.Group(),threat=new T.Group(),marker=new T.Group(),light=new T.DirectionalLight();
  scene.add(cave.root,actor,threat,marker,light);cave.root.visible=true;actor.visible=false;cave.setReflectionActors([actor,threat]);cave.prime();
  scene.updateMatrixWorld(true);
+ const roof=cave.root.getObjectByName('prism-reflection-roof');assert(!roof.visible);
  const mirror=cave.root.getObjectByName('prism-live-river'),camera=new T.PerspectiveCamera(39,9/16,.1,240);camera.position.z=32;camera.lookAt(0,0,0);camera.updateMatrixWorld(true);
  const original={tag:'canvas'},viewport=new T.Vector4(2,3,14,16);let target=original,scissor=true,currentViewport=viewport.clone(),draws=0;
  const renderer={xr:{enabled:true},shadowMap:{autoUpdate:true},autoClear:true,state:{buffers:{depth:{setMask(){}}}},
   getRenderTarget:()=>target,setRenderTarget:t=>{target=t;},getViewport:v=>v.copy(currentViewport),setViewport:v=>{currentViewport.copy(v);},
   getScissorTest:()=>scissor,setScissorTest:v=>{scissor=v;},
-  render:()=>{draws++;assert(actor.visible);assert(threat.visible);assert(!marker.visible);assert(light.visible);assert(!mirror.visible);throw Error('mirror interrupted');},
+  render:()=>{draws++;assert(roof.visible);assert(actor.visible);assert(threat.visible);assert(!marker.visible);assert(light.visible);assert(!mirror.visible);throw Error('mirror interrupted');},
  };
  assert.throws(()=>mirror.onBeforeRender(renderer,scene,camera,mirror.geometry,mirror.material,null),/mirror interrupted/);
  assert.equal(draws,1);assert.equal(target,original);assert(currentViewport.equals(viewport));assert(scissor);
- assert(!actor.visible&&threat.visible&&marker.visible&&mirror.visible);assert(renderer.xr.enabled&&renderer.shadowMap.autoUpdate);
+ assert(!roof.visible);assert(!actor.visible&&threat.visible&&marker.visible&&mirror.visible);assert(renderer.xr.enabled&&renderer.shadowMap.autoUpdate);
 });
 
 

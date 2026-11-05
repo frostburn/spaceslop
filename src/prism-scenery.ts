@@ -2,6 +2,7 @@ import * as T from 'three';
 import { prismSafe } from './prism-safe';
 import { prismOptics, caveWallMaterial } from './prism-optics';
 import { createPrismMirror } from './prism-mirror';
+import { createPrismRoof } from './prism-roof';
 import { prismCrystals, prismCrystalY, prismScroll, PRISM_DURATION, PRISM_PITCH } from './prism-layout';
 
 export function prismCrystalGeometry(variant:number) {
@@ -57,7 +58,8 @@ function stellarEffects(uniforms:ReturnType<typeof prismOptics>['uniforms']) {
 export function createPrismScenery() {
   const root=new T.Group(),field=new T.Group();root.name='prism-vault';root.visible=false;root.add(field);
   const optics=prismOptics(),wall=new T.Mesh(caveGeometry(),caveWallMaterial(optics.uniforms));wall.frustumCulled=false;wall.name='prism-basalt';field.add(wall);
-  const mirror=createPrismMirror(root,optics);field.add(mirror.mirror);
+  const roof=createPrismRoof(optics.uniforms);field.add(roof);
+  const mirror=createPrismMirror(root,optics,roof);field.add(mirror.mirror);
   const bounce=new T.DirectionalLight(0xc4dcff,1.1);bounce.position.set(0,1,-6);field.add(bounce,bounce.target);
   const effects=stellarEffects(optics.uniforms);field.add(effects.glints);
   const tip=new T.Vector3(),transform=new T.Object3D(),inverse=new T.Matrix4(),color=new T.Color(),yAxis=new T.Vector3(0,1,0);

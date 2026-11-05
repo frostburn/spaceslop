@@ -11,14 +11,29 @@ uniform vec3 caveEye;
    return vec2(sin(p.y*14.0+p.x*3.0+n*9.0-caveTime*1.4)*.018,
      sin(p.y*8.0-p.x*7.0+n*6.0-caveTime*.9)*.006);
  }
- vec3 caveRoof(vec2 p){
-   float rock=caveNoise(p*.7);vec3 color=vec3(.015,.022,.036)*(0.4+rock);
-   // Long pale roof facets and narrow fissures supply legible river reflections.
-   vec2 tile=vec2(p.x*.95,p.y*.42);vec2 f=fract(tile)-.5;
-   float shard=max(abs(f.x)*1.5,abs(f.y)*.85+abs(f.x)*.55);
-   float crystal=(1.0-smoothstep(.18,.23,shard))*step(.52,caveHash(floor(tile)));
-   float facet=.18+positivePow(.5+.5*sin(f.x*24.0+f.y*8.0),10.0)*2.7;
-   color+=crystal*vec3(.31,.43,.56)*facet;
-   return color;
+ float roofOpening(vec2 p){
+   vec2 cell=floor(p/vec2(7.0,14.0)),f=fract(p/vec2(7.0,14.0));
+   vec2 center=vec2(.30+caveHash(cell+2.0)*.4,.30+caveHash(cell+7.0)*.4);
+   vec2 q=(f-center)*vec2(7.0,14.0);
+   float radius=.65+caveHash(cell+19.0)*.70;
+   float edge=length(q)+sin(atan(q.y,q.x)*5.0+caveHash(cell)*8.0)*.12;
+   return 1.0-smoothstep(radius-.035,radius+.035,edge);
  }
+ vec3 basaltRoof(vec2 p){
+   float stone=caveNoise(p*.8),grain=caveHash(floor(p*55.0));
+   vec2 tile=p*1.25,cell=floor(tile),f=fract(tile);float first=100.0,second=100.0,facet=.5;
+   for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
+     vec2 offset=vec2(float(x),float(y)),id=cell+offset;
+     vec2 q=offset+vec2(caveHash(id),caveHash(id+17.0))*.65+.175-f;
+     float d=dot(q,q);if(d<first){second=first;first=d;facet=.4+caveHash(id+3.0)*.7;}else second=min(second,d);
+   }
+   float seam=1.0-smoothstep(.015,.08,second-first);
+   vec3 basalt=mix(vec3(.025,.027,.030),vec3(.10,.105,.11),stone)*facet;
+   return basalt*(.8+grain*.3)*(1.0-seam*.75);
+ }
+ vec3 roofStarlight(vec2 p){
+   float dust=caveNoise(p*.17);
+   return vec3(2.5,2.7,3.0)*(1.0+dust*.6);
+ }
+ vec3 caveRoof(vec2 p){return mix(basaltRoof(p),roofStarlight(p),roofOpening(p));}
 `;

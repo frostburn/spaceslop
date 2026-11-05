@@ -5,7 +5,7 @@ import { prismLight } from './prism-light';
 
 // A single bounded live reflection. Optical layers and projectile effects never
 // feed back into the mirror; the reflected cave uses its analytic environment.
-export function createPrismMirror(root:T.Group,optics:ReturnType<typeof prismOptics>) {
+export function createPrismMirror(root:T.Group,optics:ReturnType<typeof prismOptics>,roof:T.Object3D) {
   // The local XY plane is below the combat lane; its normal follows the
   // pitched corridor into the boss view. One pass reflects actual undersides.
   const geometry=new T.PlaneGeometry(2,124,1,124);geometry.translate(0,38,0);
@@ -19,13 +19,13 @@ export function createPrismMirror(root:T.Group,optics:ReturnType<typeof prismOpt
         uniform sampler2D tDiffuse;varying vec4 vProject;varying vec2 vRiver;
         void main(){vec2 ripple=riverCurrent(vRiver);vec2 uv=vProject.xy/vProject.w+ripple*.4;
           vec3 live=texture2D(tDiffuse,clamp(uv,vec2(.002),vec2(.998))).rgb;
-          vec2 roof=vRiver+vec2(0,caveScroll)+ripple*7.0;
-          vec3 reflection=caveRoof(roof)*.22+live*.90;
+          vec2 bed=vRiver+vec2(0,caveScroll)+ripple*2.0;
+          vec3 reflection=live*.90;
           float shore=smoothstep(2.6,4.1,abs(vRiver.x));
-          float stones=caveNoise(roof*8.0);float foam=positivePow(caveNoise(vRiver*vec2(2.0,20.0)+ripple*25.0),6.0);
+          float stones=caveNoise(bed*8.0);float foam=positivePow(caveNoise(vRiver*vec2(2.0,20.0)+ripple*25.0),6.0);
           vec3 water=vec3(.004,.014,.023)+vec3(.022,.032,.028)*stones*shore;
           water+=reflection;
-          // Narrow white streaks reveal moving liquid even outside the light fans.
+          // Narrow white streaks reveal moving liquid between reflected openings.
           water+=foam*.006+shore*foam*.06;
           gl_FragColor=vec4(safeHDR(water),1.0);
           #include <tonemapping_fragment>
@@ -44,14 +44,14 @@ export function createPrismMirror(root:T.Group,optics:ReturnType<typeof prismOpt
     const target=renderer.getRenderTarget(),viewport=renderer.getViewport(new T.Vector4()),scissor=renderer.getScissorTest();
     const xr=renderer.xr.enabled,shadow=renderer.shadowMap.autoUpdate,visible=mirror.visible;
     const parent=root.parent,siblings=parent?.children??[],states=siblings.map(node=>node.visible),actorStates=actors.map(node=>node.visible);
-    const layer=optics.refraction.uniforms.captureLayer.value;
+    const layer=optics.refraction.uniforms.captureLayer.value,roofVisible=roof.visible;
     viewToCave.copy(optics.uniforms.viewToCave.value);projectionInverse.copy(optics.uniforms.caveProjectionInverse.value);viewportSize.copy(optics.uniforms.iceViewport.value);
-    reflecting=true;optics.refraction.uniforms.captureLayer.value=1;
+    reflecting=true;roof.visible=true;optics.refraction.uniforms.captureLayer.value=1;
     siblings.forEach(node=>{if(!allowed.has(node) && !(node instanceof T.Light))node.visible=false;});
     if(priming)actors.forEach(node=>{node.visible=true;});
     try {renderer.setScissorTest(false);draw.call(mirror,renderer,scene,camera,g,m,group);}
     finally {
-      reflecting=false;priming=false;mirror.forceUpdate=false;mirror.visible=visible;
+      reflecting=false;roof.visible=roofVisible;priming=false;mirror.forceUpdate=false;mirror.visible=visible;
       optics.refraction.uniforms.captureLayer.value=layer;
       optics.uniforms.viewToCave.value.copy(viewToCave);optics.uniforms.caveProjectionInverse.value.copy(projectionInverse);optics.uniforms.iceViewport.value.copy(viewportSize);
       siblings.forEach((node,i)=>{node.visible=states[i];});actors.forEach((node,i)=>{node.visible=actorStates[i];});
