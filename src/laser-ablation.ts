@@ -2,6 +2,34 @@ import * as T from 'three';
 
 type Point = { x: number; y: number };
 
+export function createLaserShield() {
+  const root = new T.Group(); root.name = 'laser-shield'; root.renderOrder = 21; root.visible = false;
+  const geometry = new T.RingGeometry(0.88, 1, 6);
+  const ripples = Array.from({ length: 3 }, () => {
+    const ring = new T.Mesh(geometry, new T.MeshBasicMaterial({ color: 0x71caff,
+      transparent: true, blending: T.AdditiveBlending, depthTest: false, depthWrite: false }));
+    ring.renderOrder = 21; root.add(ring); return ring;
+  });
+  const glint = new T.Mesh(new T.OctahedronGeometry(0.065), new T.MeshBasicMaterial({ color: 0xc2eeff,
+    transparent: true, depthTest: false, depthWrite: false, blending: T.AdditiveBlending }));
+  glint.renderOrder = 21; root.add(glint);
+  return {
+    root,
+    draw(end: Point, time: number, blocked: boolean) {
+      root.visible = blocked;
+      if (!blocked) return;
+      root.position.set(end.x, end.y, 0);
+      ripples.forEach((ring, i) => {
+        const phase = (time * 2.3 + i / 3) % 1, radius = 0.1 + phase * 0.52;
+        ring.scale.set(radius, radius * 0.48, 1);
+        ring.material.opacity = (1 - phase) ** 2 * 0.8;
+      });
+      glint.rotation.z = time * 5;
+      glint.scale.setScalar(0.85 + Math.sin(time * 31) * 0.15);
+    },
+  };
+}
+
 export function createLaserAblation() {
   const root = new T.Group(); root.name = 'laser-contact'; root.renderOrder = 21;
   const material = new T.ShaderMaterial({

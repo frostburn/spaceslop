@@ -431,7 +431,8 @@ export class FlightView {
         }
         const end = typeof target === 'number' ? this.bossLaserContact[flight.level](target, distance ?? BOSS_CAMERA_DISTANCE)
           : model ? this.laserContact(origin, wing.beamEnd, model, distance) : wing.beamEnd;
-        laser.draw(origin, end, wing.laserHold, this.animationTime, typeof target === 'number' || Boolean(model));
+        laser.draw(origin, end, wing.laserHold, this.animationTime, typeof target === 'number' || Boolean(model),
+          flight.phase === 'boss' && target === undefined);
       }
     }
   }

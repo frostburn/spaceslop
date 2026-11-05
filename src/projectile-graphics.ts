@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { shipAlloy } from './encounter-surfaces';
 import type { Flight } from './game';
 import { wingWeapons } from './wing';
-import { createLaserAblation } from './laser-ablation';
+import { createLaserAblation, createLaserShield } from './laser-ablation';
 
 type Shot = Flight['shots'][number];
 export const projectileKinds = ['ship', 'drone', 'homing', 'cannon', 'omega', 'hostile', 'spore'] as const;
@@ -181,15 +181,17 @@ export function createContinuousLaser() {
   beam.add(new T.Mesh(new T.PlaneGeometry(0.24, 1), material),
     new T.Mesh(new T.PlaneGeometry(0.043, 1), new T.MeshBasicMaterial({ color: 0xffe8fc, transparent: true, opacity: 0.94, depthWrite: false })));
   const ablation = createLaserAblation();
-  root.add(beam, ablation.root);
+  const shield = createLaserShield();
+  root.add(beam, ablation.root, shield.root);
   root.visible = false;
-  function draw(origin: { x: number; y: number }, end: { x: number; y: number }, hold: number, time: number, contact: boolean) {
+  function draw(origin: { x: number; y: number }, end: { x: number; y: number }, hold: number, time: number, contact: boolean, blocked = false) {
     const dx = end.x - origin.x, dy = end.y - origin.y;
     beam.position.set((origin.x + end.x) / 2, (origin.y + end.y) / 2, 0);
     beam.rotation.z = Math.atan2(-dx, dy);
     beam.scale.set(1 + Math.min(hold, 0.85) * 0.75, Math.hypot(dx, dy), 1);
     material.uniforms.clock.value = time;
     ablation.draw(origin, end, hold, time, contact);
+    shield.draw(end, time, blocked);
   }
-  return { root, draw, prime() { root.visible = true; draw({ x: 0, y: 0 }, { x: 0, y: 4 }, 1, 0, true); } };
+  return { root, draw, prime() { root.visible = true; draw({ x: 0, y: 0 }, { x: 0, y: 4 }, 1, 0, true, true); } };
 }
