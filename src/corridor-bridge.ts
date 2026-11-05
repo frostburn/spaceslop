@@ -39,7 +39,8 @@ export function createCorridorBridge() {
   bridge.rotation.z = -0.045;
   const neighbor = bridge.clone();
   const root = new T.Group();
-  root.position.z = -1.04;
+  // Seat the deck below the corridor rails and leave clearance for the curved fern fronds.
+  root.position.z = -2.45;
   root.add(bridge, neighbor);
 
   return {
