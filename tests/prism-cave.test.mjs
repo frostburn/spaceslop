@@ -53,11 +53,11 @@ test('crystal shells have closed root and tip surfaces',()=>{
  }
 });
 
-test('the live mirror excludes projectiles and restores visibility and renderer state after a failed draw',()=>{
+test('the river excludes projectiles and restores visibility and renderer state after a failed draw',()=>{
  const cave=createPrismScenery(),scene=new T.Scene(),actor=new T.Group(),threat=new T.Group(),light=new T.DirectionalLight();
  scene.add(cave.root,actor,threat,light);cave.root.visible=true;actor.visible=false;cave.setReflectionActors([actor]);cave.prime();
  scene.updateMatrixWorld(true);
- const mirror=cave.root.getObjectByName('prism-live-mirror'),camera=new T.PerspectiveCamera(39,9/16,.1,240);camera.position.z=32;camera.lookAt(0,0,0);camera.updateMatrixWorld(true);
+ const mirror=cave.root.getObjectByName('prism-live-river'),camera=new T.PerspectiveCamera(39,9/16,.1,240);camera.position.z=32;camera.lookAt(0,0,0);camera.updateMatrixWorld(true);
  const original={tag:'canvas'},viewport=new T.Vector4(2,3,14,16);let target=original,scissor=true,currentViewport=viewport.clone(),draws=0;
  const renderer={xr:{enabled:true},shadowMap:{autoUpdate:true},autoClear:true,state:{buffers:{depth:{setMask(){}}}},
   getRenderTarget:()=>target,setRenderTarget:t=>{target=t;},getViewport:v=>v.copy(currentViewport),setViewport:v=>{currentViewport.copy(v);},
@@ -67,4 +67,30 @@ test('the live mirror excludes projectiles and restores visibility and renderer 
  assert.throws(()=>mirror.onBeforeRender(renderer,scene,camera,mirror.geometry,mirror.material,null),/mirror interrupted/);
  assert.equal(draws,1);assert.equal(target,original);assert(currentViewport.equals(viewport));assert(scissor);
  assert(!actor.visible&&threat.visible&&mirror.visible);assert(renderer.xr.enabled&&renderer.shadowMap.autoUpdate);
+});
+
+
+test('the river remains below the lane and follows its forward axis throughout the camera pitch',()=>{
+ const cave=createPrismScenery(),river=cave.root.getObjectByName('prism-live-river');
+ for(const reveal of [0,.25,.5,.75,1]) {
+  cave.update(1,reveal,32);cave.root.updateMatrixWorld(true);
+  const normal=new T.Vector3(0,0,1).transformDirection(river.matrixWorld);
+  const forward=new T.Vector3(0,1,0).transformDirection(river.matrixWorld);
+  assert(Math.abs(normal.dot(forward))<1e-8);
+  assert(river.getWorldPosition(new T.Vector3()).z<-.1);
+  assert.equal(river.getRenderTarget().width,384);assert.equal(river.getRenderTarget().height,768);
+ }
+});
+
+test('the HDR pass restores the caller target, viewport and scissor after a failed draw',async()=>{
+ const {createPrismGlow}=await server.ssrLoadModule('/src/prism-glow.ts');
+ const original={tag:'caller'},viewport=new T.Vector4(3,5,17,19);
+ let target=original,scissor=true,currentViewport=viewport.clone();
+ const renderer={capabilities:{maxSamples:4},getDrawingBufferSize:v=>v.set(450,800),
+  getRenderTarget:()=>target,setRenderTarget:t=>{target=t;},getViewport:v=>v.copy(currentViewport),setViewport:v=>{currentViewport.copy(v);},
+  getScissorTest:()=>scissor,setScissorTest:v=>{scissor=v;},
+  render:()=>{assert.notEqual(target,original);assert(!scissor);throw Error('HDR interrupted');}};
+ const glow=createPrismGlow(renderer);
+ assert.throws(()=>glow.render(new T.Scene(),new T.PerspectiveCamera()),/HDR interrupted/);
+ assert.equal(target,original);assert(currentViewport.equals(viewport));assert(scissor);
 });

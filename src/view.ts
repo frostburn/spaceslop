@@ -17,6 +17,7 @@ import { createShipyard } from './shipyard';
 import { createStageBackdrops } from './stage-backdrops';
 import { createHiveScenery } from './hive-scenery';
 import { createPrismScenery } from './prism-scenery';
+import { createPrismGlow } from './prism-glow';
 import { PRISM_DURATION, PRISM_CAMERA_DISTANCE } from './prism-layout';
 import { createIceScenery } from './ice-scenery';
 import { ICE_CAMERA_DISTANCE, ICE_CORRIDOR_PITCH } from './ice-layout';
@@ -54,6 +55,7 @@ function trackMotion() {
 
 export class FlightView {
   private renderer: T.WebGLRenderer;
+  private caveGlow:ReturnType<typeof createPrismGlow>;
   private scene = new T.Scene();
   private plane = new T.Group();
   private ortho = new T.OrthographicCamera(-WIDTH / 2, WIDTH / 2, HEIGHT / 2, -HEIGHT / 2, 0.1, 240);
@@ -143,6 +145,7 @@ export class FlightView {
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new T.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    this.caveGlow=createPrismGlow(this.renderer);
     this.scene.background = new T.Color(sceneColor);
     const light = new T.DirectionalLight(0xb9e8ff, 2.7);
     light.position.set(3, 5, 6);
@@ -248,7 +251,8 @@ export class FlightView {
       try {
         this.ice.capture(this.renderer, camera);
         this.cave.capture(this.renderer, camera);
-        this.renderer.render(this.scene, camera);
+        if(objects.includes(this.cave.root))this.caveGlow.render(this.scene,camera);
+        else this.renderer.render(this.scene, camera);
       } finally {
         objects.forEach((object, index) => { object.visible = visible[index]; });
         this.renderer.setScissorTest(false);
@@ -419,7 +423,8 @@ export class FlightView {
     this.pulse.material.opacity = flight.pulseFlash / 0.3;
     this.ice.capture(this.renderer, camera);
     this.cave.capture(this.renderer, camera);
-    this.renderer.render(this.scene, camera);
+    if(this.cave.root.visible)this.caveGlow.render(this.scene,camera);
+    else this.renderer.render(this.scene, camera);
   }
 
   private drawScenery(flight: Flight, reveal: number, distance: number, elapsed: number, fighterSpeed: number, droneSpeed: number) {

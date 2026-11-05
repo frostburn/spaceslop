@@ -1,4 +1,5 @@
 import { createPrismScenery } from './prism-scenery';
+import { createPrismGlow } from './prism-glow';
 import { PRISM_DURATION } from './prism-layout';
 import { createMarineRig, createLeviathan, setMarineTexture } from './marine-rigs';
 import { marineMotion, leviathanMotion, LEVIATHAN_INTERVAL } from './marine';
@@ -31,6 +32,7 @@ function element<T extends HTMLElement>(id: string) {
 
 function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const scene = new T.Scene();
+  const caveGlow=createPrismGlow(renderer);
   const camera = new T.PerspectiveCamera(39, 1, 0.05, 200);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
@@ -127,7 +129,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const assets = {
     prism_vault: {root:cave.root,duration:PRISM_DURATION+20,
       bounds:new T.Box3(new T.Vector3(-7,-8,-8),new T.Vector3(7,8,3)),
-      pose(time:number){const reveal=T.MathUtils.smoothstep(time,PRISM_DURATION,PRISM_DURATION+TRANSITION_TIME);cave.update(Math.min(1,time/PRISM_DURATION),reveal,time);return reveal>0?'Mirror chamber':'Prismatic corridor';}},
+      pose(time:number){const reveal=T.MathUtils.smoothstep(time,PRISM_DURATION,PRISM_DURATION+TRANSITION_TIME);cave.update(Math.min(1,time/PRISM_DURATION),reveal,time);return reveal>0?'River pursuit':'Starlit prism river';}},
     ichthyosaur: {root:hunter.root,duration:5,pose(time:number){hunter.pose(time,marineMotion('ichthyosaur',time,0).bank);return time>1.25?'hunting bank':'cruise';}},
     plesiosaur: {root:sweeper.root,duration:5,pose(time:number){sweeper.pose(time,marineMotion('plesiosaur',time,0).bank,Math.max(0,1-Math.abs(time-1.8)/.55));return 'four-flipper stroke';}},
     leviathan: {root:leviathan.root,duration:LEVIATHAN_INTERVAL*2,pose(time:number){leviathan.pose(1,0,0,0,0,time);return leviathanMotion(time).windup>0?'jaw windup':'pursuit';}},
@@ -277,7 +279,8 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     controls.update();
     if(iceField.root.visible)iceField.capture(renderer,camera);
     if(cave.root.visible)cave.capture(renderer,camera);
-    renderer.render(scene, camera);
+    if(cave.root.visible)caveGlow.render(scene,camera);
+    else renderer.render(scene, camera);
   });
 }
 

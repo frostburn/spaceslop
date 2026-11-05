@@ -1,28 +1,39 @@
 import * as T from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import type { prismOptics } from './prism-optics';
+import { prismLight } from './prism-light';
 
 // A single bounded live reflection. Optical layers and projectile effects never
 // feed back into the mirror; the reflected cave uses its analytic environment.
 export function createPrismMirror(root:T.Group,optics:ReturnType<typeof prismOptics>) {
-  const shape=new T.Shape();shape.moveTo(-1.3,-18);shape.lineTo(1.3,-15);shape.lineTo(1.3,47);
-  shape.lineTo(.4,52);shape.lineTo(-1.3,49);shape.closePath();
-  const geometry=new T.ShapeGeometry(shape),p=geometry.getAttribute('position'),coords:number[]=[];
-  for(let i=0;i<p.count;i++)coords.push(p.getX(i)/1.3,p.getY(i)/35);
-  geometry.setAttribute('mirrorCoord',new T.Float32BufferAttribute(coords,2));
-  const mirror=new Reflector(geometry,{textureWidth:256,textureHeight:512,multisample:0,clipBias:.003,
-    shader:{name:'prism-live-mirror',uniforms:{tDiffuse:{value:null},color:{value:new T.Color()},textureMatrix:{value:new T.Matrix4()}},
-      vertexShader:`uniform mat4 textureMatrix;attribute vec2 mirrorCoord;varying vec4 vProject;varying vec2 vFacet;
-        void main(){vProject=textureMatrix*vec4(position,1.0);vFacet=mirrorCoord;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-      fragmentShader:`uniform sampler2D tDiffuse;varying vec4 vProject;varying vec2 vFacet;
-        void main(){vec3 reflection=texture2DProj(tDiffuse,vProject).rgb;float rim=pow(clamp(abs(vFacet.x),0.0,1.0),20.0);
-        gl_FragColor=vec4(reflection*vec3(.68,.74,.83)+vec3(.013,.014,.025)+rim*vec3(.16,.13,.20),1.0);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
+  // The local XY plane is below the combat lane; its normal follows the
+  // pitched corridor into the boss view. One pass reflects actual undersides.
+  const geometry=new T.PlaneGeometry(2,124,1,124);geometry.translate(0,38,0);
+  const mirror=new Reflector(geometry,{textureWidth:384,textureHeight:768,multisample:0,clipBias:.003,
+    shader:{name:'prism-live-river',uniforms:{tDiffuse:{value:null},color:{value:new T.Color()},textureMatrix:{value:new T.Matrix4()},
+      caveScroll:optics.uniforms.caveScroll,caveTime:optics.uniforms.caveTime},
+      vertexShader:`uniform mat4 textureMatrix;uniform float caveScroll;varying vec4 vProject;varying vec2 vRiver;
+        void main(){vec3 p=position;float y=p.y+caveScroll;p.x*=3.8+sin(y*.31)*.28+sin(y*.83)*.12;
+          vProject=textureMatrix*vec4(p,1.0);vRiver=p.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);}`,
+      fragmentShader:`${prismLight}
+        uniform sampler2D tDiffuse;varying vec4 vProject;varying vec2 vRiver;
+        void main(){vec2 ripple=riverCurrent(vRiver);vec2 uv=vProject.xy/vProject.w+ripple*.4;
+          vec3 live=texture2D(tDiffuse,clamp(uv,vec2(.002),vec2(.998))).rgb;
+          vec2 roof=vRiver+vec2(0,caveScroll)+ripple*7.0;
+          vec3 reflection=caveRoof(roof)*.22+live*.90;
+          float shore=smoothstep(2.6,4.1,abs(vRiver.x));
+          float stones=caveNoise(roof*8.0);float foam=pow(caveNoise(vRiver*vec2(2.0,20.0)+ripple*25.0),6.0);
+          vec3 water=vec3(.004,.014,.023)+vec3(.022,.032,.028)*stones*shore;
+          water+=reflection+stellarCaustics(vec3(vRiver+ripple*6.0,-3.8))*(.72+foam*1.5);
+          // Narrow white streaks reveal moving liquid even outside the light fans.
+          water+=foam*.006+shore*foam*.06;
+          gl_FragColor=vec4(water,1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
         }`}});
-  mirror.name='prism-live-mirror';mirror.position.set(-4.25,0,-1.7);mirror.rotation.y=.60;mirror.frustumCulled=false;
-  const border=new T.LineSegments(new T.EdgesGeometry(geometry),new T.LineBasicMaterial({color:0x8c9da8,transparent:true,opacity:.32}));
-  border.position.copy(mirror.position);border.quaternion.copy(mirror.quaternion);
+  (mirror.material as T.ShaderMaterial).uniforms.caveScroll=optics.uniforms.caveScroll;
+  (mirror.material as T.ShaderMaterial).uniforms.caveTime=optics.uniforms.caveTime;
+  mirror.name='prism-live-river';mirror.position.z=-3.8;mirror.frustumCulled=false;
   const draw=mirror.onBeforeRender;
   let actors:T.Object3D[]=[],priming=false,reflecting=false;
   const allowed=new Set<T.Object3D>([root]);
@@ -43,13 +54,14 @@ export function createPrismMirror(root:T.Group,optics:ReturnType<typeof prismOpt
       optics.refraction.uniforms.captureLayer.value=layer;
       optics.uniforms.viewToCave.value.copy(viewToCave);optics.uniforms.caveProjectionInverse.value.copy(projectionInverse);optics.uniforms.iceViewport.value.copy(viewportSize);
       siblings.forEach((node,i)=>{node.visible=states[i];});actors.forEach((node,i)=>{node.visible=actorStates[i];});
-      renderer.xr.enabled=xr;renderer.shadowMap.autoUpdate=shadow;renderer.setRenderTarget(target);renderer.setViewport(viewport);renderer.setScissorTest(scissor);
+      renderer.xr.enabled=xr;renderer.shadowMap.autoUpdate=shadow;renderer.setViewport(viewport);renderer.setRenderTarget(target);renderer.setScissorTest(scissor);
     }
   };
-  return {mirror,border,
+  return {mirror,
     async prepare(renderer:T.WebGLRenderer,camera:T.Camera,signal:AbortSignal) {
       const scene=new T.Scene(),key=new T.DirectionalLight(0xb9e8ff,2.7);key.position.set(3,5,6);
-      scene.add(key,new T.HemisphereLight(0xd6e3ff,0x514873,1.75));
+      const bounce=new T.DirectionalLight(0xc4dcff,1.1);bounce.position.set(0,1,-6);
+      scene.add(key,bounce,new T.HemisphereLight(0xd6e3ff,0x514873,1.75));
       const objects:T.Mesh[]=[],seen=new Set<string>();
       for(const actor of [root,...actors])actor.traverse(node=>{
         if(!(node instanceof T.Mesh)||node===mirror)return;

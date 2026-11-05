@@ -1,45 +1,37 @@
 import * as T from 'three';
 import { iceRefraction, iceLayerSampling } from './ice-refraction';
 import { iceEnvironment } from './ice-surfaces';
+import { prismLight } from './prism-light';
 
-export const caveSampling = `
- uniform float caveScroll,caveTime;
- float caveHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
- vec3 spectrum(float t) { return .5+.5*cos(6.2831853*(t+vec3(0.0,.333,.667))); }
+export const caveSampling = `${prismLight}
  vec3 cavePaint(vec3 point) {
-   vec3 p=point+vec3(0.0,caveScroll,0.0);
-   vec2 tile=vec2(p.x*.8+p.z*.37,p.y*.65)+vec2(sin(p.y*.37),sin(p.x*.53+p.z*.8))*.45;
-   vec2 cell=floor(tile),f=fract(tile),blend=f*f*(3.0-2.0*f);
-   float stone=mix(mix(caveHash(cell),caveHash(cell+vec2(1,0)),blend.x),mix(caveHash(cell+vec2(0,1)),caveHash(cell+vec2(1,1)),blend.x),blend.y);
-   float grain=caveHash(floor(vec2(p.x+p.z*.31,p.y)*32.0));
-   float angle=caveHash(cell+7.0)*6.2831853;
-   float joint=abs(dot(f-.5,vec2(cos(angle),sin(angle))));
-   float crack=(1.0-smoothstep(.005,.020,joint))*smoothstep(.60,.8,caveHash(cell+19.0));
-   float fleck=pow(max(0.0,sin(p.x*17.0+p.y*7.0+p.z*19.0)),32.0);
-   float bend=sin(p.x*1.7+p.y*.4)*.3+sin(p.z*2.0-p.y*.8)*.14;
-   float stripe=pow(max(0.0,sin(p.y*1.45+p.x*2.3+p.z*1.2+bend+caveTime*.12)),22.0);
-   stripe*=pow(abs(sin(p.y*.31+p.z*1.4)),5.0);
-   float edge=smoothstep(1.5,4.8,abs(p.x));
-   vec3 rock=mix(vec3(.009,.011,.018),vec3(.026,.023,.033),stone);
-   rock*=.65+grain*.55;
-   float vein=pow(1.0-abs(sin(p.y*.53+p.x*2.7+sin(p.z)*.5)),60.0);
-   return rock*(1.0-crack*.45)+fleck*.008
-     +vein*vec3(.08,.10,.13)*edge
-     +stripe*spectrum(p.y*.025+p.x*.065)*(.016+edge*.34);
+   vec3 p=point+vec3(0,caveScroll,0);
+   float stone=caveNoise(vec2(p.x+p.z*.37,p.y)*1.8);
+   float grain=caveHash(floor(p.xy*90.0));
+   float joint=pow(1.0-abs(sin(p.x*6.0+p.y*2.0+floor(p.y*1.3)*1.7)),26.0);
+   vec3 rock=mix(vec3(.014,.020,.027),vec3(.09,.098,.10),stone*stone);
+   rock*=.7+grain*.45;rock*=1.0-joint*.7;
+   return rock+stellarCaustics(point)*(.17+stone*.25);
  }
  vec3 caveRay(vec3 origin,vec3 direction) {
-   vec2 p=vec2(origin.x/5.4,(origin.z+1.5)/6.5),d=vec2(direction.x/5.4,direction.z/6.5);
-   float a=dot(d,d),b=dot(p,d),c=dot(p,p)-1.0;
-   float distance=a>.00001?(-b+sqrt(max(0.0,b*b-a*c)))/a:64.0;
-   return cavePaint(origin+direction*clamp(distance,0.0,90.0));
+   // Shallow analytic transport beyond the three captured crystal layers.
+   float wall=(5.8*sign(direction.x)-origin.x)/max(abs(direction.x),.001)*sign(direction.x);
+   float floorHit=(-4.0-origin.z)/(abs(direction.z)>.001?direction.z:.001);
+   float roofHit=(5.0-origin.z)/(abs(direction.z)>.001?direction.z:.001);
+   if(direction.z>.0 && roofHit<abs(wall))return caveRoof((origin+direction*roofHit).xy+vec2(0,caveScroll));
+   if(floorHit>0.0 && floorHit<abs(wall)){
+     vec3 p=origin+direction*floorHit;
+     return caveRoof(p.xy+vec2(0,caveScroll))*.25+stellarCaustics(p)*.65+vec3(.006,.015,.025);
+   }
+   return cavePaint(origin+direction*clamp(abs(wall),0.0,90.0));
  }
 `;
 export function prismOptics() {
   const refraction=iceRefraction('prism-crystals-');
   const uniforms={caveScroll:{value:0},caveTime:{value:0},iceViewport:{value:new T.Vector2(1,1)},
     viewToCave:{value:new T.Matrix4()},caveProjectionInverse:{value:new T.Matrix4()}};
-  const surface=new T.MeshPhysicalMaterial({color:0xffffff,roughness:.075,metalness:0,flatShading:true,
-    ior:1.54,specularIntensity:1.2,envMap:iceEnvironment(),envMapIntensity:.75});
+  const surface=new T.MeshPhysicalMaterial({color:0xffffff,roughness:.035,metalness:0,flatShading:true,
+    ior:1.54,specularIntensity:1.3,envMap:iceEnvironment(),envMapIntensity:1.6});
   surface.name='prism-dispersive-crystal';
   surface.onBeforeCompile=shader=>{
     Object.assign(shader.uniforms,uniforms,refraction.uniforms);
@@ -61,34 +53,34 @@ export function prismOptics() {
     shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>',`
       vec2 uv=gl_FragCoord.xy/iceViewport;
       vec3 incident=-normalize(vViewPosition);
-      vec2 red=refract(incident,normal,1.0/1.49).xy*.065;
-      vec2 green=refract(incident,normal,1.0/1.54).xy*.065;
-      vec2 blue=refract(incident,normal,1.0/1.60).xy*.065;
+      vec2 red=refract(incident,normal,1.0/1.49).xy*.085;
+      vec2 green=refract(incident,normal,1.0/1.54).xy*.085;
+      vec2 blue=refract(incident,normal,1.0/1.60).xy*.085;
       vec3 transmitted=vec3(iceBehind(uv+red).r,iceBehind(uv+green).g,iceBehind(uv+blue).b);
-      float thickness=.8+sin(vCrystalPosition.y*3.14159)*.5;
-      transmitted*=pow(max(diffuseColor.rgb,vec3(.12)),vec3(thickness));
+      vec3 localNormal=normalize(mat3(viewToCave)*normal);
       vec3 reflected=caveRay(vCavePosition,normalize(mat3(viewToCave)*reflect(incident,normal)));
       float fresnel=.045+.955*pow(1.0-clamp(dot(normal,-incident),0.0,1.0),5.0);
-      float fracture=pow(1.0-abs(sin(vCrystalPosition.y*39.0+vCrystalPosition.x*17.0)),48.0)*.1;
-      float cloud=.06+.08*(.5+.5*sin(vRockId*937.0+vCrystalPosition.y*7.0));
-      float faceLight=.045+.12*max(0.0,dot(normal,normalize(vec3(.4,.5,1.0))));
-      outgoingLight=transmitted*(1.0-fresnel)*(.91-cloud)+reflected*(.1+fresnel*.85)
-        +(reflectedLight.directSpecular+reflectedLight.indirectSpecular)*.85
-        +diffuseColor.rgb*faceLight*cloud+fracture*diffuseColor.rgb;
+      float fracture=pow(1.0-abs(sin(vCrystalPosition.y*39.0+vCrystalPosition.x*17.0+vRockId*37.0)),80.0)*.045;
+      float star=pow(max(0.0,dot(localNormal,normalize(vec3(.65,.48,.72)))),24.0)*1.5;
+      vec3 dispersion=stellarCaustics(vCavePosition);
+      outgoingLight=transmitted*(1.0-fresnel)*.97+reflected*(.15+fresnel*.85)
+        +(reflectedLight.directSpecular+reflectedLight.indirectSpecular)*1.5
+        +vec3(star+fracture)+dispersion*(.12+fresnel*.3);
       #include <opaque_fragment>
       if(captureLayer>.5)gl_FragColor.a=vRockId;`);
   };
-  surface.customProgramCacheKey=()=> 'prism-layered-dispersion-v1';
+  surface.customProgramCacheKey=()=> 'prism-stellar-dispersion-v2';
   return {surface,uniforms,refraction};
 }
 export function caveWallMaterial(uniforms:ReturnType<typeof prismOptics>['uniforms']) {
   return new T.ShaderMaterial({side:T.DoubleSide,uniforms,
-    vertexShader:`uniform float caveScroll;attribute float caveAngle;varying vec3 vCavePosition;
-      void main(){vec3 p=position;float bump=1.0+.028*sin((p.y+caveScroll)*.9+caveAngle*7.0)+.018*sin((p.y+caveScroll)*2.1-caveAngle*11.0);
-      p.x*=bump;p.z=-1.5+(p.z+1.5)*bump;vCavePosition=p;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);}`,
+    vertexShader:`uniform float caveScroll;varying vec3 vCavePosition;
+      void main(){vec3 p=position;float y=p.y+caveScroll;
+      p.z+=.22*sin(y*1.4+p.x*5.0)+.17*sin(y*3.7-p.x*7.0);p.x+=.10*sin(y*2.1+p.x*8.0);vCavePosition=p;
+      gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);}`,
     fragmentShader:`${caveSampling}
       varying vec3 vCavePosition;
-      void main(){vec3 n=normalize(cross(dFdx(vCavePosition),dFdy(vCavePosition)));float light=.45+.55*abs(dot(n,normalize(vec3(.4,.5,1.0))));
+      void main(){vec3 n=normalize(cross(dFdx(vCavePosition),dFdy(vCavePosition)));float light=.5+.5*abs(dot(n,normalize(vec3(.65,.48,.72))));
       gl_FragColor=vec4(cavePaint(vCavePosition)*light,1.0);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
