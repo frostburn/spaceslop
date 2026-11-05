@@ -6,7 +6,7 @@ const server = await createServer({ root: new URL('..', import.meta.url).pathnam
 after(() => server.close());
 const { Flight, STEP, titanWaves } = await server.ssrLoadModule('/src/game.ts');
 const { TITAN_DURATION, TITAN_SCREENS, titanTileY } = await server.ssrLoadModule('/src/titan-layout.ts');
-const { titanMask, riverCenter } = await server.ssrLoadModule('/src/titan-mask.ts');
+const { titanMask } = await server.ssrLoadModule('/src/titan-mask.ts');
 const { titanLights } = await server.ssrLoadModule('/src/titan-features.ts');
 
 test('the ten-screen plate scrolls bottom to top with uninterrupted viewport coverage', () => {
@@ -52,17 +52,14 @@ test('a failed Titan run retains its position and a new flight starts at the ope
   assert.equal(new Flight('sentry', [], 'vex', 'titan').hiveProgress, 0);
 });
 
-test('procedural mask gates river, cyan pipe and lamps instead of recoloring the whole plate', () => {
+test('procedural mask retains pipe and lamp animation with no river channel', () => {
   const w = 720, h = 128, top = 5800, pixels = new Uint8ClampedArray(w*h*4);
   for (let i = 0; i < pixels.length; i += 4) pixels.set([80,70,55,255], i);
-  const riverX = Math.round(riverCenter(top + 50)), pipeX = 620;
-  pixels.set([12,15,18,255], (50*w+riverX)*4);
+  const pipeX = 620;
+  pixels.set([12,15,18,255], (50*w+100)*4);
   pixels.set([40,180,200,255], (50*w+pipeX)*4);
   const mask = titanMask(pixels,w,h,top,12800);
-  assert.equal(mask[(50*w+riverX)*4], 0, 'station occlusion must not ripple dark roofs and pipes');
-  const waterY=11000, waterX=Math.round(riverCenter(waterY+50));
-  pixels.set([12,15,18,255],(50*w+waterX)*4);
-  assert(titanMask(pixels,w,h,waterY,12800)[(50*w+waterX)*4] > 200);
+  assert(mask.every((value,i) => i%4 !== 0 || value === 0), 'river channel must remain unused');
   assert(mask[(50*w+pipeX)*4+1] > 200);
   assert.equal(mask[(50*w+400)*4], 0); assert.equal(mask[(50*w+400)*4+1], 0);
   // The same cyan pixel outside the pipe's registered section stays unaffected.

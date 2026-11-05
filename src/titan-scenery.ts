@@ -2,24 +2,23 @@ import * as T from 'three';
 import { encounterTextureUrl } from './encounter-texture';
 import {TITAN_DURATION,TITAN_SCREENS,titanTileY} from './titan-layout';
 import {titanMask} from './titan-mask';
+import {createTitanAmbient} from './titan-ambient';
 
 export function createTitanScenery(){
  const root=new T.Group();root.name='titan-research-station';root.visible=false;
  const tiles:T.Mesh<T.PlaneGeometry,T.ShaderMaterial>[]=[],textures:T.Texture[]=[];
  const clock={value:0};
  const geometry=new T.PlaneGeometry(9,16);
+ const ambient=createTitanAmbient();root.add(ambient.root);
  for(let i=0;i<TITAN_SCREENS;i++){
-  const material=new T.ShaderMaterial({uniforms:{map:{value:null},mask:{value:null},hasMap:{value:0},clock,tile:{value:i},texel:{value:new T.Vector2(1/720,1/1284)},crop:{value:new T.Vector2(2/1284,1280/1284)}},
+  const material=new T.ShaderMaterial({uniforms:{map:{value:null},mask:{value:null},hasMap:{value:0},clock,tile:{value:i},crop:{value:new T.Vector2(2/1284,1280/1284)}},
    vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
-   fragmentShader:`uniform sampler2D map,mask;uniform float hasMap,clock,tile;uniform vec2 texel,crop;varying vec2 vUv;
+   fragmentShader:`uniform sampler2D map,mask;uniform float hasMap,clock,tile;uniform vec2 crop;varying vec2 vUv;
     void main(){float y=(tile+1.0-vUv.y)/10.0;
      vec2 uv=vec2(vUv.x,crop.x+vUv.y*crop.y);vec3 m=texture2D(mask,uv).rgb;
      vec3 c=vec3(.052,.039,.027);
      if(hasMap>.5){
-      float ripple=sin(y*8200.0+sin(vUv.x*45.0)*1.5-clock*1.1);
-      vec2 warped=uv+vec2(ripple*texel.x*.85*m.r,0.0);
-      c=texture2D(map,warped).rgb;
-      c+=vec3(.018,.016,.010)*m.r*pow(max(0.0,ripple),14.0);
+      c=texture2D(map,uv).rgb;
       float flow=pow(max(0.0,sin(y*1800.0+vUv.x*28.0-clock*3.6)),5.0);
       c+=vec3(.015,.13,.18)*m.g*(.12+flow*.88);
       float phase=fract(clock*.65+floor(y*12800.0/32.0)*.173+floor(vUv.x*720.0/32.0)*.31);
@@ -61,7 +60,7 @@ export function createTitanScenery(){
      maskPixels.data.set(titanMask(pixels.data,w,h+4,i*h-2,fullHeight));maskContext.putImageData(maskPixels,0,0);
      const map=new T.CanvasTexture(canvas),mask=new T.CanvasTexture(maskCanvas);map.colorSpace=T.SRGBColorSpace;
      for(const texture of [map,mask]){texture.minFilter=texture.magFilter=T.LinearFilter;texture.generateMipmaps=false;textures.push(texture);}
-     const u=tiles[i].material.uniforms;u.map.value=map;u.mask.value=mask;u.texel.value.set(1/w,1/(h+4));u.crop.value.set(2/(h+4),h/(h+4));u.hasMap.value=1;
+     const u=tiles[i].material.uniforms;u.map.value=map;u.mask.value=mask;u.crop.value.set(2/(h+4),h/(h+4));u.hasMap.value=1;
     }
     hasArt=true;
    }catch{for(const mesh of tiles)mesh.material.uniforms.hasMap.value=0;}
@@ -69,7 +68,7 @@ export function createTitanScenery(){
   };
   image.src=url;
  });
- return{root,ready,get hasArt(){return hasArt;},update(progress:number,time=progress*TITAN_DURATION){clock.value=time;
+ return{root,ready,get hasArt(){return hasArt;},update(progress:number,time=progress*TITAN_DURATION){clock.value=time;ambient.update(progress,time);
   tiles.forEach((mesh,i)=>{mesh.position.y=titanTileY(i,progress);mesh.visible=Math.abs(mesh.position.y)<16.01;});
  }};
 }
