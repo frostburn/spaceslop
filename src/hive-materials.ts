@@ -40,6 +40,26 @@ function surface(fungal: boolean) {
 const chitin = surface(false);
 const fungal = surface(true);
 
+function cloudedEye() {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 64;
+  const context = canvas.getContext('2d')!;
+  const pixels = context.createImageData(64, 64);
+  for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
+    const cloud = Math.sin(x * 0.13 + Math.sin(y * 0.17) * 1.8) * Math.cos(y * 0.11);
+    const vein = Math.sin(x * 0.37 + Math.cos(y * 0.15) * 3) ** 18;
+    const index = (y * 64 + x) * 4;
+    pixels.data[index] = 134 + cloud * 20 - vein * 12;
+    pixels.data[index + 1] = 155 + cloud * 18 - vein * 10;
+    pixels.data[index + 2] = 147 + cloud * 17 - vein * 8;
+    pixels.data[index + 3] = 255;
+  }
+  context.putImageData(pixels, 0, 0);
+  const texture = new T.CanvasTexture(canvas);
+  texture.colorSpace = T.SRGBColorSpace;
+  return texture;
+}
+
 export const antShell = new T.MeshStandardMaterial({
   color: 0xd4b2a0, map: chitin.color, bumpMap: chitin.height, bumpScale: 0.026,
   roughnessMap: chitin.height, roughness: 0.64, metalness: 0.14,
@@ -48,7 +68,7 @@ export const antJoint = new T.MeshStandardMaterial({
   color: 0x62514b, map: chitin.color, bumpMap: chitin.height, bumpScale: 0.016, roughness: 0.72,
 });
 export const antSeam = new T.MeshStandardMaterial({ color: 0x3d2420, roughness: 0.66 });
-export const antEye = new T.MeshStandardMaterial({ color: 0x21111a, roughness: 0.18, metalness: 0.28 });
+export const antEye = new T.MeshStandardMaterial({ color: 0xe0e5d7, map: cloudedEye(), roughness: 0.68 });
 export const sporeGlow = new T.MeshBasicMaterial({ color: 0xffb05b });
 
 export const fungusCap = new T.MeshStandardMaterial({

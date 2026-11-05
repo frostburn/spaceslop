@@ -2,7 +2,8 @@ import * as T from 'three';
 import { BOSS_MUZZLE_Z } from './encounters';
 import { antEye, antJoint, antSeam, antShell, fungusStem, sporeGlow } from './hive-materials';
 import { part, pivot } from './rig-geometry';
-import { addParasiteCrust, createParasiteColony } from './ant-parasite';
+import { addParasiteCrust, createHeadStem, createParasiteColony } from './ant-parasite';
+import { addMoldPatch } from './ant-mold';
 
 export type AntKind = 'worker' | 'soldier';
 const oval = new T.SphereGeometry(1, 20, 14);
@@ -44,6 +45,9 @@ export function createAntRig(kind: AntKind = 'worker') {
   const abdomen = pivot(root, 'gaster', 0, -0.56, 0.19);
   part(abdomen, gaster, antShell, 0, 0, 0).scale.z = 0.78;
   addParasiteCrust(abdomen);
+  addMoldPatch(abdomen, 0, -0.03, 0.3, 0.3, 0.8);
+  addMoldPatch(abdomen, -0.25, -0.05, 0.27, 0.28, 0.65, 1);
+  addMoldPatch(abdomen, 0.25, 0.02, 0.27, 0.28, 0.7, 2);
   for (const y of [-0.23, 0.02, 0.21]) {
     const band = part(abdomen, suture, antSeam, 0, y, 0);
     band.scale.set(y > 0.1 ? 0.84 : 1, 1, y > 0.1 ? 0.65 : 0.77);
@@ -52,10 +56,15 @@ export function createAntRig(kind: AntKind = 'worker') {
   part(root, oval, antShell, 0, -0.12, 0.2).scale.set(0.12, 0.09, 0.12);
   part(root, oval, antShell, 0, 0.08, 0.19).scale.set(0.23, 0.27, 0.19);
   part(root, oval, antShell, 0, 0.22, 0.19).scale.set(0.25, 0.14, 0.2);
+  addMoldPatch(root, 0, 0.13, 0.41, 0.42, 0.46, 1);
   const head = pivot(root, 'head', 0, 0.49, 0.2);
   part(head, oval, antShell, 0, 0, 0).scale.set(0.29, 0.27, 0.2);
   part(head, oval, antShell, 0, 0.15, 0.035).scale.set(0.23, 0.15, 0.17);
   part(head, oval, antJoint, 0, 0.255, 0.035).scale.set(0.12, 0.055, 0.08);
+  addMoldPatch(head, 0, -0.02, 0.225, 0.38, 0.34, 2);
+  const headStem = createHeadStem();
+  headStem.position.set(-0.03, -0.06, 0.18);
+  head.add(headStem);
 
   const legs: { side: number; index: number; root: T.Group; knee: T.Group }[] = [];
   const feelers: { side: number; root: T.Group }[] = [];
@@ -63,6 +72,7 @@ export function createAntRig(kind: AntKind = 'worker') {
   const vents: T.Mesh[] = [];
   for (const side of [-1, 1]) {
     const eye = part(head, oval, antEye, side * 0.252, 0.035, 0.11);
+    eye.name = 'clouded-eye';
     eye.scale.set(0.065, 0.105, 0.075);
     const jaw = pivot(head, 'mandible', side * 0.09, 0.22, 0.015);
     part(jaw, mandible, antJoint, 0, 0, 0).scale.x = side;

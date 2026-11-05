@@ -4,6 +4,7 @@ import {
 import { levels, type LevelId } from './levels';
 import { DRONE_HULL, FIGHTER_HULL, HiveCollision, POD_BOUNDS, POD_HULL } from './hive-collision';
 import { HIVE_CAMERA_DISTANCE } from './hive-layout';
+import { steerHiveAnt } from './ant-navigation';
 import { HEIGHT, WIDTH } from './playfield';
 import { CLOSE_CALLS_REQUIRED, HOT_DOCK_COOLDOWN, HOT_DOCK_DISTANCE, type PilotId } from './pilot-data';
 import { WING_FLASH_TIME, WING_FORMATION, wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
@@ -30,6 +31,7 @@ type Shot = Point & {
 type Threat = Shot & { graze?: 'near' | 'counted' };
 type Enemy = Point & {
   lane: number; age: number; fire: number; hp: number; drop?: WingWeapon; raptor?: boolean; ant?: 'worker' | 'soldier';
+  course?: number; courseAt?: number; heading?: number;
 };
 type Drop = Point & { weapon: WingWeapon };
 type Wing = {
@@ -560,8 +562,11 @@ export class Flight {
     for (const enemy of this.enemies) {
       enemy.age += dt;
       const motion = enemy.raptor ? raptorFlight(enemy.age) : undefined;
-      enemy.y -= (motion?.speed ?? (enemy.ant === 'soldier' ? 1.7 : 2.25)) * dt;
-      if (!motion || motion.pose === 'glide') enemy.x = enemy.lane + Math.sin(enemy.age * 1.55) * 0.46;
+      if (enemy.ant && this.fungi) steerHiveAnt(enemy, this.fungi, this.stageDuration, dt);
+      else {
+        enemy.y -= (motion?.speed ?? 2.25) * dt;
+        if (!motion || motion.pose === 'glide') enemy.x = enemy.lane + Math.sin(enemy.age * 1.55) * 0.46;
+      }
       if (!motion && enemy.age >= enemy.fire) {
         enemy.fire += enemy.ant === 'soldier' ? 3.1 : 2.4;
         const dx = this.player.x - enemy.x;

@@ -9,6 +9,7 @@ after(() => server.close());
 const { Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
 const { HiveCollision, FIGHTER_HULL, DRONE_HULL } = await server.ssrLoadModule('/src/hive-collision.ts');
 const { hiveCollisionRecipes, hiveRoot, projectHivePoint } = await server.ssrLoadModule('/src/hive-layout.ts');
+const { steerHiveAnt, antHulls } = await server.ssrLoadModule('/src/ant-navigation.ts');
 const colony = hiveCollisionRecipes[0];
 const capCenter = { x: 0, y: 0 };
 const cloud = colony.bodies[0].cap;
@@ -92,4 +93,38 @@ test('boss footprints use the final view and the preserve keeps unrestricted mov
   flight.player.y = capCenter.y;
   flight.steer(-1, 0, 1);
   assert.equal(flight.player.x, -3.95);
+});
+
+test('workers and soldiers anticipate growth and remain clear throughout scrolling approaches', () => {
+  const scenery = new HiveCollision();
+  let detours = 0;
+  for (const kind of ['worker', 'soldier']) for (const start of [0.8, 4.8, 9.2, 18.2, 22.2]) for (const lane of [-2.6, 2.6]) {
+    const ant = { x: lane, y: 8.6, lane, age: 0, ant: kind };
+    let dodged = false, previous = { x: ant.x, y: ant.y };
+    for (let frame = 0; start + frame * STEP < 28 && ant.y > -9; frame++) {
+      const time = start + frame * STEP;
+      scenery.update(time / 28, 26);
+      ant.age += STEP;
+      steerHiveAnt(ant, scenery, 28, STEP);
+      assert(!scenery.overlaps(ant, antHulls[kind]), `${kind} overlaps growth at ${time}, lane ${lane}`);
+      if (frame > 1) assert(Math.hypot(ant.x - previous.x, ant.y - previous.y) < 0.15,
+        `${kind} jumps at ${time}, lane ${lane}: ${JSON.stringify({ previous, ant })}`);
+      if (Math.abs(ant.course - (lane + Math.sin(ant.age * 1.55) * 0.46)) > 0.5) dodged = true;
+      previous = { x: ant.x, y: ant.y };
+    }
+    if (dodged) detours++;
+    assert(ant.y < 7, `${kind} stalled near its spawn`);
+  }
+  assert(detours >= 10, `expected deliberate detours, saw ${detours}`);
+});
+
+test('an ant returns toward its own lane when its path is clear', () => {
+  const emptyScenery = new HiveCollision();
+  const ant = { x: 1.5, y: 5, lane: 0, age: 0, ant: 'worker', course: 1.5 };
+  for (let frame = 0; frame < 120; frame++) {
+    ant.age += STEP;
+    steerHiveAnt(ant, emptyScenery, 28, STEP);
+  }
+  assert(Math.abs(ant.x) < 0.6);
+  assert(ant.y < 1);
 });

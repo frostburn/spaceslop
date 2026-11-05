@@ -15,6 +15,7 @@ import { createShipyard } from './shipyard';
 import { createStageBackdrops } from './stage-backdrops';
 import { createHiveScenery } from './hive-scenery';
 import { HIVE_CAMERA_DISTANCE } from './hive-layout';
+import { antScales } from './ant-navigation';
 import { WING_FLASH_TIME, wingWeapons, type WingProjectile, type WingWeapon } from './wing';
 import { createWingPod } from './wing-pod';
 
@@ -305,8 +306,8 @@ export class FlightView {
       ant.root.visible = Boolean(enemy?.ant);
       if (!ant.root.visible || !enemy) continue;
       ant.root.position.set(enemy.x, enemy.y, 0);
-      ant.root.scale.setScalar(enemy.ant === 'soldier' ? 1.03 : 0.8);
-      ant.root.rotation.z = Math.PI + 0.15 * Math.cos(enemy.age * 1.55);
+      ant.root.scale.setScalar(antScales[enemy.ant ?? 'worker']);
+      ant.root.rotation.z = Math.PI + (enemy.heading ?? 0.05 * Math.cos(enemy.age * 1.55));
       ant.setKind(enemy.ant === 'soldier' ? 'soldier' : 'worker');
       const windup = enemy.ant === 'soldier' ? T.MathUtils.clamp((enemy.age - enemy.fire + 0.55) / 0.55, 0, 1) : 0;
       ant.pose(enemy.age, windup);

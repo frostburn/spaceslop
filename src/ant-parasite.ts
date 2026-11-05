@@ -26,6 +26,15 @@ for (let i = 0; i < 4; i++) {
 }
 const stalks = mergeGeometries(stems);
 const tips = mergeGeometries(clubs);
+const headCurve = new T.CatmullRomCurve3([
+  new T.Vector3(), new T.Vector3(-0.08, 0.08, 0.24), new T.Vector3(-0.25, 0.27, 0.58),
+  new T.Vector3(-0.18, 0.47, 0.92), new T.Vector3(-0.1, 0.57, 1.03),
+]);
+const headStalk = new T.TubeGeometry(headCurve, 18, 0.031, 8, false);
+const headClub = sphere.clone().scale(0.095, 0.095, 0.2);
+headClub.applyQuaternion(new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 0, 1), headCurve.getTangent(1)));
+const headEnd = headCurve.getPoint(1);
+headClub.translate(headEnd.x, headEnd.y, headEnd.z);
 
 const crustParts: T.BufferGeometry[] = [];
 for (const side of [-1, 1]) for (let i = 0; i < 4; i++) {
@@ -48,4 +57,13 @@ export function createParasiteColony() {
 
 export function addParasiteCrust(parent: T.Group) {
   part(parent, crust, fungusStem, 0, 0, 0);
+}
+
+export function createHeadStem() {
+  const root = new T.Group();
+  root.name = 'head-fruiting-stem';
+  part(root, sphere, fungusStem, 0, 0, 0.015).scale.set(0.083, 0.095, 0.055);
+  part(root, headStalk, fungusStem, 0, 0, 0);
+  part(root, headClub, fungusCap, 0, 0, 0);
+  return root;
 }
