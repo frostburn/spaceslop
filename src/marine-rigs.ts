@@ -65,12 +65,11 @@ function tintGeometry(geometry: T.BufferGeometry, fin = false) {
   geometry.setAttribute('color',new T.Float32BufferAttribute(colors,3));
   geometry.setAttribute('hideCoord',positions.clone()); return geometry;
 }
-const profiles: Record<Animal, number[][]> = {
+const profiles: Record<MarineKind, number[][]> = {
   ichthyosaur: [[-1.45,.025,.04],[-1.1,.09,.11],[-.65,.22,.25],[-.15,.35,.34],[.4,.29,.28],[.75,.23,.21],[.93,.12,.10],[1.3,.075,.06],[1.62,.008,.012]],
   plesiosaur: [[-1.1,.008,.01],[-.8,.18,.12],[-.3,.43,.29],[.25,.4,.30],[.58,.23,.21],[.9,.17,.17],[1.4,.14,.14],[1.85,.13,.12],[2.03,.20,.14],[2.24,.16,.11],[2.42,.018,.025]],
-  mosasaur: [[-4,.02,.04],[-3.4,.12,.17],[-2.6,.25,.3],[-1.7,.49,.47],[-.6,.83,.68],[.2,.78,.65],[.75,.65,.48],[.85,.62,.43]],
 };
-function bodyGeometry(kind: Animal) {
+function bodyGeometry(kind: MarineKind) {
   if(geometryCache.has(kind))return geometryCache.get(kind)!;
   const curve = new T.CatmullRomCurve3(profiles[kind].map(([y,w,h])=>new T.Vector3(w,y,h)),false,'centripetal');
   const p:number[]=[],uv:number[]=[],indices:number[]=[],weights:number[]=[],joints:number[]=[];
@@ -80,11 +79,9 @@ function bodyGeometry(kind: Animal) {
     for(let col=0;col<=cols;col++) {
       const a=col/cols*Math.PI*2;
       let z=Math.sin(a)*Math.max(.002,v.z);
-      // The mosasaur skull and mandible are rigid meshes sharing one head frame.
       p.push(Math.cos(a)*Math.max(.002,v.x),y,z); uv.push(col/cols,row/rows);
       let first=0,second=1,weight=T.MathUtils.clamp((-y-.2)/.5,0,1);
       if(y<-.7){first=1;second=2;weight=T.MathUtils.clamp((-y-.7)/.9,0,1);}
-      if(kind==='mosasaur'&&y>.2){first=0;second=3;weight=T.MathUtils.clamp((y-.2)/.45,0,1);}
       if(kind==='plesiosaur'&&y>.5){
         first=y<1.0?0:y<1.6?3:4;second=first===0?3:first+1;
         const start=first===0?.5:first===3?1.0:1.6, length=first===0?.5:first===3?.6:.3;
@@ -122,8 +119,8 @@ function verticalFin(kind:'dorsal'|'fluke') {
 const orb = tintGeometry(new T.SphereGeometry(1,24,16));
 const eyeMaterial = new T.MeshPhysicalMaterial({color:0x060c0d,roughness:.08,clearcoat:1});
 const amber = new T.MeshStandardMaterial({color:0x69533b,roughness:.3});
-const mouthMaterial = new T.MeshStandardMaterial({color:0x30252b,roughness:.63,side:T.DoubleSide});
-const toothMaterial = new T.MeshStandardMaterial({color:0xe5d7bc,roughness:.35});
+const mouthMaterial = new T.MeshBasicMaterial({color:0x080609,side:T.DoubleSide});
+const toothMaterial = new T.MeshStandardMaterial({color:0xa59e89,roughness:.7});
 function eyes(parent:T.Object3D,y:number,width:number,z:number,size:number) {
   for(const side of [-1,1]) {
     const socket=part(parent,orb,skin(),side*width,y,z);socket.scale.set(size*1.35,size*1.6,size*.7);
@@ -134,13 +131,14 @@ function eyes(parent:T.Object3D,y:number,width:number,z:number,size:number) {
 
 function animal(kind:Animal) {
   const root=new T.Group();root.name=kind;
-  const bones=Array.from({length:6},()=>new T.Bone());
+  const large=kind==='mosasaur',jawParts=large?marineJawGeometry(tintGeometry):undefined;
+  const bones=Array.from({length:large?7:6},()=>new T.Bone());
   bones[0].add(bones[1],bones[3]);bones[1].position.y=-.7;bones[1].add(bones[2]);bones[2].position.y=-.9;
   bones[3].position.y=.5;bones[3].add(bones[4]);bones[4].position.y=.65;bones[4].add(bones[5]);bones[5].position.y=.65;
+  if(large){bones[6].name='lower-jaw';bones[6].position.set(0,JAW_HINGE_Y-.5,JAW_HINGE_Z);bones[3].add(bones[6]);}
   const pattern: SkinPattern = kind==='plesiosaur'?'stripes':kind==='mosasaur'?'spots':'plain';
-  const body=new T.SkinnedMesh(bodyGeometry(kind),skin(kind==='mosasaur'?1:0,pattern));body.name=`${kind}-body`;body.add(bones[0]);body.bind(new T.Skeleton(bones));body.frustumCulled=false;root.add(body);
+  const body=new T.SkinnedMesh(kind==='mosasaur'?jawParts!.exterior:bodyGeometry(kind),skin(kind==='mosasaur'?1:0,pattern));body.name=`${kind}-body`;body.add(bones[0]);body.bind(new T.Skeleton(bones));body.frustumCulled=false;root.add(body);
   const flippers:T.Group[]=[];
-  const large=kind==='mosasaur';
   for(const rear of [false,true])for(const side of [-1,1]) {
     const x=large?(rear?.5:.7):(kind==='plesiosaur'?(rear?.22:.29):rear?.19:.27);
     const y=large?(rear?-1.6:0):(kind==='plesiosaur'?(rear?-.50:.25):rear?-.55:.25);
@@ -178,22 +176,17 @@ function animal(kind:Animal) {
   }
   const glowMaterial=new T.MeshBasicMaterial({color:0xffb65f,transparent:true,opacity:0,depthWrite:false,blending:T.AdditiveBlending});
   const glow=part(headParent,orb,glowMaterial,0,end-.12-offset,-.03);glow.scale.setScalar(large?.10:.065);glow.name='mouth-charge';
-  let jaw:T.Bone|undefined;
-  if(large) {
-    const jawParts=marineJawGeometry(tintGeometry);
-    part(headParent,jawParts.skull,skin(1,'spots'),0,-offset,0).name='upper-jaw-skin';
+  const jaw=large?bones[6]:undefined;
+  if(jaw && jawParts) {
     jawParts.ridges.forEach((geometry,index)=>{part(headParent,geometry,skin(1,'spots'),0,-offset,0).name=`cranial-ridge-${index}`;});
-    jaw=new T.Bone();jaw.name='lower-jaw';jaw.position.set(0,JAW_HINGE_Y-offset,JAW_HINGE_Z);headParent.add(jaw);
-    part(jaw,jawParts.mandible,skin(1,'spots'),0,0,0).name='lower-jaw-skin';
     part(headParent,jawParts.upperPalate,mouthMaterial,0,-offset,0).name='upper-palate';
     part(jaw,jawParts.lowerPalate,mouthMaterial,0,0,0).name='lower-palate';
-    const throat=new T.SkinnedMesh(jawParts.throat,[skin(1,'spots'),mouthMaterial]);throat.name='gular-skin';root.add(throat);
-    root.updateMatrixWorld(true);throat.bind(new T.Skeleton([bones[3],jaw]));throat.frustumCulled=false;
+    const throat=new T.SkinnedMesh(jawParts.throat,mouthMaterial);throat.name='oral-cavity';root.add(throat);
+    throat.bind(body.skeleton,body.bindMatrix);throat.frustumCulled=false;
     for(const side of [-1,1]) {
       const name=side<0?'L':'R';
       pivot(headParent,`skull-hinge-${name}`,side*.50,JAW_HINGE_Y-offset,JAW_HINGE_Z);
       pivot(jaw,`jaw-hinge-${name}`,side*.50,0,0);
-      const cheek=part(headParent,jawParts.hinges[side<0?0:1],skin(1,'spots'),0,-offset,0);cheek.name=`jaw-joint-${name}`;
       part(headParent,jawParts.socketRims[side<0?0:1],skin(1,'spots'),0,-offset,0).name=`orbital-rim-${name}`;
       part(headParent,jawParts.socketCups[side<0?0:1],mouthMaterial,0,-offset,0).name=`orbital-cup-${name}`;
       const frame=marineEyeFrame(side),eye=pivot(headParent,`protected-eye-${name}`,frame.position.x,frame.position.y-offset,frame.position.z);

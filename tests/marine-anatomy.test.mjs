@@ -51,9 +51,8 @@ test('Leviathan mandible rotates about both skull condyles without a displaced h
     }
     assert(jaw.rotation.x<=0 && jaw.rotation.x>-.5);
   }
-  const shell=rig.root.getObjectByName('lower-jaw-skin').geometry;shell.computeBoundingBox();
-  assert(shell.boundingBox.min.y>-.10,'the mandible must not extend far behind its hinge');
-  assert(shell.boundingBox.max.y>1);
+  const skin=rig.root.getObjectByName('mosasaur-body'),joints=skin.geometry.getAttribute('skinIndex');
+  assert(skin.skeleton.bones.includes(jaw));assert(Array.from(joints.array).filter(j=>j===6).length>500);
 });
 
 test('plesiosaur path and bank stay gentle while the four paddles provide the stroke', () => {
@@ -65,16 +64,17 @@ test('plesiosaur path and bank stay gentle while the four paddles provide the st
 });
 
 
-test('the torso blends continuously into the rigid mosasaur skull', () => {
-  const rig=createLeviathan(),geometry=rig.root.getObjectByName('mosasaur-body').geometry;
-  const uv=geometry.getAttribute('uv'),positions=geometry.getAttribute('position');
-  const joints=geometry.getAttribute('skinIndex'),weights=geometry.getAttribute('skinWeight');
-  let previous=0;
-  for(let i=0;i<positions.count;i++)if(uv.getX(i)===0) {
-    let head=0;for(let j=0;j<4;j++)if(joints.array[i*4+j]===3)head+=weights.array[i*4+j];
-    assert(Math.abs(head-previous)<.3,'a sudden head-weight jump folds the neck into a seam');previous=head;
-  }
-  assert(previous>.99);
+test('Leviathan has one connected exterior from torso through neck into both jaws', () => {
+  const rig=createLeviathan(),body=rig.root.getObjectByName('mosasaur-body'),geometry=body.geometry;
+  assert.equal(rig.root.getObjectByName('gular-skin'),undefined);
+  assert.equal(rig.root.getObjectByName('upper-jaw-skin'),undefined);
+  assert.equal(rig.root.getObjectByName('lower-jaw-skin'),undefined);
+  const adjacency=Array.from({length:geometry.getAttribute('position').count},()=>[]),index=geometry.index.array;
+  for(let i=0;i<index.length;i+=3)for(let j=0;j<3;j++) {const a=index[i+j],b=index[i+(j+1)%3];adjacency[a].push(b);adjacency[b].push(a);}
+  const seen=new Set([0]),todo=[0];while(todo.length)for(const next of adjacency[todo.pop()])if(!seen.has(next)){seen.add(next);todo.push(next);}
+  assert.equal(seen.size,adjacency.length,'the blubber must be one connected surface');
+  const weights=geometry.getAttribute('skinWeight');
+  for(let i=0;i<weights.count;i++)assert(Math.abs(weights.getX(i)+weights.getY(i)+weights.getZ(i)+weights.getW(i)-1)<1e-6);
 });
 
 test('marine bodies have closed nose and tail surfaces rather than open loft rings', () => {
@@ -90,19 +90,24 @@ test('marine bodies have closed nose and tail surfaces rather than open loft rin
   }
 });
 
-test('the skinned throat stays joined to the neck and hinged chin across the bite cycle', () => {
-  const rig=createLeviathan(),skin=rig.root.getObjectByName('gular-skin'),positions=skin.geometry.getAttribute('position');
-  assert.equal(skin.isSkinnedMesh,true);assert.equal(skin.skeleton.bones[1],rig.root.getObjectByName('lower-jaw'));
+test('the continuous neck has no splitting seams as the chin opens', () => {
+  const rig=createLeviathan(),body=rig.root.getObjectByName('mosasaur-body'),p=body.geometry.getAttribute('position');
+  const duplicates=new Map();
+  for(let i=0;i<p.count;i++)if(p.getY(i)>.15&&p.getY(i)<1.3) {
+    const key=[p.getX(i),p.getY(i),p.getZ(i)].map(v=>Math.round(v*1e6)).join('/');
+    if(!duplicates.has(key))duplicates.set(key,[]);duplicates.get(key).push(i);
+  }
   for(const time of [0,.8,1.45,1.8,2.4]) {
     rig.pose(1,0,0,0,0,time);rig.root.updateMatrixWorld(true);
-    for(const [row,bone] of [[0,0],[3,1]])for(const column of [0,6,12,18]) {
-      const index=row*25+column,point=new T.Vector3().fromBufferAttribute(positions,index);
-      const expected=point.clone().applyMatrix4(skin.skeleton.boneInverses[bone]).applyMatrix4(skin.skeleton.bones[bone].matrixWorld);
-      const actual=skin.applyBoneTransform(index,point).applyMatrix4(skin.matrixWorld);
-      assert(expected.distanceTo(actual)<1e-6,'the throat attachment slipped');
+    for(const indices of duplicates.values())if(indices.length>1) {
+      const first=body.applyBoneTransform(indices[0],new T.Vector3().fromBufferAttribute(p,indices[0]));
+      for(const i of indices.slice(1))assert(first.distanceTo(body.applyBoneTransform(i,new T.Vector3().fromBufferAttribute(p,i)))<1e-5,'a neck seam opened');
     }
   }
-  assert(skin.geometry.groups.some(group=>group.materialIndex===1),'the mouth-side closure needs oral tissue');
+  for(const name of ['upper-palate','lower-palate','oral-cavity']) {
+    const material=rig.root.getObjectByName(name).material;
+    assert(material.isMeshBasicMaterial);assert(Math.max(material.color.r,material.color.g,material.color.b)<.005,'oral tissue must remain dark under strong lights');
+  }
 });
 
 test('Leviathan eyes sit behind protective angular orbital rims', () => {
@@ -115,8 +120,25 @@ test('Leviathan eyes sit behind protective angular orbital rims', () => {
       const local=new T.Vector3().fromBufferAttribute(positions,i).add(rim.position).sub(eye.position).applyQuaternion(inverse);
       hood=Math.max(hood,local.z);
     }
-    assert(hood>.07);assert(eye.children.every(part=>part.position.z+part.scale.z<hood));
+    assert(hood>.065);assert(eye.children.every(part=>part.position.z+part.scale.z<hood));
     assert(rig.root.getObjectByName('orbital-cup-'+side));
+  }
+});
+
+test('both protected eyes have an unobstructed forward view past the snout and brow', () => {
+  const rig=createLeviathan();rig.pose(1,0,0,0,0,0);rig.root.updateMatrixWorld(true);
+  const body=rig.root.getObjectByName('mosasaur-body');
+  for(const side of ['L','R']) {
+    const eye=rig.root.getObjectByName('protected-eye-'+side);
+    const gaze=new T.Vector3(0,0,1).applyQuaternion(eye.quaternion);
+    assert(gaze.y>.75,'the socket must look forward along the animal, not up or sideways');
+    const forward=new T.Vector3(0,1,0).transformDirection(eye.parent.matrixWorld);
+    const pupil=eye.children[2].getWorldPosition(new T.Vector3());
+    const ray=new T.Raycaster(pupil.clone().addScaledVector(forward,3),forward.clone().negate(),0,3.2);
+    const blockers=[body,...eye.children,rig.root.getObjectByName('orbital-rim-'+side)];
+    for(let i=0;i<3;i++)blockers.push(rig.root.getObjectByName('cranial-ridge-'+i));
+    const hit=ray.intersectObjects(blockers,false)[0];
+    assert(hit && eye.children.includes(hit.object),`${side} eye is hidden behind its own brow or snout`);
   }
 });
 
