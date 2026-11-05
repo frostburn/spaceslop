@@ -2,6 +2,7 @@ import { registerSW } from 'virtual:pwa-register';
 import { BOSS_HP, Flight, HEIGHT, STEP, WIDTH } from './game';
 import { setupPilots } from './pilots';
 import { FlightView } from './view';
+import { levels, readLevel } from './levels';
 import { readWingWeapon, wingWeapons } from './wing';
 import './style.css';
 
@@ -32,8 +33,11 @@ const hull = element('hull');
 const score = element('score');
 const charges = element('charges');
 const bossHud = element('boss-hud');
+const bossName = element('boss-name');
 const bossHealth = element<HTMLProgressElement>('boss-health');
 const droneWeapon = element<HTMLSelectElement>('drone-weapon');
+const levelSelector = element<HTMLSelectElement>('level');
+levelSelector.value = readLevel(new URLSearchParams(location.search).get('level'));
 const testingWings = import.meta.env.DEV || new URLSearchParams(location.search).get('testLoadout') === '1';
 element('test-wing-loadout').hidden = !testingWings;
 const wingSelectors = ['left-wing', 'right-wing'].map((id) => element<HTMLSelectElement>(id));
@@ -62,7 +66,7 @@ const directions: Record<string, readonly [number, number]> = {
 };
 const keys = new Set<string>();
 let screen: Screen = 'title';
-let flight = new Flight('sentry', [], pilotPicker.selectedId);
+let flight = new Flight('sentry', [], pilotPicker.selectedId, readLevel(levelSelector.value));
 let pointer: { id: number; x: number; y: number; dragging: boolean } | undefined;
 let pendingUpdate = false;
 let offlineReady = false;
@@ -91,7 +95,7 @@ function syncUI() {
   const active = screen === 'active';
   const fighting = flight.phase === 'stage' || flight.phase === 'boss';
   const label = {
-    stage: 'SECTOR 01', approach: 'CONTACT', boss: 'BOSS', won: 'CLEAR', lost: 'SIGNAL LOST',
+    stage: levels[flight.level].sector, approach: 'CONTACT', boss: 'BOSS', won: 'CLEAR', lost: 'SIGNAL LOST',
   }[flight.phase];
   sector.textContent = label;
   score.textContent = String(flight.score).padStart(6, '0');
@@ -99,6 +103,7 @@ function syncUI() {
   charges.textContent = String(flight.charges).padStart(2, '0');
   bossHud.hidden = flight.phase !== 'boss';
   bossHealth.value = flight.bossHealth;
+  bossName.textContent = levels[flight.level].boss;
   pulse.disabled = !active || !fighting || flight.charges === 0;
   pause.hidden = !active;
   panel.hidden = active;
@@ -183,11 +188,19 @@ start.addEventListener('click', () => {
       droneWeapon.value === 'towline' ? 'towline' : 'sentry',
       testingWings ? wingSelectors.map((select) => readWingWeapon(select.value)) : [],
       pilotPicker.selectedId,
+      readLevel(levelSelector.value),
     );
   }
   screen = 'active';
   resetInput();
   view.render(flight);
+  syncUI();
+});
+
+levelSelector.addEventListener('change', () => {
+  if (screen !== 'title' && screen !== 'results') return;
+  flight = new Flight('sentry', [], pilotPicker.selectedId, readLevel(levelSelector.value));
+  view?.render(flight);
   syncUI();
 });
 

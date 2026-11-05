@@ -22,6 +22,13 @@ const encounterTextures = Object.fromEntries(Object.entries({
   scales: 'encounters/draconian-scales.png',
   preserve: 'encounters/preserve-backdrop.png',
   shipyard: 'encounters/shipyard-backdrop.png',
+  hive: 'encounters/broodlock-foreground.png',
+  hiveMask: 'encounters/broodlock-mines-mask.png',
+  hiveStars: 'encounters/broodlock-stars.png',
+  hiveMines: 'encounters/broodlock-mines.png',
+  chitin: 'encounters/ant-chitin.png',
+  fungus: 'encounters/broodlock-fungus.png',
+  mold: 'encounters/ant-mold.png',
 }).filter(([, src]) => existsSync(new URL(`./public/${src}`, import.meta.url))));
 
 export default defineConfig({

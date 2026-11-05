@@ -1,6 +1,6 @@
 # Spaceslop
 
-Vibe-coded vertical shooter for the browser (PWA). The first playable slice has four scrolling waves, a camera transition, and a head-on interceptor fight.
+Vibe-coded vertical shooter for the browser (PWA), with selectable preserve and ant hive prototype levels, scrolling waves, a camera transition, and a head-on boss fight.
 
 ## Play locally
 
@@ -24,13 +24,23 @@ Enemies can drop wing weapons. Fly through a pickup to equip a pod that flies al
 
 During boss fights, line a wing up horizontally with the green cannon. Homing missiles steer toward it automatically.
 
-The second wave includes a feathered raptor. Its wings fold before it dives along its lane. At the boss, the draconian ace turns toward the camera, then the active cannon glows during its windup and recoils on the volley.
+Choose a level before launch. **Broodlock · Ant hive** is the default: a 28-second traversal of the three-screen hive strip, six waves of infected ants, then a brood guardian. Workers fire aimed spores; larger soldiers charge their amber vents before a three-spore fan. The guardian uses the existing alternating hardpoint, warning-ring, and volley mechanics. The procedural ants have textured chitin, segmented abdomens, elbowed antennae, serrated mandibles, and a jointed six-leg gait. Soldiers have broader heads and larger jaws. Their eyes are cloudy and pale, a long fruiting stalk emerges from the head, and branching parasite colonies and crust spread across their bodies. Five soft mold sprites coat the abdomen, thorax, and head. These planes always face the camera, including while orbiting in the workshop, and leave the amber attack vents readable.
+
+Procedural mushrooms attach to fixed coordinates on the hive strip. Their mycelial roots and contact shadows meet the painted pipes and rock, while tapered stems bend sideways and return toward the camera. Caps follow the direction of each neck, with modeled rims and underside gills. The hive uses a shallow perspective view so the caps have foreground parallax while their roots stay on the same source pixels throughout scrolling and the boss approach.
+
+Stems and caps obstruct the fighter, drone, and wing pods. Contact slides craft along the growth without damaging hull. A blocked touch target releases immediately; a blocked drone parks at the surface, and Glint's Hot Dock counts the actual completed move. Scrolling growth pushes a parked craft clear, including at screen edges. The central flight lane remains open. Collision shapes use the same curves, cap profiles, and projection as the models, and do not depend on texture files.
+
+Ants look ahead along their path and steer into clear lanes before reaching a fruiting body. They bank gently during detours and ease back toward their original lane afterward. Collision clearance also keeps their bodies and legs out of stems and caps. Their avoidance is identical with art and placeholders.
+
+**Overgrown preserve** keeps the original four waves and draconian interceptor fight. Its second wave includes a feathered raptor whose wings fold before a dive. Use `?level=preserve` to open that level directly.
 
 The procedural encounter rigs live in `src/encounter-rigs.ts`. A future model can use the same local pose and pivot names while the simulation owns movement, attack timing, and hitboxes. The interceptor's `muzzle_L` and `muzzle_R` pivots line up with the existing cannon lanes.
 
+Run `npm test` for the hive movement regression checks: keyboard and touch contact, fast movement, scrolling edge traps, drone docking, the open boss lane, and ant detours across the scrolling strip.
+
 ## Asset workshop
 
-Run `npm run dev` and open **Asset workshop** from the game menu or visit `/workshop.html`. Orbit and zoom the raptor, ships, or wing weapon pods. Switch camera presets, scrub or play the animated rigs, and toggle wireframe. The workshop uses the game rigs and the optional alloy texture.
+Run `npm run dev` and open **Asset workshop** from the game menu or visit `/workshop.html`. Orbit and zoom the raptor, ships, worker and soldier ants, guardian, mushroom cluster, or wing weapon pods. Switch camera presets, scrub or play the animated rigs, and toggle wireframe. The workshop uses the game rigs and textures. Its side view exposes the mushroom roots, projecting stems, cap rim, and gills.
 
 ## Assets and offline play
 
@@ -55,5 +65,16 @@ The encounter textures and backdrops are optional PNGs. Add the reviewed files a
 | `public/encounters/draconian-scales.png` | Tileable draconian face, snout, and jaw |
 | `public/encounters/preserve-backdrop.png` | Portrait, top-down scenery. It scrolls underneath the procedural ferns. |
 | `public/encounters/shipyard-backdrop.png` | Portrait backdrop for the boss approach and fight. |
+| `public/encounters/broodlock-foreground.png` | RGBA 720 × 3840 three-screen hive strip. Preserve its alpha and orientation; it traverses bottom to top once, without mirroring or repeating. |
+| `public/encounters/broodlock-mines-mask.png` | Grayscale mask with the exact foreground dimensions and alignment. White reveals mines through the central channel and bridge grating; black reveals stars through exterior holes. Loaded as linear data. |
+| `public/encounters/broodlock-stars.png` | Opaque portrait starfield, fixed in screen space. sRGB; no tiling required. |
+| `public/encounters/broodlock-mines.png` | Opaque portrait dark mine plate, scrolling much more slowly than the hive. sRGB; no tiling required. |
+| `public/encounters/ant-chitin.png` | Optional tileable 512 × 512 RGB albedo for ant shells, limbs, and guardian appendages. sRGB, repeated 1.2 times across the model UVs. |
+| `public/encounters/broodlock-fungus.png` | Optional tileable 512 × 512 RGB albedo for mushroom caps, stems, and ant infection growths. sRGB, repeated 1.1 times across the model UVs. |
+| `public/encounters/ant-mold.png` | Optional 512 × 512 RGBA fuzzy mold patch for camera-facing body infection. Preserve soft alpha, use sRGB and clamp-to-edge; no tiling or opaque background. |
 
 The preserve catwalks and orbital shipyard also have procedural scenery that runs without background images.
+
+Broodlock composites the two distant plates under the alpha foreground, using the matching mask to distinguish the central mine channel from the holes into space. Neither plate is baked into the foreground. The scene freezes at the end of the strip for the guardian. Each file is optional: missing plates use code-drawn stars or mine ribs, and a missing foreground uses procedural side rails and brood chambers. Without a mask, a simple central-channel split is used. New hive geometry and textures join the preflight warm-up so the first ant and guardian do not trigger their initial uploads during play.
+
+Ant and mushroom surfaces retain deterministic code-drawn color, bump, and roughness detail without the chitin and fungus albedo files. Those two optional PNGs replace color only; keep them opaque and do not import them as normal maps. The mold patch instead needs alpha, and has a procedural fuzzy fallback when absent or unreadable. Its sprites share materials, blend over the shell, and do not write depth. With no hive foreground, procedural side rails meet the same mushroom roots; positions and collision remain identical. The prototype strip always spans three screens. Shared mushroom, parasite, and mold rendering is warmed before launch, including the variants farther up the strip. Layout and collision live in `src/hive-layout.ts` and `src/hive-collision.ts`, ant avoidance in `src/ant-navigation.ts`, meshes in `src/hive-fungi.ts`, `src/ant-rigs.ts`, and `src/ant-parasite.ts`, and mold sprites in `src/ant-mold.ts`; no model download is required.

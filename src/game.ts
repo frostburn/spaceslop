@@ -1,11 +1,15 @@
 import {
   BOSS_FIRE_AT, BOSS_MUZZLE_Z, BOSS_RECOIL_TIME, BOSS_VOLLEY_INTERVAL, BOSS_WINDUP_AT, raptorFlight,
 } from './encounters';
+import { levels, type LevelId } from './levels';
+import { DRONE_HULL, FIGHTER_HULL, HiveCollision, POD_BOUNDS, POD_HULL } from './hive-collision';
+import { HIVE_CAMERA_DISTANCE } from './hive-layout';
+import { steerHiveAnt } from './ant-navigation';
+import { HEIGHT, WIDTH } from './playfield';
 import { CLOSE_CALLS_REQUIRED, HOT_DOCK_COOLDOWN, HOT_DOCK_DISTANCE, type PilotId } from './pilot-data';
 import { WING_FLASH_TIME, WING_FORMATION, wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
 
-export const WIDTH = 9;
-export const HEIGHT = 16;
+export { HEIGHT, WIDTH } from './playfield';
 export const STEP = 1 / 60;
 export const BOSS_DEPTH = -12;
 export const BOSS_Y = 4.2;
@@ -26,7 +30,8 @@ type Shot = Point & {
 };
 type Threat = Shot & { graze?: 'near' | 'counted' };
 type Enemy = Point & {
-  lane: number; age: number; fire: number; hp: number; drop?: WingWeapon; raptor?: boolean;
+  lane: number; age: number; fire: number; hp: number; drop?: WingWeapon; raptor?: boolean; ant?: 'worker' | 'soldier';
+  course?: number; courseAt?: number; heading?: number;
 };
 type Drop = Point & { weapon: WingWeapon };
 type Wing = {
@@ -49,12 +54,24 @@ const wingShots = {
   omega: { interval: 1.7, damage: 4, speed: 20, bossTravel: 0.36 },
 };
 
-const stageWaves = [
+type Wave = { time: number; lanes: number[]; carrier?: number; drop?: WingWeapon;
+  raptor?: number; ant?: 'worker' | 'soldier' };
+
+const stageWaves: Wave[] = [
   { time: 0.6, lanes: [-2.6, 0, 2.6], carrier: 1, drop: 'homing' },
   { time: 3.6, lanes: [-2, 2], raptor: 0, carrier: 1, drop: 'cannon' },
   { time: 6.6, lanes: [-3, 0, 3], carrier: 0, drop: 'laser' },
   { time: 9.6, lanes: [-1.3, 1.3], carrier: 1, drop: 'omega' },
-] satisfies { time: number; lanes: number[]; carrier: number; drop: WingWeapon; raptor?: number }[];
+];
+
+const hiveWaves: Wave[] = [
+  { time: 0.8, lanes: [-2.6, 0, 2.6], ant: 'worker', carrier: 1, drop: 'homing' },
+  { time: 4.8, lanes: [-1.9, 1.9], ant: 'soldier', carrier: 1, drop: 'cannon' },
+  { time: 9.2, lanes: [-3, -0.8, 1.6], ant: 'worker', carrier: 0, drop: 'laser' },
+  { time: 13.5, lanes: [-2.4, 1.2], ant: 'soldier', carrier: 0, drop: 'omega' },
+  { time: 18.2, lanes: [-2.8, 0, 2.8], ant: 'worker' },
+  { time: 22.2, lanes: [-2, 2], ant: 'soldier' },
+];
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 const near = (a: Point, b: Point, radius: number) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 < radius ** 2;
@@ -116,7 +133,9 @@ export class Flight {
   perkMessage = '';
   private closeCalls = 0;
   private repairUsed = false;
-  private longRedeploy = false;
+  private droneLaunch?: Point;
+  private stageProgress = 0;
+  private fungi?: HiveCollision;
   private hotDockReady = false;
   private hotDockCooldown = 0;
   private towlineDamage = TOWLINE_DAMAGE;
@@ -135,14 +154,31 @@ export class Flight {
     droneWeapon: DroneWeapon = 'sentry',
     loadout: readonly (WingWeapon | undefined)[] = [],
     pilot: PilotId = 'vex',
+    readonly level: LevelId = 'preserve',
   ) {
     this.droneWeapon = droneWeapon;
     this.pilot = pilot;
+    if (level === 'broodlock') this.fungi = new HiveCollision();
     if (droneWeapon === 'towline') this.droneCooldown = TOWLINE_INTERVAL;
     for (const [index, wing] of this.wings.entries()) {
       const weapon = loadout[index];
       if (weapon) this.equip(wing, weapon);
     }
+  }
+
+  get stageDuration() { return levels[this.level].duration; }
+
+  get hiveProgress() {
+    if (this.phase === 'stage') return clamp(this.time / this.stageDuration, 0, 1);
+    if (this.phase === 'approach' || this.phase === 'boss' || this.phase === 'won') return 1;
+    return this.stageProgress;
+  }
+
+  private prepareFungi() {
+    if (!this.fungi) return;
+    const reveal = this.phase === 'stage' ? 0 : this.phase === 'approach' ? clamp(this.time / TRANSITION_TIME, 0, 1) : 1;
+    const eased = reveal * reveal * (3 - 2 * reveal);
+    this.fungi.update(this.hiveProgress, HIVE_CAMERA_DISTANCE + (BOSS_CAMERA_DISTANCE - HIVE_CAMERA_DISTANCE) * eased);
   }
 
   get perkReadout() {
@@ -171,7 +207,9 @@ export class Flight {
     const desiredX = this.player.x + side * WING_FORMATION.x;
     const x = clamp(desiredX, -WIDTH / 2 + 0.38, WIDTH / 2 - 0.38);
     const tuck = Math.abs(desiredX - x);
-    return { x, y: Math.min(HEIGHT / 2 - 0.24, this.player.y + WING_FORMATION.y + tuck * 0.95) };
+    const origin = { x, y: Math.min(HEIGHT / 2 - 0.24, this.player.y + WING_FORMATION.y + tuck * 0.95) };
+    this.fungi?.move(origin, 0, 0, POD_HULL, POD_BOUNDS);
+    return origin;
   }
 
   get cannonWindup() {
@@ -184,7 +222,7 @@ export class Flight {
     const target = { x: 0, y: 0 };
     moveWithinField(target, x, y);
     this.droneTarget = target;
-    this.longRedeploy = this.pilot === 'glint' && !near(this.drone, target, HOT_DOCK_DISTANCE);
+    this.droneLaunch = { ...this.drone };
   }
 
   aimBy(dx: number, dy: number) {
@@ -197,15 +235,23 @@ export class Flight {
   }
 
   steer(x: number, y: number, dt: number) {
+    this.prepareFungi();
     const maxStep = SHIP_SPEED * dt;
     const direction = Math.hypot(x, y);
     if (direction > 0) {
       this.clearAim();
-      moveWithinField(this.player, x / direction * maxStep, y / direction * maxStep);
+      if (this.fungi) this.fungi.move(this.player, x / direction * maxStep, y / direction * maxStep, FIGHTER_HULL);
+      else moveWithinField(this.player, x / direction * maxStep, y / direction * maxStep);
       return;
     }
 
-    if (this.aim && moveToward(this.player, this.aim, maxStep)) this.clearAim();
+    if (this.aim) {
+      const next = { ...this.player };
+      const reached = moveToward(next, this.aim, maxStep);
+      const blocked = this.fungi?.move(this.player, next.x - this.player.x, next.y - this.player.y, FIGHTER_HULL);
+      if (!this.fungi) Object.assign(this.player, next);
+      if (reached || blocked) this.clearAim();
+    }
   }
 
   pulse() {
@@ -226,19 +272,32 @@ export class Flight {
   step(dt: number) {
     if (this.phase === 'won' || this.phase === 'lost') return;
     this.time += dt;
+    if (this.phase === 'stage') this.stageProgress = this.hiveProgress;
+    this.prepareFungi();
+    if (this.fungi?.move(this.player, 0, 0, FIGHTER_HULL)) this.clearAim();
+    this.fungi?.move(this.drone, 0, 0, DRONE_HULL);
     this.invulnerable = Math.max(0, this.invulnerable - dt);
     this.pulseFlash = Math.max(0, this.pulseFlash - dt);
     this.pickupTime = Math.max(0, this.pickupTime - dt);
     this.bossRecoil = Math.max(0, this.bossRecoil - dt);
     this.perkTime = Math.max(0, this.perkTime - dt);
     this.hotDockCooldown = Math.max(0, this.hotDockCooldown - dt);
-    if (this.droneTarget && moveToward(this.drone, this.droneTarget, DRONE_SPEED * dt)) {
+    let droneDone = false;
+    if (this.droneTarget) {
+      const next = { ...this.drone };
+      droneDone = moveToward(next, this.droneTarget, DRONE_SPEED * dt);
+      const blocked = this.fungi?.move(this.drone, next.x - this.drone.x, next.y - this.drone.y, DRONE_HULL);
+      if (!this.fungi) Object.assign(this.drone, next);
+      droneDone ||= Boolean(blocked);
+    }
+    if (droneDone) {
       this.droneTarget = undefined;
-      if (this.longRedeploy && !this.hotDockReady && this.hotDockCooldown === 0) {
+      if (this.pilot === 'glint' && this.droneLaunch && !near(this.drone, this.droneLaunch, HOT_DOCK_DISTANCE) &&
+        !this.hotDockReady && this.hotDockCooldown === 0) {
         this.hotDockReady = true;
         this.announcePerk('Hot Dock ready');
       }
-      this.longRedeploy = false;
+      this.droneLaunch = undefined;
     }
     if (this.phase === 'approach') {
       if (this.time >= TRANSITION_TIME) this.enter('boss');
@@ -304,7 +363,7 @@ export class Flight {
 
     if (this.phase === 'stage') {
       this.collectDrops(dt);
-      if (this.time >= 14) this.enter('approach');
+      if (this.time >= this.stageDuration) this.enter('approach');
     }
   }
 
@@ -488,12 +547,13 @@ export class Flight {
   }
 
   private stepStage(dt: number) {
-    const wave = stageWaves[this.nextWave];
+    const wave = (this.level === 'broodlock' ? hiveWaves : stageWaves)[this.nextWave];
     if (wave && this.time >= wave.time) {
       this.nextWave++;
       this.enemies.push(...wave.lanes.map((lane, index) =>
         ({
-          x: lane, y: 8.6, lane, age: 0, fire: 1.1 + index * 0.28, hp: 2,
+          x: lane, y: 8.6, lane, age: 0, fire: (wave.ant === 'soldier' ? 1.6 : 1.1) + index * 0.28,
+          hp: wave.ant === 'soldier' ? 5 : 2, ant: wave.ant,
           drop: index === wave.carrier ? wave.drop : undefined,
           raptor: index === wave.raptor,
         })));
@@ -502,14 +562,22 @@ export class Flight {
     for (const enemy of this.enemies) {
       enemy.age += dt;
       const motion = enemy.raptor ? raptorFlight(enemy.age) : undefined;
-      enemy.y -= (motion?.speed ?? 2.25) * dt;
-      if (!motion || motion.pose === 'glide') enemy.x = enemy.lane + Math.sin(enemy.age * 1.55) * 0.46;
+      if (enemy.ant && this.fungi) steerHiveAnt(enemy, this.fungi, this.stageDuration, dt);
+      else {
+        enemy.y -= (motion?.speed ?? 2.25) * dt;
+        if (!motion || motion.pose === 'glide') enemy.x = enemy.lane + Math.sin(enemy.age * 1.55) * 0.46;
+      }
       if (!motion && enemy.age >= enemy.fire) {
-        enemy.fire += 2.4;
+        enemy.fire += enemy.ant === 'soldier' ? 3.1 : 2.4;
         const dx = this.player.x - enemy.x;
         const dy = this.player.y - enemy.y;
-        const scale = 5.7 / (Math.hypot(dx, dy) || 1);
-        this.threats.push({ x: enemy.x, y: enemy.y, z: 0, vx: dx * scale, vy: dy * scale, vz: 0 });
+        const angle = Math.atan2(dx, dy);
+        const speed = enemy.ant ? 4.6 : 5.7;
+        const spread = enemy.ant === 'soldier' ? [-0.24, 0, 0.24] : [0];
+        for (const offset of spread) {
+          this.threats.push({ x: enemy.x, y: enemy.y, z: 0,
+            vx: Math.sin(angle + offset) * speed, vy: Math.cos(angle + offset) * speed, vz: 0 });
+        }
       }
       if (near(enemy, this.player, 0.68)) {
         enemy.hp = 0;

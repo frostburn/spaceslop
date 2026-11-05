@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { createAntRig, createHiveGuardian } from './ant-rigs';
 import { poseBurners, shipBurners } from './burners';
 import { createInterceptorRig, createRaptorRig } from './encounter-rigs';
 import { loadEncounterTextures } from './encounter-texture';
@@ -7,6 +8,7 @@ import {
   BOSS_FIRE_AT, BOSS_RECOIL_TIME, BOSS_VOLLEY_INTERVAL, BOSS_WINDUP_AT, RAPTOR_FLARE_END, raptorFlight,
 } from './encounters';
 import { BOSS_CANNON_X, TRANSITION_TIME } from './game';
+import { createMushroomCluster } from './hive-fungi';
 import { createDroneRig, createFighterRig, createScoutRig } from './ship-rigs';
 import { createWingPod } from './wing-pod';
 import type { WingWeapon } from './wing';
@@ -32,6 +34,11 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const raptor = createRaptorRig();
   const interceptor = createInterceptorRig(BOSS_CANNON_X);
   const interceptorBurners = shipBurners(interceptor.root);
+  const ant = createAntRig();
+  ant.root.rotation.z = Math.PI;
+  const soldier = createAntRig('soldier');
+  soldier.root.rotation.z = Math.PI;
+  const guardian = createHiveGuardian(BOSS_CANNON_X);
   raptor.root.rotation.z = Math.PI;
   const scout = createScoutRig();
   scout.rotation.z = Math.PI;
@@ -67,24 +74,9 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     };
   }
 
-  const assets = {
-    fighter: shipAsset(createFighterRig().root),
-    scout: shipAsset(scout),
-    drone: shipAsset(createDroneRig()),
-    homing: weaponAsset('homing'),
-    cannon: weaponAsset('cannon'),
-    laser: weaponAsset('laser'),
-    omega: weaponAsset('omega'),
-    raptor: {
-      root: raptor.root,
-      duration: RAPTOR_FLARE_END,
-      pose(time: number) {
-        raptor.pose(time);
-        return raptorFlight(time).pose;
-      },
-    },
-    interceptor: {
-      root: interceptor.root,
+  function bossAsset(rig: typeof guardian, burners?: T.Mesh[]) {
+    return {
+      root: rig.root,
       duration: TRANSITION_TIME + BOSS_VOLLEY_INTERVAL + BOSS_FIRE_AT + BOSS_RECOIL_TIME,
       pose(time: number) {
         const reveal = Math.min(1, time / TRANSITION_TIME);
@@ -96,13 +88,52 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
         const fired = elapsed >= BOSS_FIRE_AT;
         const windup = fired ? 0 : Math.max(0, (elapsed - BOSS_WINDUP_AT) / (BOSS_FIRE_AT - BOSS_WINDUP_AT));
         const recoil = fired ? Math.max(0, 1 - (elapsed - BOSS_FIRE_AT) / BOSS_RECOIL_TIME) : 0;
-        interceptor.pose(eased, windup, fired ? -cannon : cannon, fired ? cannon : 0, recoil);
-        poseBurners(interceptorBurners, time, 0.42 + 0.48 * Math.sin(eased * Math.PI));
+        rig.pose(eased, windup, fired ? -cannon : cannon, fired ? cannon : 0, recoil);
+        if (burners) poseBurners(burners, time, 0.42 + 0.48 * Math.sin(eased * Math.PI));
         if (reveal < 1) return 'reveal';
         if (recoil > 0) return 'recoil';
         return windup > 0 ? 'windup' : 'ready';
       },
+    };
+  }
+
+  const assets = {
+    fighter: shipAsset(createFighterRig().root),
+    scout: shipAsset(scout),
+    drone: shipAsset(createDroneRig()),
+    homing: weaponAsset('homing'),
+    cannon: weaponAsset('cannon'),
+    laser: weaponAsset('laser'),
+    omega: weaponAsset('omega'),
+    ant: {
+      root: ant.root,
+      duration: 3.1,
+      pose(time: number) {
+        const windup = T.MathUtils.clamp((time - 2.55) / 0.55, 0, 1);
+        ant.pose(time, windup);
+        return windup > 0 ? 'spore windup' : 'scuttle';
+      },
     },
+    soldier: {
+      root: soldier.root,
+      duration: 3.1,
+      pose(time: number) {
+        const windup = T.MathUtils.clamp((time - 2.55) / 0.55, 0, 1);
+        soldier.pose(time, windup);
+        return windup > 0 ? 'spore windup' : 'scuttle';
+      },
+    },
+    mushroom: { root: createMushroomCluster(), duration: 0, pose: () => 'rooted' },
+    guardian: bossAsset(guardian),
+    raptor: {
+      root: raptor.root,
+      duration: RAPTOR_FLARE_END,
+      pose(time: number) {
+        raptor.pose(time);
+        return raptorFlight(time).pose;
+      },
+    },
+    interceptor: bossAsset(interceptor, interceptorBurners),
   };
   void loadEncounterTextures(interceptor, raptor, Object.values(assets).map(({ root }) => root));
   for (const asset of Object.values(assets)) scene.add(asset.root);

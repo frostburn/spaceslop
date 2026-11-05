@@ -32,12 +32,19 @@
       <div class="bay">
         <div id="flight">
           <canvas id="field" aria-label="Spaceslop flight view"></canvas>
-          <div id="boss-hud" hidden><span>INTERCEPTOR</span><progress id="boss-health" aria-label="Boss health"></progress></div>
+          <div id="boss-hud" hidden><span id="boss-name">INTERCEPTOR</span><progress id="boss-health" aria-label="Boss health"></progress></div>
           <section id="panel" aria-labelledby="heading">
             <h1 id="heading">Spaceslop</h1>
             <p id="message">Tap to place the drone. Drag to steer.</p>
             <div id="mobile-picker">
               <div id="loadout-picker">
+                <label class="loadout-field">
+                  Level
+                  <select id="level">
+                    <option value="broodlock">Broodlock · Ant hive</option>
+                    <option value="preserve">Overgrown preserve</option>
+                  </select>
+                </label>
                 <fieldset id="pilot-picker">
                   <legend>Select pilot</legend>
                   <div id="pilot-choices"></div>
