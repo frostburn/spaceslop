@@ -19,6 +19,7 @@ import { antScales } from './ant-navigation';
 import { WING_FLASH_TIME, wingWeapons, type WingWeapon } from './wing';
 import { createWingPod } from './wing-pod';
 import { createCombatEffects } from './combat-effects';
+import { createLaserContactTrace } from './laser-contact';
 import { createPowerupGraphic } from './powerup-graphics';
 import { createContinuousLaser, createMuzzleFlash, createProjectileBatch, projectileKinds, type ProjectileKind } from './projectile-graphics';
 
@@ -91,6 +92,7 @@ export class FlightView {
   private wingPods = Array.from({ length: 2 }, () => (Object.keys(wingWeapons) as WingWeapon[])
     .map((weapon) => ({ weapon, ...createWingPod(weapon) })));
   private wingLasers = Array.from({ length: 2 }, createContinuousLaser);
+  private laserContact = createLaserContactTrace(this.plane);
   private drops = Array.from({ length: 12 }, createPowerupGraphic);
   private markers = Array.from({ length: 3 }, () => new T.Mesh(
     new T.RingGeometry(0.53, 0.61, 24),
@@ -174,6 +176,17 @@ export class FlightView {
       this.renderer.initTexture(texture);
     }
     await compiled;
+
+    // Cache silhouette bounds before the first laser hit, spread across small preflight batches.
+    const contactModels = [this.raptor.root, this.enemies[0].root, this.boss.root, this.hiveBoss.root,
+      ...this.ants.map(({ root }) => root)];
+    for (let i = 0; i < contactModels.length; i += 3) {
+      await nextFrame();
+      if (signal.aborted) return;
+      for (const model of contactModels.slice(i, i + 3)) model.traverse((node) => {
+        if (node instanceof T.Mesh && !node.geometry.boundingBox) node.geometry.computeBoundingBox();
+      });
+    }
 
     // Use the actual canvas framebuffer so the draws prime the same programs and buffers as play.
     const stage: T.Object3D[] = [this.raptor.root, this.enemies[0].root, this.bridge.root];
@@ -320,7 +333,7 @@ export class FlightView {
       ant.pose(enemy.age, windup);
     }
 
-    this.drawWings(flight, eased, fighterVelocity);
+    this.drawWings(flight, eased, fighterVelocity, camera === this.ortho ? undefined : distance);
     for (const [index, model] of this.drops.entries()) {
       const drop = flight.drops[index];
       model.root.visible = Boolean(drop);
@@ -383,7 +396,7 @@ export class FlightView {
     this.preserveEdges.update(scroll % PRESERVE_LOOP, reveal, !this.backdrops.hasPreserve, elapsed, wakes);
   }
 
-  private drawWings(flight: Flight, reveal: number, velocity: T.Vector2) {
+  private drawWings(flight: Flight, reveal: number, velocity: T.Vector2, distance?: number) {
     const fighting = flight.phase === 'stage' || flight.phase === 'boss';
     const throttle = Math.min(1, 0.38 + velocity.length() * 0.12 + 0.24 * Math.sin(reveal * Math.PI));
     for (const [index, wing] of flight.wings.entries()) {
@@ -404,7 +417,15 @@ export class FlightView {
 
       laser.root.visible = fighting && flight.hull > 0 && Boolean(wing.beamEnd);
       if (laser.root.visible && wing.beamEnd) {
-        laser.draw(origin, wing.beamEnd, wing.laserHold, this.animationTime, wing.laserTarget !== undefined);
+        const target = wing.laserTarget;
+        let model: T.Object3D | undefined;
+        if (typeof target === 'number') model = flight.level === 'broodlock' ? this.hiveBoss.root : this.boss.root;
+        else if (target) {
+          const index = flight.enemies.indexOf(target);
+          if (index >= 0) model = target.raptor ? this.raptor.root : target.ant ? this.ants[index].root : this.enemies[index].root;
+        }
+        const end = model ? this.laserContact(origin, wing.beamEnd, model, distance) : wing.beamEnd;
+        laser.draw(origin, end, wing.laserHold, this.animationTime, target !== undefined);
       }
     }
   }

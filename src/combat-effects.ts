@@ -5,16 +5,17 @@ const specs = { hit: { life: 0.22, size: 0.1, spread: 1.5, sparks: 4 },
   kill: { life: 0.42, size: 0.22, spread: 2.2, sparks: 8 },
   pickup: { life: 0.55, size: 0.28, spread: 1.65, sparks: 8 } };
 const material = new T.MeshBasicMaterial({ color: 0xffffff, transparent: true,
-  blending: T.AdditiveBlending, opacity: 0.85, depthWrite: false });
+  blending: T.AdditiveBlending, opacity: 0.85, depthTest: false, depthWrite: false });
 const hot = new T.Color(0xfff5dc);
 
 export function createCombatEffects() {
-  const root = new T.Group(); root.name = 'combat-bursts';
+  const root = new T.Group(); root.name = 'combat-bursts'; root.renderOrder = 20;
   const sparks = new T.InstancedMesh(new T.OctahedronGeometry(1), material, 192);
   const rings = new T.InstancedMesh(new T.RingGeometry(0.86, 1, 28), material, 24);
   const identity = new T.Matrix4();
   for (const mesh of [sparks, rings]) {
     mesh.count = 0; mesh.frustumCulled = false;
+    mesh.renderOrder = 20;
     mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);
     mesh.setColorAt(0, new T.Color());
     root.add(mesh);

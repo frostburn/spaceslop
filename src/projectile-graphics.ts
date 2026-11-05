@@ -179,7 +179,17 @@ export function createContinuousLaser() {
   });
   beam.add(new T.Mesh(new T.PlaneGeometry(0.24, 1), material),
     new T.Mesh(new T.PlaneGeometry(0.043, 1), new T.MeshBasicMaterial({ color: 0xffe8fc, transparent: true, opacity: 0.94, depthWrite: false })));
-  const impact = new T.Mesh(new T.OctahedronGeometry(0.14), new T.MeshBasicMaterial({ color: 0xffdbf7 }));
+  const impact = new T.Group(); impact.name = 'laser-contact'; impact.renderOrder = 21;
+  const glint = new T.Mesh(new T.PlaneGeometry(0.38, 0.038), new T.MeshBasicMaterial({
+    color: 0xffdbf7, transparent: true, depthTest: false, depthWrite: false, blending: T.AdditiveBlending }));
+  const cross = glint.clone(); cross.rotation.z = Math.PI / 2;
+  const halo = new T.Mesh(new T.RingGeometry(0.11, 0.15, 20), new T.MeshBasicMaterial({
+    color: wingWeapons.laser.color, transparent: true, opacity: 0.75, depthTest: false, depthWrite: false,
+    blending: T.AdditiveBlending }));
+  const core = new T.Mesh(new T.OctahedronGeometry(0.085), new T.MeshBasicMaterial({
+    color: 0xfff5fc, transparent: true, depthTest: false, depthWrite: false }));
+  impact.add(glint, cross, halo, core);
+  for (const mesh of impact.children) mesh.renderOrder = 21;
   root.add(beam, impact);
   root.visible = false;
   function draw(origin: { x: number; y: number }, end: { x: number; y: number }, hold: number, time: number, contact: boolean) {
