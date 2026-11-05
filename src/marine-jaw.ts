@@ -6,7 +6,7 @@ export const JAW_HINGE_Y = .80;
 export const JAW_HINGE_Z = -.09;
 const lowerBite = -.18;
 
-// A single rounded arcade supplies both tooth rows, lips and oral lining.
+// A single rounded arcade supplies both tooth rows and lips.
 // Geometry starts in the animal's bind frame; only the mandible is subsequently
 // moved into hinge-local space. This keeps the closed bite aligned across parts.
 const arcade = new T.CatmullRomCurve3([
@@ -106,12 +106,13 @@ export function marineEyeFrame(side:number) {
   return {position:new T.Vector3(side*.51,1.04,.30),
     rotation:new T.Quaternion().setFromUnitVectors(new T.Vector3(0,0,1),new T.Vector3(side*.50,.82,.27).normalize())};
 }
-function orbit(side:number,cup:boolean) {
+function orbit(side:number,cup:boolean,head:T.Mesh) {
   const positions:number[]=[],uv:number[]=[],indices:number[]=[],columns=16;
   const rings=cup?[[.088,.123,-.025],[.068,.096,-.07],[.001,.001,-.08]]:
     [[.15,.19,-.035],[.15,.19,.03],[.088,.123,.035],[.088,.123,-.025]];
-  const frame=marineEyeFrame(side);
-  for(const [rx,ry,z] of rings)for(let i=0;i<=columns;i++) {
+  const frame=marineEyeFrame(side),normal=new T.Vector3(0,0,1).applyQuaternion(frame.rotation);
+  const ray=new T.Raycaster();
+  for(const [row,[rx,ry,z]] of rings.entries())for(let i=0;i<=columns;i++) {
     const angle=i/columns*Math.PI*2,c=Math.cos(angle),s=Math.sin(angle);
     const v=new T.Vector3(Math.sign(c)*Math.abs(c)**.7*rx,Math.sign(s)*Math.abs(s)**.7*ry,z);
     // A heavy upper/anterior hood protects a narrow, recessed eye opening.
@@ -119,13 +120,42 @@ function orbit(side:number,cup:boolean) {
       const tangent=new T.Vector3(c,s,0).applyQuaternion(frame.rotation);
       v.z+=Math.max(0,tangent.z)*.06+Math.max(0,-tangent.y)*.015;
     }
-    v.applyQuaternion(frame.rotation).add(frame.position);positions.push(v.x,v.y,v.z);uv.push(i/columns,z);
+    v.applyQuaternion(frame.rotation).add(frame.position);
+    if(!cup && row===0) {
+      // Extend the rear skirt into the actual skull instead of leaving an open
+      // floating ring. Every foot is embedded beneath the continuous skin.
+      ray.set(v.clone().addScaledVector(normal,.5),normal.clone().negate());
+      const hit=ray.intersectObject(head,false)[0];
+      if(hit)v.copy(hit.point).addScaledVector(normal,-.035);
+    }
+    positions.push(v.x,v.y,v.z);uv.push(i/columns,z);
   }
   for(let row=0;row<rings.length-1;row++)for(let col=0;col<columns;col++) {
     const i=row*(columns+1)+col;indices.push(i,i+1,i+columns+1,i+1,i+columns+2,i+columns+1);
   }
   const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));
   geometry.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
+}
+function oralLight(geometry:T.BufferGeometry) {
+  const p=geometry.getAttribute('position'),values:number[]=[];
+  for(let i=0;i<p.count;i++)values.push(T.MathUtils.smoothstep(p.getY(i),.80,2.05));
+  geometry.setAttribute('oralLight',new T.Float32BufferAttribute(values,1));return geometry;
+}
+function tongue() {
+  const p:number[]=[],uv:number[]=[],indices:number[]=[];
+  for(let row=0;row<=24;row++) {
+    const t=row/24,y=.94+t*.97,width=.003+.22*(1-t)**.6*Math.sin(.48+t*Math.PI*.5);
+    for(let col=0;col<=16;col++) {
+      const a=col/16*Math.PI*2,x=Math.cos(a)*width;
+      let z=biteHeight(y,true)+.025+Math.sin(t*Math.PI)*.028+Math.sin(a)*.028;
+      if(Math.sin(a)>0)z-=Math.exp(-((x/.022)**2))*.007;
+      p.push(x,y,z);uv.push(col/16,t);
+      if(row<24&&col<16){const i=row*17+col;indices.push(i,i+17,i+1,i+1,i+17,i+18);}
+    }
+  }
+  const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(p,3));
+  geometry.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geometry.setIndex(indices);
+  sealMarineTube(geometry,24,16);geometry.computeVertexNormals();oralLight(geometry);return hingeLocal(geometry);
 }
 function throat() {
   const p:number[]=[],uv:number[]=[],indices:number[]=[],joints:number[]=[],weights:number[]=[];
@@ -137,7 +167,7 @@ function throat() {
   }
   const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(p,3));
   geometry.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geometry.setAttribute('skinIndex',new T.Uint16BufferAttribute(joints,4));
-  geometry.setAttribute('skinWeight',new T.Float32BufferAttribute(weights,4));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
+  geometry.setAttribute('skinWeight',new T.Float32BufferAttribute(weights,4));geometry.setIndex(indices);geometry.computeVertexNormals();return oralLight(geometry);
 }
 
 function ridge(profile:number[][]) {
@@ -160,14 +190,14 @@ function palate(lower:boolean) {
     if(row<42){const i=row*2;indices.push(i,i+1,i+2,i+1,i+3,i+2);}
   }
   const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(p,3));geometry.setIndex(indices);
-  if(lower)hingeLocal(geometry);geometry.computeVertexNormals();return geometry;
+  oralLight(geometry);if(lower)hingeLocal(geometry);geometry.computeVertexNormals();return geometry;
 }
 
 function lip(lower:boolean) {
   const curve=new T.CatmullRomCurve3(arcade.getSpacedPoints(56).map(p=>
     new T.Vector3(p.x*(lower?.99:1.03),p.y,lower?lowerBite+.003:-.005)));
   const geometry=new T.TubeGeometry(curve,64,.010,6,false);
-  return lower?hingeLocal(geometry):geometry;
+  oralLight(geometry);return lower?hingeLocal(geometry):geometry;
 }
 function teeth(lower:boolean) {
   const pieces:T.BufferGeometry[]=[],count=lower?28:29;
@@ -183,12 +213,14 @@ function teeth(lower:boolean) {
 
 let cached: ReturnType<typeof build> | undefined;
 function build(prepare:(geometry:T.BufferGeometry)=>T.BufferGeometry) {
+  const body=prepare(exterior()),head=new T.Mesh(body,new T.MeshBasicMaterial({side:T.DoubleSide}));
+  head.updateMatrixWorld(true);
   const ridges=[prepare(ridge([[0,.65,.47,.07,.11],[0,1.0,.37,.09,.14],[0,1.35,.28,.065,.10],
     [0,1.8,.19,.024,.045],[0,1.98,.13,.008,.016]])),...[-1,1].map(side=>prepare(ridge([
       [side*.47,.72,.36,.065,.09],[side*.44,.92,.28,.08,.13],[side*.43,1.28,.18,.06,.09],
       [side*.28,1.72,.17,.025,.035],[side*.23,1.85,.14,.008,.015]])))];
-  return {exterior:prepare(exterior()),ridges,throat:throat(),
-    socketRims:[-1,1].map(side=>prepare(orbit(side,false))),socketCups:[-1,1].map(side=>orbit(side,true)),
+  return {exterior:body,ridges,throat:throat(),tongue:tongue(),
+    socketRims:[-1,1].map(side=>prepare(orbit(side,false,head))),socketCups:[-1,1].map(side=>orbit(side,true,head)),
     upperPalate:palate(false),lowerPalate:palate(true),
     upperTeeth:teeth(false),lowerTeeth:teeth(true),upperLip:lip(false),lowerLip:lip(true)};
 }

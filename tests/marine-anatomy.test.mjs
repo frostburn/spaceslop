@@ -106,7 +106,8 @@ test('the continuous neck has no splitting seams as the chin opens', () => {
   }
   for(const name of ['upper-palate','lower-palate','oral-cavity']) {
     const material=rig.root.getObjectByName(name).material;
-    assert(material.isMeshBasicMaterial);assert(Math.max(material.color.r,material.color.g,material.color.b)<.005,'oral tissue must remain dark under strong lights');
+    assert(material.isMeshPhysicalMaterial);assert(material.color.r>.12 && material.color.r>material.color.g*1.5,'oral tissue needs a real fleshy albedo');
+    assert.equal(material.emissive.getHex(),0);assert(rig.root.getObjectByName(name).geometry.getAttribute('oralLight'));
   }
 });
 
@@ -140,6 +141,38 @@ test('both protected eyes have an unobstructed forward view past the snout and b
     const hit=ray.intersectObjects(blockers,false)[0];
     assert(hit && eye.children.includes(hit.object),`${side} eye is hidden behind its own brow or snout`);
   }
+});
+
+test('socket skirt feet are embedded in the skull around the whole back of each rim', () => {
+  const rig=createLeviathan(),geometry=rig.root.getObjectByName('mosasaur-body').geometry;
+  const skull=new T.Mesh(geometry,new T.MeshBasicMaterial({side:T.DoubleSide}));skull.updateMatrixWorld(true);
+  for(const side of ['L','R']) {
+    const eye=rig.root.getObjectByName('protected-eye-'+side),positions=rig.root.getObjectByName('orbital-rim-'+side).geometry.getAttribute('position');
+    const normal=new T.Vector3(0,0,1).applyQuaternion(eye.quaternion);
+    for(let i=0;i<=16;i++) {
+      const foot=new T.Vector3().fromBufferAttribute(positions,i);
+      const hits=new T.Raycaster(foot.clone().addScaledVector(normal,.6),normal.clone().negate(),0,.62).intersectObject(skull,false);
+      assert(hits.length && hits[0].distance<.59,`${side} socket foot ${i} is floating`);
+    }
+  }
+});
+
+test('the fleshy tongue follows the lower jaw and fits below the closed palate', () => {
+  const rig=createLeviathan(),tongue=rig.root.getObjectByName('tongue');
+  assert.equal(tongue.parent,rig.root.getObjectByName('lower-jaw'));
+  assert(tongue.material.isMeshPhysicalMaterial);assert(tongue.geometry.getAttribute('oralLight'));
+  tongue.geometry.computeBoundingBox();assert(tongue.geometry.boundingBox.max.z-.09<-.02);
+  assert(tongue.geometry.getAttribute('position').count>400);
+});
+
+test('gentle head sway reveals the sides while the mouth stays within its combat target', () => {
+  const rig=createLeviathan(),positions=[];
+  for(let i=0;i<=200;i++) {
+    rig.pose(1,0,0,0,0,i*.1);rig.root.updateMatrixWorld(true);
+    const mouth=rig.root.getObjectByName('laser_contact_L').getWorldPosition(new T.Vector3());
+    assert(Math.abs(mouth.x)<.7);positions.push(mouth.x);
+  }
+  assert(Math.max(...positions)-Math.min(...positions)>.5);
 });
 
 test('the looping line follows a complete closed turn with continuous facing and delayed followers', () => {

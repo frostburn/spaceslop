@@ -86,5 +86,6 @@ export function leviathanMotion(time: number) {
   const windup = Math.max(0,Math.min(1,(elapsed - LEVIATHAN_WINDUP) / (LEVIATHAN_FIRE - LEVIATHAN_WINDUP)));
   const recoil = elapsed < LEVIATHAN_FIRE ? 0 : Math.max(0,1-(elapsed-LEVIATHAN_FIRE)/.45);
   return { windup: elapsed < LEVIATHAN_FIRE ? windup : 0, recoil,
+    headYaw: Math.sin(time*.55)*.15, headPitch: Math.sin(time*.77)*.035, headRoll: Math.sin(time*.44)*.02,
     jaw: elapsed < LEVIATHAN_FIRE ? .02 + windup * .88 : .02 + recoil * .90 };
 }

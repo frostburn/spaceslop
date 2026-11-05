@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { createMarineMouth } from './marine-mouth';
 import { sealMarineTube } from './marine-geometry';
 import { marineJawGeometry, marineEyeFrame, JAW_HINGE_Y, JAW_HINGE_Z } from './marine-jaw';
 import { part, pivot } from './rig-geometry';
@@ -132,6 +133,7 @@ function eyes(parent:T.Object3D,y:number,width:number,z:number,size:number) {
 function animal(kind:Animal) {
   const root=new T.Group();root.name=kind;
   const large=kind==='mosasaur',jawParts=large?marineJawGeometry(tintGeometry):undefined;
+  const mouth=large?createMarineMouth():undefined;
   const bones=Array.from({length:large?7:6},()=>new T.Bone());
   bones[0].add(bones[1],bones[3]);bones[1].position.y=-.7;bones[1].add(bones[2]);bones[2].position.y=-.9;
   bones[3].position.y=.5;bones[3].add(bones[4]);bones[4].position.y=.65;bones[4].add(bones[5]);bones[5].position.y=.65;
@@ -177,12 +179,13 @@ function animal(kind:Animal) {
   const glowMaterial=new T.MeshBasicMaterial({color:0xffb65f,transparent:true,opacity:0,depthWrite:false,blending:T.AdditiveBlending});
   const glow=part(headParent,orb,glowMaterial,0,end-.12-offset,-.03);glow.scale.setScalar(large?.10:.065);glow.name='mouth-charge';
   const jaw=large?bones[6]:undefined;
-  if(jaw && jawParts) {
+  if(jaw && jawParts && mouth) {
     jawParts.ridges.forEach((geometry,index)=>{part(headParent,geometry,skin(1,'spots'),0,-offset,0).name=`cranial-ridge-${index}`;});
-    part(headParent,jawParts.upperPalate,mouthMaterial,0,-offset,0).name='upper-palate';
-    part(jaw,jawParts.lowerPalate,mouthMaterial,0,0,0).name='lower-palate';
-    const throat=new T.SkinnedMesh(jawParts.throat,mouthMaterial);throat.name='oral-cavity';root.add(throat);
+    part(headParent,jawParts.upperPalate,mouth.tissue,0,-offset,0).name='upper-palate';
+    part(jaw,jawParts.lowerPalate,mouth.tissue,0,0,0).name='lower-palate';
+    const throat=new T.SkinnedMesh(jawParts.throat,mouth.tissue);throat.name='oral-cavity';root.add(throat);
     throat.bind(body.skeleton,body.bindMatrix);throat.frustumCulled=false;
+    part(jaw,jawParts.tongue,mouth.tongue,0,0,0).name='tongue';
     for(const side of [-1,1]) {
       const name=side<0?'L':'R';
       pivot(headParent,`skull-hinge-${name}`,side*.50,JAW_HINGE_Y-offset,JAW_HINGE_Z);
@@ -197,13 +200,13 @@ function animal(kind:Animal) {
     }
     part(headParent,jawParts.upperTeeth,toothMaterial,0,-offset,0).name='upper-dentition';
     part(jaw,jawParts.lowerTeeth,toothMaterial,0,0,0).name='lower-dentition';
-    const upperLip=part(headParent,jawParts.upperLip,mouthMaterial,0,-offset,0);upperLip.name='upper-lip';
-    part(jaw,jawParts.lowerLip,mouthMaterial,0,0,0).name='lower-lip';
+    const upperLip=part(headParent,jawParts.upperLip,mouth.tissue,0,-offset,0);upperLip.name='upper-lip';
+    part(jaw,jawParts.lowerLip,mouth.tissue,0,0,0).name='lower-lip';
   }
   return {root,body,head:headParent,headOffset:offset, pose(time:number,charge=0,jawOpen=.1) {
     bones[1].rotation.z=kind==='plesiosaur'?0:Math.sin(time*3.2)*.13;
     bones[2].rotation.z=Math.sin(time*3.2-.9)*(kind==='plesiosaur'?.025:.30);
-    if(large){bones[3].rotation.x=.5;bones[1].rotation.x=-.12;bones[2].rotation.x=-.20;}
+    if(large){const motion=leviathanMotion(time);bones[3].rotation.set(.5+motion.headPitch,motion.headRoll,motion.headYaw);bones[1].rotation.x=-.12;bones[2].rotation.x=-.20;}
     if(kind==='plesiosaur'){bones[3].rotation.z=Math.sin(time*.8)*.025;bones[4].rotation.z=Math.sin(time*.8-.5)*.020;bones[5].rotation.z=-bones[3].rotation.z*.4;}
     flippers.forEach((fin,i)=>{
       const side=i%2?1:-1;
@@ -217,6 +220,7 @@ function animal(kind:Animal) {
       }
     });
     if(jaw)jaw.rotation.x=-jawOpen*.50;
+    mouth?.pose(jawOpen);
     glowMaterial.opacity=charge*.4;glow.scale.setScalar((large?.10:.0650)*(1+charge*.8));
   } };
 }

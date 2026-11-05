@@ -15,7 +15,21 @@ function element<T extends HTMLElement>(id: string) {
 
 const canvas = element<HTMLCanvasElement>('field');
 const panel = element('panel');
+let devBossLaunch = false;
 if (import.meta.env.DEV) {
+  const bossStart = document.createElement('button');
+  bossStart.id = 'dev-boss';
+  bossStart.type = 'button';
+  bossStart.textContent = 'Launch at boss';
+  bossStart.style.marginTop = '.75rem';
+  bossStart.disabled = true;
+  bossStart.addEventListener('click', () => {
+    if (screen !== 'title' && screen !== 'results') return;
+    devBossLaunch = true;
+    start.click();
+    devBossLaunch = false;
+  });
+  panel.append(bossStart);
   const workshop = document.createElement('a');
   workshop.href = import.meta.env.BASE_URL + 'workshop.html';
   workshop.textContent = 'Asset workshop';
@@ -112,6 +126,11 @@ function syncUI() {
   pause.hidden = !active;
   panel.hidden = active;
   const betweenRuns = screen === 'title' || screen === 'results';
+  if (import.meta.env.DEV) {
+    const bossStart = element<HTMLButtonElement>('dev-boss');
+    bossStart.hidden = !betweenRuns;
+    bossStart.disabled = start.disabled || !view;
+  }
   pilotPicker.setVisible(betweenRuns);
   perkReadout.hidden = betweenRuns;
   if (!betweenRuns && perkReadout.textContent !== flight.perkReadout) {
@@ -194,6 +213,12 @@ start.addEventListener('click', () => {
       pilotPicker.selectedId,
       readLevel(levelSelector.value),
     );
+    if (import.meta.env.DEV && devBossLaunch) {
+      // Enter the normal approach through the simulation, preserving level
+      // progress, the selected loadout and the full camera transition.
+      flight.time = flight.stageDuration;
+      flight.step(0);
+    }
   }
   screen = 'active';
   resetInput();
