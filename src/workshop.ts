@@ -20,7 +20,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createAntRig, createHiveGuardian } from './ant-rigs';
 import { poseBurners, shipBurners } from './burners';
 import { createInterceptorRig, createRaptorRig } from './encounter-rigs';
-import { loadEncounterTextures } from './encounter-texture';
+import { loadEncounterTextures } from './rendering/workshop-textures';
 import {
   BOSS_FIRE_AT, BOSS_RECOIL_TIME, BOSS_VOLLEY_INTERVAL, BOSS_WINDUP_AT, RAPTOR_FLARE_END, raptorFlight,
 } from './encounters';

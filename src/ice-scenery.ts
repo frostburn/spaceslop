@@ -26,11 +26,11 @@ function wreckGeometry(kind: number) {
   return mergeGeometries(pieces);
 }
 
-export function createIceScenery() {
+export function createIceScenery(signal?:AbortSignal) {
   const root = new T.Group(); root.name = 'frostwake-scenery'; root.visible = false;
   const field = new T.Group(); field.name = 'asteroid-corridor'; root.add(field);
-  const galaxy = createGalacticBackdrop(); root.add(galaxy.root);
-  const { surface, uniforms, textures, capture } = iceOptics(galaxy);
+  const galaxy = createGalacticBackdrop(signal); root.add(galaxy.root);
+  const { surface, uniforms, textures, capture,dispose } = iceOptics(galaxy);
   const transform = new T.Object3D(), color = new T.Color();
   const batches = Array.from({ length: 6 }, (_, variant) => {
     const rocks = iceRocks.map((rock, index) => ({ rock, index })).filter(({ rock }) => rock.variant === variant);
@@ -81,11 +81,11 @@ export function createIceScenery() {
   });
   const ready = Promise.all([
     galaxy.ready, ...textures.map(texture => Promise.resolve(texture)),
-    loadEncounterTexture('ice', (texture) => { uniforms.iceMap.value = texture; uniforms.hasIce.value = 1; }, 1),
-    loadEncounterTexture('rock', (texture) => { uniforms.rockMap.value = texture; uniforms.hasRock.value = 1; }, 1),
+    loadEncounterTexture('ice', (texture) => { uniforms.iceMap.value = texture; uniforms.hasIce.value = 1; }, 1, signal),
+    loadEncounterTexture('rock', (texture) => { uniforms.rockMap.value = texture; uniforms.hasRock.value = 1; }, 1, signal),
   ]);
   return {
-    root, ready,
+    root, ready,dispose,
     capture(renderer: T.WebGLRenderer, camera: T.Camera) { capture(renderer, camera, root, field); },
     update(progress: number, reveal: number, time = progress * ICE_DURATION, distance = ICE_CAMERA_DISTANCE) {
       const scroll = iceTravel(time), angle = -ICE_CORRIDOR_PITCH * reveal;

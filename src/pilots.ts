@@ -1,5 +1,6 @@
 import { pilots } from './pilot-data';
 
+declare const __PILOT_URLS__:Record<string,string>;
 declare const __PILOT_PORTRAITS__: readonly string[];
 
 type Pilot = typeof pilots[number];
@@ -32,7 +33,7 @@ function portrait(pilot: Pilot) {
     const image = document.createElement('img');
     image.alt = '';
     image.addEventListener('error', () => image.remove(), { once: true });
-    image.src = import.meta.env.BASE_URL + path;
+    image.src = import.meta.env.BASE_URL + __PILOT_URLS__[path];
     frame.append(image);
   }
 
@@ -47,6 +48,7 @@ export function setupPilots(
   perkDescription: HTMLElement,
   desktopSlot: HTMLElement,
   mobileSlot: HTMLElement,
+  signal?:AbortSignal,
 ) {
   const desktop = matchMedia('(min-width: 760px)');
   function placePicker() {
@@ -57,7 +59,8 @@ export function setupPilots(
     }
   }
 
-  desktop.addEventListener('change', placePicker);
+  desktop.addEventListener('change', placePicker,{signal});
+  choices.replaceChildren();
   placePicker();
 
   let selected = savedPilot();

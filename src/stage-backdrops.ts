@@ -2,7 +2,7 @@ import * as T from 'three';
 import { loadEncounterTexture } from './encounter-texture';
 import { HEIGHT, WIDTH } from './game';
 
-export function createStageBackdrops() {
+export function createStageBackdrops(signal?:AbortSignal) {
   const uniforms = {
     preserveMap: { value: null as T.Texture | null },
     shipyardMap: { value: null as T.Texture | null },
@@ -68,12 +68,12 @@ export function createStageBackdrops() {
     cropToField(texture, uniforms.preserveCrop.value);
     uniforms.preserveMap.value = texture;
     uniforms.hasPreserve.value = 1;
-  });
+  }, undefined, signal);
   const shipyardReady = loadEncounterTexture('shipyard', (texture) => {
     cropToField(texture, uniforms.shipyardCrop.value);
     uniforms.shipyardMap.value = texture;
     uniforms.hasShipyard.value = 1;
-  });
+  }, undefined, signal);
 
   return {
     root,

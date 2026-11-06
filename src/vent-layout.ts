@@ -1,6 +1,7 @@
+import {levels} from './levels';
 // One world: X across the corridor, Y forward, Z up. Rendering and rooted
 // enemies use this same transform throughout the abyss approach.
-export const VENT_DURATION=100;
+export const VENT_DURATION=levels.vents.duration;
 export const VENT_APPROACH=8;
 export const VENT_CAMERA_SWING=5;
 export const VENT_SPEED=1.5;

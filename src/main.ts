@@ -1,355 +1,111 @@
-import {ventSection} from './vent-layout';
-import {ioSection,IO_SCREENS} from './io-layout';
-import { titanSection } from './titan-layout';
 import { registerSW } from 'virtual:pwa-register';
-import { BOSS_HP, Flight, HEIGHT, STEP, WIDTH } from './game';
-import { setupPilots } from './pilots';
-import { FlightView } from './view';
-import { levels, readLevel } from './levels';
-import { iceSection } from './ice-layout';
-import { readWingWeapon, wingWeapons } from './wing';
+import { levels, readLevel, type LevelId } from './levels';
+import { saveLevelOffline, savedLevels, clearSavedLevels } from './app/offline';
 import './style.css';
-
-function element<T extends HTMLElement>(id: string) {
-  const node = document.getElementById(id);
-  if (!node) throw new Error(`Missing #${id}`);
-  return node as T;
-}
-
-const canvas = element<HTMLCanvasElement>('field');
-const panel = element('panel');
-let devBossLaunch = false;
-if (import.meta.env.DEV) {
-  const bossStart = document.createElement('button');
-  bossStart.id = 'dev-boss';
-  bossStart.type = 'button';
-  bossStart.textContent = 'Launch at boss';
-  bossStart.style.marginTop = '.75rem';
-  bossStart.disabled = true;
-  bossStart.addEventListener('click', () => {
-    if (screen !== 'title' && screen !== 'results') return;
-    devBossLaunch = true;
-    start.click();
-    devBossLaunch = false;
-  });
-  panel.append(bossStart);
-  const workshop = document.createElement('a');
-  workshop.href = import.meta.env.BASE_URL + 'workshop.html';
-  workshop.textContent = 'Asset workshop';
-  workshop.style.cssText = 'margin-top: .8rem; color: var(--accent); font-size: .75rem';
-  panel.append(workshop);
-  const ventStudy=document.createElement('a');ventStudy.id='vent-study';ventStudy.href=import.meta.env.BASE_URL+'vent-study.html';ventStudy.textContent='Abyss camera study';ventStudy.style.cssText=workshop.style.cssText;panel.append(ventStudy);
-  const ioStudy=document.createElement('a');ioStudy.id='io-study';ioStudy.href=import.meta.env.BASE_URL+'io-study.html';ioStudy.textContent='Io camera study';ioStudy.style.cssText=workshop.style.cssText;panel.append(ioStudy);
-}
-const heading = element('heading');
-const message = element('message');
-const start = element<HTMLButtonElement>('start');
-const pause = element<HTMLButtonElement>('pause');
-const pulse = element<HTMLButtonElement>('pulse');
-const update = element<HTMLButtonElement>('update');
-const status = element('status');
-const sector = element('sector');
-const hull = element('hull');
-const score = element('score');
-const charges = element('charges');
-const bossHud = element('boss-hud');
-const bossName = element('boss-name');
-const bossHealth = element<HTMLProgressElement>('boss-health');
-const droneWeapon = element<HTMLSelectElement>('drone-weapon');
-const levelSelector = element<HTMLSelectElement>('level');
-levelSelector.value = readLevel(new URLSearchParams(location.search).get('level'));
-const testingWings = import.meta.env.DEV || new URLSearchParams(location.search).get('testLoadout') === '1';
-element('test-wing-loadout').hidden = !testingWings;
-const wingSelectors = ['left-wing', 'right-wing'].map((id) => element<HTMLSelectElement>(id));
-for (const select of wingSelectors) {
-  select.add(new Option('Empty', ''));
-  for (const [key, weapon] of Object.entries(wingWeapons)) select.add(new Option(weapon.name, key));
-}
-bossHealth.max = BOSS_HP;
-
-const selectedPortrait = element('selected-portrait');
-const perkReadout = element('pilot-perk-readout');
-const pilotPicker = setupPilots(
-  element('loadout-picker'),
-  element('pilot-choices'),
-  selectedPortrait,
-  element('selected-pilot'),
-  element('pilot-perk-description'),
-  element('desktop-picker'),
-  element('mobile-picker'),
-);
-
-type Screen = 'title' | 'active' | 'paused' | 'results';
-const directions: Record<string, readonly [number, number]> = {
-  ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0],
-  ArrowUp: [0, 1], KeyW: [0, 1], ArrowDown: [0, -1], KeyS: [0, -1],
+const menu = document.querySelector<HTMLElement>('#front-menu')!;
+const app = document.querySelector<HTMLElement>('#game-app')!;
+const cards = document.querySelector<HTMLElement>('#level-cards')!;
+const prepare = document.querySelector<HTMLButtonElement>('#prepare-flight')!;
+const status = document.querySelector<HTMLElement>('#menu-status')!;
+const update = document.querySelector<HTMLButtonElement>('#menu-update')!;
+let selected = readLevel(new URLSearchParams(location.search).get('level'));
+let session: AbortController | undefined;
+let reloadBeforePreparation = false;
+const descriptions: Record<LevelId, string> = {
+  vents: 'Mineral gardens, black smokers and the abyss. An articulated crab guards the drop.',
+  io: 'Sulfur works, flowing lava and the Caldera Engine.',
+  titan: 'An overgrown research station beneath amber haze. Rise to face the cicada.',
+  ice: 'Tumbling ice, remote industry and ancient marine predators.',
+  broodlock: 'An infected ant hive threaded with parasitic growth.',
+  preserve: 'A short prototype flight through the overgrown preserve.',
 };
-const keys = new Set<string>();
-let screen: Screen = 'title';
-let flight = new Flight('sentry', [], pilotPicker.selectedId, readLevel(levelSelector.value));
-let pointer: { id: number; x: number; y: number; dragging: boolean } | undefined;
-let pendingUpdate = false;
-let offlineReady = false;
-let view: FlightView | undefined;
-let preparing: AbortController | undefined;
-
-try {
-  view = new FlightView(canvas);
-} catch {
-  start.disabled = true;
-  message.textContent = 'This device needs WebGL 2 to launch Spaceslop.';
+function select(id: LevelId) {
+  selected = id;
+  for (const button of cards.querySelectorAll<HTMLButtonElement>('button'))
+    button.setAttribute('aria-pressed', String(button.dataset.level === id));
+  const url = new URL(location.href);
+  url.searchParams.set('level', id);
+  history.replaceState(null, '', url);
+  status.textContent = descriptions[id];
 }
-
+for (const [id, level] of Object.entries(levels)) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.dataset.level = id;
+  button.className = 'level-card';
+  const title = document.createElement('strong');
+  const detail = document.createElement('span');
+  title.textContent = level.name;
+  detail.textContent = `${level.duration} second route · ${level.boss}`;
+  button.append(title, detail);
+  button.addEventListener('click', () => select(id as LevelId));
+  cards.append(button);
+}
+async function refreshSavedLevels() {
+  const ready = await savedLevels();
+  for (const card of cards.querySelectorAll<HTMLButtonElement>('button')) {
+    const id = card.dataset.level as LevelId;
+    const saved = ready.includes(id);
+    card.classList.toggle('saved-offline', saved);
+    card.querySelector('span')!.textContent = `${levels[id].duration} second route · ${saved ? 'Saved offline' : levels[id].boss}`;
+  }
+}
+select(selected);
+void refreshSavedLevels();
+function returnToMenu() {
+  session?.abort();
+  session = undefined;
+  app.hidden = true;
+  menu.hidden = false;
+  prepare.disabled = false;
+  status.textContent = descriptions[selected];
+  prepare.focus();
+  void refreshSavedLevels();
+}
+document.querySelector('#menu-button')!.addEventListener('click', returnToMenu);
+document.querySelector('#return-menu')!.addEventListener('click', returnToMenu);
+prepare.addEventListener('click', async () => {
+  if (session) return;
+  // Failed module loads can remain in the browser's module map until reload.
+  if (reloadBeforePreparation) { location.reload(); return; }
+  const controller = new AbortController();
+  session = controller;
+  prepare.disabled = true;
+  menu.hidden = true;
+  app.hidden = false;
+  try {
+    const { openFlightSession } = await import('./app/flight-session');
+    if (controller.signal.aborted)
+      return;
+    const handle = await openFlightSession(selected, controller.signal);
+    if (handle && !controller.signal.aborted)
+      void saveLevelOffline(selected, controller.signal).then(ready => {
+        if (!controller.signal.aborted)
+          handle.setOfflineReady(ready);
+        void refreshSavedLevels();
+      });
+  }
+  catch {
+    if (controller.signal.aborted)
+      return;
+    returnToMenu();
+    reloadBeforePreparation = true; prepare.textContent = 'Reload menu';
+    status.textContent = 'This sector could not be prepared. Check your connection or WebGL support, then reload the menu to retry. Apply an available update if needed.';
+  }
+});
+document.querySelector('#clear-offline')!.addEventListener('click', async () => {
+  const cleared = await clearSavedLevels();
+  await refreshSavedLevels();
+  status.textContent = cleared ? 'Saved level files cleared. The menu remains available offline.' : 'Offline storage could not be cleared on this device.';
+});
 const applyUpdate = registerSW({
   onNeedRefresh() {
-    pendingUpdate = true;
-    syncUI();
-  },
-  onOfflineReady() {
-    offlineReady = true;
-    syncUI();
-  },
-});
-
-function syncUI() {
-  const active = screen === 'active';
-  const fighting = flight.phase === 'stage' || flight.phase === 'boss';
-  const label = {
-    stage: levels[flight.level].sector, approach: flight.level==='vents'?'ABYSSAL DROP':flight.level==='io'?'CALDERA APPROACH':flight.level==='titan'?'ASCENT':'CONTACT', boss: 'BOSS', won: 'CLEAR', lost: 'SIGNAL LOST',
-  }[flight.phase];
-  sector.textContent = (flight.level === 'vents' || flight.level === 'ice' || flight.level === 'titan') && flight.phase === 'stage'
-    ? `${label} · ${Math.min(10, Math.floor(flight.hiveProgress * 10) + 1)}/10` : label;
-  if(flight.level==='io' && flight.phase==='stage') sector.textContent=`IO · ${Math.min(IO_SCREENS,Math.floor(flight.hiveProgress*IO_SCREENS)+1)}/${IO_SCREENS}`;
-  sector.title = flight.level==='vents'&&flight.phase==='stage'?ventSection(flight.time):flight.level==='io'&&flight.phase==='stage'?ioSection(flight.time):flight.level === 'titan' ? titanSection(flight.hiveProgress) : flight.level === 'ice' ? iceSection(flight.hiveProgress) : levels[flight.level].name;
-  score.textContent = String(flight.score).padStart(6, '0');
-  hull.textContent = String(flight.hull).padStart(2, '0');
-  charges.textContent = String(flight.charges).padStart(2, '0');
-  bossHud.hidden = flight.phase !== 'boss';
-  bossHealth.max = flight.bossMaxHealth;
-  bossHealth.value = flight.bossHealth;
-  bossName.textContent = levels[flight.level].boss;
-  pulse.disabled = !active || !fighting || flight.charges === 0;
-  pause.hidden = !active;
-  panel.hidden = active;
-  const betweenRuns = screen === 'title' || screen === 'results';
-  if (import.meta.env.DEV) {
-    const bossStart = element<HTMLButtonElement>('dev-boss');
-    bossStart.hidden = !betweenRuns;
-    element('vent-study').hidden=!betweenRuns||flight.level!=='vents';
-    element('io-study').hidden = !betweenRuns || flight.level !== 'io';
-    bossStart.textContent=flight.level==='vents'||flight.level==='titan'||flight.level==='io'?'Launch at transition':'Launch at boss';
-    bossStart.disabled = start.disabled || !view;
-  }
-  pilotPicker.setVisible(betweenRuns);
-  perkReadout.hidden = betweenRuns;
-  if (!betweenRuns && perkReadout.textContent !== flight.perkReadout) {
-    perkReadout.textContent = flight.perkReadout;
-  }
-  selectedPortrait.classList.toggle('perk-flash', active && flight.perkTime > 1.15);
-  update.hidden = !pendingUpdate || !betweenRuns;
-  let tip = 'Tap for drone · Drag to steer';
-  if (preparing) tip = 'Preparing graphics…';
-  else if (screen === 'title' && offlineReady) tip = 'Ready offline';
-  else if (flight.droneWeapon === 'towline') {
-    tip = flight.phase === 'boss' ? (flight.level === 'ice' ? 'Sweep the arc across the mouth marker.' : flight.level==='io'?'Sweep the arc across the cyan support, then exposed machinery.':flight.level==='titan'?'Sweep the arc across the glowing thorax vent.':flight.level==='vents'?(flight.crabCoreOpen?'Sweep the arc across the exposed gills.':'Sweep the arc across a glowing claw joint.'):'Sweep the arc across the green cannon.') : 'Park the drone · Sweep the arc';
-  } else if (flight.phase === 'boss') tip = flight.level === 'ice' ? 'Tap the mouth marker. Dodge amber rings.' : flight.level==='io'?(flight.ioLegBroken?'Machinery exposed · Dodge the wheel shots.':'Break the cyan front support.'):flight.level==='titan'?'Tap the glowing thorax vent. Dodge amber rings.':flight.level==='vents'?(flight.crabCoreOpen?'Tap the gill chamber. Dodge amber rings.':'Tap the glowing joint. Break both claws.'):'Tap the green cannon. Dodge amber rings.';
-  if (active && flight.perkTime > 0) {
-    tip = flight.perkMessage;
-  } else if (active && flight.pickupTime > 0) {
-    tip = flight.pickupMessage;
-  } else if (active && flight.phase === 'stage') {
-    const wings = flight.wings.flatMap((wing) => wing.weapon
-      ? [`${wing.side < 0 ? 'L' : 'R'} ${wingWeapons[wing.weapon].short}`]
-      : []);
-    if (wings.length) tip = wings.join(' · ');
-    else if (flight.drops.length) tip = 'Fly through the drop to equip it';
-  }
-  if (status.textContent !== tip) status.textContent = tip;
-}
-
-async function prepareGraphics() {
-  if (!view) return;
-  const controller = new AbortController();
-  preparing = controller;
-  start.disabled = true;
-  syncUI();
-  try {
-    const currentView = view;
-    await currentView.warmup(controller.signal, () => currentView.render(flight));
-  } catch (error) {
-    console.warn('Graphics warm-up did not complete.', error);
-  } finally {
-    if (preparing === controller) {
-      preparing = undefined;
-      start.disabled = false;
-      syncUI();
-    }
-  }
-}
-
-function resetInput() {
-  if (pointer && canvas.hasPointerCapture(pointer.id)) canvas.releasePointerCapture(pointer.id);
-  pointer = undefined;
-  flight.clearAim();
-  keys.clear();
-}
-
-function pauseFlight() {
-  if (screen !== 'active') return;
-  screen = 'paused';
-  resetInput();
-  heading.textContent = 'Paused';
-  message.textContent = 'Your run is on hold.';
-  start.textContent = 'Resume';
-  syncUI();
-}
-
-function showResults() {
-  screen = 'results';
-  resetInput();
-  heading.textContent = flight.phase === 'won' ? 'Sector clear' : 'Ship lost';
-  message.textContent = `Score ${flight.score}`;
-  start.textContent = 'Fly again';
-  syncUI();
-}
-
-start.addEventListener('click', () => {
-  if (!view || start.disabled || screen === 'active') return;
-  if (screen !== 'paused') {
-    flight = new Flight(
-      droneWeapon.value === 'towline' ? 'towline' : 'sentry',
-      testingWings ? wingSelectors.map((select) => readWingWeapon(select.value)) : [],
-      pilotPicker.selectedId,
-      readLevel(levelSelector.value),
-    );
-    if (import.meta.env.DEV && devBossLaunch) {
-      // Enter the normal approach through the simulation, preserving level
-      // progress, the selected loadout and the full camera transition.
-      flight.time = flight.stageDuration;
-      flight.step(0);
-    }
-  }
-  screen = 'active';
-  resetInput();
-  view.render(flight);
-  syncUI();
-});
-
-levelSelector.addEventListener('change', () => {
-  if (screen !== 'title' && screen !== 'results') return;
-  flight = new Flight('sentry', [], pilotPicker.selectedId, readLevel(levelSelector.value));
-  view?.render(flight);
-  syncUI();
-});
-
-function firePulse() {
-  if (screen !== 'active') return;
-  flight.pulse();
-  if (flight.phase === 'won') showResults();
-  else syncUI();
-}
-
-pause.addEventListener('click', pauseFlight);
-pulse.addEventListener('click', firePulse);
-update.addEventListener('click', () => { void applyUpdate(true); });
-
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) pauseFlight();
-});
-window.addEventListener('blur', pauseFlight);
-window.addEventListener('pagehide', pauseFlight);
-canvas.addEventListener('webglcontextlost', (event) => {
-  event.preventDefault();
-  preparing?.abort();
-  preparing = undefined;
-  pauseFlight();
-  start.disabled = true;
-  syncUI();
-});
-canvas.addEventListener('webglcontextrestored', () => {
-  void prepareGraphics();
-});
-
-canvas.addEventListener('pointerdown', (event) => {
-  if (screen !== 'active' || pointer || event.button !== 0) return;
-  const { left, top, width, height } = canvas.getBoundingClientRect();
-  if (width === 0 || height === 0) return;
-  canvas.setPointerCapture(event.pointerId);
-  flight.deployDrone(
-    ((event.clientX - left) / width - 0.5) * WIDTH,
-    (0.5 - (event.clientY - top) / height) * HEIGHT,
-  );
-  pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, dragging: false };
-});
-canvas.addEventListener('pointermove', (event) => {
-  if (pointer?.id !== event.pointerId) return;
-  const { width, height } = canvas.getBoundingClientRect();
-  if (width === 0 || height === 0) return;
-  const dx = event.clientX - pointer.x;
-  const dy = pointer.y - event.clientY;
-  if (!pointer.dragging) {
-    if (Math.hypot(dx, dy) < 5) return;
-    pointer.dragging = true;
-    flight.clearAim();
-  }
-  flight.aimBy(dx * WIDTH / width, dy * HEIGHT / height);
-  pointer.x = event.clientX;
-  pointer.y = event.clientY;
-});
-for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) {
-  canvas.addEventListener(type, (event) => {
-    if (pointer?.id !== event.pointerId) return;
-    if (type !== 'pointerup' && pointer.dragging) flight.clearAim();
-    pointer = undefined;
-  });
-}
-
-window.addEventListener('keydown', (event) => {
-  if (screen !== 'active') return;
-  if (event.code === 'Escape') {
-    event.preventDefault();
-    pauseFlight();
-  } else if (event.code === 'Space' && !event.repeat) {
-    event.preventDefault();
-    firePulse();
-  } else if (Object.hasOwn(directions, event.code)) {
-    event.preventDefault();
-    keys.add(event.code);
+    update.hidden = false;
+  }, onOfflineReady() {
+    if (!session && !reloadBeforePreparation)
+      status.textContent = 'Menu available offline. Prepare a sector to save its flight.';
   }
 });
-window.addEventListener('keyup', (event) => keys.delete(event.code));
-
-new ResizeObserver(() => {
-  view?.resize(canvas.clientWidth, canvas.clientHeight);
-  view?.render(flight);
-}).observe(canvas);
-
-let previous = performance.now();
-let accumulator = 0;
-function frame(now: number) {
-  const elapsed = Math.min(Math.max((now - previous) / 1000, 0), 0.1);
-  previous = now;
-  if (screen === 'active' && view) {
-    accumulator += elapsed;
-    while (accumulator >= STEP && screen === 'active') {
-      let x = 0;
-      let y = 0;
-      for (const key of keys) {
-        x += directions[key][0];
-        y += directions[key][1];
-      }
-      flight.steer(x, y, STEP);
-      flight.step(STEP);
-      accumulator -= STEP;
-      if (flight.phase === 'won' || flight.phase === 'lost') showResults();
-    }
-    view.render(flight, elapsed);
-    syncUI();
-  } else {
-    accumulator = 0;
-  }
-  requestAnimationFrame(frame);
-}
-syncUI();
-void prepareGraphics();
-requestAnimationFrame(frame);
+update.addEventListener('click', () => {
+  void applyUpdate(true);
+});

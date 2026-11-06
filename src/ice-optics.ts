@@ -49,5 +49,5 @@ ${iceLayerSampling}
       if(captureLayer > 0.5) gl_FragColor.a = vRockId;`);
   };
   surface.customProgramCacheKey = () => 'frostwake-layered-ice-v3';
-  return { surface, uniforms, capture: refraction.capture, textures: [relief.normal, relief.roughness, environment, refraction.empty] };
+  return { surface, uniforms, dispose:refraction.dispose,capture: refraction.capture, textures: [relief.normal, relief.roughness, environment, refraction.empty] };
 }

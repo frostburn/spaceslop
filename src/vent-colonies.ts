@@ -14,7 +14,7 @@ export function createVentColonies(assets:ReturnType<typeof createMortarAssets>)
  const root=new T.Group();root.name='background-mollusk-colonies';const placements=ventColonyPlacements(),pose=new T.Object3D(),color=new T.Color();
  const batches=[0,2,3].map((cell,part)=>{
   const mesh=new T.InstancedMesh(assets.geometries[cell],assets.material,placements.length);mesh.name='mollusk-shell-parts-'+cell;mesh.frustumCulled=false;if(part)mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);
-  placements.forEach((p,i)=>mesh.setColorAt(i,color.setRGB(.38+(i%5)*.025,.51+(i%4)*.025,.53+(i%3)*.025)));root.add(mesh);return mesh;
+  placements.forEach((_,i)=>mesh.setColorAt(i,color.setRGB(.38+(i%5)*.025,.51+(i%4)*.025,.53+(i%3)*.025)));root.add(mesh);return mesh;
  });
  function update(time:number){placements.forEach((p,i)=>batches.forEach((mesh,part)=>{
   const side=part===1?-1:part===2?1:0,opening=.12+Math.sin(time*.65+p.phase)*.045;

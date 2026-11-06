@@ -42,7 +42,7 @@ function fallbackGalaxy() {
   const texture = new T.CanvasTexture(canvas); texture.colorSpace = T.SRGBColorSpace;
   return texture;
 }
-export function createGalacticBackdrop() {
+export function createGalacticBackdrop(signal?:AbortSignal) {
   const fallback = fallbackGalaxy();
   const uniforms = { galaxy: { value: fallback as T.Texture }, reveal: { value: 0 }, crop: { value: new T.Vector2(1, 1) } };
   const material = new T.ShaderMaterial({ uniforms, depthWrite: false, depthTest: false,
@@ -62,7 +62,7 @@ export function createGalacticBackdrop() {
     uniforms.crop.value.set(Math.min(1, (9 / 24) / aspect), Math.min(1, aspect / (9 / 24)));
     texture.wrapS = texture.wrapT = T.RepeatWrapping;
     uniforms.galaxy.value = texture; fallback.dispose();
-  }).then(texture => texture ?? fallback);
+  }, undefined, signal).then(texture => texture ?? fallback);
   return { root, ready, uniforms, update(reveal: number, distance: number) {
     uniforms.reveal.value = reveal;
     root.scale.setScalar(1 - root.position.z / distance);

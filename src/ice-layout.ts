@@ -1,9 +1,10 @@
+import {levels} from './levels';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { HEIGHT } from './playfield';
 
 export const ICE_SCREENS = 10;
 export const ICE_TRAVEL = (ICE_SCREENS - 1) * HEIGHT;
-export const ICE_DURATION = 90;
+export const ICE_DURATION=levels.ice.duration;
 export const ICE_CAMERA_DISTANCE = 32;
 export const iceSections = ['Outer drift', 'Broken ice', 'Open hunting ground', 'Ice narrows', 'Survey wreck',
   'Cold passage', 'Scattered flotilla', 'Shattered shelf', 'Last patrol', 'Leviathan pursuit'] as const;

@@ -27,7 +27,7 @@ export function createVentHeat(emitters:readonly {x:number;y:number;z:number}[])
   try{renderer.setScissorTest(false);renderer.setRenderTarget(target);renderer.render(scene,camera);}
   finally{root.visible=visible;renderer.setRenderTarget(previous);renderer.setViewport(viewport);renderer.setScissor(scissorBox);renderer.setScissorTest(scissor);}
  }
- return{root,capture,update(time:number){uniforms.clock.value=time;}};
+ return{root,capture,dispose:()=>target.dispose(),update(time:number){uniforms.clock.value=time;}};
 }
 
 // Pooled trails live in the flight plane, so emitted bubbles stay behind when a

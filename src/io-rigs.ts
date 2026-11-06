@@ -147,7 +147,7 @@ export function createCaldera(){
     bar(chassis,new T.Vector3(side*3.35,1.6,-2.4),new T.Vector3(side*3.35,1.6,-.2),.035,ioSteel);
   }
   const a=new T.Vector3(),b=new T.Vector3(),q=new T.Vector3(),pistonA=new T.Vector3(),pistonB=new T.Vector3();
-  function fit(mesh:T.Mesh,start:T.Vector3,end:T.Vector3,radius:number){
+  function fit(mesh:T.Mesh,start:T.Vector3,end:T.Vector3,_radius:number){
     // Existing cylinders are unit-scaled along their original length.
     const original=(mesh.geometry as T.CylinderGeometry).parameters.height;
     mesh.position.copy(start).add(end).multiplyScalar(.5);mesh.quaternion.setFromUnitVectors(up,q.copy(end).sub(start).normalize());
