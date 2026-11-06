@@ -35,6 +35,8 @@ const encounterTextures = Object.fromEntries(Object.entries({
   marine: 'encounters/marine-hide.png',
   titan: 'encounters/titan-research-ground-10screens.png',
   titanRobot: 'encounters/titan-maintenance-parts.png',
+  titanChitin: 'encounters/titan-chitin.png',
+  titanSetae: 'encounters/titan-setae.png',
 }).filter(([, src]) => existsSync(new URL(`./public/${src}`, import.meta.url))));
 
 export default defineConfig({

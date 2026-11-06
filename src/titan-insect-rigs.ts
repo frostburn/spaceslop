@@ -1,24 +1,20 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { addTitanSetae, titanChitin } from './titan-insect-surfaces';
 
 // Small patrol models share all GPU resources; each pool entry owns only its pivots.
-const shell = new T.MeshStandardMaterial({ color: 0x7b633f, roughness: .59, metalness: .17 });
-shell.onBeforeCompile = shader => {
-  shader.vertexShader = 'varying vec3 shellPoint;\n' + shader.vertexShader;
-  shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nshellPoint=position;');
-  shader.fragmentShader = 'varying vec3 shellPoint;\n' + shader.fragmentShader;
-  shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-    float mottling=sin(shellPoint.x*41.0+sin(shellPoint.y*29.0))*sin(shellPoint.y*47.0+shellPoint.z*31.0);
-    float grain=sin(shellPoint.x*250.0)*sin(shellPoint.y*210.0);
-    diffuseColor.rgb*=.88+mottling*.13+grain*.035;`);
-};
-const rim = new T.MeshStandardMaterial({ color: 0xc5a46a, roughness: .65, metalness: .12 });
-const joint = new T.MeshStandardMaterial({ color: 0x292b26, roughness: .83 });
-const eye = new T.MeshStandardMaterial({ color: 0xcb561d, emissive: 0x7d2108, emissiveIntensity: .3, roughness: .24, metalness: .3 });
+const scoutShell = titanChitin(0x64b6ae, .62);
+const scoutRim = titanChitin(0xc0d9c4, .7);
+const scoutJoint = new T.MeshStandardMaterial({ color: 0x234147, roughness: .8 });
+const scoutEye = new T.MeshStandardMaterial({ color: 0xe2a94e, roughness: .24, metalness: .2 });
+const shell = titanChitin(0xb74c44, .57);
+const rim = titanChitin(0xebb16c, .7);
+const joint = new T.MeshStandardMaterial({ color: 0x38212b, roughness: .83 });
+const eye = new T.MeshStandardMaterial({ color: 0x93dccc, emissive: 0x2d746b, emissiveIntensity: .3, roughness: .24, metalness: .3 });
 const wound = new T.MeshStandardMaterial({ color: 0x553923, roughness: .88 });
-const membrane = new T.MeshPhysicalMaterial({ color: 0xe9bf75, transparent: true, opacity: .38,
+const membrane = new T.MeshPhysicalMaterial({ color: 0xb6e5db, transparent: true, opacity: .38,
   roughness: .28, metalness: .08, clearcoat: .7, side: T.DoubleSide, depthWrite: false });
-const vein = new T.LineBasicMaterial({ color: 0xd6b47c, transparent: true, opacity: .8, depthWrite: false });
+const vein = new T.LineBasicMaterial({ color: 0xd3ebd0, transparent: true, opacity: .8, depthWrite: false });
 const orb = new T.SphereGeometry(1, 16, 10);
 const up = new T.Vector3(0, 1, 0);
 
@@ -71,11 +67,16 @@ function scoutGeometry() {
 
 export function createCicadaScout() {
   const g = scoutParts ??= scoutGeometry(), root = new T.Group(); root.name = 'cicada-scout';
-  mesh(root, g.body, shell, 'scout-carapace'); mesh(root, g.ribs, rim, 'abdomen-ribs');
-  mesh(root, g.eyes, eye, 'compound-eyes'); const feet = mesh(root, g.legs, joint, 'folded-legs');
+  mesh(root, g.body, scoutShell, 'scout-carapace'); mesh(root, g.ribs, scoutRim, 'abdomen-ribs');
+  mesh(root, g.eyes, scoutEye, 'compound-eyes'); const feet = mesh(root, g.legs, scoutJoint, 'folded-legs');
+  addTitanSetae(root, 0, -.08, .32, .57, .76, 0);
+  for (const side of [-1, 1]) addTitanSetae(root, side * .24, .31, .32, .30, .32, 0);
   const wings: { pivot: T.Group; side: number; rear: boolean }[] = [];
   for (const side of [-1, 1]) for (const rear of [true, false]) {
-    const pivot = new T.Group(); pivot.position.set(side * .2, rear ? -.17 : .15, -.04);
+    const pivot = new T.Group(); pivot.name = `patrol-${rear ? 'hind' : 'fore'}wing-${side}`;
+    pivot.position.set(side * .18, rear ? -.17 : .15, rear ? .32 : .34);
+    const hinge = mesh(root, orb, scoutRim, 'dorsal-wing-hinge');
+    hinge.position.copy(pivot.position).add(new T.Vector3(0, 0, -.035)); hinge.scale.set(.07, .10, .065);
     const blade = new T.Group(); blade.scale.set(side * (rear ? .73 : 1), rear ? .76 : 1, 1);
     blade.rotation.z = side * (rear ? -.15 : .05);
     mesh(blade, g.wing, membrane, 'wing-membrane'); blade.add(new T.LineSegments(g.veins, vein));
@@ -84,7 +85,8 @@ export function createCicadaScout() {
   return { root, pose(time: number, bank = 0) {
     root.rotation.y = bank; feet.rotation.x = Math.sin(time * 9) * .12;
     for (const { pivot, side, rear } of wings) {
-      pivot.rotation.y = side * (.15 + Math.sin(time * 48 + (rear ? .8 : 0)) * .36);
+      // The full beat stays at or above the dorsal hinge, never beneath the shell.
+      pivot.rotation.y = side * (-.16 + Math.sin(time * 48 + (rear ? .8 : 0)) * .14);
       pivot.rotation.z = side * Math.sin(time * 48) * .04;
     }
   } };

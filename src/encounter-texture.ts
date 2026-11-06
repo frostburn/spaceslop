@@ -4,9 +4,10 @@ import { setFeatherTexture, type createInterceptorRig, type createRaptorRig } fr
 import { textureShipAlloy } from './encounter-surfaces';
 import { setAntChitinTexture, setFungusTexture } from './hive-materials';
 import { setAntMoldTexture } from './ant-mold';
+import { setTitanChitinTexture, setTitanSetaeTexture } from './titan-insect-surfaces';
 
 type EncounterTexture = 'armor' | 'feathers' | 'scales' | 'preserve' | 'shipyard' |
-  'hive' | 'hiveMask' | 'hiveStars' | 'hiveMines' | 'chitin' | 'fungus' | 'mold' | 'ice' | 'rock' | 'galaxy' | 'marine' | 'titan' | 'titanRobot';
+  'hive' | 'hiveMask' | 'hiveStars' | 'hiveMines' | 'chitin' | 'fungus' | 'mold' | 'ice' | 'rock' | 'galaxy' | 'marine' | 'titan' | 'titanRobot' | 'titanChitin' | 'titanSetae';
 declare const __ENCOUNTER_TEXTURES__: Partial<Record<EncounterTexture, string>>;
 
 export function encounterTextureUrl(name: EncounterTexture) {
@@ -63,5 +64,7 @@ export function loadEncounterTextures(
     loadEncounterTexture('chitin', setAntChitinTexture, 1.2),
     loadEncounterTexture('fungus', setFungusTexture, 1.1),
     loadEncounterTexture('mold', setAntMoldTexture),
+    loadEncounterTexture('titanChitin', setTitanChitinTexture, 1),
+    loadEncounterTexture('titanSetae', setTitanSetaeTexture),
   ]);
 }
