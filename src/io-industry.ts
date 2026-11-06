@@ -1,5 +1,6 @@
 import * as T from 'three';
 import {IoDetail} from './io-detail';
+import {ioConveyorRoutes,ioSiteX} from './io-placement';
 import {ioSiloWall} from './io-silo';
 import {createIoConveyorTerminal} from './io-conveyor';
 import {ioGroundHeight,ioChannel,IO_BREACH_Y,IO_HEIGHT} from './io-layout';
@@ -29,7 +30,7 @@ export function createIoIndustry(){
   const vents:IoVent[]=[],burners:T.Vector3[]=[],belts:{a:T.Vector3;b:T.Vector3;q:T.Quaternion;up:T.Vector3;length:number;cycleLength:number;source:T.Group;sink:T.Group}[]=[];
   const beltMap=beltTexture(),beltMaterial=new T.MeshStandardMaterial({map:beltMap,bumpMap:beltMap,bumpScale:.035,roughness:.85});
   for(const [sx,y,kind]of ioSites){
-    const side=Math.sign(sx),x=sx-side*.55+ioChannel(y),z=ioGroundHeight(x,y),assembly=new T.Group();
+    const side=Math.sign(sx),x=ioSiteX(sx,y,kind),z=ioGroundHeight(x,y),assembly=new T.Group();
     assembly.position.set(x,y,z);assembly.name='io-site-'+kind;root.add(assembly);
     const d=new IoDetail();
     const box=(x:number,y:number,z:number,w:number,depth:number,h:number,m:T.Material)=>d.box(x,y,z,w,depth,h,m);
@@ -127,10 +128,8 @@ export function createIoIndustry(){
   }
 
   // Belts are genuinely below the aircraft, including the long refinery crossing.
-  const routes=[[-6,28,-2.6,35], [5.5,43,2.8,49], [-6.3,56,-2.8,62],
-    [5.8,72,2.7,78], [-5.5,93,-2.6,100], [5.5,109,2.8,115], [-5.7,119,5.4,124]];
   const details=new IoDetail(),right=new T.Vector3(),forward=new T.Vector3(),normal=new T.Vector3(),basis=new T.Matrix4();
-  for(const[x1,y1,x2,y2]of routes){
+  for(const[x1,y1,x2,y2]of ioConveyorRoutes){
     const ax=x1+ioChannel(y1),bx=x2+ioChannel(y2);
     const a=new T.Vector3(ax,y1,ioGroundHeight(ax,y1)+1.2),b=new T.Vector3(bx,y2,ioGroundHeight(bx,y2)+1.2);
     forward.copy(b).sub(a).normalize();right.copy(forward).cross(new T.Vector3(0,0,1)).normalize();normal.copy(right).cross(forward);

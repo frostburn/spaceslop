@@ -275,3 +275,21 @@ test('burner side fade is restricted to near-overhead views and the workshop sha
  assert.equal(side.count,1);assert.equal(side.material.uniforms.lowerHalf.value,0);assert.equal(top.material.uniforms.lowerHalf.value,1);assert.equal(side.material.vertexShader,top.material.vertexShader);assert.equal(side.material.fragmentShader,top.material.fragmentShader);rig.pose(2.5);assert.equal(side.material.uniforms.clock.value,2.5);assert.equal(top.material.uniforms.clock,side.material.uniforms.clock);
  assert.equal(top.material.uniforms.turbulence.value,side.material.uniforms.turbulence.value);
 });
+
+test('conveyor service corridors clear every vessel cluster and retain connected terminal ports',async()=>{
+ const {ioConveyorClearance,ioSiteX}=await server.ssrLoadModule('/src/io-placement.ts');
+ const {createIoIndustry,ioSites}=await server.ssrLoadModule('/src/io-industry.ts');
+ const industry=createIoIndustry(),sites=industry.root.children.filter(c=>c.name.startsWith('io-site-'));
+ let relocated=0;
+ for(let i=0;i<ioSites.length;i++){
+  const [sx,y,kind]=ioSites[i],site=sites[i],side=Math.sign(sx),x=ioSiteX(sx,y,kind);
+  assert.equal(site.position.x,x);assert.equal(site.position.y,y);assert.equal(site.position.z,layout.ioGroundHeight(x,y));
+  assert(!ioConveyorClearance(x+(kind==='pump'?0:side*.6),y+.6,kind==='pump'?1.1:2.5,kind==='pump'?1.8:3.4));
+  const original=sx-side*.55+layout.ioChannel(y);assert((x-original)*side>=0);if(Math.abs(x-original)>.01)relocated++;
+ }
+ assert.equal(relocated,0,'authored transfer yards must fit without displacing the vessel clusters');
+ for(const belt of industry.belts){
+  assert(ioConveyorClearance(belt.a.x,belt.a.y));assert(ioConveyorClearance(belt.b.x,belt.b.y));
+  assert(belt.source.position.distanceTo(belt.a)<1e-6);assert(belt.sink.position.distanceTo(belt.b)<1e-6);
+ }
+});

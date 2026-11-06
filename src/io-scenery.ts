@@ -1,4 +1,5 @@
 import {createIoTerrain} from './io-terrain';
+import {ioConveyorClearance,ioSiteX} from './io-placement';
 import {createIoIndustry,ioSites} from './io-industry';
 import {createIoLava} from './io-lava';
 import {createIoActivity} from './io-activity';
@@ -105,12 +106,12 @@ export function createIoScenery(){
   }
   for(let i=0;i<160;i++){
     const side=i%2?-1:1,x=side*(5.5+rng()*18),y=-15+rng()*(IO_CALDERA_Y+45);
-    if(Math.hypot(x/19,(y-IO_CALDERA_Y)/22)<1.1||ioSites.some(([sx,sy])=>Math.hypot(sx-Math.sign(sx)*.55+ioChannel(sy)-x,sy+1-y)<3.1))continue;
+    if(Math.hypot(x/19,(y-IO_CALDERA_Y)/22)<1.1||ioConveyorClearance(x,y,1.8)||ioSites.some(([sx,sy,kind])=>Math.hypot(ioSiteX(sx,sy,kind)-x,sy+1-y)<3.1))continue;
     rock(x,y,ioGroundHeight(x,y)+.2,.5+rng()*1.2,.7+rng()*1.2,.6+rng()*1.3);
   }
   for(let i=0;i<100;i++){
     const y=-12+rng()*(IO_CALDERA_Y-12),x=(i%2?-1:1)*(3.2+rng()*2.1)+ioChannel(y);
-    if(ioSites.some(([sx,sy])=>Math.hypot(sx-Math.sign(sx)*.55+ioChannel(sy)-x,sy-y)<3.1))continue;
+    if(ioConveyorClearance(x,y,1.25)||ioSites.some(([sx,sy,kind])=>Math.hypot(ioSiteX(sx,sy,kind)-x,sy-y)<3.1))continue;
     rock(x,y,ioGroundHeight(x,y)+.12,.45+rng()*.6,.6+rng()*.65,.6+rng()*.75);
   }
   // Six fixed rock shelves beneath the six load-bearing foot anchors.
@@ -136,7 +137,7 @@ export function createIoScenery(){
   const talus=new T.InstancedMesh(rubble.geometry,ioRock,1400),tilt=new T.Euler();let stones=0;
   for(let i=0;i<1400;i++){
     const y=-12+rng()*(IO_CALDERA_Y+22),x=ioChannel(y)+(i%2?-1:1)*(1.7+rng()*2.3),z=ioGroundHeight(x,y);
-    if(z<-5.5||ioSites.some(([sx,sy])=>Math.hypot(sx-Math.sign(sx)*.55+ioChannel(sy)-x,sy-y)<1.8))continue;
+    if(z<-5.5||ioConveyorClearance(x,y,.4)||ioSites.some(([sx,sy,kind])=>Math.hypot(ioSiteX(sx,sy,kind)-x,sy-y)<1.8))continue;
     const size=.04+Math.pow(rng(),2)*.32;position.set(x,y,z+size*.22);rotation.setFromEuler(tilt.set(rng()*.6,rng()*.6,rng()*6.28));scale.set(size*(.7+rng()),size*(.8+rng()),size*.65);
     matrix.compose(position,rotation,scale);talus.setMatrixAt(stones,matrix);chipColor.setHex(rng()>.9?0xb0a27a:0x999999);talus.setColorAt(stones++,chipColor);
   }
