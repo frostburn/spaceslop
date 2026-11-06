@@ -2,6 +2,7 @@ import {createIoTerrain} from './io-terrain';
 import {ioConveyorClearance,ioSiteX} from './io-placement';
 import {createIoIndustry,ioSites} from './io-industry';
 import {createIoLava} from './io-lava';
+import {createIoResidue} from './io-residue';
 import {createIoActivity} from './io-activity';
 import {createIoShadowAnchor} from './io-shadow';
 import * as T from 'three';
@@ -13,7 +14,7 @@ import { ioFrame,ioWorld,ioGroundHeight,ioChannel,IO_BOSS_Y,IO_BOSS_Z,IO_FOOT_DR
 export function createIoScenery(){
   const root=new T.Group();root.name='io-caldera-world';root.visible=false;
   const world=new T.Group();root.add(world);
-  const industry=createIoIndustry(),activity=createIoActivity(industry.vents,industry.burners);world.add(industry.root,activity.root);
+  const industry=createIoIndustry(),activity=createIoActivity(industry.vents,industry.burners,industry.belts.map(b=>b.source.position));world.add(industry.root,activity.root,createIoResidue(industry.belts).root);
   const sun=new T.DirectionalLight(0xffecd0,3.5);sun.castShadow=true;
   sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=sun.shadow.camera.bottom=-22;sun.shadow.camera.right=sun.shadow.camera.top=22;
   sun.shadow.camera.near=.5;sun.shadow.camera.far=120;sun.shadow.bias=-.0004;sun.shadow.normalBias=.06;

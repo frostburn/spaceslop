@@ -4,7 +4,7 @@ import {ioConveyorRoutes,ioSiteX} from './io-placement';
 import {ioSiloWall} from './io-silo';
 import {createIoConveyorTerminal} from './io-conveyor';
 import {ioGroundHeight,ioChannel,IO_BREACH_Y,IO_HEIGHT} from './io-layout';
-import {ioSilo as ioCeramic,ioSiloBand as ioBand,ioSafety,ioSteel,ioChrome,ioDark,ioRust,ioHot,ioSulfur} from './io-materials';
+import {ioSilo as ioCeramic,ioSiloBand as ioBand,ioSafety,ioSteel,ioChrome,ioDark,ioRust,ioHot,ioSulfur,ioSoot} from './io-materials';
 
 export interface IoVent {x:number;y:number;z:number;height:number;spread:number;size:number;opacity:number}
 export const ioSites=[
@@ -79,9 +79,10 @@ export function createIoIndustry(){
       for(let j=0;j<5;j++)d.geometry(new T.DodecahedronGeometry(.18,0).translate(Math.sin(j*4)*.2,Math.cos(j*2)*.2,.83),ioSulfur);
     }
     function stack(cx:number,cy:number,h:number){
-      d.rod([cx,cy,.5],[cx,cy,h],.17,ioRust);
+      d.rod([cx,cy,.5],[cx,cy,h-.55],.17,ioRust);
+      d.rod([cx,cy,h-.55],[cx,cy,h],.17,ioSoot);
       for(let j=1;j<h;j+=.7)d.geometry(new T.TorusGeometry(.21,.035,5,12).translate(cx,cy,j),ioSteel);
-      d.geometry(new T.CylinderGeometry(.23,.24,.15,12).rotateX(Math.PI/2).translate(cx,cy,h),ioDark);
+      d.geometry(new T.CylinderGeometry(.23,.24,.15,12).rotateX(Math.PI/2).translate(cx,cy,h),ioSoot);
       burners.push(new T.Vector3(x+cx,y+cy,z+h+.08));
       const exhaustZ=Math.min(z+h+1.65,IO_HEIGHT-1);
       vents.push({x:x+cx,y:y+cy,z:exhaustZ,height:Math.min(2.2,IO_HEIGHT-.3-exhaustZ),spread:.8,size:.75,opacity:.4});

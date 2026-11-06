@@ -16,16 +16,18 @@ function dustMask(){
   }
   const map=new T.DataTexture(data,n,n);map.colorSpace=T.SRGBColorSpace;map.generateMipmaps=true;map.minFilter=T.LinearMipmapLinearFilter;map.magFilter=T.LinearFilter;map.needsUpdate=true;return map;
 }
-export function createIoActivity(exhaust:IoVent[]=[],burners:T.Vector3[]=[]){
-  const sites:IoVent[]=[...exhaust,...[[-3.4,8],[3.5,36],[-3.7,82],[3.6,116],[-8,IO_CALDERA_Y+8],[9,IO_CALDERA_Y+6]].map(([x,y],i)=>({x,y,z:ioGroundHeight(x,y)+.3,height:i>=4?10:3.4,spread:i>=4?4:1.1,size:i>=4?1.4:.7,opacity:i>=4?.42:.30}))];
+export function createIoActivity(exhaust:IoVent[]=[],burners:T.Vector3[]=[],transfers:readonly T.Vector3[]=[]){
+  const sites:IoVent[]=[...exhaust,...transfers.map(p=>({x:p.x,y:p.y,z:ioGroundHeight(p.x,p.y)+.25,height:.45,spread:1.3,size:.46,opacity:.18})),...[[-3.4,8],[3.5,36],[-3.7,82],[3.6,116],[-8,IO_CALDERA_Y+8],[9,IO_CALDERA_Y+6]].map(([x,y],i)=>({x,y,z:ioGroundHeight(x,y)+.3,height:i>=4?10:3.4,spread:i>=4?4:1.1,size:i>=4?1.4:.7,opacity:i>=4?.42:.30}))];
   const root=new T.Group(),count=sites.length*12,mask=dustMask();root.name='io-vent-dust';
   const geometry=new T.PlaneGeometry(1,1);const alpha=new T.InstancedBufferAttribute(new Float32Array(count),1);geometry.setAttribute('opacity',alpha);
+  const tint=new T.InstancedBufferAttribute(new Float32Array(count*3),3);geometry.setAttribute('dustTint',tint);
+  for(let i=0;i<count;i++){const soot=i<exhaust.length*12;tint.setXYZ(i,soot?.58:1.0,soot?.52:.83,soot?.46:.56);}
   const material=new T.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{map:{value:mask}},
-    vertexShader:`attribute float opacity;varying vec2 vUv;varying float fade;
-      void main(){vUv=uv;fade=opacity;vec4 p=modelViewMatrix*instanceMatrix*vec4(0,0,0,1);
+    vertexShader:`attribute float opacity;attribute vec3 dustTint;varying vec3 vDustTint;varying vec2 vUv;varying float fade;
+      void main(){vUv=uv;fade=opacity;vDustTint=dustTint;vec4 p=modelViewMatrix*instanceMatrix*vec4(0,0,0,1);
       p.xy+=position.xy*vec2(length(instanceMatrix[0].xyz),length(instanceMatrix[1].xyz));gl_Position=projectionMatrix*p;}`,
-    fragmentShader:`uniform sampler2D map;varying vec2 vUv;varying float fade;
-      void main(){vec4 c=texture2D(map,vUv);float sun=.7+.3*vUv.x;gl_FragColor=vec4(c.rgb*vec3(1.1,1.,.86)*sun,c.a*fade);
+    fragmentShader:`uniform sampler2D map;varying vec3 vDustTint;varying vec2 vUv;varying float fade;
+      void main(){vec4 c=texture2D(map,vUv);float sun=.7+.3*vUv.x;gl_FragColor=vec4(c.rgb*vDustTint*sun,c.a*fade);
       #include <colorspace_fragment>
       }`});
   const smoke=new T.InstancedMesh(geometry,material,count);smoke.frustumCulled=false;smoke.name='ballistic-vent-plumes';root.add(smoke);

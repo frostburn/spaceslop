@@ -293,3 +293,16 @@ test('conveyor service corridors clear every vessel cluster and retain connected
   assert(belt.source.position.distanceTo(belt.a)<1e-6);assert(belt.sink.position.distanceTo(belt.b)<1e-6);
  }
 });
+
+test('settled dust conforms to the terrain and stays registered through scrolling and the boss turn',async()=>{
+ const {createIoIndustry}=await server.ssrLoadModule('/src/io-industry.ts'),{createIoResidue}=await server.ssrLoadModule('/src/io-residue.ts');
+ const residue=createIoResidue(createIoIndustry().belts),stains=residue.root.getObjectByName('terrain-deposit-stamps'),grit=residue.root.getObjectByName('spilled-sulfur-grit');
+ assert(residue.stamps.filter(s=>s.kind==='sulfur-spill').length===14);assert(residue.stamps.some(s=>s.kind==='soot-fallout'));
+ const p=stains.geometry.attributes.position;
+ for(let i=0;i<p.count;i++)assert(Math.abs(p.getZ(i)-layout.ioGroundHeight(p.getX(i),p.getY(i))-.022)<.0001);
+ assert(stains.receiveShadow);assert(!stains.castShadow);assert(!stains.material.depthWrite);assert(stains.material.polygonOffset);
+ assert(grit.isInstancedMesh);assert(grit.count>=150);assert(grit.instanceMatrix.array.every(Number.isFinite));
+ const scene=createIoScenery(),deposits=scene.root.getObjectByName('terrain-deposit-stamps'),positions=deposits.geometry.attributes.position.array,original=Array.from(positions);
+ for(const[t,rise]of [[0,0],[50,0],[100,0],[104,.5],[108,1],[120,1]])scene.update(t,rise);
+ assert.equal(deposits.geometry.attributes.position.array,positions);assert.deepEqual(Array.from(positions),original);
+});

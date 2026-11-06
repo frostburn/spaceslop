@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { texturedSurface } from './encounter-surfaces';
 import { IO_PITCH } from './io-layout';
+import {ioDustCoating} from './io-dust-surface';
 import {ioTriplanar} from './io-surface';
 
 export function ioRandom(seed:number) {
@@ -85,3 +86,10 @@ ioCrust.onBeforeCompile=(shader,renderer)=>{
 ioCrust.customProgramCacheKey=()=> 'io-fracture-hot-walls-v1';
 for(const m of [ioRock,ioCrust])ioTriplanar(m,.45);
 ioTriplanar(ioGround,.19);for(const m of [ioSilo,ioSiloBand])ioTriplanar(m,.65);
+
+// Dust scatters highlights; sheltered vertical surfaces retain irregular grime.
+// Keep furnace emissions, target paint and sulfur payloads clean/readable.
+for(const m of [ioCeramic,ioBand,ioSilo,ioSiloBand])ioDustCoating(m,.48);
+for(const m of [ioSteel,ioSafety,ioRust])ioDustCoating(m,.32);
+ioDustCoating(ioChrome,.16);ioDustCoating(ioDark,.14);
+export const ioSoot=new T.MeshStandardMaterial({color:0x241f1c,map:detail,bumpMap:detail,bumpScale:.06,roughness:.99});
