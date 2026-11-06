@@ -10,10 +10,10 @@ const {createCaldera,createSkipper}=await server.ssrLoadModule('/src/io-rigs.ts'
 const {createIoScenery}=await server.ssrLoadModule('/src/io-scenery.ts');
 const {readLevel}=await server.ssrLoadModule('/src/levels.ts');
 
-test('Io is a ten-screen 100-second route with eighteen Skipper waves, repeat accessories and a quiet eight-second approach',()=>{
- assert.equal(readLevel('io'),'io');assert.equal(layout.IO_DURATION,100);assert.equal(layout.ioWaves.length,18);
+test('Io is a ten-screen route with eighteen Skipper patrols, five Crucibles and a quiet eight-second approach',()=>{
+ assert.equal(readLevel('io'),'io');assert.equal(layout.IO_DURATION,100);assert.equal(layout.ioWaves.filter(w=>w.skipper).length,18);assert.equal(layout.ioWaves.filter(w=>w.crucible).length,5);
  const f=new Flight('sentry',[],'vex','io'),drops=new Set();let maximum=0;
- for(let i=0;i<6002;i++){f.invulnerable=100;f.step(STEP);for(const e of f.enemies){assert(e.skipper);if(e.drop)drops.add(e.drop);}maximum=Math.max(maximum,f.enemies.length);}
+ for(let i=0;i<6002;i++){f.invulnerable=100;f.step(STEP);for(const e of f.enemies){assert(e.skipper||e.crucible||e.slag);if(e.drop)drops.add(e.drop);}maximum=Math.max(maximum,f.enemies.length);}
  assert.equal(drops.size,4);assert(maximum<=layout.IO_SKIPPER_POOL);assert.equal(f.phase,'approach');
  assert.equal(f.transitionDuration,8);assert.equal(f.enemies.length+f.shots.length+f.threats.length,0);
  while(f.phase==='approach'){assert.equal(f.threats.length+f.shots.length,0);f.step(STEP);}assert.equal(f.phase,'boss');assert.equal(f.bossHealth,72);
@@ -100,7 +100,7 @@ test('the landscape has real relief and a separate lake/crust, and all six foot 
 test('Skippers share GPU geometry, and their arcing formations clear the route before the approach',()=>{
  const a=createSkipper(),b=createSkipper(),ga=[],gb=[];a.root.traverse(o=>{if(o.geometry)ga.push(o.geometry);});b.root.traverse(o=>{if(o.geometry)gb.push(o.geometry);});
  ga.forEach((g,i)=>assert.equal(g,gb[i]));
- for(const wave of layout.ioWaves)for(const[lane,slot]of wave.lanes.map((l,i)=>[l,i])){
+ for(const wave of layout.ioWaves.filter(w=>w.skipper))for(const[lane,slot]of wave.lanes.map((l,i)=>[l,i])){
   const end=layout.skipperMotion(layout.IO_DURATION-wave.time,lane,slot);assert(end.y<-9);
   for(let t=0;t<6;t+=1/60){const p=layout.skipperMotion(t,lane,slot);assert(Number.isFinite(p.x+p.y+p.heading+p.jet));assert(Math.abs(p.x)<3.5);}
  }
