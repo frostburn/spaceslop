@@ -8,7 +8,7 @@ if(import.meta.env.DEV){
   const t=slider.valueAsNumber,f=new Flight('sentry',[],'vex','vents');
   f.phase=t<VENT_DURATION?'stage':t<end?'approach':'boss';f.time=t<VENT_DURATION?t:t<end?t-VENT_DURATION:0;
   view.resize(canvas.clientWidth,canvas.clientHeight);view.render(f,0);
-  label.value=`${t.toFixed(2)} s · ${f.phase==='stage'?ventSection(t):f.phase==='approach'?'cliff swing / rim climb':'prototype boss framing'}`;
+  label.value=`${t.toFixed(2)} s · ${f.phase==='stage'?ventSection(t):f.phase==='approach'?'cliff swing / rim climb':'crab boss framing'}`;
  }
  slider.addEventListener('input',()=>{playing=false;play.textContent='Play';preview();});
  document.querySelector<HTMLSelectElement>('#section')!.addEventListener('change',event=>{slider.value=(event.target as HTMLSelectElement).value;slider.dispatchEvent(new Event('input'));});

@@ -1,3 +1,4 @@
+import {CRAB_HP,CRAB_CLAW_HP,CRAB_CORE_HP,crabTarget,crabSmooth} from './vent-crab';
 import {wormPose,WORM_WINDUP,WORM_REACH} from './vent-worm';
 import {SHRIMP_HP,SHRIMP_FIRST_FIRE,SHRIMP_INTERVAL,WORM_HP,WORM_FIRST_ATTACK,WORM_INTERVAL,shrimpMotion,faunaMuzzle,faunaBodyHit,faunaBeamEntry,type ShrimpCourse} from './vent-fauna';
 import {MORTAR_HP,MORTAR_RADIUS,MORTAR_FIRST_FIRE,MORTAR_INTERVAL,mortarAim,mortarMuzzle} from './vent-mortar';
@@ -39,7 +40,7 @@ type Phase = 'stage' | 'approach' | 'boss' | 'won' | 'lost';
 type Point = { x: number; y: number };
 type Shot = Point & {
   z: number; vx: number; vy: number; vz: number;
-  drone?: boolean; targetsBoss?: boolean; bossSupport?: boolean; wing?: WingProjectile; pierced?: Set<Enemy>; damage?: number;
+  drone?: boolean; targetsBoss?: boolean; bossSupport?: boolean; crabTarget?:number; wing?: WingProjectile; pierced?: Set<Enemy>; damage?: number;
 };
 type Threat = Shot & { graze?: 'near' | 'counted' };
 type Enemy = Point & {
@@ -157,6 +158,8 @@ export class Flight {
   charges = 2;
   score = 0;
   bossHealth = BOSS_HP;
+  crabClawHealth=[CRAB_CLAW_HP,CRAB_CLAW_HP];
+  private crabBreakTimes=[-1,-1];
   bossLaserDamage = 0;
   firedCannonX = 0;
   bossRecoil = 0;
@@ -204,6 +207,7 @@ export class Flight {
   ) {
     this.droneWeapon = droneWeapon;
     this.pilot = pilot;
+    if (level === 'vents')this.bossHealth=CRAB_HP;
     if (level === 'io') this.bossHealth=IO_HP;
     if (level === 'titan') this.bossHealth=CICADA_HP;
     if (level === 'broodlock') this.obstacles = new HiveCollision();
@@ -217,7 +221,11 @@ export class Flight {
 
   get transitionDuration() { return this.level === 'vents' ? VENT_APPROACH : this.level === 'io' ? IO_APPROACH : this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
 
-  get bossMaxHealth() { return this.level === 'io' ? IO_HP : this.level === 'titan' ? CICADA_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
+  get bossMaxHealth() { return this.level === 'vents' ? CRAB_HP : this.level === 'io' ? IO_HP : this.level === 'titan' ? CICADA_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
+
+  get crabCoreOpen(){return this.crabClawHealth.every(hp=>hp<=0);}
+  get crabBreakPose(){return this.crabBreakTimes.map(t=>t<0?0:crabSmooth((this.time-t)/.8));}
+  get crabOpening(){return this.crabCoreOpen?crabSmooth((this.time-Math.max(...this.crabBreakTimes))/.8):0;}
 
   get ioLegBroken() { return this.ioCollapseAge >= 0; }
   get ioCollapse() { return this.ioLegBroken ? smooth01(this.ioCollapseAge / 1.2) : 0; }
@@ -258,7 +266,7 @@ export class Flight {
   }
 
   get exposedCannonX() {
-    return this.level === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).x : this.level === 'ice' ? 0 : this.volley % 2 === 0 ? -BOSS_CANNON_X : BOSS_CANNON_X;
+    return this.level==='vents'?crabTarget(this.crabClawHealth,this.volley):this.level === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).x : this.level === 'ice' ? 0 : this.volley % 2 === 0 ? -BOSS_CANNON_X : BOSS_CANNON_X;
   }
 
   wingOrigin(side: WingSide) {
@@ -386,7 +394,7 @@ export class Flight {
         if (shot.z > BOSS_DEPTH) return true;
         const untilImpact = (BOSS_DEPTH - shot.z) / shot.vz;
         const impact = { x: shot.x + shot.vx * untilImpact, y: shot.y + shot.vy * untilImpact };
-        const lockedTarget = shot.targetsBoss && (this.level !== 'io' || shot.bossSupport === !this.ioLegBroken);
+        const lockedTarget = shot.targetsBoss && (this.level !== 'io' || shot.bossSupport === !this.ioLegBroken) && (this.level!=='vents'||shot.crabTarget===this.exposedCannonX);
         if (lockedTarget ||
           ((shot.drone || shot.wing) && near(impact, { x: this.exposedCannonX, y: this.bossAimY }, BOSS_CANNON_RADIUS))) {
           this.damageBoss(shot.damage ?? 1);
@@ -730,7 +738,7 @@ export class Flight {
     const volley = Math.floor(this.time / BOSS_VOLLEY_INTERVAL);
     if (elapsed >= BOSS_WINDUP_AT && this.markers.length === 0 && elapsed < BOSS_FIRE_AT) {
       const { x, y } = this.player;
-      this.markers = [-1.35, 0, 1.35].map((offset) => ({
+      this.markers = (this.level==='vents'&&this.crabCoreOpen?[-1.7,-.85,0,.85,1.7]:[-1.35, 0, 1.35]).map((offset) => ({
         x: clamp(x, -2.6, 2.6) + (this.volley % 2 === 0 ? offset : 0),
         y: clamp(y, -5.9, 5.25) + (this.volley % 2 === 0 ? 0 : offset),
       }));
@@ -806,10 +814,10 @@ export class Flight {
     const targetsBoss = !drone && Math.abs(x) < 1.65;
     // Drone shots follow the sight line through their launch point, with no lock-on.
     const expansion = 1 / BOSS_PROJECTION - 1;
-    const dx = drone ? x * expansion : (targetsBoss ? (this.level === 'io' ? this.exposedCannonX : 0) - x : 0);
+    const dx = drone ? x * expansion : (targetsBoss ? (this.level === 'io'||this.level==='vents' ? this.exposedCannonX : 0) - x : 0);
     const dy = drone ? y * expansion : (targetsBoss ? this.bossAimY - y : 0);
     this.shots.push({ x, y, z: 0, vx: dx / duration, vy: dy / duration,
-      vz: BOSS_DEPTH / duration, targetsBoss, bossSupport: this.level === 'io' ? !this.ioLegBroken : undefined, drone, damage });
+      vz: BOSS_DEPTH / duration, targetsBoss, bossSupport: this.level === 'io' ? !this.ioLegBroken : undefined, crabTarget:this.level==='vents'?this.exposedCannonX:undefined, drone, damage });
   }
 
   private advance(shot: Shot, dt: number) {
@@ -834,7 +842,11 @@ export class Flight {
   private damageBoss(damage: number, laser = false) {
     if (this.phase !== 'boss') return;
     const before = this.bossHealth;
-    this.bossHealth = Math.max(0, this.bossHealth - damage);
+    if(this.level==='vents'&&!this.crabCoreOpen){
+      const index=this.exposedCannonX<0?0:1;this.crabClawHealth[index]=Math.max(0,this.crabClawHealth[index]-damage);
+      this.bossHealth=CRAB_CORE_HP+this.crabClawHealth[0]+this.crabClawHealth[1];
+      if(this.crabClawHealth[index]===0){this.crabBreakTimes[index]=this.time;this.pickupMessage=this.crabCoreOpen?'Claws disabled · Gill chamber exposed':index===0?'Crusher joint broken':'Cutter joint broken';this.pickupTime=2.4;for(const wing of this.wings){wing.laserHold=0;wing.laserTarget=undefined;}}
+    }else this.bossHealth = Math.max(0, this.bossHealth - damage);
     if (this.level === 'io' && !this.ioLegBroken && this.bossHealth <= IO_HP-IO_LEG_HP) {
       this.bossHealth = IO_HP-IO_LEG_HP;
       this.ioCollapseAge = 0;

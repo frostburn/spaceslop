@@ -20,7 +20,7 @@ test('Hadal has ten screens of shrimp patrols and rooted threats, a quiet approa
   if(f.phase==='boss')sawBoss=true;
  }
  assert(sawApproach&&sawBoss);assert.equal(f.phase,'won');assert.equal(anchors.size,10);assert.equal(drops.size,4);assert(peak<=12);
- const again=new Flight('sentry',[],'vex','vents');assert.equal(again.time,0);assert.equal(again.bossHealth,30);
+ const again=new Flight('sentry',[],'vex','vents');assert.equal(again.time,0);assert.equal(again.bossHealth,64);
 });
 
 test('scroll coasts with matching velocity at the cliff, and camera/boss positions are continuous with settled endpoints',()=>{
@@ -61,15 +61,15 @@ test('anchored targets project from fixed world points and remain stationary rel
  const expected=v.ventAnchorPoint(0,f.time);assert.equal(enemy.x,expected.x);assert.equal(enemy.y,expected.y);
 });
 
-test('prototype boss weakpoints match ordinary boss combat and every wing weapon can damage it',()=>{
+test('crab claw targets match the boss combat plane and every wing weapon can damage it',()=>{
  const rig=createVentBoss(),end=v.VENT_DURATION+v.VENT_APPROACH,b=v.ventBossPose(1),world=new T.Group();world.add(rig.root);world.rotation.x=-v.VENT_PITCH;
  const origin=v.ventWorld(0,0,0,end,1);world.position.set(origin.x,origin.y,origin.z);rig.root.position.set(b.x,b.y,b.z);rig.root.rotation.x=v.VENT_PITCH;world.updateMatrixWorld(true);
  const p=new T.Vector3();rig.root.getWorldPosition(p);assert(Math.abs(p.y-4.2)<1e-8);assert(Math.abs(p.z+12)<1e-8);
  for(const[side,name]of[[-1,'laser_contact_L'],[1,'laser_contact_R']]){rig.root.getObjectByName(name).getWorldPosition(p);assert(Math.abs(p.x-side*2.4)<1e-8);assert(Math.abs(p.y-4.2)<1e-8);}
  for(const weapon of ['homing','cannon','laser','omega']){
   const f=new Flight('sentry',[weapon,weapon],'vex','vents');f.phase='boss';f.cooldown=1000;f.droneCooldown=1000;
-  for(let i=0;i<500&&f.bossHealth===30;i++){f.player.x=f.exposedCannonX*BOSS_PROJECTION-1.2;f.invulnerable=100;f.step(STEP);}
-  assert(f.bossHealth<30,weapon);
+  for(let i=0;i<500&&f.bossHealth===64;i++){f.player.x=f.exposedCannonX*BOSS_PROJECTION-1.2;f.invulnerable=100;f.step(STEP);}
+  assert(f.bossHealth<64,weapon);
  }
 });
 

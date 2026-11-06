@@ -20,6 +20,7 @@ const encounterTextures = Object.fromEntries(Object.entries({
   ventMortar: 'encounters/vent-barnacle.png',
   ventFauna: 'encounters/vent-fauna.png',
   ventWorm: 'encounters/vent-worm.png',
+  ventCrab: 'encounters/vent-crab.png',
   ventAtlas: 'encounters/vent-formations.png',
   ioBasalt: 'encounters/io-basalt.png',
   ioCeramic: 'encounters/io-ceramic.png',

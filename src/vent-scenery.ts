@@ -4,7 +4,7 @@ import {createVentGeology} from './vent-geology';
 import {createVentAtlas,ventCardGeometry,ventCardRelief} from './vent-atlas';
 import {loadEncounterTexture} from './encounter-texture';
 import {ioNoise} from './io-layout';
-import {VENT_PITCH,VENT_STAGE_PITCH,ventFrame,ventWorld,ventFarFloor,ventBossPose} from './vent-layout';
+import {VENT_STAGE_PITCH,ventFrame,ventWorld,ventBossPose} from './vent-layout';
 
 function random(seed:number){return()=>{seed=(Math.imul(seed,1664525)+1013904223)|0;return(seed>>>0)/4294967296;};}
 export function createVentScenery(){
@@ -40,22 +40,14 @@ export function createVentScenery(){
  motesGeometry.setAttribute('position',new T.Float32BufferAttribute(motes,3));
  const moteMaterial=new T.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{clock:{value:0}},vertexShader:`uniform float clock;void main(){vec3 p=position;p.x+=sin(clock*.18+position.y)*.12;p.z+=sin(clock*.1+position.x)*.12;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);gl_PointSize=1.6;}`,fragmentShader:`void main(){float r=length(gl_PointCoord-.5)*2.;gl_FragColor=vec4(.45,.67,.69,(1.-smoothstep(.2,1.,r))*.18);}`});
  const particles=new T.Points(motesGeometry,moteMaterial);particles.name='suspended-vent-particles';world.add(particles);
- const feet=Array.from({length:6},(_,i)=>{const x=(i%2?1:-1)*(4.5+Math.floor(i/2)*.25),y=170+Math.floor(i/2)*1.25;return new T.Vector3(x,y,ventFarFloor(x,y));});
- // Foot shelves use the continuous back-rim mesh.
- const a=new T.Vector3(),b=new T.Vector3(),bossPoint=new T.Vector3(),xAxis=new T.Vector3(1,0,0),direction=new T.Vector3(),up=new T.Vector3(0,1,0),legMaterial=new T.MeshStandardMaterial({color:0x467a80,roughness:.75});
- const legs=feet.map(()=>{const mesh=new T.Mesh(new T.CylinderGeometry(.10,.15,1,7),legMaterial);world.add(mesh);return mesh;});
- function update(time:number,rise:number,alive=true){
+ function update(time:number,rise:number,_alive=true){
   const frame=ventFrame(time,rise),origin=ventWorld(0,0,0,time,rise);world.rotation.x=-frame.pitch;world.position.set(origin.x,origin.y,origin.z);moteMaterial.uniforms.clock.value=time;
   for(let i=0;i<count;i++){
    const e=emitters[Math.floor(i/10)],t=(time*.10+(i%10)/10+Math.floor(i/10)*.37)%1;
    p.set(e.x+Math.sin(i*2.4+t*3)*t*.65,e.y+t*.45,e.z+t*5.5);q.identity();scale.set(1+t*2.4,1.2+t*2.7,1);matrix.compose(p,q,scale);clouds.setMatrixAt(i,matrix);alpha.setX(i,Math.sin(t*Math.PI)*(e.pale?.19:.4));tint.setXYZ(i,e.pale?.38:.035,e.pale?.50:.065,e.pale?.51:.08);
   }
   clouds.instanceMatrix.needsUpdate=true;alpha.needsUpdate=true;
-  const pose=ventBossPose(rise);bossPoint.set(pose.x,pose.y,pose.z);
-  feet.forEach((foot,i)=>{
-   legs[i].visible=alive;const side=i%2?1:-1,row=Math.floor(i/2);a.set(side*2.1,-.8,-row*.5).applyAxisAngle(xAxis,VENT_PITCH).add(bossPoint);
-   b.copy(foot);b.x+=pose.x*(1-rise);b.z-=7*(1-rise);const step=Math.sin(rise*Math.PI*8+i*Math.PI);b.z+=Math.max(0,step)*.55*Math.sin(rise*Math.PI);b.y+=step*.3*Math.sin(rise*Math.PI);direction.copy(b).sub(a);legs[i].position.copy(a).add(b).multiplyScalar(.5);legs[i].quaternion.setFromUnitVectors(up,direction.normalize());legs[i].scale.y=a.distanceTo(b);
-  });
+
  }
  update(0,0);
  return{root,world,ready,update,frame:ventFrame,bossPose:ventBossPose};

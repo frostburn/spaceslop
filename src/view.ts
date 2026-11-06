@@ -214,7 +214,7 @@ export class FlightView {
     const pods = this.wingPods.flatMap((side) => side.map(({ root }) => root));
     for(const rig of [this.player.root,this.drone,...pods])rig.traverse(o=>{if(o instanceof T.Mesh&&!([o.material].flat().some(m=>m.transparent))){o.castShadow=true;o.receiveShadow=true;}});
     const ammo = Object.values(this.projectiles).map(({ root }) => root);
-    this.texturesReady = Promise.all([this.backdrops.ready, this.hive.ready, this.ice.ready, this.titan.ready, Promise.all([this.vents.ready,loadEncounterTexture('ventMortar',this.mortarAssets.setAtlas),loadEncounterTexture('ventFauna',this.faunaAssets.setAtlas),loadEncounterTexture('ventWorm',this.wormAssets.setAtlas)]),
+    this.texturesReady = Promise.all([this.backdrops.ready, this.hive.ready, this.ice.ready, this.titan.ready, Promise.all([this.vents.ready,loadEncounterTexture('ventMortar',this.mortarAssets.setAtlas),loadEncounterTexture('ventFauna',this.faunaAssets.setAtlas),loadEncounterTexture('ventWorm',this.wormAssets.setAtlas),loadEncounterTexture('ventCrab',this.ventBoss.setAtlas)]),
       Promise.all([loadEncounterTexture('marine', setMarineTexture, 1), loadEncounterTexture('ioBasalt',setIoRockTexture,1), loadEncounterTexture('ioCeramic',setIoCeramicTexture,1)]), loadEncounterTextures(this.boss, this.raptor,
       [this.player.root, scout, this.drone, this.bridge.root, this.ice.root, ...pods, ...ammo, ...this.drops.map(({ root }) => root), this.io.root, this.skippers[0].root, this.crucibles[0].root])]).then(textures=>{this.surfacesReady=true;return textures;});
     this.enemies = Array.from({ length: 12 }, () => {
@@ -440,6 +440,7 @@ export class FlightView {
     if (activeBoss.root.visible) {
       if(activeBoss === this.leviathan) this.leviathan.pose(eased,flight.cannonWindup,0,0,flight.bossRecoil / BOSS_RECOIL_TIME,flight.phase==='boss'?flight.time:Math.max(0,this.iceTime-flight.stageDuration-TRANSITION_TIME));
       else if(activeBoss===this.cicada)this.cicada.pose(eased,flight.cannonWindup,flight.exposedCannonX,flight.firedCannonX,flight.bossRecoil/BOSS_RECOIL_TIME,flight.phase==='boss'?flight.transitionDuration+flight.time:flight.phase==='approach'?flight.time:0);
+      else if(activeBoss===this.ventBoss)this.ventBoss.pose(eased,flight.cannonWindup,flight.exposedCannonX,flight.firedCannonX,flight.bossRecoil/BOSS_RECOIL_TIME,this.ventTime,flight.crabBreakPose,flight.crabOpening);
       else activeBoss.pose(eased, flight.cannonWindup, flight.exposedCannonX, flight.firedCannonX,flight.bossRecoil / BOSS_RECOIL_TIME);
       if (activeBoss === this.boss) poseBurners(this.bossBurners, this.animationTime, 0.42 + 0.48 * Math.sin(eased * Math.PI));
     }

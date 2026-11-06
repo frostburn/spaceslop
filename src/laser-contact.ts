@@ -9,9 +9,10 @@ const opaque = (material: T.Material) => material.visible && material.depthWrite
 // Use the posed model anchor so recoil and the guardian's expanding vent stay aligned.
 export function createBossLaserContact(plane: T.Object3D, model: T.Object3D) {
   const left = model.getObjectByName('laser_contact_L')!, right = model.getObjectByName('laser_contact_R')!;
+  const center=model.getObjectByName('laser_contact_C')??left;
   const point = new T.Vector3(), result = new T.Vector2();
   return (cannonX: number, distance: number) => {
-    (cannonX < 0 ? left : right).getWorldPosition(point);
+    (cannonX < 0 ? left : cannonX>0?right:center).getWorldPosition(point);
     plane.worldToLocal(point);
     const projection = distance / (distance - point.z);
     return result.set(point.x * projection, point.y * projection);
