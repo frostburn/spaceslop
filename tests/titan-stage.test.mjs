@@ -8,6 +8,8 @@ const { Flight, STEP, titanWaves } = await server.ssrLoadModule('/src/game.ts');
 const { TITAN_DURATION, TITAN_ROUTE_END, TITAN_SCREENS, titanTileY } = await server.ssrLoadModule('/src/titan-layout.ts');
 const { titanMask } = await server.ssrLoadModule('/src/titan-mask.ts');
 const { titanLights } = await server.ssrLoadModule('/src/titan-features.ts');
+const { CENTIPEDE_POOL } = await server.ssrLoadModule('/src/centipede.ts');
+const { CICADA_SCOUT_POOL } = await server.ssrLoadModule('/src/titan-insects.ts');
 
 test('the ten-screen plate scrolls bottom to top with uninterrupted viewport coverage', () => {
   assert.equal(titanTileY(9, 0), 0); assert.equal(titanTileY(0, 1), 0);
@@ -19,24 +21,29 @@ test('the ten-screen plate scrolls bottom to top with uninterrupted viewport cov
   }
 });
 
-test('prototype patrols span the route, repeat all accessories and lead into the cicada ascent', () => {
+test('insect patrols span the route, fit their model pools, repeat accessories and lead into the cicada ascent', () => {
   assert.equal(TITAN_DURATION, 84);
   assert.equal(titanWaves.length, 20);
   for (const kind of ['homing','cannon','laser','omega']) assert(titanWaves.filter(w => w.drop === kind).length > 1);
   assert(TITAN_DURATION - titanWaves.at(-1).time >= 8);
   const f = new Flight('sentry', [], 'vex', 'titan');
-  const observed = new Set(); let maxEnemies = 0;
+  const observed = new Set(), formations = new Set(); let maxEnemies = 0, sawCentipede = false;
   for (let frame = 0; frame < TITAN_DURATION*60+2; frame++) {
     // Observe the complete schedule regardless of damage; browser QA covers an unmodified run.
     f.invulnerable = 100; f.step(STEP);
     for (const enemy of f.enemies) {
       assert(!enemy.raptor && !enemy.ant && !enemy.marine);
+      assert(enemy.cicada || enemy.centipede, 'no prototype ship patrols remain');
+      if (enemy.cicada) formations.add(enemy.cicada.formation);
+      if (enemy.centipede) sawCentipede = true;
       if (enemy.drop) observed.add(enemy.drop);
     }
     assert.notEqual(f.phase,'boss');
     maxEnemies = Math.max(maxEnemies, f.enemies.length);
+    assert(f.enemies.filter(e => e.cicada).length <= CICADA_SCOUT_POOL);
+    assert(f.enemies.filter(e => e.centipede).length <= CENTIPEDE_POOL);
   }
-  assert(maxEnemies > 0 && maxEnemies <= 12);
+  assert(maxEnemies > 0); assert(sawCentipede); assert.equal(formations.size, 3);
   assert.equal(observed.size, 4); assert.equal(f.phase, 'approach'); assert.equal(f.hiveProgress, TITAN_ROUTE_END);
   assert.equal(f.enemies.length + f.shots.length + f.threats.length + f.drops.length + f.markers.length, 0);
   for (const wing of f.wings) assert.equal(wing.beamEnd, undefined);

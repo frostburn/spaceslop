@@ -1,3 +1,5 @@
+import { bindCentipede, severCentipede, stepCentipedes, CENTIPEDE_SPACING, type CentipedeLink } from './centipede';
+import { cicadaMotion, titanInsectWaves, type CicadaCourse } from './titan-insects';
 import { TITAN_ROUTE_DURATION, TITAN_ROUTE_END } from './titan-layout';
 import { CICADA_HP, TITAN_ASCENT, CICADA_INTERVAL, CICADA_WINDUP, CICADA_FIRE, CICADA_TRAVEL } from './cicada';
 import {
@@ -36,6 +38,7 @@ type Shot = Point & {
 type Threat = Shot & { graze?: 'near' | 'counted' };
 type Enemy = Point & {
   lane: number; age: number; fire: number; hp: number; drop?: WingWeapon; raptor?: boolean; ant?: 'worker' | 'soldier'; marine?: MarineKind; school?: MarineSchool;
+  centipede?: CentipedeLink; cicada?: CicadaCourse;
   course?: number; courseAt?: number; heading?: number; laserDamage?: number;
 };
 type Drop = Point & { weapon: WingWeapon };
@@ -60,7 +63,8 @@ const wingShots = {
 };
 
 type Wave = { time: number; lanes: number[]; carrier?: number; drop?: WingWeapon;
-  raptor?: number; ant?: 'worker' | 'soldier'; marine?: MarineKind; formation?: MarineFormation; mirror?: number };
+  raptor?: number; ant?: 'worker' | 'soldier'; marine?: MarineKind; formation?: MarineFormation; mirror?: number;
+  centipede?: number; cicada?: Omit<CicadaCourse, 'slot' | 'count'> };
 
 const stageWaves: Wave[] = [
   { time: 0.6, lanes: [-2.6, 0, 2.6], carrier: 1, drop: 'homing' },
@@ -102,13 +106,8 @@ export const iceWaves: Wave[] = [
   { marine: 'ichthyosaur', time: 81, formation: 'chevron', mirror: 1, lanes: [-1.8, 0, 1.8], carrier: 1, drop: 'laser' },
 ];
 
-// Prototype scout patrols carry all four accessories through the ten-screen route.
-// The final gap lets the last wave leave before the ground-level pass ends.
-export const titanWaves: Wave[] = Array.from({ length: 20 }, (_, i) => {
-  const lanes = [[-2.6, 0, 2.6], [-1.6, 1.6], [-3, -.8, 1.6], [-2.2, .2, 2.6]][i % 4];
-  return { time: 1 + i * 3.9, lanes, carrier: i % lanes.length,
-    drop: (['homing', 'cannon', 'laser', 'omega'] as const)[i % 4] };
-});
+// Five breakable crawlers alternate with aerial chevrons, sweeps and dives.
+export const titanWaves: Wave[] = titanInsectWaves;
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 const near = (a: Point, b: Point, radius: number) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 < radius ** 2;
@@ -390,7 +389,7 @@ export class Flight {
       }
       return shot.y < 9 && Math.abs(shot.x) < 5;
     });
-    this.enemies = this.enemies.filter((enemy) => enemy.hp > 0 && enemy.y > -9);
+    this.enemies = this.enemies.filter((enemy) => enemy.hp > 0 && enemy.y > -9 && (!enemy.centipede || Math.abs(enemy.x) < 5.8));
 
     this.threats = this.threats.filter((shot) => {
       this.advance(shot, dt);
@@ -598,11 +597,20 @@ export class Flight {
     const wave = (this.level === 'broodlock' ? hiveWaves : this.level === 'ice' ? iceWaves : this.level === 'titan' ? titanWaves : stageWaves)[this.nextWave];
     if (wave && this.time >= wave.time) {
       this.nextWave++;
-      this.enemies.push(...wave.lanes.map((lane, index) => {
+      if (wave.centipede) {
+        const parts: Enemy[] = Array.from({ length: wave.centipede }, (_, i) => ({
+          x: wave.lanes[0], y: 8.6 + i * CENTIPEDE_SPACING, lane: wave.lanes[0], age: 0,
+          fire: i === 0 ? 1.6 : Infinity, hp: i === 0 ? 4 : 2, heading: Math.PI,
+          drop: i === wave.carrier ? wave.drop : undefined,
+        }));
+        bindCentipede(parts);
+        this.enemies.push(...parts);
+      } else this.enemies.push(...wave.lanes.map((lane, index) => {
         const school = wave.formation ? {formation: wave.formation, slot: index, count: wave.lanes.length, mirror: wave.mirror ?? 1} : undefined;
-        const start = wave.marine ? marineMotion(wave.marine, 0, lane, school) : {x: lane, y: 8.6};
+        const course = wave.cicada ? { ...wave.cicada, slot: index, count: wave.lanes.length } : undefined;
+        const start = course ? cicadaMotion(0, lane, course) : wave.marine ? marineMotion(wave.marine, 0, lane, school) : {x: lane, y: 8.6};
         return {
-          x: start.x, y: start.y, lane, age: 0, school,
+          x: start.x, y: start.y, lane, age: 0, school, cicada: course,
           fire: schoolDelay(school) + (wave.marine === 'plesiosaur' ? 1.8 : wave.ant === 'soldier' ? 1.6 : 1.1) + index * 0.28,
           hp: wave.marine ? marineSpecs[wave.marine].hp : wave.ant === 'soldier' ? 5 : 2, ant: wave.ant, marine: wave.marine,
           drop: index === wave.carrier ? wave.drop : undefined,
@@ -611,10 +619,17 @@ export class Flight {
       }));
     }
 
+    stepCentipedes(this.enemies, dt);
     for (const enemy of this.enemies) {
+      if (enemy.hp <= 0) continue;
       enemy.age += dt;
       const motion = enemy.raptor ? raptorFlight(enemy.age) : undefined;
-      if (enemy.marine) {
+      if (enemy.centipede) {
+        // Shared chain motion above keeps each plate connected.
+      } else if (enemy.cicada) {
+        const course = cicadaMotion(enemy.age, enemy.lane, enemy.cicada);
+        enemy.x = course.x; enemy.y = course.y; enemy.heading = course.heading;
+      } else if (enemy.marine) {
         const swim = marineMotion(enemy.marine,enemy.age,enemy.lane,enemy.school);
         const previous = marineMotion(enemy.marine,enemy.age-dt,enemy.lane,enemy.school);
         enemy.x=swim.x; enemy.y+=swim.y-previous.y; enemy.heading=swim.heading;
@@ -627,8 +642,8 @@ export class Flight {
         const hull = enemy.marine ? [{x:0,y:0,radius:marineSpecs[enemy.marine].radius}] : enemy.raptor ? [{ x: 0, y: 0, radius: 1.05 }] : DRONE_HULL;
         this.obstacles.move(enemy, 0, 0, hull, { minX: -2.4, maxX: 2.4, minY: -10, maxY: 10 });
       }
-      if (!motion && enemy.age >= enemy.fire && enemy.y < 8) {
-        enemy.fire += enemy.marine === 'plesiosaur' ? 3.2 : enemy.ant === 'soldier' ? 3.1 : 2.4;
+      if (!motion && (!enemy.centipede || (enemy.centipede.slot === 0 && !enemy.centipede.chain.escape)) && enemy.age >= enemy.fire && enemy.y < 8) {
+        enemy.fire += enemy.centipede ? 3.5 : enemy.cicada ? 3 : enemy.marine === 'plesiosaur' ? 3.2 : enemy.ant === 'soldier' ? 3.1 : 2.4;
         const dx = this.player.x - enemy.x;
         const dy = this.player.y - enemy.y;
         const angle = Math.atan2(dx, dy);
@@ -642,6 +657,7 @@ export class Flight {
       }
       if (enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind},this.player,this.player,.2-marineSpecs[enemy.marine].radius*.2) : near(enemy, this.player, 0.68)) {
         enemy.hp = 0;
+        if (enemy.centipede) severCentipede(enemy);
         this.hit();
       }
     }
@@ -728,10 +744,12 @@ export class Flight {
   }
 
   private damageEnemy(enemy: Enemy, damage: number, laser = false) {
+    if (enemy.hp <= 0) return;
     const before = enemy.hp;
     enemy.hp = Math.max(0, enemy.hp - damage);
     if (laser) enemy.laserDamage = (enemy.laserDamage ?? 0) + before - enemy.hp;
     if (enemy.hp === 0) {
+      if (enemy.centipede) severCentipede(enemy);
       this.score += 100;
       if (enemy.drop) this.drops.push({ x: enemy.x, y: enemy.y, weapon: enemy.drop });
     }

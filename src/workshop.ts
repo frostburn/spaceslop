@@ -1,4 +1,6 @@
 import { createCicada } from './cicada-rig';
+import { createCicadaScout, createCentipedeSection } from './titan-insect-rigs';
+import { bindCentipede, severCentipede, stepCentipedes, CENTIPEDE_SPACING, type CentipedePart } from './centipede';
 import { createMarineRig, createLeviathan, setMarineTexture } from './marine-rigs';
 import { marineMotion, leviathanMotion, LEVIATHAN_INTERVAL } from './marine';
 import { loadEncounterTexture } from './encounter-texture';
@@ -123,7 +125,29 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const hunter=createMarineRig('ichthyosaur'),sweeper=createMarineRig('plesiosaur'),leviathan=createLeviathan();
   hunter.root.rotation.z=sweeper.root.rotation.z=Math.PI;
   const cicada=createCicada();
+  const cicadaScout = createCicadaScout();
+  cicadaScout.root.rotation.z = Math.PI;
+  const centipedeRoot = new T.Group(), centipede = Array.from({ length: 7 }, createCentipedeSection);
+  for (const part of centipede) centipedeRoot.add(part.root);
   const assets = {
+    cicada_scout: { root: cicadaScout.root, duration: 3, pose(time: number) { cicadaScout.pose(time, Math.sin(time * 2) * .25); return 'wingbeat'; } },
+    centipede: { root: centipedeRoot, duration: 4,
+      bounds: new T.Box3(new T.Vector3(-5, -3, -.5), new T.Vector3(5, 4, 1)),
+      pose(time: number) {
+        const parts: CentipedePart[] = centipede.map((_, i) => ({ x: 0, y: -1.6 + i * CENTIPEDE_SPACING, hp: 2, heading: Math.PI }));
+        bindCentipede(parts);
+        // Replay the same chain solver so timeline scrubbing includes an actual mid-body cut.
+        for (let t = 0; t < time; t += 1 / 60) {
+          if (t >= 1.4 && parts[3].hp > 0) { parts[3].hp = 0; severCentipede(parts[3]); }
+          stepCentipedes(parts, Math.min(1 / 60, time - t));
+        }
+        parts.forEach((part, i) => {
+          const rig = centipede[i], link = part.centipede!;
+          rig.root.visible = part.hp > 0; rig.root.position.set(part.x, part.y + Math.min(time, 1.4) * 2.15, 0);
+          rig.root.rotation.z = -(part.heading ?? Math.PI); rig.pose(time, link.slot, link.originalHead, Boolean(link.chain.escape));
+        });
+        return time < 1.4 ? 'metachronal crawl' : 'mid-section severed · opposite escapes';
+      } },
     cicada: {root:cicada.root,duration:7.2,pose(time:number){cicada.pose(1,Math.max(0,Math.sin(time*2)),time<3.6?-2.4:2.4,0,0,time);return 'wingbeat and thorax vents';}},
     ichthyosaur: {root:hunter.root,duration:5,pose(time:number){hunter.pose(time,marineMotion('ichthyosaur',time,0).bank);return time>1.25?'hunting bank':'cruise';}},
     plesiosaur: {root:sweeper.root,duration:5,pose(time:number){sweeper.pose(time,marineMotion('plesiosaur',time,0).bank,Math.max(0,1-Math.abs(time-1.8)/.55));return 'four-flipper stroke';}},

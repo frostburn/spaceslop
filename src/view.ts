@@ -1,5 +1,8 @@
 import { titanBossPoint, titanFrame, TITAN_PITCH } from './titan-frame';
 import { createCicada } from './cicada-rig';
+import { createCicadaScout, createCentipedeSection } from './titan-insect-rigs';
+import { CICADA_SCOUT_POOL, cicadaMotion } from './titan-insects';
+import { CENTIPEDE_POOL } from './centipede';
 import { createTitanScenery } from './titan-scenery';
 import * as T from 'three';
 import { createAntRig, createHiveGuardian } from './ant-rigs';
@@ -65,6 +68,9 @@ export class FlightView {
   private boss = createInterceptorRig(BOSS_CANNON_X);
   private leviathan = createLeviathan();
   private cicada = createCicada();
+  private cicadaScouts = Array.from({ length: CICADA_SCOUT_POOL }, createCicadaScout);
+  private centipedeParts = Array.from({ length: CENTIPEDE_POOL }, createCentipedeSection);
+  private insectModels: (T.Object3D | undefined)[] = [];
   private ichthyosaurs = Array.from({ length: 12 }, () => createMarineRig('ichthyosaur'));
   private plesiosaurs = Array.from({ length: 4 }, () => createMarineRig('plesiosaur'));
   private marineModels: (T.Object3D | undefined)[] = [];
@@ -182,6 +188,7 @@ export class FlightView {
     this.plane.add(this.player.root, this.drone, this.droneGoal, this.towline, this.boss.root, this.raptor.root, this.cannonMarker, this.stars,
       this.preserveEdges.root, this.shipyard.root, this.backdrops.root, this.bridge.root, this.hive.root, this.ice.root, this.titan.root,
       this.leviathan.root, this.cicada.root, ...this.ichthyosaurs.map(r=>r.root), ...this.plesiosaurs.map(r=>r.root),
+      ...this.cicadaScouts.map(r=>r.root), ...this.centipedeParts.map(r=>r.root),
       this.hiveBoss.root, ...this.ants.map(({ root }) => root),
       this.pulse, ...this.enemies.map(({ root }) => root), ...this.markers,
       ...ammo, this.combat.root, ...pods, ...this.wingLasers.map(({ root }) => root), ...this.drops.map(({ root }) => root));
@@ -206,7 +213,7 @@ export class FlightView {
     await compiled;
 
     // Cache silhouette bounds before the first laser hit, spread across small preflight batches.
-    const contactModels = [this.raptor.root, this.enemies[0].root, this.boss.root, this.hiveBoss.root, this.leviathan.root, this.cicada.root, ...this.ichthyosaurs.map(r=>r.root), ...this.plesiosaurs.map(r=>r.root),
+    const contactModels = [this.cicadaScouts[0].root, this.centipedeParts[0].root, this.raptor.root, this.enemies[0].root, this.boss.root, this.hiveBoss.root, this.leviathan.root, this.cicada.root, ...this.ichthyosaurs.map(r=>r.root), ...this.plesiosaurs.map(r=>r.root),
       ...this.ants.map(({ root }) => root)];
     for (let i = 0; i < contactModels.length; i += 3) {
       await nextFrame();
@@ -226,12 +233,14 @@ export class FlightView {
       this.playerMuzzle.root, this.droneMuzzle.root, ...this.drops.slice(0, 4).map(({ root }) => root)];
     const marine = [...this.ichthyosaurs, ...this.plesiosaurs].map(r=>r.root);
     const marineBatches = Array.from({length:Math.ceil(marine.length/3)},(_,i)=>marine.slice(i*3,i*3+3));
-    for (const objects of [stage, boss, ...marineBatches, [this.hive.root, this.ants[0].root, this.hiveBoss.root],
+    const insects = [this.cicadaScouts[0].root, this.centipedeParts[0].root];
+    for (const objects of [stage, boss, insects, ...marineBatches, [this.hive.root, this.ants[0].root, this.hiveBoss.root],
       [this.ice.root], [this.titan.root], pods[0], [...pods[1], ...this.wingLasers.map(({ root }) => root)], ordnance]) {
       await nextFrame();
       if (signal.aborted) return;
       if (objects.includes(this.ice.root)) this.ice.prime();
       if (objects.includes(this.titan.root)) this.titan.update(0);
+      if (objects === insects) this.centipedeParts[0].prime();
       if (objects === ordnance) {
         for (const batch of Object.values(this.projectiles)) batch.prime();
         this.combat.prime(); this.playerMuzzle.prime(); this.droneMuzzle.prime();
@@ -362,7 +371,7 @@ export class FlightView {
     }
     for (const [index, { root, burners }] of this.enemies.entries()) {
       const enemy = flight.enemies[index];
-      root.visible = Boolean(enemy && !enemy.raptor && !enemy.ant && !enemy.marine);
+      root.visible = Boolean(enemy && !enemy.raptor && !enemy.ant && !enemy.marine && !enemy.cicada && !enemy.centipede);
       if (root.visible && enemy) {
         root.position.set(enemy.x, enemy.y, 0);
         root.rotation.z = Math.PI + 0.3 * Math.cos(enemy.age * 1.55);
@@ -394,6 +403,25 @@ export class FlightView {
       const swim=marineMotion(enemy.marine,enemy.age,enemy.lane,enemy.school);
       const charge=T.MathUtils.clamp(1-(enemy.fire-enemy.age)/.55,0,1);
       rig.pose(enemy.age,swim.bank,charge);this.marineModels[index]=rig.root;
+    }
+
+    for (const rig of [...this.cicadaScouts, ...this.centipedeParts]) rig.root.visible = false;
+    this.insectModels.length = flight.enemies.length;
+    let scouts = 0, sections = 0;
+    for (const [index, enemy] of flight.enemies.entries()) {
+      this.insectModels[index] = undefined;
+      const rig = enemy.centipede ? this.centipedeParts[sections++] : enemy.cicada ? this.cicadaScouts[scouts++] : undefined;
+      if (!rig) continue;
+      rig.root.visible = true;
+      rig.root.position.set(enemy.x, enemy.y, enemy.centipede ? -.2 : .04);
+      rig.root.rotation.z = -(enemy.heading ?? Math.PI);
+      if (enemy.centipede) {
+        const link = enemy.centipede;
+        (rig as typeof this.centipedeParts[number]).pose(enemy.age, link.slot, link.originalHead, Boolean(link.chain.escape));
+      } else if (enemy.cicada) {
+        (rig as typeof this.cicadaScouts[number]).pose(enemy.age, cicadaMotion(enemy.age, enemy.lane, enemy.cicada).bank);
+      }
+      this.insectModels[index] = rig.root;
     }
 
     this.drawWings(flight, eased, fighterVelocity, camera === this.ortho ? undefined : distance);
@@ -506,7 +534,7 @@ export class FlightView {
         let model: T.Object3D | undefined;
         if (target && typeof target !== 'number') {
           const index = flight.enemies.indexOf(target);
-          if (index >= 0) model = target.marine ? this.marineModels[index] : target.raptor ? this.raptor.root : target.ant ? this.ants[index].root : this.enemies[index].root;
+          if (index >= 0) model = target.centipede || target.cicada ? this.insectModels[index] : target.marine ? this.marineModels[index] : target.raptor ? this.raptor.root : target.ant ? this.ants[index]?.root : this.enemies[index]?.root;
         }
         const end = typeof target === 'number' ? this.bossLaserContact[flight.level](target, distance ?? BOSS_CAMERA_DISTANCE)
           : model ? this.laserContact(origin, wing.beamEnd, model, distance) : wing.beamEnd;
