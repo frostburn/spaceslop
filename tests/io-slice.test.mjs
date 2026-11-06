@@ -266,10 +266,11 @@ test('painted silo bands share one tapered shell without overlapping wall surfac
 });
 
 
-test('burner elevation crossfade has complementary smooth weights and the workshop shares the stage renderer',async()=>{
+test('burner side fade is restricted to near-overhead views and the workshop shares the stage renderer',async()=>{
  const {ioFlameTopWeight}=await server.ssrLoadModule('/src/io-flames.ts'),{createIoBurnerStudy}=await server.ssrLoadModule('/src/io-burner.ts');
- assert.equal(ioFlameTopWeight(0),0);assert.equal(ioFlameTopWeight(1),1);
- let previous=0;for(let i=0;i<=100;i++){const w=ioFlameTopWeight(i/100);assert(w>=previous&&w>=0&&w<=1);assert(Math.abs(w+(1-w)-1)<1e-12);previous=w;}
+ assert.equal(ioFlameTopWeight(0),0);assert.equal(ioFlameTopWeight(.9),0);assert.equal(ioFlameTopWeight(.99),1);assert.equal(ioFlameTopWeight(1),1);
+ assert(Math.abs(ioFlameTopWeight(.945)-.5)<1e-12);
+ let previous=0;for(let i=0;i<=100;i++){const w=ioFlameTopWeight(i/100);assert(w>=previous&&w>=0&&w<=1);previous=w;}
  const rig=createIoBurnerStudy(),side=rig.root.getObjectByName('io-burner-jets'),top=rig.root.getObjectByName('io-burner-cores');
  assert.equal(side.count,1);rig.pose(2.5);assert.equal(side.material.uniforms.clock.value,2.5);assert.equal(top.material.uniforms.clock,side.material.uniforms.clock);
  assert.equal(top.material.uniforms.turbulence.value,side.material.uniforms.turbulence.value);

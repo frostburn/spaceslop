@@ -1,9 +1,10 @@
 import * as T from 'three';
 import {ioNoise} from './io-layout';
 
-// One axial side view and one overhead view crossfade by viewing elevation.
+// Keep the axial flame until nearly overhead; the mouth flame stays visible.
 // Both use the same root, clock and turbulence field; there is no crossed sheet.
-export function ioFlameTopWeight(cosElevation:number){const t=Math.max(0,Math.min(1,(Math.abs(cosElevation)-.60)/.37));return t*t*(3-2*t);}
+const sideFadeStart=.90,sideFadeEnd=.99;
+export function ioFlameTopWeight(cosElevation:number){const t=Math.max(0,Math.min(1,(Math.abs(cosElevation)-sideFadeStart)/(sideFadeEnd-sideFadeStart)));return t*t*(3-2*t);}
 export function createIoBurnerFlames(burners:T.Vector3[]){
   const root=new T.Group(),n=128,data=new Uint8Array(n*n*4),clock={value:0};root.name='io-burner-flames';
   for(let y=0;y<n;y++)for(let x=0;x<n;x++){
@@ -15,7 +16,7 @@ export function createIoBurnerFlames(burners:T.Vector3[]){
   noise.minFilter=T.LinearMipmapLinearFilter;noise.magFilter=T.LinearFilter;noise.needsUpdate=true;
   const elevation=`float topView(mat4 transform){vec3 axis=normalize(mat3(transform)*vec3(0.,0.,1.));
     vec3 eye=projectionMatrix[3][3]>.5?vec3(0.,0.,1.):normalize(-(transform*vec4(0.,0.,0.,1.)).xyz);
-    return smoothstep(.60,.97,abs(dot(axis,eye)));}`;
+    return smoothstep(${sideFadeStart.toFixed(2)},${sideFadeEnd.toFixed(2)},abs(dot(axis,eye)));}`;
   const material=new T.ShaderMaterial({transparent:true,depthWrite:false,side:T.DoubleSide,uniforms:{clock,turbulence:{value:noise}},
     vertexShader:`uniform float clock;varying vec2 vUv;varying float phase;varying float fade;
       ${elevation}
@@ -40,11 +41,17 @@ export function createIoBurnerFlames(burners:T.Vector3[]){
   const topMaterial=new T.ShaderMaterial({transparent:true,depthWrite:false,side:T.DoubleSide,uniforms:{clock,turbulence:{value:noise}},
     vertexShader:`uniform float clock;varying vec2 vUv;varying float phase;varying float fade;
       ${elevation}
-      void main(){vUv=uv;phase=instanceMatrix[3].x*3.1+instanceMatrix[3].y*.7;mat4 transform=modelViewMatrix*instanceMatrix;fade=topView(transform);
+      void main(){vUv=uv;phase=instanceMatrix[3].x*3.1+instanceMatrix[3].y*.7;mat4 transform=modelViewMatrix*instanceMatrix;fade=.9+.1*topView(transform);
       float pulse=.92+.06*sin(clock*9.+phase)+.03*sin(clock*17.+phase*2.);
-      gl_Position=projectionMatrix*transform*vec4(position.xy*.9*pulse,.4,1.);}`,
+      gl_Position=projectionMatrix*transform*vec4(position.xy*.9*pulse,.06,1.);}`,
     fragmentShader:`uniform sampler2D turbulence;uniform float clock;varying vec2 vUv;varying float phase;varying float fade;
-      void main(){vec2 p=vUv*2.-1.;float n=texture2D(turbulence,p*.55+vec2(phase,-clock*.85)).r;
+      void main(){vec2 p=vUv*2.-1.;
+      // Two closed orbits stir the noise without a persistent scrolling direction.
+      float cycle=clock*1.8+phase;
+      vec2 orbitA=vec2(cos(cycle),sin(cycle))*.19;
+      vec2 orbitB=vec2(cos(-cycle+1.7),sin(-cycle+1.7))*.23;
+      float n=texture2D(turbulence,p*.55+vec2(phase)+orbitA).r*.55
+        +texture2D(turbulence,p.yx*.8-vec2(phase)+orbitB).r*.45;
       float radius=length(p)+(n-.5)*.35;float a=(1.-smoothstep(.35,.95,radius))*.88*fade;
       float hot=clamp(1.-radius+(n-.5)*.25,0.,1.);
       vec3 c=mix(vec3(1.8,.16,.008),vec3(3.8,2.1,.8),smoothstep(.1,.9,hot));gl_FragColor=vec4(c,a);
