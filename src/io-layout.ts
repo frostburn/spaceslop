@@ -11,6 +11,8 @@ export const IO_FIRE = 1.65;
 export const IO_TRAVEL = 1.05;
 export const IO_SKIPPER_POOL = 12;
 export const IO_FOOT_DROP = 6.85;
+export const IO_WHEEL_SCALE = 1.35;
+export const IO_WHEEL_Y = 3.25;
 export const IO_FINAL_SCROLL = IO_SPEED * (IO_DURATION + IO_APPROACH / 2);
 export const IO_BOSS_Y = IO_FINAL_SCROLL + 4.8 * Math.cos(IO_PITCH) + 12 * Math.sin(IO_PITCH);
 export const IO_BOSS_Z = IO_HEIGHT + 4.8 * Math.sin(IO_PITCH) - 12 * Math.cos(IO_PITCH);
@@ -43,17 +45,25 @@ export function calderaContact(collapse:number,broken:boolean) {
 }
 export function calderaWheel(time:number,collapse:number) {
   const a=time*.55+collapse*.7;
-  return calderaPoint(Math.cos(a)*2.15,2.5+Math.sin(a)*2.15,.95,collapse);
+  return calderaPoint(Math.cos(a)*2.15*IO_WHEEL_SCALE,IO_WHEEL_Y+Math.sin(a)*2.15*IO_WHEEL_SCALE,.5+.45*IO_WHEEL_SCALE,collapse);
 }
 
 // Authored macro terrain; continuous sampling makes chunk seams impossible.
+export function ioNoise(x:number,y:number){
+  const ix=Math.floor(x),iy=Math.floor(y),u=smooth01(x-ix),v=smooth01(y-iy);
+  const at=(a:number,b:number)=>{let h=Math.imul(a,374761393)+Math.imul(b,668265263);h=Math.imul(h^(h>>>13),1274126177);return((h^(h>>>16))>>>0)/4294967296;};
+  return (at(ix,iy)*(1-u)+at(ix+1,iy)*u)*(1-v)+(at(ix,iy+1)*(1-u)+at(ix+1,iy+1)*u)*v;
+}
+export function ioChannel(y:number){return .48*Math.sin(y*.15)+.20*Math.sin(y*.37);}
 export function ioGroundHeight(x:number,y:number) {
   const lake=Math.hypot(x/17,(y-56)/19);
-  const low=-3+Math.sin(x*.33+y*.08)*.35+Math.sin(y*.27-x*.13)*.22;
+  const bank=smooth01((Math.abs(x-ioChannel(y))-2.35)/1.8);
+  const detail=(ioNoise(x*.8,y*.8)-.5)*.32+(ioNoise(x*2.3,y*2.3)-.5)*.13;
+  const low=-3+detail+Math.sin(y*.27-x*.13)*.13+bank*(.3+(ioNoise(x*.35,y*.35)-.4)*1.35);
   const lip=Math.exp(-(((lake-1)/.16)**2))*2.0;
   const basin=1-smooth01((lake-.68)/.23);
-  const causeway=(1-smooth01((Math.abs(x)-2.3)/.8))*(1-smooth01((y-39)/3));
-  return Math.max(low + lip - basin*5, -3*causeway-9*(1-causeway));
+  const vents=Math.exp(-((x+3.4)**2+(y-4)**2)/.65)+Math.exp(-((x-3.5)**2+(y-26)**2)/.65);
+  return low+lip-basin*5-vents*1.1;
 }
 
 export function skipperMotion(age:number,lane:number,slot=0) {

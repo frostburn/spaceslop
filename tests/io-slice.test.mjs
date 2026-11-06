@@ -89,7 +89,7 @@ test('the landscape has real relief and a separate lake/crust, and all six foot 
  assert(scene.root.getObjectByName('broken-lava-crust').geometry.attributes.position.count>1000);
  assert(scene.root.getObjectByName('caldera-rock-volumes').isInstancedMesh);
  scene.update(28,1);scene.root.updateMatrixWorld(true);const feet=[];
- scene.boss.root.traverse(o=>{if(o.isMesh&&o.geometry.type==='BoxGeometry'&&o.scale.x===1.15)feet.push(o);});assert.equal(feet.length,6);
+ scene.boss.root.traverse(o=>{if(o.name==='caldera-foot')feet.push(o);});assert.equal(feet.length,6);
  const before=feet.map(o=>o.getWorldPosition(new T.Vector3()).toArray());scene.boss.pose(40,1,true);scene.root.updateMatrixWorld(true);
  assert.deepEqual(feet.map(o=>o.getWorldPosition(new T.Vector3()).toArray()),before,'support collapse must not slide ground anchors');
  const geometry=new Set();scene.root.traverse(o=>{if(o.geometry)geometry.add(o.geometry);});
@@ -118,4 +118,31 @@ test('ship shots already committed to the failed support cannot damage the newly
  f.fire(f.player);assert.equal(f.shots[0].bossSupport,true);f.damageBoss(20);assert.equal(f.bossHealth,52);
  for(let i=0;i<30;i++)f.step(STEP);assert.equal(f.bossHealth,52);
  f.fire(f.player);assert.equal(f.shots[0].bossSupport,false);for(let i=0;i<30;i++)f.step(STEP);assert(f.bossHealth<52);
+});
+
+test('Io dust remains finite, camera-facing and pooled throughout the route and camera approach',()=>{
+ const scene=createIoScenery(),dust=scene.root.getObjectByName('ballistic-vent-plumes');
+ assert(dust.isInstancedMesh);assert(!dust.castShadow);assert(!dust.material.depthWrite);
+ const matrices=dust.instanceMatrix.array,opacity=dust.geometry.attributes.opacity,mask=dust.material.uniforms.map.value;
+ assert(mask.isDataTexture);assert(mask.generateMipmaps);
+ for(let t=0;t<=90;t+=.7){
+  scene.update(t,Math.min(1,t/28));
+  assert.equal(dust.instanceMatrix.array,matrices);assert.equal(dust.geometry.attributes.opacity,opacity);
+  assert(matrices.every(Number.isFinite));assert(opacity.array.every(a=>Number.isFinite(a)&&a>=0&&a<=.27));
+ }
+ scene.update(12.3,1);const frozen=Array.from(matrices);scene.update(12.3,1);assert.deepEqual(Array.from(matrices),frozen);
+ scene.update(13.3,1);assert.notDeepEqual(Array.from(matrices),frozen,'time must animate the pooled plumes');
+});
+
+test('reviewed surfaces propagate to every Io terrain and painted material, while fallback lighting stays finite',async()=>{
+ const m=await server.ssrLoadModule('/src/io-materials.ts');
+ const hdr=m.ioEnvironment.image.data;assert(hdr.every(h=>Number.isFinite(T.DataUtils.fromHalfFloat(h))));
+ const scene=createIoScenery(),sun=scene.world.children.find(o=>o.isDirectionalLight);
+ assert(sun.castShadow);assert(sun.shadow.mapSize.x>=1024);assert(scene.root.getObjectByName('io-basalt-scree').count>300);
+ const heat=scene.root.getObjectByName('broken-lava-crust').geometry.attributes.temperature.array;
+ assert(heat.every(t=>t>=0&&t<=1));assert(heat.some(t=>t>.1));assert(heat.some(t=>t===0));
+ const rock=new T.Texture(),paint=new T.Texture();m.setIoRockTexture(rock);m.setIoCeramicTexture(paint);
+ for(const material of [m.ioGround,m.ioRock,m.ioCrust]){assert.equal(material.map,rock);assert.equal(material.bumpMap,rock);}
+ for(const material of [m.ioCeramic,m.ioBand]){assert.equal(material.map,paint);assert.equal(material.bumpMap,paint);}
+ for(const rise of [0,.3,.7,1]){m.poseIoEnvironment(rise);assert(Number.isFinite(m.ioChrome.envMapRotation.x));}
 });

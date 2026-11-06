@@ -143,6 +143,7 @@ export class FlightView {
   );
   private stars: T.Points;
   private texturesReady: Promise<(T.Texture | undefined)[][]>;
+  private surfacesReady = false;
   private swing = 0;
   private stageTime = 0;
   private iceTime = 0;
@@ -165,6 +166,7 @@ export class FlightView {
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new T.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     this.scene.background = new T.Color(sceneColor);
+    this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = T.PCFShadowMap;
     const light = new T.DirectionalLight(0xb9e8ff, 2.7);
     light.position.set(3, 5, 6);
     this.scene.add(this.plane);
@@ -183,10 +185,11 @@ export class FlightView {
     this.boss.root.position.set(0, BOSS_Y, BOSS_DEPTH);
     const scout = createScoutRig();
     const pods = this.wingPods.flatMap((side) => side.map(({ root }) => root));
+    for(const rig of [this.player.root,this.drone,...pods])rig.traverse(o=>{if(o instanceof T.Mesh&&!([o.material].flat().some(m=>m.transparent))){o.castShadow=true;o.receiveShadow=true;}});
     const ammo = Object.values(this.projectiles).map(({ root }) => root);
     this.texturesReady = Promise.all([this.backdrops.ready, this.hive.ready, this.ice.ready, this.titan.ready,
       Promise.all([loadEncounterTexture('marine', setMarineTexture, 1), loadEncounterTexture('ioBasalt',setIoRockTexture,1), loadEncounterTexture('ioCeramic',setIoCeramicTexture,1)]), loadEncounterTextures(this.boss, this.raptor,
-      [this.player.root, scout, this.drone, this.bridge.root, this.ice.root, ...pods, ...ammo, ...this.drops.map(({ root }) => root), this.io.root, this.skippers[0].root])]);
+      [this.player.root, scout, this.drone, this.bridge.root, this.ice.root, ...pods, ...ammo, ...this.drops.map(({ root }) => root), this.io.root, this.skippers[0].root])]).then(textures=>{this.surfacesReady=true;return textures;});
     this.enemies = Array.from({ length: 12 }, () => {
       const root = scout.clone();
       return { root, burners: shipBurners(root) };
@@ -289,6 +292,9 @@ export class FlightView {
   }
 
   render(flight: Flight, elapsed = 0) {
+    // Let optional images decode before synchronous first-draw shader work can
+    // consume their bounded loading deadline. The launch panel shows progress.
+    if(!this.surfacesReady)return;
     const newFlight = flight !== this.lastFlight;
     this.lastFlight = flight;
     this.animationTime = newFlight ? 0 : this.animationTime + elapsed;
@@ -317,8 +323,9 @@ export class FlightView {
     this.skyLight?.groundColor.setHex(flight.level==='titan'?0x543522:0x514873);
     if(flight.level==='io'){
       this.keyLight?.color.setHex(0xfff0dc);this.skyLight?.color.setHex(0xb9c9e0);this.skyLight?.groundColor.setHex(0x35251c);
+      if(this.keyLight)this.keyLight.intensity=.15;if(this.skyLight)this.skyLight.intensity=.48;
       this.keyLight?.position.set(-5,-5*Math.cos(IO_PITCH*eased)+12*Math.sin(IO_PITCH*eased),5*Math.sin(IO_PITCH*eased)+12*Math.cos(IO_PITCH*eased));
-    } else this.keyLight?.position.set(3,5,6);
+    } else {this.keyLight?.position.set(3,5,6);if(this.keyLight)this.keyLight.intensity=2.7;if(this.skyLight)this.skyLight.intensity=1.75;}
     const hive = flight.level === 'broodlock';
     const stageDistance = hive ? HIVE_CAMERA_DISTANCE : flight.level === 'io' ? 65 : flight.level === 'ice' ? ICE_CAMERA_DISTANCE : 95;
     const camera = this.swing === 0 && flight.level === 'preserve' ? this.ortho : this.perspective;
