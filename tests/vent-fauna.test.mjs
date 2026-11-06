@@ -91,3 +91,22 @@ test('the full non-shooting route fits prewarmed pools, spawns all fauna and cle
  }
  assert.equal(forms.size,3);assert.equal(worms.size,4);assert.equal(drops.size,4);assert(maxShrimp<=m.SHRIMP_POOL);assert(maxWorm<=m.WORM_POOL);assert.equal(f.phase,'approach');assert.equal(f.enemies.length,0);
 });
+
+
+test('fixed foes spawn beyond the viewport while attack times retain their original schedule',()=>{
+ for(const wave of v.ventWaves.filter(w=>w.ventAnchor!==undefined)){
+  const a=v.ventAnchors[wave.ventAnchor],p=v.ventAnchorPoint(wave.ventAnchor,wave.time);
+  assert.equal(wave.time,a.time-v.VENT_SPAWN_LEAD);assert(p.y-1.15*p.scale>8);
+ }
+});
+test('defeated worms retain a disabled hole and restart clears the defeat state',()=>{
+ const f=new Flight('sentry',[],'vex','vents'),e=worm();f.enemies=[e];f.damageEnemy(e,8);assert(f.defeatedVentWorms.has(6));assert.equal(new Flight('sentry',[],'vex','vents').defeatedVentWorms.size,0);
+ const rig=createVentWorm(wormAssets),hole=rig.root.getObjectByName('worm-fixed-hole');rig.pose(4.3,10.2,0);rig.setDisabled(true);assert(!rig.combat.visible);assert(rig.root.getObjectByName('worm-disabled-plug').visible);assert.notEqual(hole.material,wormAssets.material);
+ rig.setDisabled(false);assert.equal(hole.material,wormAssets.material);assert(!rig.root.getObjectByName('worm-disabled-plug').visible);assert(!rig.root.getObjectByName('worm-hole-lip'));
+});
+test('shrimp atlases accept both the cropped top two rows and the original square sheet',()=>{
+ const fallback=new T.DataTexture(new Uint8Array([255,255,255,255]),1,1),a=createFaunaAssets(fallback),root=new T.Group(),joint=a.part(root,6,0,0,0,1,1);
+ const cropped=new T.Texture({width:768,height:512});a.setAtlas(cropped);assert.equal(a.material.map,cropped);assert.equal(joint.material.map,fallback);
+ for(let cell=0;cell<6;cell++){const uv=a.geometries[cell].attributes.uv;for(let i=0;i<uv.count;i++)assert(uv.getY(i)>1-(Math.floor(cell/3)+1)/2&&uv.getY(i)<1-Math.floor(cell/3)/2);}
+ const square=new T.Texture({width:768,height:768});a.setAtlas(square);assert.equal(joint.material.map,square);
+});

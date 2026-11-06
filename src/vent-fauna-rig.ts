@@ -17,17 +17,23 @@ function fallbackAtlas(){
  }
  const texture=new T.CanvasTexture(c);texture.colorSpace=T.SRGBColorSpace;texture.anisotropy=4;return texture;
 }
-function rasterAssets(columns:number,rows:number,texture:T.Texture){
+function rasterAssets(columns:number,rows:number,texture:T.Texture,flexible=false){
  const material=new T.MeshBasicMaterial({map:texture,alphaTest:.5,side:T.DoubleSide});
+ const jointMaterial=material.clone();
  const geometries=Array.from({length:columns*rows},(_,cell)=>{
   const geometry=new T.CircleGeometry(.5,28),uv=geometry.attributes.uv,pad=.012;
   for(let i=0;i<uv.count;i++)uv.setXY(i,(cell%columns+pad+uv.getX(i)*(1-2*pad))/columns,1-(Math.floor(cell/columns)+1-pad-uv.getY(i)*(1-2*pad))/rows);
   return geometry;
  });
- function part(parent:T.Object3D,cell:number,x:number,y:number,z:number,w:number,h:number){const mesh=new T.Mesh(geometries[cell],material);mesh.position.set(x,y,z);mesh.scale.set(w,h,1);parent.add(mesh);return mesh;}
- return{material,geometries,part,setAtlas(texture:T.Texture){texture.anisotropy=4;material.map=texture;material.needsUpdate=true;}};
+ function part(parent:T.Object3D,cell:number,x:number,y:number,z:number,w:number,h:number){const mesh=new T.Mesh(geometries[cell],flexible&&cell>=6?jointMaterial:material);mesh.position.set(x,y,z);mesh.scale.set(w,h,1);parent.add(mesh);return mesh;}
+ material.userData.fallback=texture;
+ return{material,geometries,part,setAtlas(texture:T.Texture){texture.anisotropy=4;material.map=texture;material.needsUpdate=true;
+  if(flexible){const image=texture.image as {width:number;height:number},rowCount=image.width/image.height>1.3?2:3;
+   for(let cell=0;cell<6;cell++){const uv=geometries[cell].attributes.uv,base=new T.CircleGeometry(.5,28).attributes.uv;for(let i=0;i<uv.count;i++)uv.setXY(i,(cell%3+.012+base.getX(i)*.976)/3,1-(Math.floor(cell/3)+1-.012-base.getY(i)*.976)/rowCount);uv.needsUpdate=true;}
+   jointMaterial.map=rowCount===3?texture:material.userData.fallback;jointMaterial.needsUpdate=true;
+  }}};
 }
-export function createFaunaAssets(fallback?:T.Texture){return rasterAssets(3,3,fallback??fallbackAtlas());}
+export function createFaunaAssets(fallback?:T.Texture){return rasterAssets(3,3,fallback??fallbackAtlas(),true);}
 export function createWormAssets(fallback?:T.Texture){
  if(fallback)return rasterAssets(3,2,fallback);
  const size=192,canvas=document.createElement('canvas');canvas.width=size*3;canvas.height=size*2;const g=canvas.getContext('2d')!;
@@ -72,7 +78,9 @@ export function createVentShrimp(assets:Assets){
 export function createVentWorm(assets:Assets){
  const root=new T.Group();root.name='vent-burrow-worm';
  const foot=assets.part(root,0,0,0,.03,2.15,2.15);foot.name='worm-fixed-hole';
- const lip=assets.part(root,0,0,0,.34,2.15,2.15);lip.name='worm-hole-lip';
+
+ const disabledMaterial=assets.material.clone();disabledMaterial.color.setHex(0x626d72);
+ const plug=new T.Mesh(new T.CircleGeometry(.55,7),new T.MeshBasicMaterial({color:0x263238}));plug.position.z=.08;plug.name='worm-disabled-plug';root.add(plug);
  const combat=new T.Group();combat.name='worm-living-parts';root.add(combat);
  const aim=new T.Group();aim.name='worm-aim';combat.add(aim);
  const warningGeometry=new T.BufferGeometry(),warningPoints=new T.BufferAttribute(new Float32Array(17*3),3);warningGeometry.setAttribute('position',warningPoints);
@@ -92,5 +100,5 @@ export function createVentWorm(assets:Assets){
   return p;
  }
  // Prime every sprite cell before play; the initial live pose may be fully hidden.
- pose(WORM_FIRST_ATTACK+.7,WORM_FIRST_ATTACK+WORM_INTERVAL,0);warning.visible=true;return{root,combat,pose};
+ pose(WORM_FIRST_ATTACK+.7,WORM_FIRST_ATTACK+WORM_INTERVAL,0);warning.visible=true;return{root,combat,pose,setDisabled(disabled:boolean){if(disabledMaterial.map!==assets.material.map){disabledMaterial.map=assets.material.map;disabledMaterial.needsUpdate=true;}foot.material=disabled?disabledMaterial:assets.material;plug.visible=disabled;if(disabled)combat.visible=false;}};
 }

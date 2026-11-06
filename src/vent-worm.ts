@@ -7,7 +7,8 @@ const smooth=(v:number)=>{const t=Math.max(0,Math.min(1,v));return t*t*(3-2*t);}
 export function wormPose(age:number,nextAttack:number,reach=8.5,bend=1){
  const since=age-(nextAttack-WORM_INTERVAL),until=nextAttack-age;
  let phase:'hidden'|'windup'|'strike'|'hold'|'retreat'='hidden',length=0,charge=0,jaw=0;
- if(since>=-1e-6&&since<WORM_STRIKE+WORM_HOLD+WORM_RETREAT){
+ if(age<0){}
+ else if(since>=-1e-6&&since<WORM_STRIKE+WORM_HOLD+WORM_RETREAT){
   if(since<WORM_STRIKE){phase='strike';length=1.4+(reach-1.4)*smooth(since/WORM_STRIKE);jaw=1;}
   else if(since<WORM_STRIKE+WORM_HOLD){phase='hold';length=reach;jaw=.7;}
   else {phase='retreat';const t=smooth((since-WORM_STRIKE-WORM_HOLD)/WORM_RETREAT);length=reach*(1-t);jaw=.7*(1-t);}

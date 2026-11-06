@@ -4,7 +4,7 @@ import {createMortarAssets,createVentMortar} from './vent-mortar-rig';
 import {MORTAR_POOL} from './vent-mortar';
 import {createVentScenery} from './vent-scenery';
 import {createVentBoss} from './vent-boss';
-import {VENT_DURATION,VENT_APPROACH,VENT_CAMERA_DISTANCE,VENT_PITCH,ventBossPose,ventWorld,ventFrame} from './vent-layout';
+import {ventAnchors,VENT_SPAWN_LEAD,ventAnchorPoint,VENT_DURATION,VENT_APPROACH,VENT_CAMERA_DISTANCE,VENT_PITCH,ventBossPose,ventWorld,ventFrame} from './vent-layout';
 import { createCrucible, createSlag } from './io-crucible-rig';
 import { CRUCIBLE_POOL, SLAG_POOL, crucibleValve } from './io-crucible';
 import { setIoRockTexture, setIoCeramicTexture } from './io-materials';
@@ -547,14 +547,26 @@ export class FlightView {
 
     this.faunaModels.length=flight.enemies.length;
     for(const rig of this.shrimps)rig.root.visible=false;for(const rig of this.worms)rig.root.visible=false;
-    let shrimps=0,worms=0;
+    let shrimps=0;
     for(const[index,enemy]of flight.enemies.entries()){
       this.faunaModels[index]=undefined;
-      const rig=enemy.ventWorm?this.worms[worms++]:enemy.shrimp?this.shrimps[shrimps++]:undefined;if(!rig)continue;
+      const rig=enemy.shrimp?this.shrimps[shrimps++]:undefined;if(!rig)continue;
       rig.root.visible=true;rig.root.position.set(enemy.x,enemy.y,0);rig.root.scale.setScalar(enemy.ventScale??1);
-      if(enemy.ventWorm){rig.root.rotation.z=0;(rig as typeof this.worms[number]).pose(enemy.age,enemy.fire,enemy.mortarAngle??0,enemy.wormReach,enemy.wormBend);}
-      else {rig.root.rotation.z=enemy.heading??0;rig.pose(enemy.age,enemy.fire,0);}
+      rig.root.rotation.z=enemy.heading??0;rig.pose(enemy.age,enemy.fire);
       this.faunaModels[index]=rig.combat;
+    }
+
+    let wormSlot=0;
+    for(const[anchorIndex,anchor]of ventAnchors.entries()){
+      if(!anchor.worm)continue;const rig=this.worms[wormSlot++];
+      if(flight.phase!=='stage'&&flight.phase!=='lost')continue;
+      if(this.ventTime<anchor.time-VENT_SPAWN_LEAD)continue;
+      const point=ventAnchorPoint(anchorIndex,this.ventTime);if(point.y<-11)continue;
+      rig.root.visible=true;rig.root.position.set(point.x,point.y,0);rig.root.scale.setScalar(point.scale);rig.root.rotation.z=0;
+      const index=flight.enemies.findIndex(e=>e.ventAnchor===anchorIndex),enemy=flight.enemies[index];
+      if(enemy){rig.pose(enemy.age,enemy.fire,enemy.mortarAngle??0,enemy.wormReach,enemy.wormBend);this.faunaModels[index]=rig.combat;}
+      else rig.pose(0,3.6,0);
+      rig.setDisabled(flight.defeatedVentWorms.has(anchorIndex));
     }
 
     this.drawWings(flight, eased, fighterVelocity, flight.level==='io'?distance:flight.level === 'titan' ? (eased > 0 ? distance / eased : undefined) : camera === this.ortho ? undefined : distance);
