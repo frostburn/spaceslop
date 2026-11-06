@@ -1,7 +1,8 @@
+import {createTitanMountains} from './titan-mountains';
 import {titanFrame,titanWorld} from './titan-frame';
 import * as T from 'three';
 import { encounterTextureUrl, loadEncounterTexture } from './encounter-texture';
-import {TITAN_DURATION,TITAN_SCREENS,titanTileY} from './titan-layout';
+import {TITAN_DURATION,TITAN_SCREENS,titanTileY,titanGroundTile,TITAN_TRAVEL} from './titan-layout';
 import {titanMask} from './titan-mask';
 import {createTitanClouds} from './titan-clouds';
 import {createTitanAmbient} from './titan-ambient';
@@ -9,9 +10,11 @@ import {createTitanAmbient} from './titan-ambient';
 export function createTitanScenery(){
  const root=new T.Group();root.name='titan-research-station';root.visible=false;
  const tiles:T.Mesh<T.PlaneGeometry,T.ShaderMaterial>[]=[],textures:T.Texture[]=[];
+ const copies:{mesh:T.Mesh;index:number;column:number;repeat:number}[]=[];
  const clock={value:0};
  const geometry=new T.PlaneGeometry(9,16);
  const ambient=createTitanAmbient(),clouds=createTitanClouds(),terrain=new T.Group();root.add(terrain,clouds.root);terrain.add(ambient.root);ambient.root.position.z=4;
+ const mountains=createTitanMountains();terrain.add(mountains);
  const floor=new T.Mesh(new T.PlaneGeometry(400,400),new T.MeshBasicMaterial({color:0x3a2d20}));floor.position.z=-.02;terrain.add(floor);
  for(let i=0;i<TITAN_SCREENS;i++){
   const material=new T.ShaderMaterial({uniforms:{map:{value:null},mask:{value:null},hasMap:{value:0},clock,tile:{value:i},crop:{value:new T.Vector2(2/1284,1280/1284)}},
@@ -39,6 +42,10 @@ export function createTitanScenery(){
      #include <colorspace_fragment>
     }`});
   const mesh=new T.Mesh(geometry,material);mesh.position.z=0;mesh.frustumCulled=false;terrain.add(mesh);tiles.push(mesh);
+  for(let column=-8;column<=8;column++)for(let repeat=-1;repeat<=1;repeat++){
+   if(column===0&&repeat===0)continue;
+   const copy=new T.Mesh(geometry,material);copy.scale.set(Math.abs(column)%2?-1:1,Math.abs(repeat)%2?-1:1,1);terrain.add(copy);copies.push({mesh:copy,index:i,column,repeat});
+  }
  }
  let hasArt=false;
  const backdropReady=new Promise<T.Texture[]>(resolve=>{
@@ -74,6 +81,8 @@ export function createTitanScenery(){
  const ready=Promise.all([backdropReady,loadEncounterTexture('titanRobot',ambient.setRobotTexture).then(texture=>texture?[texture]:[])]).then(parts=>parts.flat());
  return{root,ready,get hasArt(){return hasArt;},update(progress:number,time=progress*TITAN_DURATION,ascent=0,distance=95){clock.value=time;ambient.update(progress,time);ambient.root.visible=true;clouds.update(time,ascent,distance);
   const frame=titanFrame(ascent),point=titanWorld(0,-4,ascent);terrain.rotation.x=-frame.pitch;terrain.position.set(0,point.y,point.z);
+  mountains.position.y=-progress*TITAN_TRAVEL;
+  copies.forEach(({mesh,index,column,repeat})=>{const tile=titanGroundTile(index,column,repeat,progress);mesh.position.set(tile.x,tile.y,0);mesh.visible=ascent>0&&ascent<.65;});
   tiles.forEach((mesh,i)=>{mesh.position.y=titanTileY(i,progress);mesh.visible=Math.abs(mesh.position.y)<(ascent>0?80:16.01);});
  }};
 }

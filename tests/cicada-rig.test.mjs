@@ -44,3 +44,26 @@ test('wing vein triangles fit within membranes and every leg has tibial spines',
  }
  for(const leg of rig.root.children.filter(n=>n.name.startsWith('leg-')))assert.equal(leg.children.filter(n=>n.name==='tibial-spine').length,5);
 });
+
+
+test('mirrored strip extensions share borders and mountains leave the flight corridor clear',async()=>{
+ const {titanGroundTile}=await server.ssrLoadModule('/src/titan-layout.ts');
+ const {createTitanMountains}=await server.ssrLoadModule('/src/titan-mountains.ts');
+ for(const p of [0,.5,.933,1]){
+  const top=titanGroundTile(0,0,0,p),next=titanGroundTile(0,0,1,p),bottom=titanGroundTile(9,0,0,p),previous=titanGroundTile(9,0,-1,p);
+  assert.equal(top.y+8,next.y-8);assert.equal(bottom.y-8,previous.y+8);
+  assert.equal(titanGroundTile(0,-1,0,p).x+4.5,top.x-4.5);
+  assert.equal(next.flipY,-1);assert.equal(titanGroundTile(0,-1,0,p).flipX,-1);
+ }
+ let peaks=0;createTitanMountains().traverse(n=>{if(n.isMesh){const a=n.geometry.attributes.position;for(let i=0;i<a.count;i++){assert(Math.abs(a.getX(i))>=6);assert(Number.isFinite(a.getZ(i)));if(a.getZ(i)>12)peaks++;}}});assert(peaks>100);
+});
+
+
+test('the ocellar triangle clears the face ribs and main eyes and rostrum stay compact',async()=>{
+ const {Box3}=await import('three'),rig=createCicada(),ribs=[],ocelli=[],eyes=[];let rostrum;
+ rig.root.updateMatrixWorld(true);rig.root.traverse(n=>{if(n.name==='clypeal-rib')ribs.push(n);if(n.name==='ocellus')ocelli.push(n);if(n.name==='compound-eye')eyes.push(n);if(n.name==='rostrum')rostrum=n;});
+ assert.equal(ocelli.length,3);assert.equal(eyes.length,2);const top=Math.max(...ribs.map(n=>new Box3().setFromObject(n).max.y));
+ for(const eye of ocelli)assert(new Box3().setFromObject(eye).min.y>top+.05);
+ for(const eye of eyes)assert(Math.max(...eye.scale.toArray())<.6);
+ const box=new Box3().setFromObject(rostrum);assert(box.max.y-box.min.y<.7);
+});

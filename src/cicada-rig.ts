@@ -34,16 +34,17 @@ export function createCicada() {
   const head=new T.Group();root.add(head);head.position.set(0,1.2,.65);
   volume(head,chitin,0,0,0,1.7,.98,.8);
   for(const side of [-1,1]){
-    volume(head,dark,side*1.4,.12,.38,.97,1.09,.66);
-    volume(head,eye,side*1.47,.15,.62,.84,.94,.64,new T.IcosahedronGeometry(1,3));
+    volume(head,chitin,side*1.4,.4,.43,.42,.4,.53);
+    const compound=volume(head,eye,side*1.65,.58,.83,.50,.56,.42,new T.IcosahedronGeometry(1,3));compound.name='compound-eye';
     link(new T.Vector3(side*.48,.6,.6),new T.Vector3(side*.75,1.45,.55),.055,rim,head);
     link(new T.Vector3(side*.75,1.45,.55),new T.Vector3(side*1.3,1.75,.48),.029,chitin,head);
   }
   // Paired vertical rows of clypeal ribs; these are cuticular ridges, not jaws.
   volume(head,rim,0,-.15,.76,.55,.6,.27);
-  for(const side of [-1,1])for(let j=0;j<7;j++){const rib=volume(head,rim,side*(.23+Math.sin(j/6*Math.PI)*.11),.29-j*.125,1.01,.15,.052,.105);rib.rotation.z=side*(.28+j*.025);}
-  for(const [x,y] of [[0,.58],[-.29,.3],[.29,.3]])volume(head,eye,x,y,.86,.15,.15,.11);
-  const rostrum=volume(head,rim,0,-.68,.87,.17,.67,.15,new T.ConeGeometry(1,2,14));rostrum.rotation.z=Math.PI;
+  for(const side of [-1,1])for(let j=0;j<7;j++){const rib=volume(head,rim,side*(.23+Math.sin(j/6*Math.PI)*.11),.29-j*.125,1.01,.15,.052,.105);rib.rotation.z=side*(.28+j*.025);rib.name='clypeal-rib';}
+  volume(head,chitin,0,.68,.55,.57,.43,.37);
+  for(const [x,y] of [[0,.95],[-.29,.65],[.29,.65]]){const ocellus=volume(head,eye,x,y,.98,.12,.12,.09);ocellus.name='ocellus';}
+  const rostrum=volume(head,rim,0,-.65,.87,.13,.30,.12,new T.ConeGeometry(1,2,14));rostrum.rotation.z=Math.PI;rostrum.name='rostrum';
   const vents:T.Mesh[]=[];
   for(const side of [-1,1]){
     volume(root,chitin,side*1.45,-.1,0,.8,.95,.58);

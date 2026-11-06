@@ -1,3 +1,4 @@
+import { TITAN_ROUTE_DURATION, TITAN_ROUTE_END } from './titan-layout';
 import { CICADA_HP, TITAN_ASCENT, CICADA_INTERVAL, CICADA_WINDUP, CICADA_FIRE, CICADA_TRAVEL } from './cicada';
 import {
   BOSS_FIRE_AT, BOSS_MUZZLE_Z, BOSS_RECOIL_TIME, BOSS_VOLLEY_INTERVAL, BOSS_WINDUP_AT, raptorFlight,
@@ -105,7 +106,7 @@ export const iceWaves: Wave[] = [
 // The final gap lets the last wave leave before the ground-level pass ends.
 export const titanWaves: Wave[] = Array.from({ length: 20 }, (_, i) => {
   const lanes = [[-2.6, 0, 2.6], [-1.6, 1.6], [-3, -.8, 1.6], [-2.2, .2, 2.6]][i % 4];
-  return { time: 1 + i * 4.2, lanes, carrier: i % lanes.length,
+  return { time: 1 + i * 3.9, lanes, carrier: i % lanes.length,
     drop: (['homing', 'cannon', 'laser', 'omega'] as const)[i % 4] };
 });
 
@@ -212,8 +213,8 @@ export class Flight {
   get stageDuration() { return levels[this.level].duration; }
 
   get hiveProgress() {
-    if (this.phase === 'stage') return clamp(this.time / this.stageDuration, 0, 1);
-    if (this.phase === 'approach' || this.phase === 'boss' || this.phase === 'won') return 1;
+    if (this.phase === 'stage') return clamp(this.time / (this.level==='titan'?TITAN_ROUTE_DURATION:this.stageDuration), 0, 1);
+    if (this.phase === 'approach' || this.phase === 'boss' || this.phase === 'won') return this.level==='titan'?TITAN_ROUTE_END:1;
     return this.stageProgress;
   }
 

@@ -5,7 +5,7 @@ const server = await createServer({ root: new URL('..', import.meta.url).pathnam
   server: { middlewareMode: true, hmr: false, ws: false }, optimizeDeps: { noDiscovery: true, entries: [] }, appType: 'custom' });
 after(() => server.close());
 const { Flight, STEP, titanWaves } = await server.ssrLoadModule('/src/game.ts');
-const { TITAN_DURATION, TITAN_SCREENS, titanTileY } = await server.ssrLoadModule('/src/titan-layout.ts');
+const { TITAN_DURATION, TITAN_ROUTE_END, TITAN_SCREENS, titanTileY } = await server.ssrLoadModule('/src/titan-layout.ts');
 const { titanMask } = await server.ssrLoadModule('/src/titan-mask.ts');
 const { titanLights } = await server.ssrLoadModule('/src/titan-features.ts');
 
@@ -20,13 +20,13 @@ test('the ten-screen plate scrolls bottom to top with uninterrupted viewport cov
 });
 
 test('prototype patrols span the route, repeat all accessories and lead into the cicada ascent', () => {
-  assert.equal(TITAN_DURATION, 90);
+  assert.equal(TITAN_DURATION, 84);
   assert.equal(titanWaves.length, 20);
   for (const kind of ['homing','cannon','laser','omega']) assert(titanWaves.filter(w => w.drop === kind).length > 1);
   assert(TITAN_DURATION - titanWaves.at(-1).time >= 8);
   const f = new Flight('sentry', [], 'vex', 'titan');
   const observed = new Set(); let maxEnemies = 0;
-  for (let frame = 0; frame < 5402; frame++) {
+  for (let frame = 0; frame < TITAN_DURATION*60+2; frame++) {
     // Observe the complete schedule regardless of damage; browser QA covers an unmodified run.
     f.invulnerable = 100; f.step(STEP);
     for (const enemy of f.enemies) {
@@ -37,7 +37,7 @@ test('prototype patrols span the route, repeat all accessories and lead into the
     maxEnemies = Math.max(maxEnemies, f.enemies.length);
   }
   assert(maxEnemies > 0 && maxEnemies <= 12);
-  assert.equal(observed.size, 4); assert.equal(f.phase, 'approach'); assert.equal(f.hiveProgress, 1);
+  assert.equal(observed.size, 4); assert.equal(f.phase, 'approach'); assert.equal(f.hiveProgress, TITAN_ROUTE_END);
   assert.equal(f.enemies.length + f.shots.length + f.threats.length + f.drops.length + f.markers.length, 0);
   for (const wing of f.wings) assert.equal(wing.beamEnd, undefined);
   assert.equal(f.transitionDuration,7);
@@ -45,7 +45,7 @@ test('prototype patrols span the route, repeat all accessories and lead into the
   assert.equal(f.phase,'boss');assert.equal(f.bossMaxHealth,80);
   for(let i=0;i<2400&&f.phase==='boss';i++){f.invulnerable=100;f.step(STEP);}
   assert.equal(f.phase,'won');assert.equal(f.bossHealth,0);
-  const score=f.score;f.step(10);assert.equal(f.score,score);assert.equal(f.hiveProgress,1);
+  const score=f.score;f.step(10);assert.equal(f.score,score);assert.equal(f.hiveProgress,TITAN_ROUTE_END);
 });
 
 test('a failed Titan run retains its position and a new flight starts at the opening', () => {
