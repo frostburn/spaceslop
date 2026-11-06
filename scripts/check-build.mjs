@@ -25,5 +25,5 @@ assert(pack.required.includes(pack.entry));
  assert(!serviceWorker.includes('encounters/'),'The service worker eagerly downloads level media.');
 }
 for(const file of ['workshop.html','vent-study.html','io-study.html'])await assert.rejects(stat(join(root,file)));
-for(const file of files.filter(f=>f.endsWith('.js'))){const text=await readFile(join(root,'assets',file),'utf8');assert(!text.includes('__qa'),'QA hooks leaked into production.');}
+for(const file of files.filter(f=>f.endsWith('.js'))){const text=await readFile(join(root,'assets',file),'utf8');assert(!text.includes('__qa'),'QA hooks leaked into production.');assert(!/(workshop|vent-study|io-study)\.html/.test(text),'Development links leaked into production.');}
 console.log('Menu size, six isolated level packages, selective precaching and production dev-page exclusions passed.');

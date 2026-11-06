@@ -24,6 +24,7 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     panel.querySelector('#dev-tools')?.remove();
     const devTools = document.createElement('div');
     devTools.id = 'dev-tools';
+    devTools.className='dev-links';
     panel.append(devTools);
     const bossStart = document.createElement('button');
     bossStart.id = 'dev-boss';
@@ -42,19 +43,16 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     const workshop = document.createElement('a');
     workshop.href = import.meta.env.BASE_URL + 'workshop.html';
     workshop.textContent = 'Asset workshop';
-    workshop.style.cssText = 'margin-top: .8rem; color: var(--accent); font-size: .75rem';
     devTools.append(workshop);
     const ventStudy = document.createElement('a');
     ventStudy.id = 'vent-study';
     ventStudy.href = import.meta.env.BASE_URL + 'vent-study.html';
     ventStudy.textContent = 'Abyss camera study';
-    ventStudy.style.cssText = workshop.style.cssText;
     devTools.append(ventStudy);
     const ioStudy = document.createElement('a');
     ioStudy.id = 'io-study';
     ioStudy.href = import.meta.env.BASE_URL + 'io-study.html';
     ioStudy.textContent = 'Io camera study';
-    ioStudy.style.cssText = workshop.style.cssText;
     devTools.append(ioStudy);
   }
   const heading = element('heading');

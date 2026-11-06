@@ -98,6 +98,14 @@ document.querySelector('#clear-offline')!.addEventListener('click', async () => 
   await refreshSavedLevels();
   status.textContent = cleared ? 'Saved level files cleared. The menu remains available offline.' : 'Offline storage could not be cleared on this device.';
 });
+if (import.meta.env.DEV) {
+  const links=document.createElement('nav');
+  links.id='menu-dev-tools';links.className='dev-links';links.setAttribute('aria-label','Development tools');
+  for(const [path,label]of [['workshop.html','Asset workshop'],['vent-study.html','Abyss camera study'],['io-study.html','Io camera study']]){
+    const link=document.createElement('a');link.href=import.meta.env.BASE_URL+path;link.textContent=label;links.append(link);
+  }
+  menu.querySelector('.menu-actions')!.append(links);
+}
 const applyUpdate = registerSW({
   onNeedRefresh() {
     update.hidden = false;

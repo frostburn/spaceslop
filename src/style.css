@@ -289,3 +289,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .offline-settings p {line-height:1.5;}
 .offline-settings button {font-size:.7rem;}
 .level-card.saved-offline span {color:var(--accent);}
+
+.dev-links {display:grid;gap:.65rem;justify-items:start;margin-top:.65rem;}
+.dev-links a {display:block;color:var(--accent);font-size:.75rem;line-height:1.4;}
+#dev-tools {justify-items:center;}

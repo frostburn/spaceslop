@@ -13,7 +13,7 @@ npm run dev
 
 The app opens in a lightweight sector menu. Choose a sector and **Prepare flight** to load its graphics, then choose your loadout and launch. Tap to place the drone, drag to steer, or use WASD/arrows. Space fires Pulse; Escape pauses. **Menu** leaves the current run.
 
-Vite dev provides boss/transition launch shortcuts in the hangar, `/workshop.html`, `/vent-study.html` and `/io-study.html`. Production excludes those pages and shortcuts. `?level=vents` selects a sector in the menu without loading it; `?testLoadout=1` enables the wing test picker.
+Vite dev links the asset workshop and camera studies directly from the main menu. The hangar also includes these links and boss/transition launch shortcuts. Direct URLs are `/workshop.html`, `/vent-study.html` and `/io-study.html`. Production excludes those pages and shortcuts. `?level=vents` selects a sector in the menu without loading it; `?testLoadout=1` enables the wing test picker.
 
 ## Validate
 
