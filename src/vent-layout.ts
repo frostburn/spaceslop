@@ -4,6 +4,7 @@ export const VENT_DURATION=100;
 export const VENT_APPROACH=8;
 export const VENT_SPEED=1.5;
 export const VENT_CAMERA_DISTANCE=40;
+export const VENT_STAGE_PITCH=22*Math.PI/180;
 export const VENT_PITCH=72*Math.PI/180;
 export const VENT_END_SCROLL=VENT_SPEED*(VENT_DURATION+VENT_APPROACH/2);
 export const VENT_CLIFF_Y=153;
@@ -13,7 +14,7 @@ export function ventScroll(time:number){
  return VENT_SPEED*(stage+t-t*t/(2*VENT_APPROACH));
 }
 export function ventFrame(time:number,rise:number){
- return{scroll:ventScroll(time),pitch:22*Math.PI/180+(VENT_PITCH-22*Math.PI/180)*rise,height:8-2*rise};
+ return{scroll:ventScroll(time),pitch:VENT_STAGE_PITCH+(VENT_PITCH-VENT_STAGE_PITCH)*rise,height:8-2*rise};
 }
 export function ventWorld(x:number,y:number,z:number,time:number,rise:number){
  const f=ventFrame(time,rise),dy=y-f.scroll,dz=z-f.height;

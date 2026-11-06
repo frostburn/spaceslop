@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {VENT_STAGE_PITCH} from './vent-layout';
 
 // Eight independent cells: four overhead formations, four head-on formations.
 // Optional reviewed art replaces this runtime-drawn atlas without changing the
@@ -36,8 +37,12 @@ export function createVentAtlas(){
  }
  const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;texture.generateMipmaps=true;texture.anisotropy=4;return texture;
 }
+// Raise the painted chimney above its rubble apron. Low shelves can overlap
+// the foot without cutting across the tower or its mouth.
+export function ventCardRelief(cell:number,v:number){return cell===2||cell===3?-.65+Math.max(0,v-.35)*10:0;}
 export function ventCardGeometry(cell:number){
- const g=new T.PlaneGeometry(1,1),uv=g.attributes.uv,col=cell%4,row=Math.floor(cell/4),pad=.012;
+ const g=new T.PlaneGeometry(1,1,1,cell===2||cell===3?16:1),uv=g.attributes.uv,col=cell%4,row=Math.floor(cell/4),pad=.012;
+ const positions=g.attributes.position;for(let i=0;i<uv.count;i++){const relief=ventCardRelief(cell,uv.getY(i));positions.setZ(i,relief);positions.setY(i,positions.getY(i)-relief*Math.tan(VENT_STAGE_PITCH)/7.5);}g.computeVertexNormals();
  for(let i=0;i<uv.count;i++)uv.setXY(i,(col+pad+uv.getX(i)*(1-pad*2))/4,1-(row+1-pad-uv.getY(i)*(1-pad*2))/2);
  return g;
 }

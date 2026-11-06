@@ -1,10 +1,10 @@
 import * as T from 'three';
 import {createVentFormations,ventTierTint,type VentFormation} from './vent-formations';
 import {createVentGeology} from './vent-geology';
-import {createVentAtlas,ventCardGeometry} from './vent-atlas';
+import {createVentAtlas,ventCardGeometry,ventCardRelief} from './vent-atlas';
 import {loadEncounterTexture} from './encounter-texture';
 import {ioNoise} from './io-layout';
-import {VENT_PITCH,ventFrame,ventWorld,ventFarFloor,ventBossPose} from './vent-layout';
+import {VENT_PITCH,VENT_STAGE_PITCH,ventFrame,ventWorld,ventFarFloor,ventBossPose} from './vent-layout';
 
 function random(seed:number){return()=>{seed=(Math.imul(seed,1664525)+1013904223)|0;return(seed>>>0)/4294967296;};}
 export function createVentScenery(){
@@ -16,13 +16,13 @@ export function createVentScenery(){
  const matrix=new T.Matrix4(),p=new T.Vector3(),q=new T.Quaternion(),scale=new T.Vector3();
  for(const f of formations){
   batches[f.cell].push(f);
-  if(f.cell===2||f.cell===3)emitters.push({x:f.x,y:f.y+f.h*.27,z:f.z+.1,pale:f.cell===3});
+  if(f.cell===2||f.cell===3)emitters.push({x:f.x,y:f.y+f.h*.27-ventCardRelief(f.cell,.77)*f.h/7.5*Math.tan(VENT_STAGE_PITCH),z:f.z+ventCardRelief(f.cell,.77)*f.h/7.5+.1,pale:f.cell===3});
   if(f.front&&(f.cell===5||f.cell===7))emitters.push({x:f.x-(f.cell===7?f.w*.07:0),y:f.y-.1,z:f.z+f.h*.375,pale:f.x>0});
  }
  for(let cell=0;cell<8;cell++){
   const mesh=new T.InstancedMesh(ventCardGeometry(cell),material,batches[cell].length);mesh.name=`vent-raster-layer-${cell}`;mesh.frustumCulled=false;
   batches[cell].forEach((f,i)=>{
-   p.set(f.x,f.y,f.z);q.setFromEuler(new T.Euler(f.front?Math.PI/2:0,0,f.angle));scale.set(f.w,f.h,1);matrix.compose(p,q,scale);mesh.setMatrixAt(i,matrix);
+   p.set(f.x,f.y,f.z);q.setFromEuler(new T.Euler(f.front?Math.PI/2:0,0,f.angle));scale.set(f.w,f.h,f.cell===2||f.cell===3?f.h/7.5:1);matrix.compose(p,q,scale);mesh.setMatrixAt(i,matrix);
    const tint=ventTierTint[f.tier];mesh.setColorAt(i,new T.Color().setRGB(tint[0],tint[1],tint[2]));
   });world.add(mesh);
  }

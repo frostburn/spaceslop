@@ -9,14 +9,16 @@ export function createVentFormations(){
  const rng=random(52391),formations:VentFormation[]=[];
  function card(cell:number,x:number,y:number,z:number,w:number,h:number,tier:VentTier,front=false,angle=0){formations.push({cell,x,y,z,w,h,tier,front,angle});}
  for(let y=-12,index=0;y<150;y+=5.2,index++)for(const side of [-1,1]){
-  const variant=index+(side>0?1:0),x=side*(4.8+rng()*1.1),vent=variant%3===1,cell=vent?(variant%2?2:3):variant%2;
-  card(cell,x,y,ventBankHeight(x,y)+.09,4.5+rng()*1.5,6.5+rng()*2.2,'near',false,(rng()-.5)*.25);
-  // Terraces extend inward behind openings in the near bank. The recessed bed
-  // stays below them; depth tint and perspective make the tiers distinguishable.
+  const variant=index+(side>0?1:0),vent=variant%3===1;
+  // A V in cross-section: low near shelves stay outboard, middle terraces
+  // step inward, and the distant seabed is visible down the central channel.
+  const w=5.2+rng()*.9,x=side*(4+w/2+rng()*.35),bankZ=ventBankHeight(x,y)-.55;
+  card(variant%2,x,y,bankZ,w,6.2+rng()*.8,'near',false,(rng()-.5)*.15);
+  if(vent){const vx=side*(4.55+rng()*.3);card(variant%2?2:3,vx,y+.8,ventBankHeight(vx,y)+.7,4.4+rng()*.3,5.8+rng()*.6,'near');}
   if(y<133){
-   card(variant%4,side*(5.0+rng()*.8),y+1.8+rng()*2,-6.1-rng()*1.5,5.7+rng()*.8,8+rng()*2,'middle',false,(rng()-.5)*.45);
-   card(variant%2,side*(5.6+rng()*.9),y-1.5,-12-rng()*1.4,6.6+rng()*1.0,10+rng()*2,'deep',false,(rng()-.5)*.6);
-   if(variant%5===0)card(0,side*(2.4+rng()*.7),y+4,-12.8,2.7,4,'deep',false,rng()*.6);
+   const midVent=variant%4>=2;
+   card(midVent?variant%4:variant%2,side*(midVent?3.5+rng()*.35:4.5+rng()*.4),y+2,-6.7-rng()*.6,midVent?3.7:5.5,midVent?5.0:8.0,'middle',false,midVent?0:(rng()-.5)*.25);
+   card(variant%2,side*(3.6+rng()*.5),y-1.5,-12.5-rng()*.7,4.8+rng()*.6,9+rng()*1.5,'deep',false,(rng()-.5)*.35);
   }
  }
  for(const a of ventAnchors)card(1,a.x,a.y,1.0,2.3,3.3,'near');

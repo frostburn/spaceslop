@@ -88,3 +88,20 @@ test('middle and distant formations clear the seabed across their footprints and
  const geology=createVentGeology(),material=geology.getObjectByName('finite-corridor-shelves').material;
  assert(material.map.isDataTexture);assert.equal(material.map,material.bumpMap);assert(material.map.generateMipmaps);
 });
+
+test('vent mouths stand above base shelves and the chasm steps inward towards the deep seabed',async()=>{
+ const {createVentFormations}=await server.ssrLoadModule('/src/vent-formations.ts'),{ventCardRelief}=await server.ssrLoadModule('/src/vent-atlas.ts');
+ const f=createVentFormations(),near=f.filter(p=>p.tier==='near'),low=near.filter(p=>p.cell<2),towers=near.filter(p=>p.cell===2||p.cell===3);
+ const highestShelf=Math.max(...low.map(p=>p.z));
+ for(const p of towers){assert(p.z+ventCardRelief(p.cell,.77)*p.h/7.5>highestShelf+.1,'base-level shelf can cover a vent mouth');assert.equal(p.angle,0);}
+ const mean=tier=>{const a=f.filter(p=>p.tier===tier);return a.reduce((n,p)=>n+Math.abs(p.x),0)/a.length;};
+ assert(mean('near')>mean('middle'));assert(mean('middle')>mean('deep'));
+ for(const cell of [2,3]){
+  const g=ventCardGeometry(cell);g.computeBoundingBox();assert(g.boundingBox.max.z-g.boundingBox.min.z>5);
+  const p=g.attributes.position;for(let i=0;i<p.count;i++){
+   const originalV=1-Math.floor(i/2)/g.parameters.heightSegments;
+   const projected=p.getY(i)*Math.cos(v.VENT_STAGE_PITCH)+p.getZ(i)/7.5*Math.sin(v.VENT_STAGE_PITCH);
+   assert(Math.abs(projected-(originalV-.5)*Math.cos(v.VENT_STAGE_PITCH))<1e-6,'depth relief stretches the painted tower');
+  }
+ }
+});
