@@ -10,10 +10,10 @@ const {createCaldera,createSkipper}=await server.ssrLoadModule('/src/io-rigs.ts'
 const {createIoScenery}=await server.ssrLoadModule('/src/io-scenery.ts');
 const {readLevel}=await server.ssrLoadModule('/src/levels.ts');
 
-test('Io is a two-screen 20-second slice, with five Skipper waves, all accessories, and a quiet eight-second approach',()=>{
- assert.equal(readLevel('io'),'io');assert.equal(layout.IO_DURATION,20);assert.equal(layout.ioWaves.length,5);
+test('Io is a ten-screen 100-second route with eighteen Skipper waves, repeat accessories and a quiet eight-second approach',()=>{
+ assert.equal(readLevel('io'),'io');assert.equal(layout.IO_DURATION,100);assert.equal(layout.ioWaves.length,18);
  const f=new Flight('sentry',[],'vex','io'),drops=new Set();let maximum=0;
- for(let i=0;i<1202;i++){f.invulnerable=100;f.step(STEP);for(const e of f.enemies){assert(e.skipper);if(e.drop)drops.add(e.drop);}maximum=Math.max(maximum,f.enemies.length);}
+ for(let i=0;i<6002;i++){f.invulnerable=100;f.step(STEP);for(const e of f.enemies){assert(e.skipper);if(e.drop)drops.add(e.drop);}maximum=Math.max(maximum,f.enemies.length);}
  assert.equal(drops.size,4);assert(maximum<=layout.IO_SKIPPER_POOL);assert.equal(f.phase,'approach');
  assert.equal(f.transitionDuration,8);assert.equal(f.enemies.length+f.shots.length+f.threats.length,0);
  while(f.phase==='approach'){assert.equal(f.threats.length+f.shots.length,0);f.step(STEP);}assert.equal(f.phase,'boss');assert.equal(f.bossHealth,72);
@@ -26,10 +26,10 @@ test('world travel coasts to rest without a velocity discontinuity and all ancho
  assert(Math.abs((ioScroll(d+a)-ioScroll(d+a-h))/h)<2e-5);
  assert.equal(ioScroll(200),layout.IO_FINAL_SCROLL);
  for(let i=0;i<=100;i++){
-  const rise=i/100,p=ioWorld(48,-2,20+8*rise,rise),q=ioWorld(52,3,20+8*rise,rise);
+  const rise=i/100,p=ioWorld(48,-2,layout.IO_DURATION+layout.IO_APPROACH*rise,rise),q=ioWorld(52,3,layout.IO_DURATION+layout.IO_APPROACH*rise,rise);
   assert(Math.abs(Math.hypot(p.y-q.y,p.z-q.z)-Math.sqrt(41))<1e-10);
  }
- const below=ioWorld(layout.IO_FINAL_SCROLL,-3,28,1);assert(below.z<0);
+ const below=ioWorld(layout.IO_FINAL_SCROLL,-3,layout.IO_DURATION+layout.IO_APPROACH,1);assert(below.z<0);
 });
 
 test('support absorbs exactly 20 damage before one failure, reveals the core, and collapse remains frozen at results',()=>{
@@ -71,7 +71,7 @@ test('Caldera warnings lock before rotating wheel shots fire and the broken supp
 test('rig weakpoint anchors and rotor phase agree with combat through the complete support collapse',()=>{
  const rig=createCaldera(),world=new T.Group();world.add(rig.root);
  rig.root.position.set(0,layout.IO_BOSS_Y,layout.IO_BOSS_Z);rig.root.rotation.x=Math.PI/2;
- world.rotation.x=-layout.IO_PITCH;const origin=layout.ioWorld(0,0,28,1);world.position.set(0,origin.y,origin.z);
+ world.rotation.x=-layout.IO_PITCH;const origin=layout.ioWorld(0,0,layout.IO_DURATION+layout.IO_APPROACH,1);world.position.set(0,origin.y,origin.z);
  const point=new T.Vector3();
  for(let i=0;i<=20;i++){
   const collapse=i/20,broken=i>0;rig.pose(31,collapse,broken);world.updateMatrixWorld(true);
@@ -83,17 +83,17 @@ test('rig weakpoint anchors and rotor phase agree with combat through the comple
 
 test('the landscape has real relief and a separate lake/crust, and all six foot shelves share the same frame',async()=>{
  const scene=createIoScenery();
- const land=scene.root.getObjectByName('io-heightfield'),positions=land.geometry.attributes.position;
- let min=Infinity,max=-Infinity;for(let i=0;i<positions.count;i++){min=Math.min(min,positions.getZ(i));max=Math.max(max,positions.getZ(i));}
+ const land=scene.root.getObjectByName('io-heightfield');
+ let min=Infinity,max=-Infinity;for(const chunk of land.children){const positions=chunk.geometry.attributes.position;for(let i=0;i<positions.count;i++){min=Math.min(min,positions.getZ(i));max=Math.max(max,positions.getZ(i));}}
  assert(max-min>4);assert.equal(scene.root.getObjectByName('caldera-lava-lake').position.z,-6.85);
  assert(scene.root.getObjectByName('broken-lava-crust').geometry.attributes.position.count>1000);
  assert(scene.root.getObjectByName('caldera-rock-volumes').isInstancedMesh);
- scene.update(28,1);scene.root.updateMatrixWorld(true);const feet=[];
+ scene.update(layout.IO_DURATION+layout.IO_APPROACH,1);scene.root.updateMatrixWorld(true);const feet=[];
  scene.boss.root.traverse(o=>{if(o.name==='caldera-foot')feet.push(o);});assert.equal(feet.length,6);
  const before=feet.map(o=>o.getWorldPosition(new T.Vector3()).toArray());scene.boss.pose(40,1,true);scene.root.updateMatrixWorld(true);
  assert.deepEqual(feet.map(o=>o.getWorldPosition(new T.Vector3()).toArray()),before,'support collapse must not slide ground anchors');
  const geometry=new Set();scene.root.traverse(o=>{if(o.geometry)geometry.add(o.geometry);});
- for(let i=0;i<10;i++){scene.update(20+i*.8,i/10);scene.boss.pose(i,i/10,true);}
+ for(let i=0;i<10;i++){scene.update(layout.IO_DURATION+i*.8,i/10);scene.boss.pose(i,i/10,true);}
  const after=new Set();scene.root.traverse(o=>{if(o.geometry)after.add(o.geometry);});assert.deepEqual(after,geometry);
 });
 
@@ -101,14 +101,14 @@ test('Skippers share GPU geometry, and their arcing formations clear the route b
  const a=createSkipper(),b=createSkipper(),ga=[],gb=[];a.root.traverse(o=>{if(o.geometry)ga.push(o.geometry);});b.root.traverse(o=>{if(o.geometry)gb.push(o.geometry);});
  ga.forEach((g,i)=>assert.equal(g,gb[i]));
  for(const wave of layout.ioWaves)for(const[lane,slot]of wave.lanes.map((l,i)=>[l,i])){
-  const end=layout.skipperMotion(20-wave.time,lane,slot);assert(end.y<-9);
+  const end=layout.skipperMotion(layout.IO_DURATION-wave.time,lane,slot);assert(end.y<-9);
   for(let t=0;t<6;t+=1/60){const p=layout.skipperMotion(t,lane,slot);assert(Number.isFinite(p.x+p.y+p.heading+p.jet));assert(Math.abs(p.x)<3.5);}
  }
 });
 
 test('a media-free simulation reaches the boss, visibly breaks its support, wins, and can restart cleanly',()=>{
  const f=new Flight('sentry',[],'vex','io');let sawSupport=false;
- for(let i=0;i<7200&&!['won','lost'].includes(f.phase);i++){f.invulnerable=100;f.step(STEP);sawSupport ||= f.ioLegBroken;}
+ for(let i=0;i<12000&&!['won','lost'].includes(f.phase);i++){f.invulnerable=100;f.step(STEP);sawSupport ||= f.ioLegBroken;}
  assert.equal(f.phase,'won');assert(sawSupport);assert(f.score>=1000);
  const again=new Flight('sentry',[],'vex','io');assert.equal(again.bossHealth,72);assert(!again.ioLegBroken);assert.equal(again.time,0);
 });
@@ -126,9 +126,9 @@ test('Io dust remains finite, camera-facing and pooled throughout the route and 
  const matrices=dust.instanceMatrix.array,opacity=dust.geometry.attributes.opacity,mask=dust.material.uniforms.map.value;
  assert(mask.isDataTexture);assert(mask.generateMipmaps);
  for(let t=0;t<=90;t+=.7){
-  scene.update(t,Math.min(1,t/28));
+  scene.update(t,Math.min(1,t/(layout.IO_DURATION+layout.IO_APPROACH)));
   assert.equal(dust.instanceMatrix.array,matrices);assert.equal(dust.geometry.attributes.opacity,opacity);
-  assert(matrices.every(Number.isFinite));assert(opacity.array.every(a=>Number.isFinite(a)&&a>=0&&a<=.27));
+  assert(matrices.every(Number.isFinite));assert(opacity.array.every(a=>Number.isFinite(a)&&a>=0&&a<=.43));
  }
  scene.update(12.3,1);const frozen=Array.from(matrices);scene.update(12.3,1);assert.deepEqual(Array.from(matrices),frozen);
  scene.update(13.3,1);assert.notDeepEqual(Array.from(matrices),frozen,'time must animate the pooled plumes');
@@ -150,8 +150,8 @@ test('reviewed surfaces propagate to every Io terrain and painted material, whil
 test('shadow texel phase stays fixed to terrain during scrolling and the entire camera rotation',()=>{
  const scene=createIoScenery(),sun=scene.world.children.find(o=>o.isDirectionalLight),plane=new T.Group();plane.add(scene.root);
  const point=new T.Vector3(),reference=[];
- for(let i=0;i<=280;i++){
-  const time=i/10,rise=layout.smooth01((time-20)/8);plane.rotation.x=(rise-1)*Math.PI/2;
+ for(let i=0;i<=(layout.IO_DURATION+layout.IO_APPROACH)*10;i++){
+  const time=i/10,rise=layout.smooth01((time-layout.IO_DURATION)/layout.IO_APPROACH);plane.rotation.x=(rise-1)*Math.PI/2;
   scene.update(time,rise);plane.updateMatrixWorld(true);sun.shadow.updateMatrices(sun);
   const phase=[];
   for(const [x,y,z] of [[1,14,-3],[-3,27,0],[6,51,-2]]){
@@ -161,4 +161,38 @@ test('shadow texel phase stays fixed to terrain during scrolling and the entire 
   if(!i)reference.push(...phase);
   else phase.forEach((v,j)=>assert(Math.abs(v-reference[j]-Math.round(v-reference[j]))<1e-7,'terrain slides between light texels'));
  }
+});
+
+test('production terrain chunks meet with identical heights and normals across the full ten screens',()=>{
+ const scene=createIoScenery(),chunks=scene.root.getObjectByName('io-heightfield').children,edges=new Map();let shared=0;
+ assert(chunks.length>=10);
+ for(const chunk of chunks){
+  const p=chunk.geometry.attributes.position,n=chunk.geometry.attributes.normal;
+  for(let i=0;i<p.count;i++){
+   assert(Number.isFinite(p.getZ(i)));
+   if(i<193||i>=p.count-193){
+    const key=`${p.getX(i)},${p.getY(i)}`,value=[p.getZ(i),n.getX(i),n.getY(i),n.getZ(i)];
+    if(edges.has(key)){assert.deepEqual(value,edges.get(key));shared++;}else edges.set(key,value);
+   }
+  }
+ }
+ assert(shared>1500);
+ assert(layout.ioGroundHeight(0,layout.IO_BREACH_Y)<-7,'molten breach must cut into the terrain');
+ assert(layout.ioGroundHeight(0,layout.IO_APRON_Y)<-7,'rim spill must be revealed ahead of the boss basin');
+});
+
+test('conveyors, ore, burners, smoke and lava animate from the same pausable clock without allocating geometry',async()=>{
+ const {createIoIndustry,ioSites}=await server.ssrLoadModule('/src/io-industry.ts');
+ const industry=createIoIndustry(),scene=createIoScenery(),ore=industry.root.getObjectByName('conveyor-ore');
+ const belts=[];industry.root.traverse(o=>{if(o.name==='moving-conveyor-belt')belts.push(o);});
+ assert(belts.length>=7);assert(ioSites.filter(s=>s[1]>=90&&s[1]<150).length>=10);assert(industry.burners.length>=20);
+ const arrays=ore.instanceMatrix.array,initial=Array.from(arrays),map=belts[0].material.map;
+ industry.update(1.25);assert.equal(ore.instanceMatrix.array,arrays);assert.notDeepEqual(Array.from(arrays),initial);assert(map.offset.y<0);
+ const moving=Array.from(arrays),offset=map.offset.y;industry.update(1.25);assert.deepEqual(Array.from(arrays),moving);assert.equal(map.offset.y,offset);
+ const smoke=scene.root.getObjectByName('ballistic-vent-plumes'),jets=scene.root.getObjectByName('io-burner-jets'),lava=scene.root.getObjectByName('molten-refinery-breach');
+ const geometry=new Set();scene.root.traverse(o=>{if(o.geometry)geometry.add(o.geometry);});
+ for(let t=0;t<=108;t+=.6){scene.update(t,layout.smooth01((t-100)/8));assert.equal(jets.material.uniforms.clock.value,t);assert.equal(lava.material.uniforms.clock.value,t);}
+ const after=new Set();scene.root.traverse(o=>{if(o.geometry)after.add(o.geometry);});assert.deepEqual(after,geometry);
+ assert.equal(lava.material.uniforms.thermal.value.magFilter,T.LinearFilter);
+ scene.prime(true);scene.prime(false);assert(!smoke.frustumCulled);assert(!jets.frustumCulled);assert(!scene.root.getObjectByName('conveyor-ore').frustumCulled);
 });

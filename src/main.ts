@@ -1,3 +1,4 @@
+import {ioSection,IO_SCREENS} from './io-layout';
 import { titanSection } from './titan-layout';
 import { registerSW } from 'virtual:pwa-register';
 import { BOSS_HP, Flight, HEIGHT, STEP, WIDTH } from './game';
@@ -116,8 +117,8 @@ function syncUI() {
   }[flight.phase];
   sector.textContent = (flight.level === 'ice' || flight.level === 'titan') && flight.phase === 'stage'
     ? `${label} · ${Math.min(10, Math.floor(flight.hiveProgress * 10) + 1)}/10` : label;
-  if(flight.level==='io' && flight.phase==='stage') sector.textContent=`IO · ${Math.min(2,Math.floor(flight.hiveProgress*2)+1)}/2`;
-  sector.title = flight.level === 'titan' ? titanSection(flight.hiveProgress) : flight.level === 'ice' ? iceSection(flight.hiveProgress) : levels[flight.level].name;
+  if(flight.level==='io' && flight.phase==='stage') sector.textContent=`IO · ${Math.min(IO_SCREENS,Math.floor(flight.hiveProgress*IO_SCREENS)+1)}/${IO_SCREENS}`;
+  sector.title = flight.level==='io'&&flight.phase==='stage'?ioSection(flight.time):flight.level === 'titan' ? titanSection(flight.hiveProgress) : flight.level === 'ice' ? iceSection(flight.hiveProgress) : levels[flight.level].name;
   score.textContent = String(flight.score).padStart(6, '0');
   hull.textContent = String(flight.hull).padStart(2, '0');
   charges.textContent = String(flight.charges).padStart(2, '0');

@@ -11,6 +11,7 @@ export class IoDetail {
     if(m instanceof T.MeshStandardMaterial&&m.vertexColors)ioWeather(g,31);
     const list=this.batches.get(m)||[];list.push(g);this.batches.set(m,list);
   }
+  geometry(g:T.BufferGeometry,m:T.Material){this.add(g,m);}
   box(x:number,y:number,z:number,w:number,h:number,d:number,m:T.Material,angle=0){
     this.add(new RoundedBoxGeometry(w,h,d,1,Math.min(w,h,d)*.12).rotateZ(angle).translate(x,y,z),m);
   }
