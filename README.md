@@ -32,6 +32,25 @@ Ineffective boss laser hits show expanding blue shield ripples at the beam endpo
 
 Wing pickups use metal badges with matching colors and distinct weapon icons, rotating beacons, and a short arrival animation. The homing icon is a fixed crosshair with two shrinking lock-on circles. Muzzle flashes and collection bursts give immediate feedback. These effects use shared geometry and pooled instances, are warmed before launch, and need no new asset files.
 
+**Hadal · Hydrothermal vents** (`?level=vents`) is a ten-screen / 100-second prototype route. Modular overhead rock and vent cards occupy the corridor banks at several depths, with animated mineral plumes, suspended particles, and a continuous 3D seabed. The floor ends at an actual cliff over an abyss. An eight-second quiet approach coasts past the edge and smoothly changes the view from overhead to head-on. Horizontal floor cards pass below the camera; fixed vertical cards form the far rim. The prototype guardian climbs in an arc around that rim, with no opacity fade or scenery reset. Its six simple support limbs are a staging proxy for the eventual crustacean rig. Combat uses the original alternating-cannon prototype boss, with all weapons and normal results/restart supported.
+
+Eighteen prototype scout waves and six scenery-fixed sentries populate the route, with repeated drops of every wing accessory. The fixed targets share their world anchors with their supporting scenery. The raster formations and cliff are decorative; movement, firing and hit geometry remain on the stable combat plane throughout the camera swing. The final boss pose agrees with the original cannon collision and laser-contact geometry.
+
+The optional transparent atlas goes at `public/encounters/vent-formations.png`. Use **four columns × two rows** of equal-sized cells, retaining alpha and the cell order below. A 2:1 PNG around 1792×896 or 2048×1024 is suitable. The renderer clamps the sheet, insets cell UVs, uses sRGB colors, mip filtering and modest anisotropy, and never mirrors the formations. No atlas is required: a runtime-drawn modular sheet preserves all placements and parallax. Generated art is delivered in chat for owner review/upload and stays out of Git.
+
+| Cell (left to right) | View | Module |
+| --- | --- | --- |
+| Top 1 | Overhead | Broken basalt shelf |
+| Top 2 | Overhead | Tube-colony ledge |
+| Top 3 | Overhead | Black-smoker chimney |
+| Top 4 | Overhead | Pale chimney |
+| Bottom 1 | Head-on | Cliff buttress |
+| Bottom 2 | Head-on | Tall vent |
+| Bottom 3 | Head-on | Colony ledge |
+| Bottom 4 | Head-on | Distant tower cluster |
+
+Vite dev includes **Launch at transition** for Hadal and **Abyss camera study** (`/vent-study.html`), with section jumps, bidirectional scrubbing and playback across the 100–108 second camera swing. Production excludes the study entry page and skip controls. Atlas decoding, formations, plumes, particles and prototype boss buffers join the preflight warm-up.
+
 **Io · Caldera** (`?level=io`) is a **ten-screen / 100-second production route** with eighteen Skipper patrols and five Crucible crossings, repeat drops of every wing accessory, an eight-second camera approach, and the **Caldera Engine** fight. Select it in the launch menu; Frostwake remains the default.
 
 Crucibles are heavy soot-black spherical carriers with ceramic cheeks and opening pouring valves. They cross from alternating sides, visibly charge the valve for 0.7 seconds, and release three aimed molten droplets every 2.6 seconds. Droplets cool into dark, cracked slag over 0.9 seconds and slow down; both hot and cold slag can be shot apart. Carriers have 10 HP and award 300 points, slag has 1 HP and awards 10. The first and third carriers drop a cannon and Omega respectively. Every weapon can destroy both, including laser, piercing Omega, Towline and Pulse. Their models and cooling shaders are pooled and prewarmed; both appear in the Vite workshop. Existing reviewed textures remain optional.

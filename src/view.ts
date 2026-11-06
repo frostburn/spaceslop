@@ -1,3 +1,6 @@
+import {createVentScenery} from './vent-scenery';
+import {createVentBoss} from './vent-boss';
+import {VENT_DURATION,VENT_APPROACH,VENT_CAMERA_DISTANCE,VENT_PITCH,ventBossPose,ventWorld,ventFrame} from './vent-layout';
 import { createCrucible, createSlag } from './io-crucible-rig';
 import { CRUCIBLE_POOL, SLAG_POOL, crucibleValve } from './io-crucible';
 import { setIoRockTexture, setIoCeramicTexture } from './io-materials';
@@ -81,6 +84,9 @@ export class FlightView {
   private crucibles=Array.from({length:CRUCIBLE_POOL},createCrucible);
   private slags=Array.from({length:SLAG_POOL},createSlag);
   private crucibleModels:(T.Object3D|undefined)[]=[];
+  private vents=createVentScenery();
+  private ventBoss=createVentBoss();
+  private ventTime=0;
   private ioTime = 0;
   private ioPitch = 0;
   private ioBank = 0;
@@ -134,6 +140,7 @@ export class FlightView {
   private laserContact = createLaserContactTrace(this.plane);
   private ioContact = createBossLaserContact(this.plane, this.caldera.root);
   private bossLaserContact = {
+    vents: createBossLaserContact(this.plane,this.ventBoss.root),
     io: (x:number,distance:number) => this.ioContact(x < -1 ? -1 : 1,distance),
     preserve: createBossLaserContact(this.plane, this.boss.root),
     broodlock: createBossLaserContact(this.plane, this.hiveBoss.root),
@@ -195,7 +202,7 @@ export class FlightView {
     const pods = this.wingPods.flatMap((side) => side.map(({ root }) => root));
     for(const rig of [this.player.root,this.drone,...pods])rig.traverse(o=>{if(o instanceof T.Mesh&&!([o.material].flat().some(m=>m.transparent))){o.castShadow=true;o.receiveShadow=true;}});
     const ammo = Object.values(this.projectiles).map(({ root }) => root);
-    this.texturesReady = Promise.all([this.backdrops.ready, this.hive.ready, this.ice.ready, this.titan.ready,
+    this.texturesReady = Promise.all([this.backdrops.ready, this.hive.ready, this.ice.ready, this.titan.ready, Promise.all([this.vents.ready]),
       Promise.all([loadEncounterTexture('marine', setMarineTexture, 1), loadEncounterTexture('ioBasalt',setIoRockTexture,1), loadEncounterTexture('ioCeramic',setIoCeramicTexture,1)]), loadEncounterTextures(this.boss, this.raptor,
       [this.player.root, scout, this.drone, this.bridge.root, this.ice.root, ...pods, ...ammo, ...this.drops.map(({ root }) => root), this.io.root, this.skippers[0].root, this.crucibles[0].root])]).then(textures=>{this.surfacesReady=true;return textures;});
     this.enemies = Array.from({ length: 12 }, () => {
@@ -209,7 +216,7 @@ export class FlightView {
     this.drone.add(this.droneMuzzle.root);
     this.plane.add(this.player.root, this.drone, this.droneGoal, this.towline, this.boss.root, this.raptor.root, this.cannonMarker, this.stars,
       this.preserveEdges.root, this.shipyard.root, this.backdrops.root, this.bridge.root, this.hive.root, this.ice.root, this.titan.root,
-      this.io.root, ...this.skippers.map(r=>r.root), ...this.crucibles.map(r=>r.root), ...this.slags.map(r=>r.root), this.leviathan.root, this.cicada.root, ...this.ichthyosaurs.map(r=>r.root), ...this.plesiosaurs.map(r=>r.root),
+      this.vents.root, this.ventBoss.root, this.io.root, ...this.skippers.map(r=>r.root), ...this.crucibles.map(r=>r.root), ...this.slags.map(r=>r.root), this.leviathan.root, this.cicada.root, ...this.ichthyosaurs.map(r=>r.root), ...this.plesiosaurs.map(r=>r.root),
       ...this.cicadaScouts.map(r=>r.root), ...this.centipedeParts.map(r=>r.root),
       this.hiveBoss.root, ...this.ants.map(({ root }) => root),
       this.pulse, ...this.enemies.map(({ root }) => root), ...this.markers,
@@ -235,7 +242,7 @@ export class FlightView {
     await compiled;
 
     // Cache silhouette bounds before the first laser hit, spread across small preflight batches.
-    const contactModels = [this.caldera.root, this.skippers[0].root, this.crucibles[0].root, this.slags[0].root,this.cicadaScouts[0].root, this.centipedeParts[0].root, this.raptor.root, this.enemies[0].root, this.boss.root, this.hiveBoss.root, this.leviathan.root, this.cicada.root, ...this.ichthyosaurs.map(r=>r.root), ...this.plesiosaurs.map(r=>r.root),
+    const contactModels = [this.ventBoss.root,this.caldera.root, this.skippers[0].root, this.crucibles[0].root, this.slags[0].root,this.cicadaScouts[0].root, this.centipedeParts[0].root, this.raptor.root, this.enemies[0].root, this.boss.root, this.hiveBoss.root, this.leviathan.root, this.cicada.root, ...this.ichthyosaurs.map(r=>r.root), ...this.plesiosaurs.map(r=>r.root),
       ...this.ants.map(({ root }) => root)];
     for (let i = 0; i < contactModels.length; i += 3) {
       await nextFrame();
@@ -257,11 +264,12 @@ export class FlightView {
     const marineBatches = Array.from({length:Math.ceil(marine.length/3)},(_,i)=>marine.slice(i*3,i*3+3));
     const insects = [this.cicadaScouts[0].root, this.centipedeParts[0].root];
     for (const objects of [stage, boss, insects, ...marineBatches, [this.hive.root, this.ants[0].root, this.hiveBoss.root],
-      [this.io.root,this.skippers[0].root,...this.crucibles.map(r=>r.root),...this.slags.map(r=>r.root)], [this.ice.root], [this.titan.root], pods[0], [...pods[1], ...this.wingLasers.map(({ root }) => root)], ordnance]) {
+      [this.io.root,this.skippers[0].root,...this.crucibles.map(r=>r.root),...this.slags.map(r=>r.root)], [this.ice.root], [this.titan.root], [this.vents.root,this.ventBoss.root], pods[0], [...pods[1], ...this.wingLasers.map(({ root }) => root)], ordnance]) {
       await nextFrame();
       if (signal.aborted) return;
       if (objects.includes(this.ice.root)) this.ice.prime();
       if (objects.includes(this.titan.root)) this.titan.update(0);
+      if(objects.includes(this.vents.root)){this.vents.update(VENT_DURATION+VENT_APPROACH,1);this.ventBoss.root.position.set(0,4.2,-12);this.ventBoss.root.rotation.set(0,0,0);}
       if (objects.includes(this.io.root)) { this.io.update(IO_DURATION+IO_APPROACH,1); this.io.prime(true); }
       if (objects === insects) this.centipedeParts[0].prime();
       if (objects === ordnance) {
@@ -307,11 +315,16 @@ export class FlightView {
     this.lastFlight = flight;
     this.animationTime = newFlight ? 0 : this.animationTime + elapsed;
     if (newFlight) {
-      this.iceTime = 0;this.titanTime=0;this.ioTime=0;
+      this.iceTime = 0;this.titanTime=0;this.ioTime=0;this.ventTime=0;
       this.seenShots = new WeakSet(); this.seenDrops = new WeakMap(); this.previousDrops = [];
       this.enemyVitals.clear(); this.combat.clear(); this.playerMuzzle.clear(); this.droneMuzzle.clear();
       this.previousBossHealth = flight.bossHealth; this.previousBossLaserDamage = flight.bossLaserDamage;
       this.previousHull = flight.hull; this.bossHitAt = -1;
+    }
+    if(flight.level==='vents'){
+      if(flight.phase==='stage')this.ventTime=flight.time;
+      if(flight.phase==='approach')this.ventTime=VENT_DURATION+flight.time;
+      if(flight.phase==='boss')this.ventTime=VENT_DURATION+VENT_APPROACH+flight.time;
     }
     if (flight.level === 'io') {
       if(flight.phase==='stage')this.ioTime=flight.time;
@@ -327,17 +340,20 @@ export class FlightView {
     const angle = (eased - 1) * Math.PI / 2;
     this.rotation.setFromAxisAngle(this.axis, angle);
     this.plane.quaternion.copy(this.rotation);
-    (this.scene.background as T.Color).setHex(flight.level === 'io' ? 0x020305 : flight.level === 'ice' ? 0x03060c : sceneColor);
+    (this.scene.background as T.Color).setHex(flight.level==='vents'?0x041a25:flight.level === 'io' ? 0x020305 : flight.level === 'ice' ? 0x03060c : sceneColor);
     this.keyLight?.color.setHex(flight.level==='titan'?0xffcf93:0xb9e8ff);
     this.skyLight?.color.setHex(flight.level==='titan'?0xffdca4:0xd6e3ff);
     this.skyLight?.groundColor.setHex(flight.level==='titan'?0x543522:0x514873);
-    if(flight.level==='io'){
+    if(flight.level==='vents'){
+      this.keyLight?.color.setHex(0xa7dde1);this.skyLight?.color.setHex(0x94cbd4);this.skyLight?.groundColor.setHex(0x072330);
+      if(this.keyLight)this.keyLight.intensity=2.4;if(this.skyLight)this.skyLight.intensity=1.5;this.keyLight?.position.set(-5,-4,12);
+    } else if(flight.level==='io'){
       this.keyLight?.color.setHex(0xfff0dc);this.skyLight?.color.setHex(0xb9c9e0);this.skyLight?.groundColor.setHex(0x35251c);
       if(this.keyLight)this.keyLight.intensity=.15;if(this.skyLight)this.skyLight.intensity=.48;
       this.ioOrientation.set(-this.ioPitch,this.ioBank,0);this.keyLight?.position.set(-5,-5,12).applyEuler(this.ioOrientation);
     } else {this.keyLight?.position.set(3,5,6);if(this.keyLight)this.keyLight.intensity=2.7;if(this.skyLight)this.skyLight.intensity=1.75;}
     const hive = flight.level === 'broodlock';
-    const stageDistance = hive ? HIVE_CAMERA_DISTANCE : flight.level === 'io' ? IO_CAMERA_DISTANCE : flight.level === 'ice' ? ICE_CAMERA_DISTANCE : 95;
+    const stageDistance = flight.level==='vents'?VENT_CAMERA_DISTANCE:hive ? HIVE_CAMERA_DISTANCE : flight.level === 'io' ? IO_CAMERA_DISTANCE : flight.level === 'ice' ? ICE_CAMERA_DISTANCE : 95;
     const camera = this.swing === 0 && flight.level === 'preserve' ? this.ortho : this.perspective;
     const distance = T.MathUtils.lerp(stageDistance, BOSS_CAMERA_DISTANCE, eased);
     this.perspective.fov = T.MathUtils.radToDeg(2 * Math.atan(HEIGHT / 2 / distance));
@@ -392,8 +408,8 @@ export class FlightView {
     }
     this.cannonMarker.visible = flight.phase === 'boss';
     this.cannonMarker.position.set(flight.exposedCannonX * BOSS_PROJECTION, flight.bossAimY * BOSS_PROJECTION, 0);
-    const activeBoss = flight.level === 'titan' ? this.cicada : flight.level === 'ice' ? this.leviathan : flight.level === 'broodlock' ? this.hiveBoss : this.boss;
-    this.cicada.root.visible = this.leviathan.root.visible = this.boss.root.visible = this.hiveBoss.root.visible = false;
+    const activeBoss = flight.level === 'vents'?this.ventBoss:flight.level === 'titan' ? this.cicada : flight.level === 'ice' ? this.leviathan : flight.level === 'broodlock' ? this.hiveBoss : this.boss;
+    this.ventBoss.root.visible=this.cicada.root.visible = this.leviathan.root.visible = this.boss.root.visible = this.hiveBoss.root.visible = false;
     this.caldera.root.visible = flight.level === 'io' && flight.bossHealth > 0;
     this.caldera.pose(this.ioTime,flight.ioCollapse,flight.ioLegBroken,flight.cannonWindup);
     activeBoss.root.visible = flight.level !== 'io' && this.swing > 0 && flight.bossHealth > 0;
@@ -404,6 +420,11 @@ export class FlightView {
       this.cicada.root.position.set(0,point.y,point.z);
       this.cicada.root.rotation.x=TITAN_PITCH-titanFrame(eased).pitch;
     }
+    if(flight.level==='vents'){
+      const pose=ventBossPose(eased),point=ventWorld(pose.x,pose.y,pose.z,this.ventTime,eased);
+      this.ventBoss.root.visible=flight.bossHealth>0;this.ventBoss.root.position.set(point.x,point.y,point.z);
+      this.ventBoss.root.rotation.x=VENT_PITCH-ventFrame(this.ventTime,eased).pitch;
+    }
     if (activeBoss.root.visible) {
       if(activeBoss === this.leviathan) this.leviathan.pose(eased,flight.cannonWindup,0,0,flight.bossRecoil / BOSS_RECOIL_TIME,flight.phase==='boss'?flight.time:Math.max(0,this.iceTime-flight.stageDuration-TRANSITION_TIME));
       else if(activeBoss===this.cicada)this.cicada.pose(eased,flight.cannonWindup,flight.exposedCannonX,flight.firedCannonX,flight.bossRecoil/BOSS_RECOIL_TIME,flight.phase==='boss'?flight.transitionDuration+flight.time:flight.phase==='approach'?flight.time:0);
@@ -411,6 +432,7 @@ export class FlightView {
       if (activeBoss === this.boss) poseBurners(this.bossBurners, this.animationTime, 0.42 + 0.48 * Math.sin(eased * Math.PI));
     }
     if((flight.level==='ice'||flight.level==='titan')&&this.cannonMarker.visible){const contact=this.bossLaserContact[flight.level as 'ice'|'titan'](flight.exposedCannonX,distance);this.cannonMarker.position.set(contact.x,contact.y,0);}
+    if(flight.level==='vents'&&this.cannonMarker.visible){const p=this.bossLaserContact.vents(flight.exposedCannonX,distance);this.cannonMarker.position.set(p.x,p.y,0);}
     if(flight.level==='io' && this.cannonMarker.visible){const p=this.bossLaserContact.io(flight.exposedCannonX,distance);this.cannonMarker.position.set(p.x,p.y,0);}
     this.drawScenery(flight, eased, distance, newFlight ? 2 : elapsed, fighterSpeed, droneSpeed);
 
@@ -426,8 +448,9 @@ export class FlightView {
       root.visible = Boolean(enemy && !enemy.raptor && !enemy.ant && !enemy.marine && !enemy.cicada && !enemy.centipede && !enemy.skipper && !enemy.crucible && !enemy.slag);
       if (root.visible && enemy) {
         root.position.set(enemy.x, enemy.y, 0);
-        root.rotation.z = Math.PI + 0.3 * Math.cos(enemy.age * 1.55);
-        poseBurners(burners, enemy.age + index * 0.27, 0.55 + 0.16 * Math.sin(enemy.age * 4 + index));
+        root.rotation.z = enemy.ventAnchor!==undefined?Math.PI:Math.PI + 0.3 * Math.cos(enemy.age * 1.55);
+        root.scale.setScalar(enemy.ventScale??1);
+        poseBurners(burners, enemy.age + index * 0.27, enemy.ventAnchor!==undefined?0:0.55 + 0.16 * Math.sin(enemy.age * 4 + index));
       }
     }
     for (const [index, ant] of this.ants.entries()) {
@@ -517,7 +540,7 @@ export class FlightView {
     for (const weapon of ['homing', 'cannon', 'omega'] as const) {
       this.projectiles[weapon].draw(flight.shots.filter((shot) => shot.wing === weapon), this.animationTime);
     }
-    this.projectiles.hostile.draw(flight.level === 'preserve' || flight.level === 'titan' || flight.level === 'io' ? flight.threats : [], this.animationTime);
+    this.projectiles.hostile.draw(flight.level === 'vents' || flight.level === 'preserve' || flight.level === 'titan' || flight.level === 'io' ? flight.threats : [], this.animationTime);
     this.projectiles.brine.draw(flight.level === 'ice' ? flight.threats : [], this.animationTime);
     this.projectiles.spore.draw(flight.level === 'broodlock' ? flight.threats : [], this.animationTime);
     this.drawFeedback(flight, elapsed);
@@ -541,7 +564,13 @@ export class FlightView {
   private drawScenery(flight: Flight, reveal: number, distance: number, elapsed: number, fighterSpeed: number, droneSpeed: number) {
     if (flight.phase === 'stage') this.stageTime = flight.time;
     if (flight.phase === 'approach' || flight.phase === 'boss') this.stageTime = flight.stageDuration;
-    const perspectiveDistance = this.swing === 0 && (flight.level === 'preserve' || flight.level === 'titan') ? undefined : distance;
+    const perspectiveDistance = this.swing === 0 && (flight.level === 'vents' || flight.level === 'preserve' || flight.level === 'titan') ? undefined : distance;
+    this.vents.root.visible=flight.level==='vents';
+    if(this.vents.root.visible){
+      this.vents.update(this.ventTime,reveal,flight.bossHealth>0);
+      this.io.root.visible=this.stars.visible=this.titan.root.visible=this.ice.root.visible=this.hive.root.visible=this.preserveEdges.root.visible=this.shipyard.root.visible=this.backdrops.root.visible=this.bridge.root.visible=false;
+      return;
+    }
     this.io.root.visible = flight.level === 'io';
     if(this.io.root.visible){
       this.io.update(this.ioTime,reveal);

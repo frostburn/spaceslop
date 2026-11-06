@@ -6,7 +6,7 @@ import { setAntChitinTexture, setFungusTexture } from './hive-materials';
 import { setAntMoldTexture } from './ant-mold';
 import { setTitanChitinTexture } from './titan-insect-surfaces';
 
-type EncounterTexture = 'armor' | 'feathers' | 'scales' | 'preserve' | 'shipyard' |
+type EncounterTexture = 'ventAtlas' | 'armor' | 'feathers' | 'scales' | 'preserve' | 'shipyard' |
   'hive' | 'hiveMask' | 'hiveStars' | 'hiveMines' | 'chitin' | 'fungus' | 'mold' | 'ice' | 'rock' | 'galaxy' | 'marine' | 'titan' | 'titanRobot' | 'titanChitin' | 'ioBasalt' | 'ioCeramic';
 declare const __ENCOUNTER_TEXTURES__: Partial<Record<EncounterTexture, string>>;
 

@@ -17,6 +17,7 @@ const portraits = existsSync(pilotDir)
   : [];
 
 const encounterTextures = Object.fromEntries(Object.entries({
+  ventAtlas: 'encounters/vent-formations.png',
   ioBasalt: 'encounters/io-basalt.png',
   ioCeramic: 'encounters/io-ceramic.png',
   armor: 'encounters/interceptor-metal.png',
