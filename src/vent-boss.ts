@@ -61,8 +61,8 @@ export function createVentBoss(fallback?:T.Texture){
   return{side,index,hinge,finger,joint,anchor,glow};
  });
  function pose(reveal:number,windup:number,targetX:number,firedX:number,recoil:number,time=0,broken:readonly number[]=[0,0],opening=0){
-  const feet=crabFeet(reveal);
-  legs.forEach((leg,i)=>{const side=i%2?1:-1,row=Math.floor(i/2),foot=feet[i],hip={x:side*1.7,y:.2-row*.35,z:0},knee={x:side*(2.9+row*.65),y:.5-row*.55,z:foot.z*.35+.25};span(leg.upper,hip,knee,1.35-row*.04);span(leg.lower,knee,foot,1.12-row*.025);leg.toe.position.set(foot.x,foot.y+.18,foot.z+.04);leg.toe.rotation.z=-side*.3;});
+  const feet=crabFeet(reveal,Math.max(0,time-108));
+  legs.forEach((leg,i)=>{const side=i%2?1:-1,row=Math.floor(i/2),foot=feet[i],hip={x:side*1.7,y:.15-row*.12,z:0},knee={x:side*(2.9+row*.65),y:-.8-row*.12,z:foot.z*.35+.25};span(leg.upper,hip,knee,1.35-row*.04);span(leg.lower,knee,foot,1.12-row*.025);leg.toe.position.set(foot.x,foot.y+.18,foot.z+.04);leg.toe.rotation.z=-side*.3;});
   for(const{pivot,side}of eyes)pivot.rotation.z=side*(.08+Math.sin(time*.7)*.035);
   for(const{side,hinge}of plates)hinge.rotation.y=side*opening*1.3;
   core.scale.set(1.85*(1+Math.sin(time*3)*.025+opening*windup*.05),1.7,1);core.position.z=.76-(targetX===0?recoil*.06:0);coreGlow.visible=targetX===0&&opening>0;coreGlow.material.opacity=.12+windup*.3;

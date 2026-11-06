@@ -3,12 +3,12 @@ import {FlightView} from './view';
 import {VENT_DURATION,VENT_APPROACH,ventSection} from './vent-layout';
 if(import.meta.env.DEV){
  const canvas=document.querySelector<HTMLCanvasElement>('#preview')!,slider=document.querySelector<HTMLInputElement>('#time')!,play=document.querySelector<HTMLButtonElement>('#play')!,label=document.querySelector<HTMLOutputElement>('#phase')!;
- const view=new FlightView(canvas),end=VENT_DURATION+VENT_APPROACH;let playing=false,last=0;
+ const view=new FlightView(canvas),bossStart=VENT_DURATION+VENT_APPROACH,end=bossStart+24;let playing=false,last=0;
  function preview(){
   const t=slider.valueAsNumber,f=new Flight('sentry',[],'vex','vents');
-  f.phase=t<VENT_DURATION?'stage':t<end?'approach':'boss';f.time=t<VENT_DURATION?t:t<end?t-VENT_DURATION:0;
+  f.phase=t<VENT_DURATION?'stage':t<bossStart?'approach':'boss';f.time=t<VENT_DURATION?t:t<bossStart?t-VENT_DURATION:t-bossStart;
   view.resize(canvas.clientWidth,canvas.clientHeight);view.render(f,0);
-  label.value=`${t.toFixed(2)} s · ${f.phase==='stage'?ventSection(t):f.phase==='approach'?'cliff swing / rim climb':'crab boss framing'}`;
+  label.value=`${t.toFixed(2)} s · ${f.phase==='stage'?ventSection(t):f.phase==='approach'?'cliff swing / rim climb':'crab boss framing / circular-wall scurry'}`;
  }
  slider.addEventListener('input',()=>{playing=false;play.textContent='Play';preview();});
  document.querySelector<HTMLSelectElement>('#section')!.addEventListener('change',event=>{slider.value=(event.target as HTMLSelectElement).value;slider.dispatchEvent(new Event('input'));});

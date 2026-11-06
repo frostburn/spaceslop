@@ -4,7 +4,7 @@ import {createVentGeology} from './vent-geology';
 import {createVentAtlas,ventCardGeometry,ventCardRelief} from './vent-atlas';
 import {loadEncounterTexture} from './encounter-texture';
 import {ioNoise} from './io-layout';
-import {VENT_STAGE_PITCH,ventFrame,ventWorld,ventBossPose} from './vent-layout';
+import {VENT_SHAFT_Y,VENT_STAGE_PITCH,ventFrame,ventWorld,ventBossPose} from './vent-layout';
 
 function random(seed:number){return()=>{seed=(Math.imul(seed,1664525)+1013904223)|0;return(seed>>>0)/4294967296;};}
 export function createVentScenery(){
@@ -22,8 +22,8 @@ export function createVentScenery(){
  for(let cell=0;cell<8;cell++){
   const mesh=new T.InstancedMesh(ventCardGeometry(cell),material,batches[cell].length);mesh.name=`vent-raster-layer-${cell}`;mesh.frustumCulled=false;
   batches[cell].forEach((f,i)=>{
-   p.set(f.x,f.y,f.z);q.setFromEuler(new T.Euler(f.front?Math.PI/2:0,0,f.angle));scale.set(f.w,f.h,f.cell===2||f.cell===3?f.h/7.5:1);matrix.compose(p,q,scale);mesh.setMatrixAt(i,matrix);
-   const tint=ventTierTint[f.tier];mesh.setColorAt(i,new T.Color().setRGB(tint[0],tint[1],tint[2]));
+   p.set(f.x,f.y,f.z);q.setFromEuler(new T.Euler(f.front?Math.PI/2:0,0,f.angle,f.front?'ZXY':'XYZ'));scale.set(f.w,f.h,f.cell===2||f.cell===3?f.h/7.5:1);matrix.compose(p,q,scale);mesh.setMatrixAt(i,matrix);
+   const tint=ventTierTint[f.tier],depth=f.front?Math.max(.2,1+Math.min(0,f.z)*.015):1;mesh.setColorAt(i,new T.Color().setRGB(tint[0]*depth,tint[1]*depth,tint[2]*depth));
   });world.add(mesh);
  }
  const n=64,data=new Uint8Array(n*n*4);
@@ -37,11 +37,12 @@ export function createVentScenery(){
  const clouds=new T.InstancedMesh(cloudGeometry,cloudMaterial,count);clouds.name='vent-mineral-plumes';clouds.frustumCulled=false;world.add(clouds);
  const motesGeometry=new T.BufferGeometry(),motes:number[]=[];
  for(let i=0;i<600;i++)motes.push((rng()-.5)*23,-15+rng()*202,-1+rng()*11);
+ for(let i=0;i<500;i++){const a=rng()*Math.PI*2,r=Math.sqrt(rng())*22;motes.push(Math.sin(a)*r,VENT_SHAFT_Y+Math.cos(a)*r,-5-rng()*65);}
  motesGeometry.setAttribute('position',new T.Float32BufferAttribute(motes,3));
  const moteMaterial=new T.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{clock:{value:0}},vertexShader:`uniform float clock;void main(){vec3 p=position;p.x+=sin(clock*.18+position.y)*.12;p.z+=sin(clock*.1+position.x)*.12;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);gl_PointSize=1.6;}`,fragmentShader:`void main(){float r=length(gl_PointCoord-.5)*2.;gl_FragColor=vec4(.45,.67,.69,(1.-smoothstep(.2,1.,r))*.18);}`});
  const particles=new T.Points(motesGeometry,moteMaterial);particles.name='suspended-vent-particles';world.add(particles);
  function update(time:number,rise:number,_alive=true){
-  const frame=ventFrame(time,rise),origin=ventWorld(0,0,0,time,rise);world.rotation.x=-frame.pitch;world.position.set(origin.x,origin.y,origin.z);moteMaterial.uniforms.clock.value=time;
+  const frame=ventFrame(time,rise),origin=ventWorld(0,0,0,time,rise);world.rotation.set(-frame.pitch,0,frame.yaw,'XYZ');world.position.set(origin.x,origin.y,origin.z);moteMaterial.uniforms.clock.value=time;
   for(let i=0;i<count;i++){
    const e=emitters[Math.floor(i/10)],t=(time*.10+(i%10)/10+Math.floor(i/10)*.37)%1;
    p.set(e.x+Math.sin(i*2.4+t*3)*t*.65,e.y+t*.45,e.z+t*5.5);q.identity();scale.set(1+t*2.4,1.2+t*2.7,1);matrix.compose(p,q,scale);clouds.setMatrixAt(i,matrix);alpha.setX(i,Math.sin(t*Math.PI)*(e.pale?.19:.4));tint.setXYZ(i,e.pale?.38:.035,e.pale?.50:.065,e.pale?.51:.08);

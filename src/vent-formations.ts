@@ -1,4 +1,4 @@
-import {ventBankHeight,ventFarEdge,ventAnchors} from './vent-layout';
+import {ventBankHeight,ventAnchors,ventRimHeight,VENT_SHAFT_Y,VENT_SHAFT_RADIUS} from './vent-layout';
 export type VentTier='near'|'middle'|'deep'|'rim'|'back';
 export type VentFormation={cell:number;x:number;y:number;z:number;w:number;h:number;front:boolean;angle:number;tier:VentTier};
 function random(seed:number){return()=>{seed=(Math.imul(seed,1664525)+1013904223)|0;return(seed>>>0)/4294967296;};}
@@ -22,11 +22,15 @@ export function createVentFormations(){
   }
  }
  for(const a of ventAnchors)card(1,a.x,a.y,1.0,2.3,3.3,'near');
- for(let x=-21,index=0;x<=21;x+=4.3,index++){
-  const y=ventFarEdge(x)+2.5,z=3.5+rng()*2,cell=4+index%3,w=4.5+rng()*2.7,h=6+rng()*3.8;
-  card(cell,x+(rng()-.5)*.8,y,z,w,h,'rim',true);
-  card(index%3===0?5:7,x+(rng()-.5)*2,y+6+rng()*3,6+rng()*2,6+rng()*3,10+rng()*6,'back',true);
+ for(let index=0;index<32;index++){
+  const angle=index/32*Math.PI*2,r=VENT_SHAFT_RADIUS-.45,x=Math.sin(angle)*r,y=VENT_SHAFT_Y+Math.cos(angle)*r;
+  card(4+index%4,x,y,ventRimHeight(angle)+3.6,4.8+rng()*1.6,7+rng()*3,'rim',true,-angle);
+  for(let row=0;row<3;row++){
+   const a=angle+(row%2?.08:0),radius=VENT_SHAFT_RADIUS-.45;
+   card(4+(index+row)%4,Math.sin(a)*radius,VENT_SHAFT_Y+Math.cos(a)*radius,-7-row*17-rng()*9,6.0+rng()*2.0,14+row*3+rng()*8,'back',true,-a);
+  }
  }
+
  return formations;
 }
 export const ventTierTint={near:[.76,.9,.95],middle:[.32,.49,.55],deep:[.11,.25,.31],rim:[.55,.7,.76],back:[.24,.42,.49]} as const;

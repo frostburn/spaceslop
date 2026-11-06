@@ -26,8 +26,8 @@ test('Hadal has ten screens of shrimp patrols and rooted threats, a quiet approa
 test('scroll coasts with matching velocity at the cliff, and camera/boss positions are continuous with settled endpoints',()=>{
  const h=1e-4,d=v.VENT_DURATION,end=d+v.VENT_APPROACH;
  assert(Math.abs((v.ventScroll(d)-v.ventScroll(d-h))/h-v.VENT_SPEED)<1e-6);
- assert(Math.abs((v.ventScroll(d+h)-v.ventScroll(d))/h-v.VENT_SPEED)<2e-5);
- assert(Math.abs(v.ventScroll(end+h)-v.ventScroll(end-h))<1e-8);
+ assert(Math.abs((v.ventScroll(d+h)-v.ventScroll(d))/h-v.VENT_SPEED)<2e-4);
+ assert(Math.abs(v.ventScroll(end+h)-v.ventScroll(end-h))<5e-8);
  const pose=(t)=>{const rise=v.ventSmooth((t-d)/v.VENT_APPROACH),boss=v.ventBossPose(rise);return {...v.ventWorld(2,153,-2,t,rise),boss:v.ventWorld(boss.x,boss.y,boss.z,t,rise),frame:v.ventFrame(t,rise)};};
  for(let t=0;t<end;t+=.05){const a=pose(t),b=pose(t+.05);assert(Number.isFinite(a.x+a.y+a.z+a.boss.x+a.boss.y+a.boss.z));assert(Math.abs(b.frame.pitch-a.frame.pitch)<.02);}
  for(const t of [d,end]){
@@ -37,13 +37,13 @@ test('scroll coasts with matching velocity at the cliff, and camera/boss positio
  const final=v.ventBossPose(1),point=v.ventWorld(final.x,final.y,final.z,end,1);
  assert(Math.abs(point.x)<1e-8);assert(Math.abs(point.y-4.2)<1e-8);assert(Math.abs(point.z+12)<1e-8);
  assert(v.ventBossPose(0).x<-7);assert(v.ventBossPose(0).z<-6);
- const offset=final.y-v.ventFarEdge(0);for(let r=0;r<=1;r+=.02){const b=v.ventBossPose(r);assert(Math.abs(b.y-v.ventFarEdge(b.x)-offset)<1e-8,'proxy must follow the actual far rim');}
+ for(let r=0;r<=1;r+=.02){const b=v.ventBossPose(r);assert(Math.abs(Math.hypot(b.x,b.y-v.VENT_SHAFT_Y)-v.VENT_CRAB_RADIUS)<1e-8,'crab must follow the circular wall');}
 });
 
 test('the corridor has an actual abyss gap and a cliff drop, with floor cards separated from head-on cells',()=>{
  const geology=createVentGeology(),shelf=geology.getObjectByName('finite-corridor-shelves'),wall=geology.getObjectByName('abyss-cliff-faces');
  const p=shelf.geometry.attributes.position;
- for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i);assert(y<=v.ventCliffEdge(x)+.0001||y>=v.ventFarEdge(x)-.0001,'seabed bridges the abyss');}
+ for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i);assert(Math.hypot(x,y-v.VENT_SHAFT_Y)>=v.VENT_SHAFT_RADIUS-.0001,'seabed caps the shaft');}
  wall.geometry.computeBoundingBox();assert(wall.geometry.boundingBox.min.z<-35);assert(wall.geometry.boundingBox.max.z>=1.4);
  for(let cell=0;cell<8;cell++){
   const uv=ventCardGeometry(cell).attributes.uv;

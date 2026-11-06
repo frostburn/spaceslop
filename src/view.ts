@@ -151,8 +151,9 @@ export class FlightView {
   private wingLasers = Array.from({ length: 2 }, createContinuousLaser);
   private laserContact = createLaserContactTrace(this.plane);
   private ioContact = createBossLaserContact(this.plane, this.caldera.root);
+  private crabContact=createBossLaserContact(this.plane,this.ventBoss.root);
   private bossLaserContact = {
-    vents: createBossLaserContact(this.plane,this.ventBoss.root),
+    vents: (x:number,distance:number)=>this.crabContact(this.lastFlight?.crabCoreOpen?0:x,distance),
     io: (x:number,distance:number) => this.ioContact(x < -1 ? -1 : 1,distance),
     preserve: createBossLaserContact(this.plane, this.boss.root),
     broodlock: createBossLaserContact(this.plane, this.hiveBoss.root),
@@ -433,14 +434,14 @@ export class FlightView {
       this.cicada.root.rotation.x=TITAN_PITCH-titanFrame(eased).pitch;
     }
     if(flight.level==='vents'){
-      const pose=ventBossPose(eased),point=ventWorld(pose.x,pose.y,pose.z,this.ventTime,eased);
+      const pose=ventBossPose(eased,Math.max(0,this.ventTime-VENT_DURATION-VENT_APPROACH)),point=ventWorld(pose.x,pose.y,pose.z,this.ventTime,eased);
       this.ventBoss.root.visible=flight.bossHealth>0;this.ventBoss.root.position.set(point.x,point.y,point.z);
       this.ventBoss.root.rotation.x=VENT_PITCH-ventFrame(this.ventTime,eased).pitch;
     }
     if (activeBoss.root.visible) {
       if(activeBoss === this.leviathan) this.leviathan.pose(eased,flight.cannonWindup,0,0,flight.bossRecoil / BOSS_RECOIL_TIME,flight.phase==='boss'?flight.time:Math.max(0,this.iceTime-flight.stageDuration-TRANSITION_TIME));
       else if(activeBoss===this.cicada)this.cicada.pose(eased,flight.cannonWindup,flight.exposedCannonX,flight.firedCannonX,flight.bossRecoil/BOSS_RECOIL_TIME,flight.phase==='boss'?flight.transitionDuration+flight.time:flight.phase==='approach'?flight.time:0);
-      else if(activeBoss===this.ventBoss)this.ventBoss.pose(eased,flight.cannonWindup,flight.exposedCannonX,flight.firedCannonX,flight.bossRecoil/BOSS_RECOIL_TIME,this.ventTime,flight.crabBreakPose,flight.crabOpening);
+      else if(activeBoss===this.ventBoss)this.ventBoss.pose(eased,flight.cannonWindup,flight.crabTargetX,flight.firedCrabTarget,flight.bossRecoil/BOSS_RECOIL_TIME,this.ventTime,flight.crabBreakPose,flight.crabOpening);
       else activeBoss.pose(eased, flight.cannonWindup, flight.exposedCannonX, flight.firedCannonX,flight.bossRecoil / BOSS_RECOIL_TIME);
       if (activeBoss === this.boss) poseBurners(this.bossBurners, this.animationTime, 0.42 + 0.48 * Math.sin(eased * Math.PI));
     }

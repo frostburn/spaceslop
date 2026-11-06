@@ -41,13 +41,13 @@ test('all wings, main gun, drone, Towline and Pulse damage claw and core phases'
 test('claw charges retain three locked warnings and the core attack expands to five',()=>{
  for(const core of [false,true]){
   const f=new Flight('sentry',[],'vex','vents');f.phase='boss';if(core){f.damageBoss(12);f.damageBoss(12);}f.time=.6;f.stepBoss();assert.equal(f.markers.length,core?5:3);const points=f.markers.map(p=>({...p}));
-  f.player.x=3;f.player.y=4;f.time=1.18;f.stepBoss();assert.deepEqual(f.markers,points);assert.equal(f.threats.length,core?5:3);for(const t of f.threats)assert.equal(t.x,core?0:-2.4);
+  f.player.x=3;f.player.y=4;f.time=1.18;const origin=f.exposedCannonX;f.stepBoss();assert.deepEqual(f.markers,points);assert.equal(f.threats.length,core?5:3);for(const t of f.threats)assert.equal(t.x,origin);
  }
 });
 
-test('eight articulated feet settle on the actual far-rim floor throughout the camera transform',()=>{
+test('eight articulated feet brace on the visible inner wall throughout the camera transform',()=>{
  const feet=c.crabFeet(1),boss=v.ventBossPose(1),co=Math.cos(v.VENT_PITCH),si=Math.sin(v.VENT_PITCH);assert.equal(feet.length,8);
- for(const p of feet){const x=boss.x+p.x,y=boss.y+p.y*co-p.z*si,z=boss.z+p.y*si+p.z*co;assert(Math.abs(z-v.ventFarFloor(x,y))<1e-8);assert(y>=v.ventFarEdge(x));}
+ for(const p of feet){const x=boss.x+p.x,y=boss.y+p.y*co-p.z*si,z=boss.z+p.y*si+p.z*co;assert(Math.abs(Math.hypot(x,y-v.VENT_SHAFT_Y)-(v.VENT_SHAFT_RADIUS-.5))<1e-8);assert(z<boss.z);}
  for(let reveal=0;reveal<=1;reveal+=.02){const a=c.crabFeet(reveal),b=c.crabFeet(reveal+1e-5);for(let i=0;i<8;i++)assert(Math.hypot(a[i].x-b[i].x,a[i].y-b[i].y,a[i].z-b[i].z)<.005);}
 });
 

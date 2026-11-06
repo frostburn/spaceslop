@@ -5,23 +5,36 @@ export const VENT_APPROACH=8;
 export const VENT_SPEED=1.5;
 export const VENT_CAMERA_DISTANCE=40;
 export const VENT_STAGE_PITCH=22*Math.PI/180;
-export const VENT_PITCH=72*Math.PI/180;
-export const VENT_END_SCROLL=VENT_SPEED*(VENT_DURATION+VENT_APPROACH/2);
+export const VENT_PITCH=50*Math.PI/180;
+export const VENT_SHAFT_Y=177,VENT_SHAFT_RADIUS=24,VENT_CRAB_RADIUS=21,VENT_CRAB_Z=-7;
+export const VENT_END_SCROLL=VENT_SHAFT_Y+VENT_CRAB_RADIUS-4.2*Math.cos(VENT_PITCH)-12*Math.sin(VENT_PITCH);
+export const VENT_END_HEIGHT=VENT_CRAB_Z-4.2*Math.sin(VENT_PITCH)+12*Math.cos(VENT_PITCH);
 export const VENT_CLIFF_Y=153;
 export const ventSmooth=(t:number)=>{const v=Math.max(0,Math.min(1,t));return v*v*(3-2*v);};
 export function ventScroll(time:number){
- const stage=Math.max(0,Math.min(VENT_DURATION,time)),t=Math.max(0,Math.min(VENT_APPROACH,time-VENT_DURATION));
- return VENT_SPEED*(stage+t-t*t/(2*VENT_APPROACH));
+ if(time<=VENT_DURATION)return Math.max(0,time)*VENT_SPEED;
+ const t=Math.min(1,(time-VENT_DURATION)/VENT_APPROACH),t2=t*t,t3=t2*t;
+ return VENT_SPEED*VENT_DURATION*(2*t3-3*t2+1)+VENT_END_SCROLL*(-2*t3+3*t2)+VENT_SPEED*VENT_APPROACH*(t3-2*t2+t);
+}
+// Bursts, planted pauses and direction reversals; the view follows most of the
+// angular travel while the crab retains a small, real lateral combat offset.
+export function ventOrbit(time:number){
+ const t=Math.max(0,time)%12;let angle=0,speed=0;
+ const move=(from:number,to:number,start:number,duration:number)=>{const u=(t-start)/duration;angle=from+(to-from)*ventSmooth(u);speed=(to-from)*6*u*(1-u)/duration;};
+ if(t<1){}else if(t<3)move(0,.35,1,2);else if(t<5)angle=.35;else if(t<8)move(.35,-.35,5,3);else if(t<10)angle=-.35;else move(-.35,0,10,2);
+ const yaw=angle*.85,delta=angle-yaw;
+ return{angle,yaw,speed,offsetX:VENT_CRAB_RADIUS*Math.tan(delta)};
 }
 export function ventFrame(time:number,rise:number){
- return{scroll:ventScroll(time),pitch:VENT_STAGE_PITCH+(VENT_PITCH-VENT_STAGE_PITCH)*rise,height:8-2*rise};
+ return{scroll:ventScroll(time),pitch:VENT_STAGE_PITCH+(VENT_PITCH-VENT_STAGE_PITCH)*rise,height:8+(VENT_END_HEIGHT-8)*rise,yaw:ventOrbit(Math.max(0,time-VENT_DURATION-VENT_APPROACH)).yaw};
 }
 export function ventWorld(x:number,y:number,z:number,time:number,rise:number){
- const f=ventFrame(time,rise),dy=y-f.scroll,dz=z-f.height;
- return{x,y:dy*Math.cos(f.pitch)+dz*Math.sin(f.pitch),z:-dy*Math.sin(f.pitch)+dz*Math.cos(f.pitch)};
+ const f=ventFrame(time,rise),c=Math.cos(f.yaw),s=Math.sin(f.yaw),dx=x*c-(y-VENT_SHAFT_Y)*s,dy=x*s+(y-VENT_SHAFT_Y)*c+VENT_SHAFT_Y-f.scroll,dz=z-f.height;
+ return{x:dx,y:dy*Math.cos(f.pitch)+dz*Math.sin(f.pitch),z:-dy*Math.sin(f.pitch)+dz*Math.cos(f.pitch)};
 }
-export function ventCliffEdge(x:number){return VENT_CLIFF_Y+Math.sin(x*.35)*.6;}
-export function ventFarEdge(x:number){const t=Math.min(1,Math.abs(x)/9);return 168.5+2.5*t*t;}
+export function ventCliffEdge(x:number){return VENT_SHAFT_Y-Math.sqrt(Math.max(0,(VENT_SHAFT_RADIUS+.2)**2-x*x));}
+export function ventFarEdge(x:number){return VENT_SHAFT_Y+Math.sqrt(Math.max(0,VENT_SHAFT_RADIUS**2-x*x));}
+export function ventRimHeight(angle:number){return -2+3.5*(1+Math.cos(angle))/2+Math.sin(angle*7)*.12;}
 export function ventFarFloor(x:number,y:number){return 1.5+Math.sin(x*.7+y*.4)*.18;}
 export function ventBankHeight(x:number,y:number){return -2+Math.sin(x*.7+y*.19)*.15+Math.sin(y*.7+x*.3)*.08;}
 export function ventFloor(x:number,y:number){
@@ -30,12 +43,9 @@ export function ventFloor(x:number,y:number){
  const lip=ventSmooth((y-135)/18);
  return -16.5+(ventBankHeight(x,y)+16.5)*lip+Math.sin(x*.5+y*.12)*.22*(1-lip);
 }
-export function ventBossPose(rise:number){
- const endY=VENT_END_SCROLL+4.2*Math.cos(VENT_PITCH)+12*Math.sin(VENT_PITCH);
- const endZ=6+4.2*Math.sin(VENT_PITCH)-12*Math.cos(VENT_PITCH);
- const a=-1.1*(1-rise),climb=ventSmooth((rise-.1)/.75);
- const x=Math.sin(a)*8.7;
- return{x,y:endY+ventFarEdge(x)-ventFarEdge(0),z:-7+(endZ+7)*climb};
+export function ventBossPose(rise:number,fightTime=0){
+ const orbit=ventOrbit(fightTime),a=-.35*(1-rise)+orbit.angle,radius=VENT_CRAB_RADIUS/Math.cos(orbit.angle-orbit.yaw),climb=ventSmooth((rise-.2)/.7);
+ return{x:Math.sin(a)*radius,y:VENT_SHAFT_Y+Math.cos(a)*radius,z:-24+(VENT_CRAB_Z+24)*climb};
 }
 export const VENT_SPAWN_LEAD=3;
 const anchorTimes=[8,23,39,54,70,84];

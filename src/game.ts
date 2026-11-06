@@ -2,7 +2,7 @@ import {CRAB_HP,CRAB_CLAW_HP,CRAB_CORE_HP,crabTarget,crabSmooth} from './vent-cr
 import {wormPose,WORM_WINDUP,WORM_REACH} from './vent-worm';
 import {SHRIMP_HP,SHRIMP_FIRST_FIRE,SHRIMP_INTERVAL,WORM_HP,WORM_FIRST_ATTACK,WORM_INTERVAL,shrimpMotion,faunaMuzzle,faunaBodyHit,faunaBeamEntry,type ShrimpCourse} from './vent-fauna';
 import {MORTAR_HP,MORTAR_RADIUS,MORTAR_FIRST_FIRE,MORTAR_INTERVAL,mortarAim,mortarMuzzle} from './vent-mortar';
-import {VENT_APPROACH,VENT_SPAWN_LEAD,ventWaves,ventAnchorPoint} from './vent-layout';
+import {ventOrbit,VENT_APPROACH,VENT_SPAWN_LEAD,ventWaves,ventAnchorPoint} from './vent-layout';
 import { CRUCIBLE_HP, CRUCIBLE_RADIUS, CRUCIBLE_FIRST_POUR, CRUCIBLE_POUR_INTERVAL, CRUCIBLE_MUZZLE_Y, SLAG_RADIUS, crucibleMotion, slagSpeed } from './io-crucible';
 import { IO_DURATION, IO_HP, IO_LEG_HP, IO_APPROACH, IO_INTERVAL, IO_WINDUP, IO_FIRE, IO_TRAVEL, calderaContact, calderaWheel, skipperMotion, ioWaves, smooth01 } from './io-layout';
 import { bindCentipede, severCentipede, stepCentipedes, CENTIPEDE_SPACING, type CentipedeLink } from './centipede';
@@ -162,6 +162,7 @@ export class Flight {
   private crabBreakTimes=[-1,-1];
   bossLaserDamage = 0;
   firedCannonX = 0;
+  firedCrabTarget=0;
   bossRecoil = 0;
   enemies: Enemy[] = [];
   defeatedVentWorms=new Set<number>();
@@ -223,6 +224,8 @@ export class Flight {
 
   get bossMaxHealth() { return this.level === 'vents' ? CRAB_HP : this.level === 'io' ? IO_HP : this.level === 'titan' ? CICADA_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
 
+  get crabTargetX(){return crabTarget(this.crabClawHealth,this.volley);}
+  get crabOffsetX(){return this.phase==='boss'?ventOrbit(this.time).offsetX:0;}
   get crabCoreOpen(){return this.crabClawHealth.every(hp=>hp<=0);}
   get crabBreakPose(){return this.crabBreakTimes.map(t=>t<0?0:crabSmooth((this.time-t)/.8));}
   get crabOpening(){return this.crabCoreOpen?crabSmooth((this.time-Math.max(...this.crabBreakTimes))/.8):0;}
@@ -266,7 +269,7 @@ export class Flight {
   }
 
   get exposedCannonX() {
-    return this.level==='vents'?crabTarget(this.crabClawHealth,this.volley):this.level === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).x : this.level === 'ice' ? 0 : this.volley % 2 === 0 ? -BOSS_CANNON_X : BOSS_CANNON_X;
+    return this.level==='vents'?this.crabTargetX+this.crabOffsetX:this.level === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).x : this.level === 'ice' ? 0 : this.volley % 2 === 0 ? -BOSS_CANNON_X : BOSS_CANNON_X;
   }
 
   wingOrigin(side: WingSide) {
@@ -394,7 +397,7 @@ export class Flight {
         if (shot.z > BOSS_DEPTH) return true;
         const untilImpact = (BOSS_DEPTH - shot.z) / shot.vz;
         const impact = { x: shot.x + shot.vx * untilImpact, y: shot.y + shot.vy * untilImpact };
-        const lockedTarget = shot.targetsBoss && (this.level !== 'io' || shot.bossSupport === !this.ioLegBroken) && (this.level!=='vents'||shot.crabTarget===this.exposedCannonX);
+        const lockedTarget = shot.targetsBoss && (this.level !== 'io' || shot.bossSupport === !this.ioLegBroken) && (this.level!=='vents'||shot.crabTarget===this.crabTargetX);
         if (lockedTarget ||
           ((shot.drone || shot.wing) && near(impact, { x: this.exposedCannonX, y: this.bossAimY }, BOSS_CANNON_RADIUS))) {
           this.damageBoss(shot.damage ?? 1);
@@ -746,7 +749,7 @@ export class Flight {
     if (elapsed >= BOSS_FIRE_AT && this.markers.length && this.volley === volley) {
       const x = this.exposedCannonX;
       const z = BOSS_DEPTH + BOSS_MUZZLE_Z;
-      this.firedCannonX = x;
+      this.firedCannonX = x;if(this.level==='vents')this.firedCrabTarget=this.crabTargetX;
       this.bossRecoil = BOSS_RECOIL_TIME;
       this.threats.push(...this.markers.map((target) => ({
         x, y: this.bossAimY, z,
@@ -817,7 +820,7 @@ export class Flight {
     const dx = drone ? x * expansion : (targetsBoss ? (this.level === 'io'||this.level==='vents' ? this.exposedCannonX : 0) - x : 0);
     const dy = drone ? y * expansion : (targetsBoss ? this.bossAimY - y : 0);
     this.shots.push({ x, y, z: 0, vx: dx / duration, vy: dy / duration,
-      vz: BOSS_DEPTH / duration, targetsBoss, bossSupport: this.level === 'io' ? !this.ioLegBroken : undefined, crabTarget:this.level==='vents'?this.exposedCannonX:undefined, drone, damage });
+      vz: BOSS_DEPTH / duration, targetsBoss, bossSupport: this.level === 'io' ? !this.ioLegBroken : undefined, crabTarget:this.level==='vents'?this.crabTargetX:undefined, drone, damage });
   }
 
   private advance(shot: Shot, dt: number) {
@@ -843,7 +846,7 @@ export class Flight {
     if (this.phase !== 'boss') return;
     const before = this.bossHealth;
     if(this.level==='vents'&&!this.crabCoreOpen){
-      const index=this.exposedCannonX<0?0:1;this.crabClawHealth[index]=Math.max(0,this.crabClawHealth[index]-damage);
+      const index=this.crabTargetX<0?0:1;this.crabClawHealth[index]=Math.max(0,this.crabClawHealth[index]-damage);
       this.bossHealth=CRAB_CORE_HP+this.crabClawHealth[0]+this.crabClawHealth[1];
       if(this.crabClawHealth[index]===0){this.crabBreakTimes[index]=this.time;this.pickupMessage=this.crabCoreOpen?'Claws disabled · Gill chamber exposed':index===0?'Crusher joint broken':'Cutter joint broken';this.pickupTime=2.4;for(const wing of this.wings){wing.laserHold=0;wing.laserTarget=undefined;}}
     }else this.bossHealth = Math.max(0, this.bossHealth - damage);
