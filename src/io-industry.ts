@@ -1,7 +1,9 @@
 import * as T from 'three';
 import {IoDetail} from './io-detail';
+import {ioSiloWall} from './io-silo';
+import {createIoConveyorTerminal} from './io-conveyor';
 import {ioGroundHeight,ioChannel,IO_BREACH_Y,IO_HEIGHT} from './io-layout';
-import {ioCeramic,ioBand,ioSafety,ioSteel,ioChrome,ioDark,ioRust,ioHot,ioSulfur} from './io-materials';
+import {ioSilo as ioCeramic,ioSiloBand as ioBand,ioSafety,ioSteel,ioChrome,ioDark,ioRust,ioHot,ioSulfur} from './io-materials';
 
 export interface IoVent {x:number;y:number;z:number;height:number;spread:number;size:number;opacity:number}
 export const ioSites=[
@@ -24,7 +26,7 @@ function beltTexture(){
 
 export function createIoIndustry(){
   const root=new T.Group();root.name='io-industrial-route';
-  const vents:IoVent[]=[],burners:T.Vector3[]=[],belts:{a:T.Vector3;b:T.Vector3;q:T.Quaternion;length:number}[]=[];
+  const vents:IoVent[]=[],burners:T.Vector3[]=[],belts:{a:T.Vector3;b:T.Vector3;q:T.Quaternion;up:T.Vector3;length:number;cycleLength:number;source:T.Group;sink:T.Group}[]=[];
   const beltMap=beltTexture(),beltMaterial=new T.MeshStandardMaterial({map:beltMap,bumpMap:beltMap,bumpScale:.035,roughness:.85});
   for(const [sx,y,kind]of ioSites){
     const side=Math.sign(sx),x=sx-side*.55+ioChannel(y),z=ioGroundHeight(x,y),assembly=new T.Group();
@@ -43,9 +45,8 @@ export function createIoIndustry(){
     }
     function tank(cx:number,cy:number,r:number,h:number,base=.6,damaged=false){
       const phase=side>0?.3:Math.PI+.3,arc=damaged?4.8:Math.PI*2;
-      d.geometry(new T.CylinderGeometry(r,r*1.03,h,20,1,damaged,phase,arc).rotateX(Math.PI/2).rotateZ(-Math.PI/2).translate(cx,cy,base+h/2),ioCeramic);
-      d.geometry(new T.SphereGeometry(r,20,12,phase,arc,0,Math.PI/2).rotateX(Math.PI/2).scale(1,1,.65).translate(cx,cy,base+h),ioCeramic);
-      d.geometry(new T.CylinderGeometry(r+.015,r+.015,.23,20).rotateX(Math.PI/2).translate(cx,cy,base+h*.53),ioBand);
+      for(const part of ioSiloWall(r,h,base,phase,arc))d.geometry(part.geometry.translate(cx,cy,0),part.band?ioBand:ioCeramic);
+      d.geometry(new T.SphereGeometry(r,24,12,phase,arc,0,Math.PI/2).rotateX(Math.PI/2).scale(1,1,.65).translate(cx,cy,base+h),ioCeramic);
       for(const level of [base+.12,base+h*.78])d.geometry(new T.TorusGeometry(r+.04,.045,5,24).translate(cx,cy,level),ioChrome);
       for(let j=0;j<8;j++){
         const a=j/8*Math.PI*2,px=cx+Math.cos(a)*(r+.03),py=cy+Math.sin(a)*(r+.03);
@@ -147,7 +148,8 @@ export function createIoIndustry(){
       }
       aa.z+=.5;bb.z+=.5;details.rod(aa.toArray(),bb.toArray(),.018,ioSafety);
     }
-    belts.push({a,b,q,length});
+    const source=createIoConveyorTerminal('source',a,q),sink=createIoConveyorTerminal('sink',b,q);root.add(source,sink);
+    belts.push({a,b,q,up:normal.clone(),length,cycleLength:length+.6,source,sink});
   }
   // Pipe gantry spanning the molten breach, with a missing maintenance deck.
   const bridgeY=IO_BREACH_Y;
@@ -173,12 +175,14 @@ export function createIoIndustry(){
   chunks.computeVertexNormals();
   const ore=new T.InstancedMesh(chunks,ioSulfur,belts.length*6);ore.name='conveyor-ore';ore.castShadow=true;ore.frustumCulled=false;root.add(ore);
   const color=new T.Color();for(let i=0;i<ore.count;i++)ore.setColorAt(i,color.setHSL(.14+(i%5)*.004,.25,.84+(i%3)*.03));
-  const matrix=new T.Matrix4(),p=new T.Vector3(),scale=new T.Vector3(.9,1.4,.65),q=new T.Quaternion();
+  const matrix=new T.Matrix4(),p=new T.Vector3(),scale=new T.Vector3(.9,1.4,.65),q=new T.Quaternion(),spin=new T.Quaternion(),axis=new T.Vector3(0,0,1);
   function update(time:number){
     beltMap.offset.y=-time*.256;
     for(let i=0;i<belts.length;i++)for(let j=0;j<6;j++){
-      const belt=belts[i],t=(j/6+time*.8/belt.length)%1;
-      p.copy(belt.a).lerp(belt.b,t);p.z+=.12;q.setFromAxisAngle(normal.set(0,0,1),j*1.7+i);
+      const belt=belts[i],distance=(j/6*belt.cycleLength+time*.8)%belt.cycleLength;
+      p.copy(belt.a).lerp(belt.b,Math.min(1,distance/belt.length)).addScaledVector(belt.up,.14);
+      p.z-=Math.max(0,distance-belt.length)*1.5;
+      q.copy(belt.q).multiply(spin.setFromAxisAngle(axis,j*1.7+i));
       matrix.compose(p,q,scale);ore.setMatrixAt(i*6+j,matrix);
     }
     ore.instanceMatrix.needsUpdate=true;

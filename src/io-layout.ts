@@ -29,11 +29,10 @@ export function ioScroll(time: number) {
   return IO_SPEED * (stage + t - t*t/(2*IO_APPROACH));
 }
 export function ioFrame(time: number, rise: number) {
-  const scroll=ioScroll(time),routeTime=scroll/IO_SPEED,stage=1-rise;
-  const pitch=(28+5*Math.sin(routeTime*.11)+2*Math.sin(routeTime*.27))*Math.PI/180;
-  const bank=(11*Math.sin(routeTime*.09)+3*Math.sin(routeTime*.20))*Math.PI/180;
-  return { pitch:pitch*stage+IO_PITCH*rise,bank:bank*stage,
-    height:IO_STAGE_HEIGHT*stage+IO_HEIGHT*rise,scroll,trackX:ioChannel(scroll+6)*.55*stage };
+  const scroll=ioScroll(time),stage=1-rise;
+  // Straight, steady flight: the terrain can meander without steering the view.
+  return { pitch:28*Math.PI/180*stage+IO_PITCH*rise,bank:0,
+    height:IO_STAGE_HEIGHT*stage+IO_HEIGHT*rise,scroll,trackX:0 };
 }
 export function ioWorld(y: number, z: number, time: number, rise: number,x=0) {
   const f=ioFrame(time,rise),dx=x-f.trackX,dy=y-f.scroll,dz=z-f.height;
@@ -70,7 +69,7 @@ export function ioChannel(y:number){
 }
 export function ioBreach(y:number,x:number){return y-IO_BREACH_Y-x*.48-Math.sin(x*.8)*.45;}
 export function ioGroundHeight(x:number,y:number) {
-  const lake=Math.hypot(x/17,(y-IO_CALDERA_Y)/19),edge=Math.abs(x-ioChannel(y))+.15*Math.sin(y*1.7)+.1*Math.sin(y*3.1);
+  const lake=Math.hypot(x/17,(y-IO_CALDERA_Y)/19),edge=Math.abs(x-ioChannel(y))+(ioNoise(x*.45+20,y*.9)-.5)*.48+(ioNoise(x*.9,y*2.1)-.5)*.16;
   const bank=smooth01((edge-1.85)/.42),detail=(ioNoise(x*.8,y*.8)-.5)*.32+(ioNoise(x*2.3,y*2.3)-.5)*.13;
   // Successive ledges expose rock strata instead of two uniformly smooth banks.
   const terraces=bank*(1.1+smooth01((edge-3.5)/.35)*.85+smooth01((edge-5.5)/.5)*.65);

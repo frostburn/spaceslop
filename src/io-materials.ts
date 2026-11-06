@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { texturedSurface } from './encounter-surfaces';
 import { IO_PITCH } from './io-layout';
+import {ioTriplanar} from './io-surface';
 
 export function ioRandom(seed:number) {
   return () => { seed=(Math.imul(seed,1664525)+1013904223)|0;return (seed>>>0)/4294967296; };
@@ -23,6 +24,7 @@ export const ioRock=texturedSurface(new T.MeshStandardMaterial({color:0x4c4845,m
 export const ioGround=texturedSurface(ioRock.clone(),.08,6);ioGround.color.setHex(0xffffff);
 export const ioCeramic=new T.MeshStandardMaterial({color:0xe8ddc0,map:detail,bumpMap:detail,bumpScale:.045,roughness:.66,vertexColors:true});
 export const ioBand=ioCeramic.clone();ioBand.color.setHex(0x824438);
+export const ioSilo=ioCeramic.clone(),ioSiloBand=ioBand.clone();
 export const ioSafety=new T.MeshStandardMaterial({color:0xb38a39,roughness:.7,metalness:.28});
 export const ioSulfur=texturedSurface(new T.MeshStandardMaterial({color:0xffdc28,map:detail,bumpMap:detail,bumpScale:.07,roughness:.94}),.45,1.4);
 export const ioSteel=texturedSurface(new T.MeshStandardMaterial({color:0x777d81,metalness:.68,roughness:.42,map:detail,bumpMap:detail,bumpScale:.035}),.12,2.5);
@@ -33,7 +35,7 @@ export const ioRust=new T.MeshStandardMaterial({color:0x753e2a,map:detail,roughn
 export const ioHot=new T.MeshStandardMaterial({color:0xff851c,emissive:0xff3900,emissiveIntensity:1.5,roughness:.43});
 export const ioTarget=new T.MeshStandardMaterial({color:0x5ddbd5,emissive:0x29bfb5,emissiveIntensity:1.3,roughness:.3,metalness:.25});
 export function setIoRockTexture(t:T.Texture) {t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=4;for(const m of [ioRock,ioGround,ioCrust]){m.map=m.bumpMap=t;m.needsUpdate=true;}}
-export function setIoCeramicTexture(t:T.Texture) {t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=4;for(const m of [ioCeramic,ioBand]){m.map=m.bumpMap=t;m.needsUpdate=true;}}
+export function setIoCeramicTexture(t:T.Texture) {t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=4;for(const m of [ioCeramic,ioBand,ioSilo,ioSiloBand]){m.map=m.bumpMap=t;m.needsUpdate=true;}}
 
 export function ioWeather(geometry:T.BufferGeometry,seed=1) {
   const p=geometry.attributes.position,colors:number[]=[],rng=ioRandom(seed);
@@ -56,10 +58,10 @@ for(let y=0;y<height;y++)for(let x=0;x<width;x++){
 }
 export const ioEnvironment=new T.DataTexture(data,width,height,T.RGBAFormat,T.HalfFloatType);
 ioEnvironment.mapping=T.EquirectangularReflectionMapping;ioEnvironment.needsUpdate=true;
-for(const m of [ioSteel,ioChrome,ioCeramic,ioBand,ioDark]){m.envMap=ioEnvironment;m.envMapIntensity=(m===ioCeramic||m===ioBand)?.22:.75;}
+for(const m of [ioSteel,ioChrome,ioCeramic,ioBand,ioSilo,ioSiloBand,ioDark]){m.envMap=ioEnvironment;m.envMapIntensity=[ioCeramic,ioBand,ioSilo,ioSiloBand].includes(m)?.22:.75;}
 export function poseIoEnvironment(rise:number,pitch=rise*IO_PITCH,bank=0){
  const angle=(rise-1)*Math.PI/2-pitch;
- for(const m of [ioSteel,ioChrome,ioCeramic,ioBand,ioDark])m.envMapRotation.set(angle,bank,0);
+ for(const m of [ioSteel,ioChrome,ioCeramic,ioBand,ioSilo,ioSiloBand,ioDark])m.envMapRotation.set(angle,bank,0);
 }
 
 export const ioFurnace=new T.MeshStandardMaterial({color:0x542407,emissive:0xff8b16,emissiveIntensity:2.4,emissiveMap:detail,bumpMap:detail,bumpScale:.15,roughness:.55});
@@ -81,3 +83,5 @@ ioCrust.onBeforeCompile=(shader,renderer)=>{
  shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=vec3(2.5,.38,.012)*vTemperature;');
 };
 ioCrust.customProgramCacheKey=()=> 'io-fracture-hot-walls-v1';
+for(const m of [ioRock,ioCrust])ioTriplanar(m,.45);
+ioTriplanar(ioGround,.19);for(const m of [ioSilo,ioSiloBand])ioTriplanar(m,.65);

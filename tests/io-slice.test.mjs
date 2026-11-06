@@ -143,7 +143,7 @@ test('reviewed surfaces propagate to every Io terrain and painted material, whil
  assert(heat.every(t=>t>=0&&t<=1));assert(heat.some(t=>t>.1));assert(heat.some(t=>t===0));
  const rock=new T.Texture(),paint=new T.Texture();m.setIoRockTexture(rock);m.setIoCeramicTexture(paint);
  for(const material of [m.ioGround,m.ioRock,m.ioCrust]){assert.equal(material.map,rock);assert.equal(material.bumpMap,rock);}
- for(const material of [m.ioCeramic,m.ioBand]){assert.equal(material.map,paint);assert.equal(material.bumpMap,paint);}
+ for(const material of [m.ioCeramic,m.ioBand,m.ioSilo,m.ioSiloBand]){assert.equal(material.map,paint);assert.equal(material.bumpMap,paint);}
  for(const rise of [0,.3,.7,1]){m.poseIoEnvironment(rise);assert(Number.isFinite(m.ioChrome.envMapRotation.x));}
 });
 
@@ -167,16 +167,20 @@ test('production terrain chunks meet with identical heights and normals across t
  const scene=createIoScenery(),chunks=scene.root.getObjectByName('io-heightfield').children,edges=new Map();let shared=0;
  assert(chunks.length>=10);
  for(const chunk of chunks){
-  const p=chunk.geometry.attributes.position,n=chunk.geometry.attributes.normal;
+  chunk.geometry.computeBoundingBox();const p=chunk.geometry.attributes.position,n=chunk.geometry.attributes.normal;
   for(let i=0;i<p.count;i++){
    assert(Number.isFinite(p.getZ(i)));
-   if(i<193||i>=p.count-193){
+   if(Math.abs(p.getY(i)-chunk.geometry.boundingBox.min.y)<1e-5||Math.abs(p.getY(i)-chunk.geometry.boundingBox.max.y)<1e-5){
     const key=`${p.getX(i)},${p.getY(i)}`,value=[p.getZ(i),n.getX(i),n.getY(i),n.getZ(i)];
     if(edges.has(key)){assert.deepEqual(value,edges.get(key));shared++;}else edges.set(key,value);
    }
   }
  }
  assert(shared>1500);
+ const g=chunks[1].geometry,p=g.attributes.position,firstY=p.getY(0);let columns=0;while(columns<p.count&&p.getY(columns)===firstY)columns++;
+ assert(new Set(Array.from({length:columns},(_,i)=>p.getY(columns+i))).size>10,'interior terrain rows must not form a square lattice');
+ assert(scene.root.getObjectByName('io-bank-talus').count>400);
+
  assert(layout.ioGroundHeight(0,layout.IO_BREACH_Y)<-7,'molten breach must cut into the terrain');
  assert(layout.ioGroundHeight(0,layout.IO_APRON_Y)<-7,'rim spill must be revealed ahead of the boss basin');
 });
@@ -197,7 +201,7 @@ test('conveyors, ore, burners, smoke and lava animate from the same pausable clo
  scene.prime(true);scene.prime(false);assert(!smoke.frustumCulled);assert(!jets.frustumCulled);assert(!scene.root.getObjectByName('conveyor-ore').frustumCulled);
 });
 
-test('the perspective tour varies viewing direction, follows broad bends and joins the boss frame smoothly',()=>{
+test('straight perspective flight keeps a fixed stage heading and angle, then joins the boss frame smoothly',()=>{
  const scene=createIoScenery(),point=new T.Vector3(),pitches=[],banks=[],path=[];
  const rise=t=>layout.smooth01((t-layout.IO_DURATION)/layout.IO_APPROACH);
  for(let time=0;time<=108;time+=.5){
@@ -207,7 +211,9 @@ test('the perspective tour varies viewing direction, follows broad bends and joi
   const expected=layout.ioWorld(126,3,time,rise(time),-2);
   assert(point.distanceTo(new T.Vector3(expected.x,expected.y,expected.z))<1e-8,'render and authored world must use the same complete 3D frame');
  }
- assert(Math.max(...path)-Math.min(...path)>4);assert(Math.min(...banks)<-.15);assert(Math.max(...banks)>.15);
+ assert(Math.max(...path)-Math.min(...path)>4);assert(banks.every(b=>b===0));
+ for(let t=0;t<=100;t+=.1){const f=layout.ioFrame(t,0);assert.equal(f.pitch,28*Math.PI/180);assert.equal(f.trackX,0);assert.equal(f.bank,0);assert.equal(f.height,layout.IO_STAGE_HEIGHT);}
+
  assert(Math.max(...pitches)-Math.min(...pitches)>.4);
  const sample=t=>{const p=layout.ioWorld(160,0,t,rise(t),3);return new T.Vector3(p.x,p.y,p.z);},h=1e-4;
  for(const boundary of [100,108]){
@@ -222,8 +228,39 @@ test('conveyor loads are rough yellow sulfur and burner ribbons keep their regis
  const industry=createIoIndustry(),ore=industry.root.getObjectByName('conveyor-ore');
  assert(ore.material.color.r>.8&&ore.material.color.g>.5&&ore.material.color.b<.1);assert(ore.material.roughness>.8);assert(ore.instanceColor);
  const flame=createIoBurnerFlames(industry.burners),jets=flame.root.getObjectByName('io-burner-jets'),cores=flame.root.getObjectByName('io-burner-cores'),matrix=new T.Matrix4(),p=new T.Vector3();
- assert.equal(jets.count,industry.burners.length);assert.equal(jets.geometry.type,'PlaneGeometry');assert(!jets.frustumCulled);assert(!cores.material.depthWrite);
+ assert.equal(jets.count,industry.burners.length);const sheets=new Set(jets.geometry.attributes.sheet.array);assert.deepEqual([...sheets],[0,1]);const normals=jets.geometry.attributes.normal;assert(Math.abs(new T.Vector3().fromBufferAttribute(normals,0).dot(new T.Vector3().fromBufferAttribute(normals,normals.count/2)))<1e-6);assert.equal(cores.geometry.type,'PlaneGeometry');assert(!jets.frustumCulled);assert(!cores.material.depthWrite);
  for(let i=0;i<jets.count;i++){jets.getMatrixAt(i,matrix);p.setFromMatrixPosition(matrix);assert(p.distanceTo(industry.burners[i])<1e-4);}
  const map=jets.material.uniforms.turbulence.value,data=map.image.data;assert(map.generateMipmaps);assert.equal(map.magFilter,T.LinearFilter);
  flame.update(4.25);assert.equal(jets.material.uniforms.clock.value,4.25);assert.equal(cores.material.uniforms.clock,jets.material.uniforms.clock);assert.equal(map.image.data,data);
+});
+
+test('conveyor loading and receiving ports conceal loop resets, and sulfur drops into the receiving bin',async()=>{
+ const {createIoIndustry}=await server.ssrLoadModule('/src/io-industry.ts'),industry=createIoIndustry(),ore=industry.root.getObjectByName('conveyor-ore'),matrix=new T.Matrix4(),p=new T.Vector3(),port=new T.Vector3();
+ industry.root.updateMatrixWorld(true);
+ for(const [i,belt]of industry.belts.entries()){
+  for(const [root,name,endpoint]of [[belt.source,'loading-port',belt.a],[belt.sink,'receiving-port',belt.b]]){
+   root.getObjectByName(name).getWorldPosition(port);assert(port.distanceTo(endpoint.clone().addScaledVector(belt.up,.14))<1e-6);
+   for(const side of [-.6,0,.6]){
+    const origin=new T.Vector3(side,-.65,2).applyQuaternion(belt.q).add(port),direction=port.clone().sub(origin),distance=direction.length();
+    const ray=new T.Raycaster(origin,direction.normalize(),0,distance),hits=ray.intersectObject(root,true);
+    assert(hits.some(h=>h.distance<distance-.1),'sulfur reset must be covered by opaque transfer machinery');
+   }
+  }
+  industry.update(0);ore.getMatrixAt(i*6,matrix);p.setFromMatrixPosition(matrix);belt.source.getObjectByName('loading-port').getWorldPosition(port);assert(p.distanceTo(port)<1e-4);
+  industry.update((belt.length+.5)/.8);ore.getMatrixAt(i*6,matrix);p.setFromMatrixPosition(matrix);belt.sink.getObjectByName('receiving-port').getWorldPosition(port);
+  assert(Math.abs(p.x-port.x)<1e-4&&Math.abs(p.y-port.y)<1e-4);assert(p.z<port.z-.7,'end-of-belt loads must descend into the covered bin');
+ }
+});
+
+test('painted silo bands share one tapered shell without overlapping wall surfaces',async()=>{
+ const {ioSiloWall}=await server.ssrLoadModule('/src/io-silo.ts');
+ for(const radius of [.48,.83,1.13]){
+  const h=2.8,base=.6,wall=ioSiloWall(radius,h,base,.3,Math.PI*2),meshes=wall.map(p=>new T.Mesh(p.geometry,new T.MeshBasicMaterial()));
+  for(const z of [base+.15,base+h*.53,base+h-.15])for(const angle of [.1,.7,1.5,3.5]){
+   const origin=new T.Vector3(Math.cos(angle)*(radius+2),Math.sin(angle)*(radius+2),z),direction=new T.Vector3(-Math.cos(angle),-Math.sin(angle),0),ray=new T.Raycaster(origin,direction);
+   const hits=ray.intersectObjects(meshes),distances=[];
+   for(const hit of hits)if(!distances.some(d=>Math.abs(d-hit.distance)<1e-6))distances.push(hit.distance);
+   assert.equal(distances.length,1,'only one outward-facing wall may occupy a radial ray at any paint height');
+  }
+ }
 });

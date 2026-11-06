@@ -1,12 +1,13 @@
+import {createIoTerrain} from './io-terrain';
 import {createIoIndustry,ioSites} from './io-industry';
 import {createIoLava} from './io-lava';
 import {createIoActivity} from './io-activity';
 import {createIoShadowAnchor} from './io-shadow';
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { ioRock,ioGround,ioCrust,ioHot,ioWeather,ioRandom,poseIoEnvironment } from './io-materials';
+import { ioRock,ioCrust,ioHot,ioWeather,ioRandom,poseIoEnvironment } from './io-materials';
 import { createCaldera } from './io-rigs';
-import { ioFrame,ioWorld,ioGroundHeight,ioNoise,ioChannel,smooth01,IO_BOSS_Y,IO_BOSS_Z,IO_FOOT_DROP,IO_CALDERA_Y,IO_BREACH_Y,IO_APRON_Y } from './io-layout';
+import { ioFrame,ioWorld,ioGroundHeight,ioChannel,IO_BOSS_Y,IO_BOSS_Z,IO_FOOT_DROP,IO_CALDERA_Y,IO_BREACH_Y,IO_APRON_Y } from './io-layout';
 
 export function createIoScenery(){
   const root=new T.Group();root.name='io-caldera-world';root.visible=false;
@@ -19,24 +20,7 @@ export function createIoScenery(){
   const anchorShadow=createIoShadowAnchor(sun,world);
   const lavaFill=new T.PointLight(0xff500f,95,45,2);lavaFill.position.set(0,IO_CALDERA_Y-2,-3.5);world.add(lavaFill);
   const boss=createCaldera();boss.root.position.set(0,IO_BOSS_Y,IO_BOSS_Z);boss.root.rotation.x=Math.PI/2;world.add(boss.root);
-  const landscape=new T.Group();landscape.name='io-heightfield';world.add(landscape);
-  const basalt=new T.Color(0x363638),sulfur=new T.Color(0xbba03b),red=new T.Color(0x80432c),pale=new T.Color(0xc9b995),color=new T.Color();
-  // Chunked relief keeps the long route cheap to cull. Sample outside each edge
-  // for identical normals on neighboring chunks, including under grazing light.
-  for(let start=-24;start<IO_CALDERA_Y+40;start+=24){
-    const land=new T.PlaneGeometry(96,24,192,48);land.translate(0,start+12,0);
-    const p=land.attributes.position,uv=land.attributes.uv,normals:number[]=[],colors:number[]=[];
-    const normal=new T.Vector3();
-    for(let i=0;i<p.count;i++){
-      const x=p.getX(i),y=p.getY(i);p.setZ(i,ioGroundHeight(x,y));uv.setXY(i,x*.19,y*.19);
-      normal.set(ioGroundHeight(x-.1,y)-ioGroundHeight(x+.1,y),ioGroundHeight(x,y-.1)-ioGroundHeight(x,y+.1),.2).normalize();normals.push(normal.x,normal.y,normal.z);
-      const stain=ioNoise(x*.31,y*.22)*.65+ioNoise(x*1.4,y*1.4)*.35,bank=smooth01((Math.abs(x-ioChannel(y))-1.8)/.8);
-      color.copy(basalt).lerp(red,bank*.8).lerp(sulfur,bank*smooth01((stain-.35)/.24));
-      color.lerp(pale,bank*smooth01((ioNoise(x*.6+40,y*.5)-.51)/.24));color.lerp(basalt,(1-Math.abs(normal.z))*.7);colors.push(color.r,color.g,color.b);
-    }
-    land.setAttribute('normal',new T.Float32BufferAttribute(normals,3));land.setAttribute('color',new T.Float32BufferAttribute(colors,3));
-    const ground=new T.Mesh(land,ioGround);ground.name='io-ground-chunk';landscape.add(ground);
-  }
+  world.add(createIoTerrain());
   const lavaFlow=createIoLava();
   const lava=new T.Mesh(new T.CircleGeometry(1,80).scale(16.8,18.8,1).translate(0,IO_CALDERA_Y,0),lavaFlow.material);
   lava.name='caldera-lava-lake';lava.position.z=-6.85;world.add(lava);
@@ -146,6 +130,17 @@ export function createIoScenery(){
     chipColor.setHex(rng()>.8?0xd7b553:0xaaaaaa);rubble.setColorAt(chips++,chipColor);
   }
   rubble.count=chips;rubble.name='io-basalt-scree';world.add(rubble);
+
+  // Talus collects along the irregular shoulders, with some fragments half
+  // buried in the ledges instead of tracing a uniform row along a mesh grid.
+  const talus=new T.InstancedMesh(rubble.geometry,ioRock,1400),tilt=new T.Euler();let stones=0;
+  for(let i=0;i<1400;i++){
+    const y=-12+rng()*(IO_CALDERA_Y+22),x=ioChannel(y)+(i%2?-1:1)*(1.7+rng()*2.3),z=ioGroundHeight(x,y);
+    if(z<-5.5||ioSites.some(([sx,sy])=>Math.hypot(sx-Math.sign(sx)*.55+ioChannel(sy)-x,sy-y)<1.8))continue;
+    const size=.04+Math.pow(rng(),2)*.32;position.set(x,y,z+size*.22);rotation.setFromEuler(tilt.set(rng()*.6,rng()*.6,rng()*6.28));scale.set(size*(.7+rng()),size*(.8+rng()),size*.65);
+    matrix.compose(position,rotation,scale);talus.setMatrixAt(stones,matrix);chipColor.setHex(rng()>.9?0xb0a27a:0x999999);talus.setColorAt(stones++,chipColor);
+  }
+  talus.count=stones;talus.name='io-bank-talus';world.add(talus);
 
   // A few real emissive fissures cut across the shoulder, clear of the flight lane.
   for(let i=0;i<16;i++){
