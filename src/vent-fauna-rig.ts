@@ -1,5 +1,6 @@
 import * as T from 'three';
-import {wormPose,SHRIMP_FIRST_FIRE,WORM_FIRST_FIRE} from './vent-fauna';
+import {SHRIMP_FIRST_FIRE} from './vent-fauna';
+import {wormPose,WORM_FIRST_ATTACK,WORM_INTERVAL,WORM_SEGMENTS} from './vent-worm';
 
 function fallbackAtlas(){
  const size=192,c=document.createElement('canvas');c.width=c.height=size*3;const g=c.getContext('2d')!;
@@ -16,15 +17,31 @@ function fallbackAtlas(){
  }
  const texture=new T.CanvasTexture(c);texture.colorSpace=T.SRGBColorSpace;texture.anisotropy=4;return texture;
 }
-export function createFaunaAssets(fallback?:T.Texture){
- const material=new T.MeshBasicMaterial({map:fallback??fallbackAtlas(),alphaTest:.5,side:T.DoubleSide});
- const geometries=Array.from({length:9},(_,cell)=>{
+function rasterAssets(columns:number,rows:number,texture:T.Texture){
+ const material=new T.MeshBasicMaterial({map:texture,alphaTest:.5,side:T.DoubleSide});
+ const geometries=Array.from({length:columns*rows},(_,cell)=>{
   const geometry=new T.CircleGeometry(.5,28),uv=geometry.attributes.uv,pad=.012;
-  for(let i=0;i<uv.count;i++)uv.setXY(i,(cell%3+pad+uv.getX(i)*(1-2*pad))/3,1-(Math.floor(cell/3)+1-pad-uv.getY(i)*(1-2*pad))/3);
+  for(let i=0;i<uv.count;i++)uv.setXY(i,(cell%columns+pad+uv.getX(i)*(1-2*pad))/columns,1-(Math.floor(cell/columns)+1-pad-uv.getY(i)*(1-2*pad))/rows);
   return geometry;
  });
  function part(parent:T.Object3D,cell:number,x:number,y:number,z:number,w:number,h:number){const mesh=new T.Mesh(geometries[cell],material);mesh.position.set(x,y,z);mesh.scale.set(w,h,1);parent.add(mesh);return mesh;}
  return{material,geometries,part,setAtlas(texture:T.Texture){texture.anisotropy=4;material.map=texture;material.needsUpdate=true;}};
+}
+export function createFaunaAssets(fallback?:T.Texture){return rasterAssets(3,3,fallback??fallbackAtlas());}
+export function createWormAssets(fallback?:T.Texture){
+ if(fallback)return rasterAssets(3,2,fallback);
+ const size=192,canvas=document.createElement('canvas');canvas.width=size*3;canvas.height=size*2;const g=canvas.getContext('2d')!;
+ for(let cell=0;cell<6;cell++){
+  g.save();g.translate(cell%3*size,Math.floor(cell/3)*size);
+  const grad=g.createRadialGradient(75,65,3,96,96,85);grad.addColorStop(0,cell===0?'#a19a81':'#a26d62');grad.addColorStop(1,cell===0?'#263236':'#322027');g.fillStyle=grad;
+  g.beginPath();g.ellipse(96,96,cell===0?82:cell===3||cell===4?32:69,cell===5?58:82,0,0,7);g.fill();
+  g.save();g.globalCompositeOperation='source-atop';
+  for(let i=0;i<13;i++){g.strokeStyle=i%3?'#4f3232':'#b39979';g.lineWidth=3;g.beginPath();g.moveTo(25,28+i*12);g.quadraticCurveTo(96,50+i*12,166,28+i*12);g.stroke();}g.restore();
+  if(cell===0||cell===2){g.fillStyle='#10171b';g.beginPath();g.ellipse(96,cell===0?96:125,cell===0?54:42,cell===0?57:36,0,0,7);g.fill();}
+  if(cell===2||cell===3||cell===4)for(let i=0;i<7;i++){const x=cell===2?58+i*12:cell===3?111:79,y=cell===2?122:40+i*17;g.fillStyle='#d7c49c';g.beginPath();g.moveTo(x-4,y-7);g.lineTo(x+5,y+4);g.lineTo(x+8,y-8);g.fill();}
+  g.restore();
+ }
+ const t=new T.CanvasTexture(canvas);t.colorSpace=T.SRGBColorSpace;t.anisotropy=4;return rasterAssets(3,2,t);
 }
 type Assets=ReturnType<typeof createFaunaAssets>;
 export function createVentShrimp(assets:Assets){
@@ -53,21 +70,27 @@ export function createVentShrimp(assets:Assets){
  pose(0,SHRIMP_FIRST_FIRE);return{root,combat:root,pose};
 }
 export function createVentWorm(assets:Assets){
- const root=new T.Group();root.name='vent-tube-worm';
- const foot=assets.part(root,5,0,0,.03,1.5,1.5);foot.name='worm-fixed-tube';
+ const root=new T.Group();root.name='vent-burrow-worm';
+ const foot=assets.part(root,0,0,0,.03,2.15,2.15);foot.name='worm-fixed-hole';
+ const lip=assets.part(root,0,0,0,.34,2.15,2.15);lip.name='worm-hole-lip';
  const combat=new T.Group();combat.name='worm-living-parts';root.add(combat);
  const aim=new T.Group();aim.name='worm-aim';combat.add(aim);
- const body=Array.from({length:3},(_,i)=>{const m=assets.part(aim,6,0,0,.12+i*.02,.52-i*.04,.5);m.name='worm-segment-'+i;return m;});
- const crown=new T.Group();crown.name='worm-crown';crown.position.z=.23;aim.add(crown);
- const petals=Array.from({length:6},(_,i)=>{const p=new T.Group();p.rotation.z=i*Math.PI/3;const leaf=assets.part(p,8,0,.24,0,.30,.58);crown.add(p);return leaf;});
- assets.part(crown,7,0,0,.02,.62,.62);
+ const warningGeometry=new T.BufferGeometry(),warningPoints=new T.BufferAttribute(new Float32Array(17*3),3);warningGeometry.setAttribute('position',warningPoints);
+ const warning=new T.Line(warningGeometry,new T.LineBasicMaterial({color:0xffb37a,transparent:true,opacity:.3,depthWrite:false}));warning.name='worm-lunge-warning';warning.frustumCulled=false;aim.add(warning);
+ const body=Array.from({length:WORM_SEGMENTS},(_,i)=>{const m=assets.part(aim,1,0,0,.12+i*.001,.86,.7);m.name='worm-segment-'+i;return m;});
+ const head=new T.Group();head.name='worm-head';head.position.z=.24;aim.add(head);
+ assets.part(head,5,0,.18,0,.95,.7);assets.part(head,2,0,-.04,.01,1.1,1.1);
+ const jaws=[-1,1].map(side=>{const p=new T.Group();p.name='worm-jaw-'+side;p.position.set(side*.25,-.26,.03);head.add(p);assets.part(p,side<0?3:4,side*.10,-.21,0,.52,.68);return{side,p};});
  const muzzle=new T.Object3D();muzzle.name='worm-muzzle';muzzle.position.z=.28;aim.add(muzzle);
- function pose(age:number,nextFire:number,angle:number){
-  const p=wormPose(age,nextFire);aim.rotation.z=angle;
-  body.forEach((mesh,i)=>{const a=p.joints[i],b=p.joints[i+1];mesh.position.x=(a.x+b.x)/2;mesh.position.y=(a.y+b.y)/2;mesh.rotation.z=Math.atan2(b.x-a.x,a.y-b.y);mesh.scale.y=Math.hypot(a.x-b.x,a.y-b.y)+.25;});
-  const head=p.joints[3];crown.position.x=head.x;crown.position.y=head.y;muzzle.position.set(head.x,head.y,.28);
-  petals.forEach((leaf,i)=>{leaf.scale.y=.34+p.open*.24;leaf.position.y=.14+p.open*.10;leaf.rotation.z=.12*Math.sin(age*1.8+i)*(1-p.open);});
+ function pose(age:number,nextAttack:number,angle:number,reach=8.5,bend=1){
+  const p=wormPose(age,nextAttack,reach,bend),exposure=Math.min(1,p.length/.8);aim.rotation.z=angle;combat.visible=p.visible;
+  warning.visible=p.phase==='windup';warning.material.opacity=.25+p.charge*.2;
+  if(warning.visible){for(let i=0;i<17;i++){const u=i/16;warningPoints.setXYZ(i,Math.sin(Math.PI*u)*bend,-reach*u,.06);}warningPoints.needsUpdate=true;}
+  body.forEach((mesh,i)=>{const a=p.joints[i],b=p.joints[i+1];mesh.visible=Boolean(a&&b);if(!a||!b)return;mesh.position.x=(a.x+b.x)/2;mesh.position.y=(a.y+b.y)/2;mesh.rotation.z=Math.atan2(b.x-a.x,a.y-b.y);mesh.scale.x=(1.4-i*.003)*exposure;mesh.scale.y=Math.hypot(a.x-b.x,a.y-b.y)+.32;});
+  const end=p.joints.at(-1)!,previous=p.joints.at(-2)??{x:0,y:0};head.position.x=end.x;head.position.y=end.y;head.rotation.z=Math.atan2(end.x-previous.x,previous.y-end.y);head.scale.setScalar(exposure);muzzle.position.set(end.x,end.y,.28);
+  for(const{side,p:joint}of jaws)joint.rotation.z=side*p.jaw*.65;
   return p;
  }
- pose(0,WORM_FIRST_FIRE,0);return{root,combat,pose};
+ // Prime every sprite cell before play; the initial live pose may be fully hidden.
+ pose(WORM_FIRST_ATTACK+.7,WORM_FIRST_ATTACK+WORM_INTERVAL,0);warning.visible=true;return{root,combat,pose};
 }

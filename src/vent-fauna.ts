@@ -1,7 +1,8 @@
 export type ShrimpFormation='weave'|'cross'|'curl';
 export type ShrimpCourse={formation:ShrimpFormation;mirror:number;slot:number};
 export const SHRIMP_HP=3,SHRIMP_POOL=12,SHRIMP_FIRST_FIRE=1.9,SHRIMP_INTERVAL=3.1;
-export const WORM_HP=6,WORM_POOL=4,WORM_FIRST_FIRE=2.4,WORM_INTERVAL=4.6,WORM_WINDUP=.7;
+import {wormPose} from './vent-worm';
+export {wormPose,WORM_HP,WORM_POOL,WORM_FIRST_ATTACK,WORM_INTERVAL,WORM_WINDUP} from './vent-worm';
 const clamp=(v:number)=>Math.max(0,Math.min(1,v));
 const smooth=(v:number)=>{const t=clamp(v);return t*t*(3-2*t);};
 
@@ -21,21 +22,15 @@ export function shrimpMotion(age:number,lane:number,course:ShrimpCourse){
  const vx=(b.x-a.x)/.002,vy=(b.y-a.y)/.002;
  return{...p,heading:Math.atan2(vx,-vy),speed:Math.hypot(vx,vy)};
 }
-export function wormPose(age:number,nextFire:number){
- const charge=clamp(1-(nextFire-age)/WORM_WINDUP),since=age-(nextFire-WORM_INTERVAL);
- const recoil=since>=-1e-6&&since<.35?1-smooth(Math.max(0,since)/.35):0;
- const open=Math.max(charge,recoil),extension=.68+.45*open,bend=.16*Math.sin(age*.9)*(1-open*.5);
- const joints=Array.from({length:4},(_,i)=>({x:bend*Math.sin(i*.7),y:-i*.28*extension}));
- return{charge,recoil,open,joints};
-}
-type Body={x:number;y:number;age:number;fire:number;heading?:number;mortarAngle?:number;ventScale?:number;ventWorm?:boolean;shrimp?:ShrimpCourse};
+type Body={x:number;y:number;age:number;fire:number;heading?:number;mortarAngle?:number;ventScale?:number;ventWorm?:boolean;shrimp?:ShrimpCourse;wormReach?:number;wormBend?:number};
 export function faunaPoint(body:Body,local:{x:number;y:number}){
  const angle=body.ventWorm?body.mortarAngle??0:body.heading??0,c=Math.cos(angle),s=Math.sin(angle),scale=body.ventScale??1;
  return{x:body.x+(local.x*c-local.y*s)*scale,y:body.y+(local.x*s+local.y*c)*scale};
 }
-export function faunaMuzzle(body:Body){return faunaPoint(body,body.ventWorm?wormPose(body.age,body.fire).joints[3]:{x:0,y:-.73});}
+export function faunaMuzzle(body:Body){return faunaPoint(body,body.ventWorm?wormPose(body.age,body.fire,body.wormReach,body.wormBend).joints.at(-1)!:{x:0,y:-.73});}
 export function faunaHulls(body:Body){
- const local=body.ventWorm?wormPose(body.age,body.fire).joints.slice(1).map((p,i)=>({...p,radius:i===2?.40:.27})):
+ const pose=body.ventWorm?wormPose(body.age,body.fire,body.wormReach,body.wormBend):undefined;
+ const local=pose?(pose.visible?pose.joints.slice(1).filter(p=>Math.hypot(p.x,p.y)>.8).map((p,i,a)=>({...p,radius:i===a.length-1?.48:.38})):[]):
   [{x:0,y:-.43,radius:.38},{x:0,y:.04,radius:.38},{x:0,y:.52,radius:.32}];
  return local.map(p=>({...faunaPoint(body,p),radius:p.radius*(body.ventScale??1)}));
 }
@@ -47,4 +42,13 @@ export function faunaBodyHit(body:Body,a:{x:number;y:number},b:{x:number;y:numbe
   const t=length?clamp(((p.x-a.x)*dx+(p.y-a.y)*dy)/length):0;
   return(p.x-a.x-dx*t)**2+(p.y-a.y-dy*t)**2<=(p.radius+padding)**2;
  });
+}
+export function faunaBeamEntry(body:Body,origin:{x:number;y:number}){
+ let y=Infinity;
+ for(const p of faunaHulls(body)){
+  const d=p.radius*p.radius-(origin.x-p.x)**2;if(d<0)continue;
+  const half=Math.sqrt(d);if(p.y+half<origin.y||p.y-half>9)continue;
+  y=Math.min(y,Math.max(origin.y,p.y-half));
+ }
+ return y;
 }

@@ -1,4 +1,4 @@
-import {createFaunaAssets,createVentShrimp,createVentWorm} from './vent-fauna-rig';
+import {createFaunaAssets,createWormAssets,createVentShrimp,createVentWorm} from './vent-fauna-rig';
 import {SHRIMP_POOL,WORM_POOL,faunaMuzzle} from './vent-fauna';
 import {createMortarAssets,createVentMortar} from './vent-mortar-rig';
 import {MORTAR_POOL} from './vent-mortar';
@@ -95,7 +95,8 @@ export class FlightView {
   private mortarModels:(T.Object3D|undefined)[]=[];
   private faunaAssets=createFaunaAssets();
   private shrimps=Array.from({length:SHRIMP_POOL},()=>createVentShrimp(this.faunaAssets));
-  private worms=Array.from({length:WORM_POOL},()=>createVentWorm(this.faunaAssets));
+  private wormAssets=createWormAssets();
+  private worms=Array.from({length:WORM_POOL},()=>createVentWorm(this.wormAssets));
   private faunaModels:(T.Object3D|undefined)[]=[];
   private ventTime=0;
   private ioTime = 0;
@@ -213,7 +214,7 @@ export class FlightView {
     const pods = this.wingPods.flatMap((side) => side.map(({ root }) => root));
     for(const rig of [this.player.root,this.drone,...pods])rig.traverse(o=>{if(o instanceof T.Mesh&&!([o.material].flat().some(m=>m.transparent))){o.castShadow=true;o.receiveShadow=true;}});
     const ammo = Object.values(this.projectiles).map(({ root }) => root);
-    this.texturesReady = Promise.all([this.backdrops.ready, this.hive.ready, this.ice.ready, this.titan.ready, Promise.all([this.vents.ready,loadEncounterTexture('ventMortar',this.mortarAssets.setAtlas),loadEncounterTexture('ventFauna',this.faunaAssets.setAtlas)]),
+    this.texturesReady = Promise.all([this.backdrops.ready, this.hive.ready, this.ice.ready, this.titan.ready, Promise.all([this.vents.ready,loadEncounterTexture('ventMortar',this.mortarAssets.setAtlas),loadEncounterTexture('ventFauna',this.faunaAssets.setAtlas),loadEncounterTexture('ventWorm',this.wormAssets.setAtlas)]),
       Promise.all([loadEncounterTexture('marine', setMarineTexture, 1), loadEncounterTexture('ioBasalt',setIoRockTexture,1), loadEncounterTexture('ioCeramic',setIoCeramicTexture,1)]), loadEncounterTextures(this.boss, this.raptor,
       [this.player.root, scout, this.drone, this.bridge.root, this.ice.root, ...pods, ...ammo, ...this.drops.map(({ root }) => root), this.io.root, this.skippers[0].root, this.crucibles[0].root])]).then(textures=>{this.surfacesReady=true;return textures;});
     this.enemies = Array.from({ length: 12 }, () => {
@@ -551,7 +552,7 @@ export class FlightView {
       this.faunaModels[index]=undefined;
       const rig=enemy.ventWorm?this.worms[worms++]:enemy.shrimp?this.shrimps[shrimps++]:undefined;if(!rig)continue;
       rig.root.visible=true;rig.root.position.set(enemy.x,enemy.y,0);rig.root.scale.setScalar(enemy.ventScale??1);
-      if(enemy.ventWorm){rig.root.rotation.z=0;(rig as typeof this.worms[number]).pose(enemy.age,enemy.fire,enemy.mortarAngle??0);}
+      if(enemy.ventWorm){rig.root.rotation.z=0;(rig as typeof this.worms[number]).pose(enemy.age,enemy.fire,enemy.mortarAngle??0,enemy.wormReach,enemy.wormBend);}
       else {rig.root.rotation.z=enemy.heading??0;rig.pose(enemy.age,enemy.fire,0);}
       this.faunaModels[index]=rig.combat;
     }

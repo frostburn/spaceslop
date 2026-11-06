@@ -1,5 +1,5 @@
-import {createFaunaAssets,createVentShrimp,createVentWorm} from './vent-fauna-rig';
-import {SHRIMP_FIRST_FIRE,SHRIMP_INTERVAL,WORM_FIRST_FIRE,WORM_INTERVAL} from './vent-fauna';
+import {createFaunaAssets,createWormAssets,createVentShrimp,createVentWorm} from './vent-fauna-rig';
+import {SHRIMP_FIRST_FIRE,SHRIMP_INTERVAL,WORM_FIRST_ATTACK,WORM_INTERVAL} from './vent-fauna';
 import {createMortarAssets,createVentMortar} from './vent-mortar-rig';
 import {MORTAR_FIRST_FIRE,MORTAR_INTERVAL} from './vent-mortar';
 import {createCrucible,createSlag} from './io-crucible-rig';
@@ -142,11 +142,12 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const burner=createIoBurnerStudy(),crucible=createCrucible(),slag=createSlag();
   const mortarAssets=createMortarAssets(),mortar=createVentMortar(mortarAssets);
   void loadEncounterTexture('ventMortar',mortarAssets.setAtlas);
-  const faunaAssets=createFaunaAssets(),shrimp=createVentShrimp(faunaAssets),worm=createVentWorm(faunaAssets);
+  const faunaAssets=createFaunaAssets(),shrimp=createVentShrimp(faunaAssets),wormAssets=createWormAssets(),worm=createVentWorm(wormAssets);
   void loadEncounterTexture('ventFauna',faunaAssets.setAtlas);
+  void loadEncounterTexture('ventWorm',wormAssets.setAtlas);
   const assets = {
     vent_shrimp:{root:shrimp.root,duration:6,pose(time:number){const next=SHRIMP_FIRST_FIRE+Math.max(0,Math.floor((time-SHRIMP_FIRST_FIRE)/SHRIMP_INTERVAL)+1)*SHRIMP_INTERVAL;shrimp.pose(time,next);return 'swimmerets / abdomen / paired pincers';}},
-    vent_worm:{root:worm.root,duration:7,pose(time:number){const next=WORM_FIRST_FIRE+Math.max(0,Math.floor((time-WORM_FIRST_FIRE)/WORM_INTERVAL)+1)*WORM_INTERVAL;const p=worm.pose(time,next,Math.sin(time*.5)*.65);return p.recoil>0?'fan volley / retreat':p.charge>0?'crown opening / charge':'rooted tracking / folded crown';}},
+    vent_worm:{root:worm.root,duration:WORM_INTERVAL+WORM_FIRST_ATTACK,bounds:new T.Box3(new T.Vector3(-2,-10,-.1),new T.Vector3(2,1.5,.6)),pose(time:number){const next=WORM_FIRST_ATTACK+Math.max(0,Math.floor((time-WORM_FIRST_ATTACK)/WORM_INTERVAL)+1)*WORM_INTERVAL;const p=worm.pose(time,next,.12,8.5,.8);return p.phase==='hidden'?'concealed in hole':p.phase==='windup'?'locked aim / warning':p.phase==='retreat'?'withdrawing into hole':'body lunge / bite';}},
     vent_mortar:{root:mortar.root,duration:6,pose(time:number){const next=MORTAR_FIRST_FIRE+Math.max(0,Math.floor((time-MORTAR_FIRST_FIRE)/MORTAR_INTERVAL)+1)*MORTAR_INTERVAL;const p=mortar.pose(time,next,Math.sin(time*.5)*.6);return p.recoil>0?'pearl volley / recoil':p.charge>0?'shell opening / charge':'tracking / folded shell';}},
     crucible: {root:crucible.root,duration:7.2,pose(time:number){const next=CRUCIBLE_FIRST_POUR+Math.max(0,Math.floor((time-CRUCIBLE_FIRST_POUR)/CRUCIBLE_POUR_INTERVAL)+1)*CRUCIBLE_POUR_INTERVAL;crucible.pose(time,crucibleValve(time,next));return 'valve charge / molten pour';}},
     slag: {root:slag.root,duration:2,pose(time:number){slag.pose(time);return time<.9?'molten droplet':'cooled · shootable slag';}},
