@@ -33,6 +33,9 @@ const encounterTextures = Object.fromEntries(Object.entries({
   rock: 'encounters/frostwake-rock.png',
   galaxy: 'encounters/frostwake-galaxy.png',
   marine: 'encounters/marine-hide.png',
+  titan: 'encounters/titan-research-ground-10screens.png',
+  titanRobot: 'encounters/titan-maintenance-parts.png',
+  titanChitin: 'encounters/titan-chitin.png',
 }).filter(([, src]) => existsSync(new URL(`./public/${src}`, import.meta.url))));
 
 export default defineConfig({
@@ -43,6 +46,7 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: 'prompt',
+      workbox: { maximumFileSizeToCacheInBytes: 24 * 1024 * 1024 },
       includeAssets: [...portraits, ...Object.values(encounterTextures)],
       manifest: {
         name: 'Spaceslop',

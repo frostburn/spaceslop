@@ -1,3 +1,4 @@
+import { titanSection } from './titan-layout';
 import { registerSW } from 'virtual:pwa-register';
 import { BOSS_HP, Flight, HEIGHT, STEP, WIDTH } from './game';
 import { setupPilots } from './pilots';
@@ -110,11 +111,11 @@ function syncUI() {
   const active = screen === 'active';
   const fighting = flight.phase === 'stage' || flight.phase === 'boss';
   const label = {
-    stage: levels[flight.level].sector, approach: 'CONTACT', boss: 'BOSS', won: 'CLEAR', lost: 'SIGNAL LOST',
+    stage: levels[flight.level].sector, approach: flight.level==='titan'?'ASCENT':'CONTACT', boss: 'BOSS', won: 'CLEAR', lost: 'SIGNAL LOST',
   }[flight.phase];
-  sector.textContent = flight.level === 'ice' && flight.phase === 'stage'
+  sector.textContent = (flight.level === 'ice' || flight.level === 'titan') && flight.phase === 'stage'
     ? `${label} · ${Math.min(10, Math.floor(flight.hiveProgress * 10) + 1)}/10` : label;
-  sector.title = flight.level === 'ice' ? iceSection(flight.hiveProgress) : levels[flight.level].name;
+  sector.title = flight.level === 'titan' ? titanSection(flight.hiveProgress) : flight.level === 'ice' ? iceSection(flight.hiveProgress) : levels[flight.level].name;
   score.textContent = String(flight.score).padStart(6, '0');
   hull.textContent = String(flight.hull).padStart(2, '0');
   charges.textContent = String(flight.charges).padStart(2, '0');
@@ -129,6 +130,7 @@ function syncUI() {
   if (import.meta.env.DEV) {
     const bossStart = element<HTMLButtonElement>('dev-boss');
     bossStart.hidden = !betweenRuns;
+    bossStart.textContent=flight.level==='titan'?'Launch at transition':'Launch at boss';
     bossStart.disabled = start.disabled || !view;
   }
   pilotPicker.setVisible(betweenRuns);
@@ -142,8 +144,8 @@ function syncUI() {
   if (preparing) tip = 'Preparing graphics…';
   else if (screen === 'title' && offlineReady) tip = 'Ready offline';
   else if (flight.droneWeapon === 'towline') {
-    tip = flight.phase === 'boss' ? (flight.level === 'ice' ? 'Sweep the arc across the mouth marker.' : 'Sweep the arc across the green cannon.') : 'Park the drone · Sweep the arc';
-  } else if (flight.phase === 'boss') tip = flight.level === 'ice' ? 'Tap the mouth marker. Dodge amber rings.' : 'Tap the green cannon. Dodge amber rings.';
+    tip = flight.phase === 'boss' ? (flight.level === 'ice' ? 'Sweep the arc across the mouth marker.' : flight.level==='titan'?'Sweep the arc across the glowing thorax vent.':'Sweep the arc across the green cannon.') : 'Park the drone · Sweep the arc';
+  } else if (flight.phase === 'boss') tip = flight.level === 'ice' ? 'Tap the mouth marker. Dodge amber rings.' : flight.level==='titan'?'Tap the glowing thorax vent. Dodge amber rings.':'Tap the green cannon. Dodge amber rings.';
   if (active && flight.perkTime > 0) {
     tip = flight.perkMessage;
   } else if (active && flight.pickupTime > 0) {

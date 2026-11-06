@@ -1,6 +1,8 @@
+import { TITAN_DURATION } from './titan-layout';
 import { ICE_DURATION } from './ice-layout';
 
 export const levels = {
+  titan: { name: 'Titan · Research station', sector: 'TITAN', boss: 'TITAN CICADA', duration: TITAN_DURATION },
   ice: { name: 'Frostwake · Ice field', sector: 'FROSTWAKE', boss: 'LEVIATHAN', duration: ICE_DURATION },
   preserve: { name: 'Overgrown preserve', sector: 'SECTOR 01', boss: 'INTERCEPTOR', duration: 14 },
   broodlock: { name: 'Broodlock · Ant hive', sector: 'BROODLOCK', boss: 'BROOD GUARDIAN', duration: 28 },
