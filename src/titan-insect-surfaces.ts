@@ -29,23 +29,6 @@ function fallbackChitin() {
   return texture;
 }
 
-function fallbackSetae() {
-  const w = 192, h = 128, data = new Uint8Array(w * h * 4), rng = random(5913);
-  for (let i = 0; i < data.length; i += 4) data.set([255, 255, 255, 0], i);
-  for (let i = 0; i < 1600; i++) {
-    const angle = rng() * Math.PI * 2, radius = Math.sqrt(rng()) * .67;
-    const x = w * (.5 + Math.cos(angle) * radius * .46), y = h * (.5 + Math.sin(angle) * radius * .46);
-    const length = 7 + rng() * 18, dx = Math.cos(angle), dy = Math.sin(angle), bend = (rng() - .5) * 5;
-    for (let t = 0; t < length; t += .5) {
-      const u = t / length, px = Math.round(x + dx*t - dy*bend*u*u), py = Math.round(y + dy*t + dx*bend*u*u);
-      if (px < 0 || py < 0 || px >= w || py >= h) continue;
-      const index = (py*w + px)*4 + 3;
-      data[index] = Math.min(230, data[index] + (1-u) * 110);
-    }
-  }
-  const texture = filteredTexture(data, w, h); texture.name = 'setae-fallback'; return texture;
-}
-
 let chitinMap: T.Texture = fallbackChitin();
 const shellMaterials = new Set<T.MeshStandardMaterial>();
 export function titanChitin(color: number, roughness = .67, metalness = .09) {
@@ -61,19 +44,21 @@ export function setTitanChitinTexture(texture: T.Texture) {
   }
 }
 
-const setaeMap = fallbackSetae();
-const furMaterials = [
-  new T.SpriteMaterial({ map: setaeMap, color: 0xc3dbbc, opacity: .48, transparent: true, depthWrite: false, alphaTest: .025 }),
-  new T.SpriteMaterial({ map: setaeMap, color: 0xd4c5a6, opacity: .86, transparent: true, depthWrite: false, alphaTest: .025 }),
-  new T.SpriteMaterial({ map: setaeMap, color: 0xc7b591, opacity: .82, transparent: true, depthWrite: false, alphaTest: .025, rotation: .7 }),
-];
-export function setTitanSetaeTexture(texture: T.Texture) {
-  texture.wrapS = texture.wrapT = T.ClampToEdgeWrapping;
-  for (const material of furMaterials) { material.map = texture; material.needsUpdate = true; }
-}
-// Depth-tested billboards stay attached to the posed 3D body, with no depth write
-// or render-order override that could paint fur across eyes and attack vents.
-export function addTitanSetae(parent: T.Object3D, x: number, y: number, z: number, width: number, height: number, kind = 1) {
-  const patch = new T.Sprite(furMaterials[kind]); patch.name = 'camera-facing-setae';
-  patch.position.set(x, y, z); patch.scale.set(width, height, 1); parent.add(patch); return patch;
+// Short tapered bristles are opaque modeled geometry, not soft fur billboards.
+// Each species shares its bristle buffer across all patches and pool entries.
+const stubbleMaterials = [0x7d8270,0x9e8c69,0x74654c].map(color=>new T.MeshStandardMaterial({color,roughness:.94,side:T.DoubleSide}));
+const stubbleGeometry = [0,1,2].map(kind=>{
+  const rng=random(3981+kind), vertices:number[]=[];
+  for(let i=0;i<(kind===0?48:110);i++){
+    const angle=rng()*Math.PI*2,r=Math.sqrt(rng())*.38,x=Math.cos(angle)*r,y=Math.sin(angle)*r;
+    const length=.04+rng()*.06,width=.004+rng()*.003;
+    const dx=Math.cos(angle)*.04+(rng()-.5)*.07,dy=Math.sin(angle)*.04+(rng()-.5)*.07;
+    vertices.push(x-width,y,0,x+width,y,0,x+dx,y+dy,length,
+      x,y-width,0,x,y+width,0,x+dx,y+dy,length);
+  }
+  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(vertices,3));g.computeVertexNormals();g.computeBoundingBox();return g;
+});
+export function addTitanSetae(parent:T.Object3D,x:number,y:number,z:number,width:number,height:number,kind=1){
+  const patch=new T.Mesh(stubbleGeometry[kind],stubbleMaterials[kind]);patch.name='coarse-setae-patch';
+  patch.position.set(x,y,z);patch.scale.set(width,height,Math.min(width,height));parent.add(patch);return patch;
 }

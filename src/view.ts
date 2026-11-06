@@ -299,10 +299,18 @@ export class FlightView {
     this.skyLight?.groundColor.setHex(flight.level==='titan'?0x543522:0x514873);
     const hive = flight.level === 'broodlock';
     const stageDistance = hive ? HIVE_CAMERA_DISTANCE : flight.level === 'ice' ? ICE_CAMERA_DISTANCE : 95;
-    const camera = this.swing === 0 && (flight.level === 'preserve' || flight.level === 'titan') ? this.ortho : this.perspective;
+    const camera = this.swing === 0 && flight.level === 'preserve' ? this.ortho : this.perspective;
     const distance = T.MathUtils.lerp(stageDistance, BOSS_CAMERA_DISTANCE, eased);
     this.perspective.fov = T.MathUtils.radToDeg(2 * Math.atan(HEIGHT / 2 / distance));
     this.perspective.updateProjectionMatrix();
+    if (flight.level === 'titan') {
+      // Normalize perspective at the flight plane, then continuously introduce
+      // depth foreshortening instead of switching projections on the first frame.
+      this.perspective.projectionMatrix.multiplyScalar(1 / distance);
+      const p = this.perspective.projectionMatrix.elements, o = this.ortho.projectionMatrix.elements;
+      for (let i = 0; i < 16; i++) p[i] = o[i] * (1 - eased) + p[i] * eased;
+      this.perspective.projectionMatrixInverse.copy(this.perspective.projectionMatrix).invert();
+    }
     camera.position.set(0, 0, distance).applyQuaternion(this.rotation);
     camera.up.set(0, 1, 0).applyQuaternion(this.rotation);
     camera.lookAt(0, 0, 0);
@@ -355,7 +363,7 @@ export class FlightView {
     }
     if (activeBoss.root.visible) {
       if(activeBoss === this.leviathan) this.leviathan.pose(eased,flight.cannonWindup,0,0,flight.bossRecoil / BOSS_RECOIL_TIME,flight.phase==='boss'?flight.time:Math.max(0,this.iceTime-flight.stageDuration-TRANSITION_TIME));
-      else if(activeBoss===this.cicada)this.cicada.pose(eased,flight.cannonWindup,flight.exposedCannonX,flight.firedCannonX,flight.bossRecoil/BOSS_RECOIL_TIME,flight.phase==='boss'?flight.time:flight.phase==='approach'?flight.time:0);
+      else if(activeBoss===this.cicada)this.cicada.pose(eased,flight.cannonWindup,flight.exposedCannonX,flight.firedCannonX,flight.bossRecoil/BOSS_RECOIL_TIME,flight.phase==='boss'?flight.transitionDuration+flight.time:flight.phase==='approach'?flight.time:0);
       else activeBoss.pose(eased, flight.cannonWindup, flight.exposedCannonX, flight.firedCannonX,flight.bossRecoil / BOSS_RECOIL_TIME);
       if (activeBoss === this.boss) poseBurners(this.bossBurners, this.animationTime, 0.42 + 0.48 * Math.sin(eased * Math.PI));
     }
@@ -424,7 +432,7 @@ export class FlightView {
       this.insectModels[index] = rig.root;
     }
 
-    this.drawWings(flight, eased, fighterVelocity, camera === this.ortho ? undefined : distance);
+    this.drawWings(flight, eased, fighterVelocity, flight.level === 'titan' ? (eased > 0 ? distance / eased : undefined) : camera === this.ortho ? undefined : distance);
     for (const [index, model] of this.drops.entries()) {
       const drop = flight.drops[index];
       model.root.visible = Boolean(drop);
@@ -469,7 +477,9 @@ export class FlightView {
       if(flight.phase==='stage')this.titanTime=flight.time;
       if(flight.phase==='approach')this.titanTime=flight.stageDuration+flight.time;
       if(flight.phase==='boss')this.titanTime=flight.stageDuration+flight.transitionDuration+flight.time;
-      this.titan.update(flight.hiveProgress,this.titanTime,reveal,distance);
+      const coast = Math.min(flight.transitionDuration, Math.max(0, this.titanTime-flight.stageDuration));
+      const progress = Math.min(1,flight.hiveProgress + 1.6 / 144 * (coast-coast*coast/(2*flight.transitionDuration)));
+      this.titan.update(progress,this.titanTime,reveal,distance);
       this.stars.visible = this.preserveEdges.root.visible = this.shipyard.root.visible = this.backdrops.root.visible =
         this.bridge.root.visible = this.hive.root.visible = this.ice.root.visible = false;
       return;

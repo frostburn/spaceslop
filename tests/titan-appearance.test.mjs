@@ -45,18 +45,14 @@ test('the three species use distinct shell palettes and actual mip-filtered text
   assert.equal(createCicada().root.children.find(o => o.isMesh).material.map, replacement);
 });
 
-test('boss fur is much heavier than patrol fuzz and follows the posed body without hiding weakpoint anchors', () => {
+test('boss stubble is much denser than patrol stubble and follows the posed body without hiding weakpoint anchors', () => {
   const scout = createCicadaScout(), boss = createCicada(), fur = rig => {
-    const patches = []; rig.root.traverse(o => { if (o.name === 'camera-facing-setae') patches.push(o); }); return patches;
+    const patches = []; rig.root.traverse(o => { if (o.name === 'coarse-setae-patch') patches.push(o); }); return patches;
   };
   const light = fur(scout), heavy = fur(boss);
   assert.equal(light.length, 3); assert(heavy.length >= 24);
-  const opacity = patches => patches.reduce((sum, p) => sum + p.material.opacity, 0) / patches.length;
-  assert(opacity(heavy) > opacity(light) * 1.5);
-  for (const patch of [...light, ...heavy]) {
-    assert(patch.isSprite); assert(patch.material.depthTest); assert(!patch.material.depthWrite);
-    assert(patch.material.map.generateMipmaps);
-  }
+  assert(heavy.reduce((n,p)=>n+p.geometry.attributes.position.count,0)>light.reduce((n,p)=>n+p.geometry.attributes.position.count,0)*10);
+  for(const patch of [...light,...heavy]){assert(patch.isMesh);assert(!patch.material.transparent);assert(patch.material.depthWrite);}
   const headPatch = heavy.find(p => p.parent !== boss.root && !p.parent.name.startsWith('leg-'));
   boss.pose(1, 0, -2.4, 0, 0, 0); boss.root.updateMatrixWorld(true); const before = headPatch.getWorldPosition(new T.Vector3());
   boss.pose(1, 0, -2.4, 0, 0, 2); boss.root.updateMatrixWorld(true);
@@ -65,6 +61,5 @@ test('boss fur is much heavier than patrol fuzz and follows the posed body witho
     const anchor = boss.root.getObjectByName(side < 0 ? 'laser_contact_L' : 'laser_contact_R');
     assert.equal(anchor.position.x, side * 2.4); assert.equal(anchor.position.z, .88);
   }
-  const replacement = new T.Texture(); surfaces.setTitanSetaeTexture(replacement);
-  for (const patch of [...light, ...heavy]) assert.equal(patch.material.map, replacement);
+
 });

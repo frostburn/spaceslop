@@ -41,7 +41,7 @@ export function createTitanScenery(){
      gl_FragColor=vec4(max(c,vec3(0.0)),1.0);
      #include <colorspace_fragment>
     }`});
-  const mesh=new T.Mesh(geometry,material);mesh.position.z=0;mesh.frustumCulled=false;terrain.add(mesh);tiles.push(mesh);
+  const mesh=new T.Mesh(geometry,material);mesh.position.z=0;mesh.frustumCulled=true;terrain.add(mesh);tiles.push(mesh);
   for(let column=-8;column<=8;column++)for(let repeat=-1;repeat<=1;repeat++){
    if(column===0&&repeat===0)continue;
    const copy=new T.Mesh(geometry,material);copy.scale.set(Math.abs(column)%2?-1:1,Math.abs(repeat)%2?-1:1,1);terrain.add(copy);copies.push({mesh:copy,index:i,column,repeat});
@@ -82,7 +82,7 @@ export function createTitanScenery(){
  return{root,ready,get hasArt(){return hasArt;},update(progress:number,time=progress*TITAN_DURATION,ascent=0,distance=95){clock.value=time;ambient.update(progress,time);ambient.root.visible=true;clouds.update(time,ascent,distance);
   const frame=titanFrame(ascent),point=titanWorld(0,-4,ascent);terrain.rotation.x=-frame.pitch;terrain.position.set(0,point.y,point.z);
   mountains.position.y=-progress*TITAN_TRAVEL;
-  copies.forEach(({mesh,index,column,repeat})=>{const tile=titanGroundTile(index,column,repeat,progress);mesh.position.set(tile.x,tile.y,0);mesh.visible=ascent>0&&ascent<.65;});
-  tiles.forEach((mesh,i)=>{mesh.position.y=titanTileY(i,progress);mesh.visible=Math.abs(mesh.position.y)<(ascent>0?80:16.01);});
+  copies.forEach(({mesh,index,column,repeat})=>{const tile=titanGroundTile(index,column,repeat,progress);mesh.position.set(tile.x,tile.y,0);mesh.visible=true;});
+  tiles.forEach((mesh,i)=>{mesh.position.y=titanTileY(i,progress);mesh.visible=true;});
  }};
 }

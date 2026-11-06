@@ -3,8 +3,8 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { addTitanSetae, titanChitin } from './titan-insect-surfaces';
 
 // Small patrol models share all GPU resources; each pool entry owns only its pivots.
-const scoutShell = titanChitin(0x64b6ae, .62);
-const scoutRim = titanChitin(0xc0d9c4, .7);
+const scoutShell = titanChitin(0x7f9690, .74); scoutShell.vertexColors = true;
+const scoutRim = titanChitin(0xa9b3a0, .7);
 const scoutJoint = new T.MeshStandardMaterial({ color: 0x234147, roughness: .8 });
 const scoutEye = new T.MeshStandardMaterial({ color: 0xe2a94e, roughness: .24, metalness: .2 });
 const shell = titanChitin(0xb74c44, .57);
@@ -12,9 +12,9 @@ const rim = titanChitin(0xebb16c, .7);
 const joint = new T.MeshStandardMaterial({ color: 0x38212b, roughness: .83 });
 const eye = new T.MeshStandardMaterial({ color: 0x93dccc, emissive: 0x2d746b, emissiveIntensity: .3, roughness: .24, metalness: .3 });
 const wound = new T.MeshStandardMaterial({ color: 0x553923, roughness: .88 });
-const membrane = new T.MeshPhysicalMaterial({ color: 0xb6e5db, transparent: true, opacity: .38,
+const membrane = new T.MeshPhysicalMaterial({ color: 0xb5c4b6, transparent: true, opacity: .38,
   roughness: .28, metalness: .08, clearcoat: .7, side: T.DoubleSide, depthWrite: false });
-const vein = new T.LineBasicMaterial({ color: 0xd3ebd0, transparent: true, opacity: .8, depthWrite: false });
+const vein = new T.LineBasicMaterial({ color: 0xc0c9b4, transparent: true, opacity: .8, depthWrite: false });
 const orb = new T.SphereGeometry(1, 16, 10);
 const up = new T.Vector3(0, 1, 0);
 
@@ -62,7 +62,17 @@ function scoutGeometry() {
   lines.push(.39, -.12, .006, .48, -.66, .006, .66, -.33, .006, .75, -.85, .006,
     .87, -.57, .006, .98, -.83, .006);
   const veins = new T.BufferGeometry(); veins.setAttribute('position', new T.Float32BufferAttribute(lines, 3));
-  return { body: merge(body), ribs: merge(ribs), legs: merge(legs), eyes: merge(eyes), wing, veins };
+  const carapace = merge(body), positions = carapace.attributes.position, uv = carapace.attributes.uv, colors: number[] = [];
+  const spots = [[-.19,.34,.22],[.21,-.15,.26],[-.12,-.62,.17],[.11,.56,.13]];
+  for (let i=0;i<positions.count;i++) {
+    const x=positions.getX(i),y=positions.getY(i);
+    uv.setXY(i,x*.73+y*.21+.27,y*.65-x*.18+.45);
+    const stain = spots.reduce((v,[cx,cy,r])=>v+Math.exp(-((x-cx)**2+(y-cy)**2)/(r*r)),0);
+    const value = Math.max(.52,1-stain*.28);
+    colors.push(value,value*.98,value*.94);
+  }
+  carapace.setAttribute('color',new T.Float32BufferAttribute(colors,3));
+  return { body: carapace, ribs: merge(ribs), legs: merge(legs), eyes: merge(eyes), wing, veins };
 }
 
 export function createCicadaScout() {
