@@ -1,7 +1,9 @@
+import { IO_DURATION } from './io-layout';
 import { TITAN_DURATION } from './titan-layout';
 import { ICE_DURATION } from './ice-layout';
 
 export const levels = {
+  io: { name: 'Io · Caldera slice', sector: 'IO', boss: 'CALDERA ENGINE', duration: IO_DURATION },
   titan: { name: 'Titan · Research station', sector: 'TITAN', boss: 'TITAN CICADA', duration: TITAN_DURATION },
   ice: { name: 'Frostwake · Ice field', sector: 'FROSTWAKE', boss: 'LEVIATHAN', duration: ICE_DURATION },
   preserve: { name: 'Overgrown preserve', sector: 'SECTOR 01', boss: 'INTERCEPTOR', duration: 14 },
