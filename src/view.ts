@@ -3,6 +3,7 @@ import {SHRIMP_POOL,WORM_POOL,faunaMuzzle} from './vent-fauna';
 import {createMortarAssets,createVentMortar} from './vent-mortar-rig';
 import {MORTAR_POOL} from './vent-mortar';
 import {createVentScenery} from './vent-scenery';
+import {createBurnerBubbles} from './vent-effects';
 import {createVentBoss} from './vent-boss';
 import {ventCameraRise,ventBossReveal,ventAnchors,VENT_SPAWN_LEAD,ventAnchorPoint,VENT_DURATION,VENT_APPROACH,VENT_CAMERA_DISTANCE,VENT_PITCH,ventBossPose,ventWorld,ventFrame} from './vent-layout';
 import { createCrucible, createSlag } from './io-crucible-rig';
@@ -111,6 +112,8 @@ export class FlightView {
   private marineModels: (T.Object3D | undefined)[] = [];
   private hiveBoss = createHiveGuardian(BOSS_CANNON_X);
   private ants = Array.from({ length: 12 }, () => createAntRig());
+  private bubbles=createBurnerBubbles();
+  private bubbleSources:T.Mesh[]=[];
   private playerBurners = shipBurners(this.player.root);
   private bossBurners = shipBurners(this.boss.root);
   private raptor = createRaptorRig();
@@ -215,13 +218,15 @@ export class FlightView {
     const pods = this.wingPods.flatMap((side) => side.map(({ root }) => root));
     for(const rig of [this.player.root,this.drone,...pods])rig.traverse(o=>{if(o instanceof T.Mesh&&!([o.material].flat().some(m=>m.transparent))){o.castShadow=true;o.receiveShadow=true;}});
     const ammo = Object.values(this.projectiles).map(({ root }) => root);
-    this.texturesReady = Promise.all([this.backdrops.ready, this.hive.ready, this.ice.ready, this.titan.ready, Promise.all([this.vents.ready,loadEncounterTexture('ventMortar',this.mortarAssets.setAtlas),loadEncounterTexture('ventFauna',this.faunaAssets.setAtlas),loadEncounterTexture('ventWorm',this.wormAssets.setAtlas),loadEncounterTexture('ventCrab',this.ventBoss.setAtlas)]),
+    this.texturesReady = Promise.all([this.backdrops.ready, this.hive.ready, this.ice.ready, this.titan.ready, Promise.all([this.vents.ready,loadEncounterTexture('ventMortar',this.mortarAssets.setAtlas),loadEncounterTexture('ventFauna',this.faunaAssets.setAtlas),loadEncounterTexture('ventWorm',this.wormAssets.setAtlas),loadEncounterTexture('ventCrab',this.ventBoss.setAtlas)]).then(textures=>textures.flat()),
       Promise.all([loadEncounterTexture('marine', setMarineTexture, 1), loadEncounterTexture('ioBasalt',setIoRockTexture,1), loadEncounterTexture('ioCeramic',setIoCeramicTexture,1)]), loadEncounterTextures(this.boss, this.raptor,
       [this.player.root, scout, this.drone, this.bridge.root, this.ice.root, ...pods, ...ammo, ...this.drops.map(({ root }) => root), this.io.root, this.skippers[0].root, this.crucibles[0].root])]).then(textures=>{this.surfacesReady=true;return textures;});
     this.enemies = Array.from({ length: 12 }, () => {
       const root = scout.clone();
       return { root, burners: shipBurners(root) };
     });
+    this.bubbleSources=[...this.playerBurners,...this.droneBurners,...pods.flatMap(shipBurners),...this.enemies.flatMap(r=>r.burners)];
+    this.plane.add(this.bubbles.root);
     this.towline.add(this.towlineGlow, this.towlineCore);
     this.playerMuzzle.root.position.set(0, 0.89, 0.045);
     this.droneMuzzle.root.position.set(0, 0.31, 0.06);
@@ -271,7 +276,7 @@ export class FlightView {
     const boss: T.Object3D[] = [this.cicada.root, this.leviathan.root, this.boss.root, this.cannonMarker, ...this.markers];
     if (!this.backdrops.hasShipyard) boss.push(this.shipyard.root);
     const pods = this.wingPods.map((side) => side.map(({ root }) => root));
-    const ordnance = [this.player.root, this.drone, ...Object.values(this.projectiles).map(({ root }) => root), this.combat.root,
+    const ordnance = [this.bubbles.root,this.player.root, this.drone, ...Object.values(this.projectiles).map(({ root }) => root), this.combat.root,
       this.playerMuzzle.root, this.droneMuzzle.root, ...this.drops.slice(0, 4).map(({ root }) => root)];
     const marine = [...this.ichthyosaurs, ...this.plesiosaurs].map(r=>r.root);
     const marineBatches = Array.from({length:Math.ceil(marine.length/3)},(_,i)=>marine.slice(i*3,i*3+3));
@@ -303,6 +308,7 @@ export class FlightView {
       this.renderer.setScissorTest(true);
       try {
         this.ice.capture(this.renderer, camera);
+        this.vents.capture(this.renderer,this.scene,camera);
         this.renderer.render(this.scene, camera);
       } finally {
         objects.forEach((object, index) => { object.visible = visible[index]; });
@@ -330,6 +336,7 @@ export class FlightView {
     if (newFlight) {
       this.iceTime = 0;this.titanTime=0;this.ioTime=0;this.ventTime=0;
       this.seenShots = new WeakSet(); this.seenDrops = new WeakMap(); this.previousDrops = [];
+      this.bubbles.reset();
       this.enemyVitals.clear(); this.combat.clear(); this.playerMuzzle.clear(); this.droneMuzzle.clear();
       this.previousBossHealth = flight.bossHealth; this.previousBossLaserDamage = flight.bossLaserDamage;
       this.previousHull = flight.hull; this.bossHitAt = -1;
@@ -603,7 +610,10 @@ export class FlightView {
     this.pulse.position.copy(this.player.root.position);
     this.pulse.scale.setScalar(1 + (0.3 - flight.pulseFlash) * 25);
     this.pulse.material.opacity = flight.pulseFlash / 0.3;
+    this.bubbles.root.visible=flight.level==='vents';
+    if(this.bubbles.root.visible)this.bubbles.update(this.plane,this.bubbleSources,newFlight?0:elapsed,this.animationTime,this.renderer);
     this.ice.capture(this.renderer, camera);
+    this.vents.capture(this.renderer,this.scene,camera);
     this.renderer.render(this.scene, camera);
   }
 

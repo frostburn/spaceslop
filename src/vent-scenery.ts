@@ -1,8 +1,9 @@
 import * as T from 'three';
 import {createVentFormations,ventTierTint,type VentFormation} from './vent-formations';
 import {createVentGeology} from './vent-geology';
-import {createVentAtlas,ventCardGeometry,ventCardRelief} from './vent-atlas';
+import {createVentAtlas,ventCardGeometry,ventCardRelief,ventTallCell} from './vent-atlas';
 import {loadEncounterTexture} from './encounter-texture';
+import {createVentHeat} from './vent-effects';
 import {ioNoise} from './io-layout';
 import {VENT_SHAFT_Y,VENT_STAGE_PITCH,ventFrame,ventWorld,ventBossPose} from './vent-layout';
 
@@ -11,21 +12,23 @@ export function createVentScenery(){
  const root=new T.Group();root.name='hydrothermal-vents';root.visible=false;
  const world=new T.Group();root.add(world);world.add(createVentGeology());
  const atlas=createVentAtlas(),material=new T.MeshBasicMaterial({map:atlas,alphaTest:.15,side:T.DoubleSide});
- const ready=loadEncounterTexture('ventAtlas',texture=>{texture.anisotropy=4;material.map=texture;material.needsUpdate=true;});
- const rng=random(52391),formations=createVentFormations(),batches=Array.from({length:8},()=>[] as VentFormation[]),emitters:{x:number;y:number;z:number;pale:boolean}[]=[];
+ const extraMaterial=material.clone();extraMaterial.map=createVentAtlas(true);
+ const ready=Promise.all([loadEncounterTexture('ventAtlas',texture=>{texture.anisotropy=4;material.map=texture;material.needsUpdate=true;}),loadEncounterTexture('ventExtras',texture=>{texture.anisotropy=4;extraMaterial.map=texture;extraMaterial.needsUpdate=true;})]);
+ const rng=random(52391),formations=createVentFormations(),batches=Array.from({length:16},()=>[] as VentFormation[]),emitters:{x:number;y:number;z:number;pale:boolean}[]=[];
  const matrix=new T.Matrix4(),p=new T.Vector3(),q=new T.Quaternion(),scale=new T.Vector3();
  for(const f of formations){
   batches[f.cell].push(f);
-  if(f.cell===2||f.cell===3)emitters.push({x:f.x,y:f.y+f.h*.27-ventCardRelief(f.cell,.77)*f.h/7.5*Math.tan(VENT_STAGE_PITCH),z:f.z+ventCardRelief(f.cell,.77)*f.h/7.5+.1,pale:f.cell===3});
-  if(f.front&&(f.cell===5||f.cell===7))emitters.push({x:f.x-(f.cell===7?f.w*.07:0),y:f.y-.1,z:f.z+f.h*.375,pale:f.x>0});
+  if(ventTallCell(f.cell))for(const offset of f.cell===10?[-.19,0,.19]:[0])emitters.push({x:f.x+offset*f.w,y:f.y+f.h*.27-ventCardRelief(f.cell,.77)*f.h/7.5*Math.tan(VENT_STAGE_PITCH),z:f.z+ventCardRelief(f.cell,.77)*f.h/7.5+.1,pale:f.cell===3});
+  if(f.front&&(f.cell===5||f.cell===7||f.cell===14))emitters.push({x:f.x-(f.cell===7?f.w*.07:0),y:f.y-.1,z:f.z+f.h*.375,pale:f.x>0});
  }
- for(let cell=0;cell<8;cell++){
-  const mesh=new T.InstancedMesh(ventCardGeometry(cell),material,batches[cell].length);mesh.name=`vent-raster-layer-${cell}`;mesh.frustumCulled=false;
+ for(let cell=0;cell<16;cell++){
+  const mesh=new T.InstancedMesh(ventCardGeometry(cell),cell<8?material:extraMaterial,batches[cell].length);mesh.name=`vent-raster-layer-${cell}`;mesh.frustumCulled=false;
   batches[cell].forEach((f,i)=>{
-   p.set(f.x,f.y,f.z);q.setFromEuler(new T.Euler(f.front?Math.PI/2:0,0,f.angle,f.front?'ZXY':'XYZ'));scale.set(f.w,f.h,f.cell===2||f.cell===3?f.h/7.5:1);matrix.compose(p,q,scale);mesh.setMatrixAt(i,matrix);
+   p.set(f.x,f.y,f.z);q.setFromEuler(new T.Euler(f.front?Math.PI/2:0,0,f.angle,f.front?'ZXY':'XYZ'));scale.set(f.w,f.h,ventTallCell(f.cell)?f.h/7.5:1);matrix.compose(p,q,scale);mesh.setMatrixAt(i,matrix);
    const tint=ventTierTint[f.tier],depth=f.front?Math.max(.2,1+Math.min(0,f.z)*.015):1;mesh.setColorAt(i,new T.Color().setRGB(tint[0]*depth,tint[1]*depth,tint[2]*depth));
   });world.add(mesh);
  }
+ const heat=createVentHeat(emitters);world.add(heat.root);
  const n=64,data=new Uint8Array(n*n*4);
  for(let y=0;y<n;y++)for(let x=0;x<n;x++){const radius=Math.hypot((x+.5)/n*2-1,(y+.5)/n*2-1),a=Math.max(0,1-radius)**1.2*(.55+ioNoise(x/7+10,y/7+20)*.45);data.set([255,255,255,a*255],(y*n+x)*4);}
  const mask=new T.DataTexture(data,n,n);mask.generateMipmaps=true;mask.minFilter=T.LinearMipmapLinearFilter;mask.magFilter=T.LinearFilter;mask.needsUpdate=true;
@@ -42,7 +45,7 @@ export function createVentScenery(){
  const moteMaterial=new T.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{clock:{value:0}},vertexShader:`uniform float clock;void main(){vec3 p=position;p.x+=sin(clock*.18+position.y)*.12;p.z+=sin(clock*.1+position.x)*.12;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);gl_PointSize=1.6;}`,fragmentShader:`void main(){float r=length(gl_PointCoord-.5)*2.;gl_FragColor=vec4(.45,.67,.69,(1.-smoothstep(.2,1.,r))*.18);}`});
  const particles=new T.Points(motesGeometry,moteMaterial);particles.name='suspended-vent-particles';world.add(particles);
  function update(time:number,rise:number,_alive=true){
-  const frame=ventFrame(time,rise),origin=ventWorld(0,0,0,time,rise);world.rotation.set(-frame.pitch,0,frame.yaw,'XYZ');world.position.set(origin.x,origin.y,origin.z);moteMaterial.uniforms.clock.value=time;
+  const frame=ventFrame(time,rise),origin=ventWorld(0,0,0,time,rise);world.rotation.set(-frame.pitch,0,frame.yaw,'XYZ');world.position.set(origin.x,origin.y,origin.z);moteMaterial.uniforms.clock.value=time;heat.update(time);
   for(let i=0;i<count;i++){
    const e=emitters[Math.floor(i/10)],t=(time*.10+(i%10)/10+Math.floor(i/10)*.37)%1;
    p.set(e.x+Math.sin(i*2.4+t*3)*t*.65,e.y+t*.45,e.z+t*5.5);q.identity();scale.set(1+t*2.4,1.2+t*2.7,1);matrix.compose(p,q,scale);clouds.setMatrixAt(i,matrix);alpha.setX(i,Math.sin(t*Math.PI)*(e.pale?.19:.4));tint.setXYZ(i,e.pale?.38:.035,e.pale?.50:.065,e.pale?.51:.08);
@@ -51,5 +54,5 @@ export function createVentScenery(){
 
  }
  update(0,0);
- return{root,world,ready,update,frame:ventFrame,bossPose:ventBossPose};
+ return{root,world,ready,update,capture(renderer:T.WebGLRenderer,scene:T.Scene,camera:T.Camera){if(root.visible)heat.capture(renderer,scene,camera);},frame:ventFrame,bossPose:ventBossPose};
 }

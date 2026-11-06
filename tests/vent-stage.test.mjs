@@ -45,9 +45,9 @@ test('the corridor has an actual abyss gap and a cliff drop, with floor cards se
  const p=shelf.geometry.attributes.position;
  for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i);assert(Math.hypot(x,y-v.VENT_SHAFT_Y)>=v.VENT_SHAFT_RADIUS-.0001,'seabed caps the shaft');}
  wall.geometry.computeBoundingBox();assert(wall.geometry.boundingBox.min.z<-35);assert(wall.geometry.boundingBox.max.z>=1.4);
- for(let cell=0;cell<8;cell++){
+ for(let cell=0;cell<16;cell++){
   const uv=ventCardGeometry(cell).attributes.uv;
-  for(let i=0;i<uv.count;i++){assert(uv.getX(i)>cell%4/4&&uv.getX(i)<(cell%4+1)/4);assert(cell<4?uv.getY(i)>.5:uv.getY(i)<.5);}
+  for(let i=0;i<uv.count;i++){assert(uv.getX(i)>cell%4/4&&uv.getX(i)<(cell%4+1)/4);assert(cell%8<4?uv.getY(i)>.5:uv.getY(i)<.5);}
  }
 });
 
@@ -91,12 +91,12 @@ test('middle and distant formations clear the seabed across their footprints and
 
 test('vent mouths stand above base shelves and the chasm steps inward towards the deep seabed',async()=>{
  const {createVentFormations}=await server.ssrLoadModule('/src/vent-formations.ts'),{ventCardRelief}=await server.ssrLoadModule('/src/vent-atlas.ts');
- const f=createVentFormations(),near=f.filter(p=>p.tier==='near'),low=near.filter(p=>p.cell<2),towers=near.filter(p=>p.cell===2||p.cell===3);
+ const f=createVentFormations(),near=f.filter(p=>p.tier==='near'),low=near.filter(p=>p.cell<2),towers=near.filter(p=>p.cell===2||p.cell===3||p.cell===10);
  const highestShelf=Math.max(...low.map(p=>p.z));
  for(const p of towers){assert(p.z+ventCardRelief(p.cell,.77)*p.h/7.5>highestShelf+.1,'base-level shelf can cover a vent mouth');assert.equal(p.angle,0);}
  const mean=tier=>{const a=f.filter(p=>p.tier===tier);return a.reduce((n,p)=>n+Math.abs(p.x),0)/a.length;};
  assert(mean('near')>mean('middle'));assert(mean('middle')>mean('deep'));
- for(const cell of [2,3]){
+ for(const cell of [2,3,10]){
   const g=ventCardGeometry(cell);g.computeBoundingBox();assert(g.boundingBox.max.z-g.boundingBox.min.z>5);
   const p=g.attributes.position;for(let i=0;i<p.count;i++){
    const originalV=1-Math.floor(i/2)/g.parameters.heightSegments;

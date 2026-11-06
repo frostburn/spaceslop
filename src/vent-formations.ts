@@ -13,21 +13,23 @@ export function createVentFormations(){
   // A V in cross-section: low near shelves stay outboard, middle terraces
   // step inward, and the distant seabed is visible down the central channel.
   const w=5.2+rng()*.9,x=side*(4+w/2+rng()*.35),bankZ=ventBankHeight(x,y)-.55;
-  card(variant%2,x,y,bankZ,w,6.2+rng()*.8,'near',false,(rng()-.5)*.15);
-  if(vent){const vx=side*(4.55+rng()*.3);card(variant%2?2:3,vx,y+.8,ventBankHeight(vx,y)+.7,4.4+rng()*.3,5.8+rng()*.6,'near');}
+  const section=y<36?0:y<76?1:y<112?2:3;
+  const lowCell=variant%3===0?variant%2:section===0?(variant%2?8:9):section===1?9:11;
+  card(lowCell,x,y,bankZ,w,6.2+rng()*.8,'near',false,(rng()-.5)*.15);
+  if(vent){const vx=side*(4.55+rng()*.3);card(section>=1&&variant%2?10:variant%2?2:3,vx,y+.8,ventBankHeight(vx,y)+.7,4.4+rng()*.3,5.8+rng()*.6,'near');}
   if(y<133){
    const midVent=variant%4>=2;
    card(midVent?variant%4:variant%2,side*(midVent?3.5+rng()*.35:4.5+rng()*.4),y+2,-6.7-rng()*.6,midVent?3.7:5.5,midVent?5.0:8.0,'middle',false,midVent?0:(rng()-.5)*.25);
-   card(variant%2,side*(3.6+rng()*.5),y-1.5,-12.5-rng()*.7,4.8+rng()*.6,9+rng()*1.5,'deep',false,(rng()-.5)*.35);
+   card(variant%3===0?variant%2:section===0?8:section===1?9:11,side*(3.6+rng()*.5),y-1.5,-12.5-rng()*.7,4.8+rng()*.6,9+rng()*1.5,'deep',false,(rng()-.5)*.35);
   }
  }
  for(const a of ventAnchors)card(1,a.x,a.y,1.0,2.3,3.3,'near');
  for(let index=0;index<32;index++){
   const angle=index/32*Math.PI*2,r=VENT_SHAFT_RADIUS-.45,x=Math.sin(angle)*r,y=VENT_SHAFT_Y+Math.cos(angle)*r;
-  card(4+index%4,x,y,ventRimHeight(angle)+3.6,4.8+rng()*1.6,7+rng()*3,'rim',true,-angle);
+  card(index%2?12+index%4:4+index%4,x,y,ventRimHeight(angle)+3.6,4.8+rng()*1.6,7+rng()*3,'rim',true,-angle);
   for(let row=0;row<3;row++){
    const a=angle+(row%2?.08:0),radius=VENT_SHAFT_RADIUS-.45;
-   card(4+(index+row)%4,Math.sin(a)*radius,VENT_SHAFT_Y+Math.cos(a)*radius,-7-row*17-rng()*9,6.0+rng()*2.0,14+row*3+rng()*8,'back',true,-a);
+   card(index%2?12+(index+row)%4:4+(index+row)%4,Math.sin(a)*radius,VENT_SHAFT_Y+Math.cos(a)*radius,-7-row*17-rng()*9,6.0+rng()*2.0,14+row*3+rng()*8,'back',true,-a);
   }
  }
 
