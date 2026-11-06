@@ -1,9 +1,10 @@
 import * as T from 'three';
+import {createVentFormations,ventTierTint,type VentFormation} from './vent-formations';
 import {createVentGeology} from './vent-geology';
 import {createVentAtlas,ventCardGeometry} from './vent-atlas';
 import {loadEncounterTexture} from './encounter-texture';
 import {ioNoise} from './io-layout';
-import {VENT_DURATION,VENT_APPROACH,VENT_PITCH,ventFrame,ventWorld,ventFloor,ventCliffEdge,ventFarEdge,ventFarFloor,ventBossPose,ventAnchors} from './vent-layout';
+import {VENT_PITCH,ventFrame,ventWorld,ventFarFloor,ventBossPose} from './vent-layout';
 
 function random(seed:number){return()=>{seed=(Math.imul(seed,1664525)+1013904223)|0;return(seed>>>0)/4294967296;};}
 export function createVentScenery(){
@@ -11,33 +12,19 @@ export function createVentScenery(){
  const world=new T.Group();root.add(world);world.add(createVentGeology());
  const atlas=createVentAtlas(),material=new T.MeshBasicMaterial({map:atlas,alphaTest:.15,side:T.DoubleSide});
  const ready=loadEncounterTexture('ventAtlas',texture=>{texture.anisotropy=4;material.map=texture;material.needsUpdate=true;});
- const rng=random(52391),batches=Array.from({length:8},()=>[] as T.Matrix4[]),emitters:{x:number;y:number;z:number;pale:boolean}[]=[];
- const matrix=new T.Matrix4(),p=new T.Vector3(),q=new T.Quaternion(),scale=new T.Vector3(),axis=new T.Vector3(0,0,1);
- function card(cell:number,x:number,y:number,z:number,w:number,h:number,front=false,angle=0){
-  p.set(x,y,z);q.setFromEuler(new T.Euler(front?Math.PI/2:0,0,angle));scale.set(w,h,1);matrix.compose(p,q,scale);batches[cell].push(matrix.clone());
+ const rng=random(52391),formations=createVentFormations(),batches=Array.from({length:8},()=>[] as VentFormation[]),emitters:{x:number;y:number;z:number;pale:boolean}[]=[];
+ const matrix=new T.Matrix4(),p=new T.Vector3(),q=new T.Quaternion(),scale=new T.Vector3();
+ for(const f of formations){
+  batches[f.cell].push(f);
+  if(f.cell===2||f.cell===3)emitters.push({x:f.x,y:f.y+f.h*.27,z:f.z+.1,pale:f.cell===3});
+  if(f.front&&(f.cell===5||f.cell===7))emitters.push({x:f.x-(f.cell===7?f.w*.07:0),y:f.y-.1,z:f.z+f.h*.375,pale:f.x>0});
  }
- for(let y=-12,index=0;y<150;y+=5.2,index++)for(const side of [-1,1]){
-  const variant=index+(side>0?1:0),x=side*(4.8+rng()*1.1),vent=variant%3===1,cell=vent?(variant%2?2:3):variant%2;
-  const w=4.5+rng()*1.5,h=6.5+rng()*2.2,z=ventFloor(x,y)+.09;
-  card(cell,x,y,z,w,h,false,(rng()-.5)*.25);
-  if(vent)emitters.push({x,y:y+h*.27,z:z+.1,pale:cell===3});
-  card(index%2===0?0:1,side*(9+rng()*4),y+1,-3-rng()*2,7,10,false,rng()*.3);
- }
- for(const a of ventAnchors)card(1,a.x,a.y,1.0,2.3,3.3);
- // The back rim is world-fixed vertical artwork; its top edges become visible
- // as we face the abyss. Floor modules remain horizontal and pass below us.
- for(let x=-21,index=0;x<=21;x+=4.3,index++){
-  const y=ventFarEdge(x)+2.5,z=3.5+rng()*2,cell=4+index%3,w=4.5+rng()*2.7,h=6+rng()*3.8;
-  card(cell,x+(rng()-.5)*.8,y,z,w,h,true);
-  if(cell===5)emitters.push({x,y:y-.1,z:z+h*.375,pale:x>0});
-  const backX=x+(rng()-.5)*2,backY=y+6+rng()*3,backZ=6+rng()*2,backW=6+rng()*3,backH=10+rng()*6,back=index%3===0?5:7;
-  card(back,backX,backY,backZ,backW,backH,true);
-  emitters.push({x:backX-(back===7?backW*.07:0),y:backY-.1,z:backZ+backH*.36,pale:index%2===0});
- }
- const cards:T.InstancedMesh[]=[];
  for(let cell=0;cell<8;cell++){
   const mesh=new T.InstancedMesh(ventCardGeometry(cell),material,batches[cell].length);mesh.name=`vent-raster-layer-${cell}`;mesh.frustumCulled=false;
-  batches[cell].forEach((m,i)=>{mesh.setMatrixAt(i,m);mesh.setColorAt(i,new T.Color().setRGB(cell>=4?.55:.76,cell>=4?.7:.9,cell>=4?.76:.95));});world.add(mesh);cards.push(mesh);
+  batches[cell].forEach((f,i)=>{
+   p.set(f.x,f.y,f.z);q.setFromEuler(new T.Euler(f.front?Math.PI/2:0,0,f.angle));scale.set(f.w,f.h,1);matrix.compose(p,q,scale);mesh.setMatrixAt(i,matrix);
+   const tint=ventTierTint[f.tier];mesh.setColorAt(i,new T.Color().setRGB(tint[0],tint[1],tint[2]));
+  });world.add(mesh);
  }
  const n=64,data=new Uint8Array(n*n*4);
  for(let y=0;y<n;y++)for(let x=0;x<n;x++){const radius=Math.hypot((x+.5)/n*2-1,(y+.5)/n*2-1),a=Math.max(0,1-radius)**1.2*(.55+ioNoise(x/7+10,y/7+20)*.45);data.set([255,255,255,a*255],(y*n+x)*4);}

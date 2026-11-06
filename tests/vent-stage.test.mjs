@@ -72,3 +72,19 @@ test('prototype boss weakpoints match ordinary boss combat and every wing weapon
   assert(f.bossHealth<30,weapon);
  }
 });
+
+test('middle and distant formations clear the seabed across their footprints and scroll at distinct projected depths',async()=>{
+ const {createVentFormations}=await server.ssrLoadModule('/src/vent-formations.ts'),formations=createVentFormations();
+ const middle=formations.filter(f=>f.tier==='middle'),deep=formations.filter(f=>f.tier==='deep');assert(middle.length>30);assert(deep.length>30);
+ for(const f of [...middle,...deep]){
+  for(const dx of [-f.w/2,0,f.w/2])for(const dy of [-f.h/2,0,f.h/2]){
+   const x=f.x+dx*Math.cos(f.angle)-dy*Math.sin(f.angle),y=f.y+dx*Math.sin(f.angle)+dy*Math.cos(f.angle);
+   assert(f.z-v.ventFloor(x,y)>1,'opaque seabed covers a raster formation');
+  }
+ }
+ const projected=(z,t)=>{const p=v.ventWorld(4,50,z,t,0),scale=v.VENT_CAMERA_DISTANCE/(v.VENT_CAMERA_DISTANCE-p.z);return p.y*scale;};
+ const rates=[-2,-7,-13].map(z=>projected(z,25.1)-projected(z,25));
+ assert(Math.abs(rates[0]-rates[1])>.005);assert(Math.abs(rates[1]-rates[2])>.005);
+ const geology=createVentGeology(),material=geology.getObjectByName('finite-corridor-shelves').material;
+ assert(material.map.isDataTexture);assert.equal(material.map,material.bumpMap);assert(material.map.generateMipmaps);
+});

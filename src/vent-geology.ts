@@ -1,13 +1,30 @@
 import * as T from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {ioNoise} from './io-layout';
+import {ioTriplanar} from './io-surface';
 import {ventFloor,ventCliffEdge,ventFarEdge,ventFarFloor} from './vent-layout';
 
+let basalt:T.DataTexture|undefined;
+function basaltRelief(){
+ if(basalt)return basalt;
+ const n=128,data=new Uint8Array(n*n*4);
+ const hash=(x:number,y:number)=>{let h=Math.imul((x%8+8)%8,374761393)^Math.imul((y%8+8)%8,668265263);h=Math.imul(h^(h>>>13),1274126177);return((h^(h>>>16))>>>0)/4294967296;};
+ for(let y=0;y<n;y++)for(let x=0;x<n;x++){
+  const u=x/n*8,v=y/n*8,cx=Math.floor(u),cy=Math.floor(v);let first=10,second=10;
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+   const a=cx+dx,b=cy+dy,d=Math.hypot(u-a-.1-hash(a,b)*.8,v-b-.1-hash(a+3,b+5)*.8);
+   if(d<first){second=first;first=d;}else if(d<second)second=d;
+  }
+  const crack=Math.min(1,(second-first)*14),grain=ioNoise(x*.7+20,y*.7+10),value=(.40+crack*.36+grain*.12)*255;
+  data.set([value,value,value,255],(y*n+x)*4);
+ }
+ basalt=new T.DataTexture(data,n,n);basalt.wrapS=basalt.wrapT=T.RepeatWrapping;basalt.generateMipmaps=true;basalt.minFilter=T.LinearMipmapLinearFilter;basalt.magFilter=T.LinearFilter;basalt.needsUpdate=true;return basalt;
+}
 export function createVentGeology(){
  const root=new T.Group();root.name='vent-cliff-geology';
- const material=new T.MeshStandardMaterial({vertexColors:true,roughness:.98,side:T.DoubleSide});
+ const relief=basaltRelief(),material=ioTriplanar(new T.MeshStandardMaterial({vertexColors:true,map:relief,bumpMap:relief,bumpScale:.22,roughness:.98,side:T.DoubleSide}),.20);
  const tint=new T.Color(),positions:number[]=[],colors:number[]=[],indices:number[]=[];
- function vertex(x:number,y:number,z:number,shade:number){positions.push(x,y,z);tint.setRGB(.018*shade,.040*shade,.048*shade);colors.push(tint.r,tint.g,tint.b);}
+ function vertex(x:number,y:number,z:number,shade:number){positions.push(x,y,z);tint.setRGB(.012*shade,.018*shade,.020*shade);colors.push(tint.r,tint.g,tint.b);}
  function grid(front:boolean){
   const start=positions.length/3,cols=48,rows=front?18:90;
   for(let j=0;j<=rows;j++)for(let i=0;i<=cols;i++){

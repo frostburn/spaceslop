@@ -22,7 +22,13 @@ export function ventWorld(x:number,y:number,z:number,time:number,rise:number){
 export function ventCliffEdge(x:number){return VENT_CLIFF_Y+Math.sin(x*.35)*.6;}
 export function ventFarEdge(x:number){const t=Math.min(1,Math.abs(x)/9);return 168.5+2.5*t*t;}
 export function ventFarFloor(x:number,y:number){return 1.5+Math.sin(x*.7+y*.4)*.18;}
-export function ventFloor(x:number,y:number){return -2+Math.sin(x*.7+y*.19)*.15+Math.sin(y*.7+x*.3)*.08;}
+export function ventBankHeight(x:number,y:number){return -2+Math.sin(x*.7+y*.19)*.15+Math.sin(y*.7+x*.3)*.08;}
+export function ventFloor(x:number,y:number){
+ // Deep seabed under the raster terraces. Only the last stretch rises into the
+ // solid cliff lip; it must not cover the middle/deep formations along the route.
+ const lip=ventSmooth((y-135)/18);
+ return -16.5+(ventBankHeight(x,y)+16.5)*lip+Math.sin(x*.5+y*.12)*.22*(1-lip);
+}
 export function ventBossPose(rise:number){
  const endY=VENT_END_SCROLL+4.2*Math.cos(VENT_PITCH)+12*Math.sin(VENT_PITCH);
  const endZ=6+4.2*Math.sin(VENT_PITCH)-12*Math.cos(VENT_PITCH);
