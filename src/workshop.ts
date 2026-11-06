@@ -1,3 +1,5 @@
+import {createMortarAssets,createVentMortar} from './vent-mortar-rig';
+import {MORTAR_FIRST_FIRE,MORTAR_INTERVAL} from './vent-mortar';
 import {createCrucible,createSlag} from './io-crucible-rig';
 import {CRUCIBLE_FIRST_POUR,CRUCIBLE_POUR_INTERVAL,crucibleValve} from './io-crucible';
 import {setIoRockTexture,setIoCeramicTexture} from './io-materials';
@@ -136,7 +138,10 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   for (const part of centipede) centipedeRoot.add(part.root);
   const caldera=createCaldera(),skipper=createSkipper();skipper.root.rotation.z=Math.PI;
   const burner=createIoBurnerStudy(),crucible=createCrucible(),slag=createSlag();
+  const mortarAssets=createMortarAssets(),mortar=createVentMortar(mortarAssets);
+  void loadEncounterTexture('ventMortar',mortarAssets.setAtlas);
   const assets = {
+    vent_mortar:{root:mortar.root,duration:6,pose(time:number){const next=MORTAR_FIRST_FIRE+Math.max(0,Math.floor((time-MORTAR_FIRST_FIRE)/MORTAR_INTERVAL)+1)*MORTAR_INTERVAL;const p=mortar.pose(time,next,Math.sin(time*.5)*.6);return p.recoil>0?'pearl volley / recoil':p.charge>0?'shell opening / charge':'tracking / folded shell';}},
     crucible: {root:crucible.root,duration:7.2,pose(time:number){const next=CRUCIBLE_FIRST_POUR+Math.max(0,Math.floor((time-CRUCIBLE_FIRST_POUR)/CRUCIBLE_POUR_INTERVAL)+1)*CRUCIBLE_POUR_INTERVAL;crucible.pose(time,crucibleValve(time,next));return 'valve charge / molten pour';}},
     slag: {root:slag.root,duration:2,pose(time:number){slag.pose(time);return time<.9?'molten droplet':'cooled · shootable slag';}},
     burner: {root:burner.root,duration:6,bounds:new T.Box3(new T.Vector3(-.6,-.6,0),new T.Vector3(.6,.6,3.6)),pose:burner.pose},

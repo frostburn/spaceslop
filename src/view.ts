@@ -1,3 +1,5 @@
+import {createMortarAssets,createVentMortar} from './vent-mortar-rig';
+import {MORTAR_POOL} from './vent-mortar';
 import {createVentScenery} from './vent-scenery';
 import {createVentBoss} from './vent-boss';
 import {VENT_DURATION,VENT_APPROACH,VENT_CAMERA_DISTANCE,VENT_PITCH,ventBossPose,ventWorld,ventFrame} from './vent-layout';
@@ -86,6 +88,9 @@ export class FlightView {
   private crucibleModels:(T.Object3D|undefined)[]=[];
   private vents=createVentScenery();
   private ventBoss=createVentBoss();
+  private mortarAssets=createMortarAssets();
+  private mortars=Array.from({length:MORTAR_POOL},()=>createVentMortar(this.mortarAssets));
+  private mortarModels:(T.Object3D|undefined)[]=[];
   private ventTime=0;
   private ioTime = 0;
   private ioPitch = 0;
@@ -202,7 +207,7 @@ export class FlightView {
     const pods = this.wingPods.flatMap((side) => side.map(({ root }) => root));
     for(const rig of [this.player.root,this.drone,...pods])rig.traverse(o=>{if(o instanceof T.Mesh&&!([o.material].flat().some(m=>m.transparent))){o.castShadow=true;o.receiveShadow=true;}});
     const ammo = Object.values(this.projectiles).map(({ root }) => root);
-    this.texturesReady = Promise.all([this.backdrops.ready, this.hive.ready, this.ice.ready, this.titan.ready, Promise.all([this.vents.ready]),
+    this.texturesReady = Promise.all([this.backdrops.ready, this.hive.ready, this.ice.ready, this.titan.ready, Promise.all([this.vents.ready,loadEncounterTexture('ventMortar',this.mortarAssets.setAtlas)]),
       Promise.all([loadEncounterTexture('marine', setMarineTexture, 1), loadEncounterTexture('ioBasalt',setIoRockTexture,1), loadEncounterTexture('ioCeramic',setIoCeramicTexture,1)]), loadEncounterTextures(this.boss, this.raptor,
       [this.player.root, scout, this.drone, this.bridge.root, this.ice.root, ...pods, ...ammo, ...this.drops.map(({ root }) => root), this.io.root, this.skippers[0].root, this.crucibles[0].root])]).then(textures=>{this.surfacesReady=true;return textures;});
     this.enemies = Array.from({ length: 12 }, () => {
@@ -216,7 +221,7 @@ export class FlightView {
     this.drone.add(this.droneMuzzle.root);
     this.plane.add(this.player.root, this.drone, this.droneGoal, this.towline, this.boss.root, this.raptor.root, this.cannonMarker, this.stars,
       this.preserveEdges.root, this.shipyard.root, this.backdrops.root, this.bridge.root, this.hive.root, this.ice.root, this.titan.root,
-      this.vents.root, this.ventBoss.root, this.io.root, ...this.skippers.map(r=>r.root), ...this.crucibles.map(r=>r.root), ...this.slags.map(r=>r.root), this.leviathan.root, this.cicada.root, ...this.ichthyosaurs.map(r=>r.root), ...this.plesiosaurs.map(r=>r.root),
+      this.vents.root, this.ventBoss.root, ...this.mortars.map(r=>r.root), this.io.root, ...this.skippers.map(r=>r.root), ...this.crucibles.map(r=>r.root), ...this.slags.map(r=>r.root), this.leviathan.root, this.cicada.root, ...this.ichthyosaurs.map(r=>r.root), ...this.plesiosaurs.map(r=>r.root),
       ...this.cicadaScouts.map(r=>r.root), ...this.centipedeParts.map(r=>r.root),
       this.hiveBoss.root, ...this.ants.map(({ root }) => root),
       this.pulse, ...this.enemies.map(({ root }) => root), ...this.markers,
@@ -242,7 +247,7 @@ export class FlightView {
     await compiled;
 
     // Cache silhouette bounds before the first laser hit, spread across small preflight batches.
-    const contactModels = [this.ventBoss.root,this.caldera.root, this.skippers[0].root, this.crucibles[0].root, this.slags[0].root,this.cicadaScouts[0].root, this.centipedeParts[0].root, this.raptor.root, this.enemies[0].root, this.boss.root, this.hiveBoss.root, this.leviathan.root, this.cicada.root, ...this.ichthyosaurs.map(r=>r.root), ...this.plesiosaurs.map(r=>r.root),
+    const contactModels = [this.mortars[0].root,this.ventBoss.root,this.caldera.root, this.skippers[0].root, this.crucibles[0].root, this.slags[0].root,this.cicadaScouts[0].root, this.centipedeParts[0].root, this.raptor.root, this.enemies[0].root, this.boss.root, this.hiveBoss.root, this.leviathan.root, this.cicada.root, ...this.ichthyosaurs.map(r=>r.root), ...this.plesiosaurs.map(r=>r.root),
       ...this.ants.map(({ root }) => root)];
     for (let i = 0; i < contactModels.length; i += 3) {
       await nextFrame();
@@ -264,7 +269,7 @@ export class FlightView {
     const marineBatches = Array.from({length:Math.ceil(marine.length/3)},(_,i)=>marine.slice(i*3,i*3+3));
     const insects = [this.cicadaScouts[0].root, this.centipedeParts[0].root];
     for (const objects of [stage, boss, insects, ...marineBatches, [this.hive.root, this.ants[0].root, this.hiveBoss.root],
-      [this.io.root,this.skippers[0].root,...this.crucibles.map(r=>r.root),...this.slags.map(r=>r.root)], [this.ice.root], [this.titan.root], [this.vents.root,this.ventBoss.root], pods[0], [...pods[1], ...this.wingLasers.map(({ root }) => root)], ordnance]) {
+      [this.io.root,this.skippers[0].root,...this.crucibles.map(r=>r.root),...this.slags.map(r=>r.root)], [this.ice.root], [this.titan.root], [this.vents.root,this.ventBoss.root,...this.mortars.map(r=>r.root)], pods[0], [...pods[1], ...this.wingLasers.map(({ root }) => root)], ordnance]) {
       await nextFrame();
       if (signal.aborted) return;
       if (objects.includes(this.ice.root)) this.ice.prime();
@@ -445,7 +450,7 @@ export class FlightView {
     }
     for (const [index, { root, burners }] of this.enemies.entries()) {
       const enemy = flight.enemies[index];
-      root.visible = Boolean(enemy && !enemy.raptor && !enemy.ant && !enemy.marine && !enemy.cicada && !enemy.centipede && !enemy.skipper && !enemy.crucible && !enemy.slag);
+      root.visible = Boolean(enemy && !enemy.raptor && !enemy.ant && !enemy.marine && !enemy.cicada && !enemy.centipede && !enemy.skipper && !enemy.crucible && !enemy.slag && enemy.ventAnchor===undefined);
       if (root.visible && enemy) {
         root.position.set(enemy.x, enemy.y, 0);
         root.rotation.z = enemy.ventAnchor!==undefined?Math.PI:Math.PI + 0.3 * Math.cos(enemy.age * 1.55);
@@ -523,6 +528,14 @@ export class FlightView {
       if(enemy.crucible){rig.root.rotation.set(-this.ioPitch,this.ioBank,0);(rig as typeof this.crucibles[number]).pose(enemy.age,crucibleValve(enemy.age,enemy.fire));}
       else (rig as typeof this.slags[number]).pose(enemy.age,enemy.slag?.vx??0);
       this.crucibleModels[index]=rig.root;
+    }
+
+    this.mortarModels.length=flight.enemies.length;for(const rig of this.mortars)rig.root.visible=false;let mortar=0;
+    for(const[index,enemy]of flight.enemies.entries()){
+      this.mortarModels[index]=undefined;if(enemy.ventAnchor===undefined)continue;
+      const rig=this.mortars[mortar++];if(!rig)continue;
+      rig.root.visible=true;rig.root.position.set(enemy.x,enemy.y,0);rig.root.scale.setScalar(enemy.ventScale??1);
+      rig.pose(enemy.age,enemy.fire,enemy.mortarAngle??0);this.mortarModels[index]=rig.combat;
     }
 
     this.drawWings(flight, eased, fighterVelocity, flight.level==='io'?distance:flight.level === 'titan' ? (eased > 0 ? distance / eased : undefined) : camera === this.ortho ? undefined : distance);
@@ -649,7 +662,7 @@ export class FlightView {
         let model: T.Object3D | undefined;
         if (target && typeof target !== 'number') {
           const index = flight.enemies.indexOf(target);
-          if (index >= 0) model = target.crucible || target.slag ? this.crucibleModels[index] : target.skipper ? this.skipperModels[index] : target.centipede || target.cicada ? this.insectModels[index] : target.marine ? this.marineModels[index] : target.raptor ? this.raptor.root : target.ant ? this.ants[index]?.root : this.enemies[index]?.root;
+          if (index >= 0) model = target.ventAnchor!==undefined ? this.mortarModels[index] : target.crucible || target.slag ? this.crucibleModels[index] : target.skipper ? this.skipperModels[index] : target.centipede || target.cicada ? this.insectModels[index] : target.marine ? this.marineModels[index] : target.raptor ? this.raptor.root : target.ant ? this.ants[index]?.root : this.enemies[index]?.root;
         }
         const end = typeof target === 'number' ? this.bossLaserContact[flight.level](target, distance ?? BOSS_CAMERA_DISTANCE)
           : model ? this.laserContact(origin, wing.beamEnd, model, distance) : wing.beamEnd;
