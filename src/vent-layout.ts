@@ -2,6 +2,7 @@
 // enemies use this same transform throughout the abyss approach.
 export const VENT_DURATION=100;
 export const VENT_APPROACH=8;
+export const VENT_CAMERA_SWING=5;
 export const VENT_SPEED=1.5;
 export const VENT_CAMERA_DISTANCE=40;
 export const VENT_STAGE_PITCH=22*Math.PI/180;
@@ -11,10 +12,13 @@ export const VENT_END_SCROLL=VENT_SHAFT_Y+VENT_CRAB_RADIUS-4.2*Math.cos(VENT_PIT
 export const VENT_END_HEIGHT=VENT_CRAB_Z-4.2*Math.sin(VENT_PITCH)+12*Math.cos(VENT_PITCH);
 export const VENT_CLIFF_Y=153;
 export const ventSmooth=(t:number)=>{const v=Math.max(0,Math.min(1,t));return v*v*(3-2*v);};
+// Finish moving the view before revealing the flat articulated boss.
+export const ventCameraRise=(time:number)=>ventSmooth((time-VENT_DURATION)/VENT_CAMERA_SWING);
+export const ventBossReveal=(time:number)=>ventSmooth((time-VENT_DURATION-VENT_CAMERA_SWING)/(VENT_APPROACH-VENT_CAMERA_SWING));
 export function ventScroll(time:number){
  if(time<=VENT_DURATION)return Math.max(0,time)*VENT_SPEED;
- const t=Math.min(1,(time-VENT_DURATION)/VENT_APPROACH),t2=t*t,t3=t2*t;
- return VENT_SPEED*VENT_DURATION*(2*t3-3*t2+1)+VENT_END_SCROLL*(-2*t3+3*t2)+VENT_SPEED*VENT_APPROACH*(t3-2*t2+t);
+ const t=Math.min(1,(time-VENT_DURATION)/VENT_CAMERA_SWING),t2=t*t,t3=t2*t;
+ return VENT_SPEED*VENT_DURATION*(2*t3-3*t2+1)+VENT_END_SCROLL*(-2*t3+3*t2)+VENT_SPEED*VENT_CAMERA_SWING*(t3-2*t2+t);
 }
 // Bursts, planted pauses and direction reversals; the view follows most of the
 // angular travel while the crab retains a small, real lateral combat offset.
@@ -43,9 +47,9 @@ export function ventFloor(x:number,y:number){
  const lip=ventSmooth((y-135)/18);
  return -16.5+(ventBankHeight(x,y)+16.5)*lip+Math.sin(x*.5+y*.12)*.22*(1-lip);
 }
-export function ventBossPose(rise:number,fightTime=0){
- const orbit=ventOrbit(fightTime),a=-.35*(1-rise)+orbit.angle,radius=VENT_CRAB_RADIUS/Math.cos(orbit.angle-orbit.yaw),climb=ventSmooth((rise-.2)/.7);
- return{x:Math.sin(a)*radius,y:VENT_SHAFT_Y+Math.cos(a)*radius,z:-24+(VENT_CRAB_Z+24)*climb};
+export function ventBossPose(reveal:number,fightTime=0){
+ const orbit=ventOrbit(fightTime),a=orbit.angle,radius=VENT_CRAB_RADIUS/Math.cos(orbit.angle-orbit.yaw);
+ return{x:Math.sin(a)*radius,y:VENT_SHAFT_Y+Math.cos(a)*radius,z:30+(VENT_CRAB_Z-30)*reveal};
 }
 export const VENT_SPAWN_LEAD=3;
 const anchorTimes=[8,23,39,54,70,84];

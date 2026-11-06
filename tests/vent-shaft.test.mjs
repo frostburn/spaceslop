@@ -17,14 +17,14 @@ test('the approach carries the camera beyond the near lip and over a deep, uncap
 
 test('world transforms agree with the scene matrix throughout peering and circular tracking',()=>{
  for(const time of [0,99.9,100,102,104,106,108,110,111,114.5,116,120,134]){
-  const rise=v.ventSmooth((time-100)/8),m=frame(time,rise);for(const point of [[3,153,-2],[0,201,-20],[-8,180,-40]]){const p=new T.Vector3(...point).applyMatrix4(m),q=v.ventWorld(...point,time,rise);assert(Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z)<1e-9);}
+  const rise=v.ventCameraRise(time),m=frame(time,rise);for(const point of [[3,153,-2],[0,201,-20],[-8,180,-40]]){const p=new T.Vector3(...point).applyMatrix4(m),q=v.ventWorld(...point,time,rise);assert(Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z)<1e-9);}
  }
 });
 
 test('both claws and the gills remain in front of the terrain through the reveal and every scurry',()=>{
  const geology=createVentGeology();geology.updateMatrixWorld(true);
- for(const time of [103,104,105,106,107,108,110,111,113,114.5,116,119,122]){
-  const rise=v.ventSmooth((time-100)/8),fight=Math.max(0,time-108),boss=v.ventBossPose(rise,fight),origin=eye(time,rise),orbit=v.ventOrbit(fight);
+ for(const time of [107,107.5,108,110,111,113,114.5,116,119,122]){
+  const rise=v.ventCameraRise(time),fight=Math.max(0,time-108),boss=v.ventBossPose(v.ventBossReveal(time),fight),origin=eye(time,rise),orbit=v.ventOrbit(fight);
   const rotation=new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),-orbit.yaw).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(1,0,0),v.VENT_PITCH));
   for(const x of [-2.4,0,2.4]){const target=new T.Vector3(x,0,.815).applyQuaternion(rotation).add(new T.Vector3(boss.x,boss.y,boss.z)),direction=target.clone().sub(origin),length=direction.length();const ray=new T.Raycaster(origin,direction.normalize(),0,length-.05);assert.equal(ray.intersectObject(geology,true).length,0,'terrain obscures weakpoint at '+time);}
  }
@@ -49,4 +49,18 @@ test('planted feet hold their wall anchors while other legs take sideways steps'
 
 test('normal ship fire keeps damaging a moving claw without relaxing phase locks',()=>{
  const f=new Flight('sentry',[],'vex','vents');f.phase='boss';f.time=2;f.stepBoss=()=>{};f.cooldown=f.droneCooldown=1000;f.fire(f.player);assert.equal(f.shots[0].crabTarget,f.crabTargetX);const before=f.bossHealth;f.step(.4);assert(f.bossHealth<before);
+});
+
+test('the camera settles before the raster crab descends from above into combat framing',async()=>{
+ const {createVentBoss}=await server.ssrLoadModule('/src/vent-boss.ts'),rig=createVentBoss();
+ for(let time=100;time<=105;time+=.25){
+  const rise=v.ventCameraRise(time),reveal=v.ventBossReveal(time),boss=v.ventBossPose(reveal),p=v.ventWorld(boss.x,boss.y,boss.z,time,rise),distance=40-18*rise;
+  rig.pose(reveal,0,-2.4,0,0,time);rig.root.position.set(p.x,p.y,p.z);rig.root.rotation.x=v.VENT_PITCH-v.ventFrame(time,rise).pitch;rig.root.updateMatrixWorld(true);
+  const camera=new T.PerspectiveCamera(2*Math.atan(8/distance)*180/Math.PI,9/16,.1,300);camera.position.z=distance;camera.updateMatrixWorld(true);
+  const frustum=new T.Frustum().setFromProjectionMatrix(new T.Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
+  assert(!frustum.intersectsBox(new T.Box3().setFromObject(rig.root)),'crab appears while camera swings at '+time);
+ }
+ const settled=v.ventFrame(105,1);let last=Infinity;
+ for(let time=105;time<=108;time+=.1){assert.equal(v.ventCameraRise(time),1);assert.deepEqual(v.ventFrame(time,1),settled);const boss=v.ventBossPose(v.ventBossReveal(time));assert(boss.z<=last);last=boss.z;}
+ assert.equal(v.ventBossReveal(108),1);assert.equal(v.ventBossPose(1).z,v.VENT_CRAB_Z);
 });

@@ -15,7 +15,7 @@ export function crabFeet(reveal:number,fightTime=0){
   let shift=.325-phase,lift=0;
   if(phase>.65){const t=(phase-.65)/.35,t2=t*t,t3=t2*t;shift=(-.325)*(2*t3-3*t2+1)+.325*(-2*t3+3*t2)-.35*(2*t3-3*t2+t);lift=Math.sin(t*Math.PI)*Math.min(1,Math.abs(orbit.speed)/.1);}
   const climb=Math.max(0,Math.sin(reveal*Math.PI*8+i*Math.PI))*Math.sin(reveal*Math.PI);
-  const angle=-.35*(1-reveal)+orbit.angle+side*(.13+row*.045)+shift*1.25/VENT_SHAFT_RADIUS;
+  const angle=orbit.angle+side*(.13+row*.045)+shift*1.25/VENT_SHAFT_RADIUS;
   const radius=VENT_SHAFT_RADIUS-.5-(lift+climb)*.35,x=Math.sin(angle)*radius,y=VENT_SHAFT_Y+Math.cos(angle)*radius,z=boss.z-4.6+row*.5+(lift+climb)*.12;
   const dx=x-boss.x,dy=y-boss.y,dz=z-boss.z,ax=dx*cy-dy*sy,ay=dx*sy+dy*cy;
   return{x:ax,y:ay*c+dz*s,z:-ay*s+dz*c};

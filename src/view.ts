@@ -4,7 +4,7 @@ import {createMortarAssets,createVentMortar} from './vent-mortar-rig';
 import {MORTAR_POOL} from './vent-mortar';
 import {createVentScenery} from './vent-scenery';
 import {createVentBoss} from './vent-boss';
-import {ventAnchors,VENT_SPAWN_LEAD,ventAnchorPoint,VENT_DURATION,VENT_APPROACH,VENT_CAMERA_DISTANCE,VENT_PITCH,ventBossPose,ventWorld,ventFrame} from './vent-layout';
+import {ventCameraRise,ventBossReveal,ventAnchors,VENT_SPAWN_LEAD,ventAnchorPoint,VENT_DURATION,VENT_APPROACH,VENT_CAMERA_DISTANCE,VENT_PITCH,ventBossPose,ventWorld,ventFrame} from './vent-layout';
 import { createCrucible, createSlag } from './io-crucible-rig';
 import { CRUCIBLE_POOL, SLAG_POOL, crucibleValve } from './io-crucible';
 import { setIoRockTexture, setIoCeramicTexture } from './io-materials';
@@ -347,7 +347,7 @@ export class FlightView {
     if (flight.phase === 'stage') this.swing = 0;
     if (flight.phase === 'approach') this.swing = Math.min(flight.time / flight.transitionDuration, 1);
     if (flight.phase === 'boss') this.swing = 1;
-    const eased = this.swing ** 2 * (3 - 2 * this.swing);
+    const eased = flight.level==='vents'?ventCameraRise(this.ventTime):this.swing ** 2 * (3 - 2 * this.swing);
     const ioPose=flight.level==='io'?ioFrame(this.ioTime,eased):undefined;
     this.ioPitch=ioPose?.pitch??0;this.ioBank=ioPose?.bank??0;
     const angle = (eased - 1) * Math.PI / 2;
@@ -434,14 +434,14 @@ export class FlightView {
       this.cicada.root.rotation.x=TITAN_PITCH-titanFrame(eased).pitch;
     }
     if(flight.level==='vents'){
-      const pose=ventBossPose(eased,Math.max(0,this.ventTime-VENT_DURATION-VENT_APPROACH)),point=ventWorld(pose.x,pose.y,pose.z,this.ventTime,eased);
+      const pose=ventBossPose(ventBossReveal(this.ventTime),Math.max(0,this.ventTime-VENT_DURATION-VENT_APPROACH)),point=ventWorld(pose.x,pose.y,pose.z,this.ventTime,eased);
       this.ventBoss.root.visible=flight.bossHealth>0;this.ventBoss.root.position.set(point.x,point.y,point.z);
       this.ventBoss.root.rotation.x=VENT_PITCH-ventFrame(this.ventTime,eased).pitch;
     }
     if (activeBoss.root.visible) {
       if(activeBoss === this.leviathan) this.leviathan.pose(eased,flight.cannonWindup,0,0,flight.bossRecoil / BOSS_RECOIL_TIME,flight.phase==='boss'?flight.time:Math.max(0,this.iceTime-flight.stageDuration-TRANSITION_TIME));
       else if(activeBoss===this.cicada)this.cicada.pose(eased,flight.cannonWindup,flight.exposedCannonX,flight.firedCannonX,flight.bossRecoil/BOSS_RECOIL_TIME,flight.phase==='boss'?flight.transitionDuration+flight.time:flight.phase==='approach'?flight.time:0);
-      else if(activeBoss===this.ventBoss)this.ventBoss.pose(eased,flight.cannonWindup,flight.crabTargetX,flight.firedCrabTarget,flight.bossRecoil/BOSS_RECOIL_TIME,this.ventTime,flight.crabBreakPose,flight.crabOpening);
+      else if(activeBoss===this.ventBoss)this.ventBoss.pose(ventBossReveal(this.ventTime),flight.cannonWindup,flight.crabTargetX,flight.firedCrabTarget,flight.bossRecoil/BOSS_RECOIL_TIME,this.ventTime,flight.crabBreakPose,flight.crabOpening);
       else activeBoss.pose(eased, flight.cannonWindup, flight.exposedCannonX, flight.firedCannonX,flight.bossRecoil / BOSS_RECOIL_TIME);
       if (activeBoss === this.boss) poseBurners(this.bossBurners, this.animationTime, 0.42 + 0.48 * Math.sin(eased * Math.PI));
     }
