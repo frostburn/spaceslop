@@ -1,3 +1,5 @@
+import { CRUCIBLE_HP, CRUCIBLE_RADIUS, CRUCIBLE_FIRST_POUR, CRUCIBLE_POUR_INTERVAL, CRUCIBLE_MUZZLE_Y, SLAG_RADIUS, crucibleMotion, slagSpeed } from './io-crucible';
+import { IO_DURATION, IO_HP, IO_LEG_HP, IO_APPROACH, IO_INTERVAL, IO_WINDUP, IO_FIRE, IO_TRAVEL, calderaContact, calderaWheel, skipperMotion, ioWaves, smooth01 } from './io-layout';
 import { bindCentipede, severCentipede, stepCentipedes, CENTIPEDE_SPACING, type CentipedeLink } from './centipede';
 import { cicadaMotion, titanInsectWaves, type CicadaCourse } from './titan-insects';
 import { TITAN_ROUTE_DURATION, TITAN_ROUTE_END } from './titan-layout';
@@ -33,12 +35,12 @@ type Phase = 'stage' | 'approach' | 'boss' | 'won' | 'lost';
 type Point = { x: number; y: number };
 type Shot = Point & {
   z: number; vx: number; vy: number; vz: number;
-  drone?: boolean; targetsBoss?: boolean; wing?: WingProjectile; pierced?: Set<Enemy>; damage?: number;
+  drone?: boolean; targetsBoss?: boolean; bossSupport?: boolean; wing?: WingProjectile; pierced?: Set<Enemy>; damage?: number;
 };
 type Threat = Shot & { graze?: 'near' | 'counted' };
 type Enemy = Point & {
   lane: number; age: number; fire: number; hp: number; drop?: WingWeapon; raptor?: boolean; ant?: 'worker' | 'soldier'; marine?: MarineKind; school?: MarineSchool;
-  centipede?: CentipedeLink; cicada?: CicadaCourse;
+  centipede?: CentipedeLink; cicada?: CicadaCourse; skipper?: boolean; crucible?: boolean; slag?: {vx:number;vy:number}; slot?: number;
   course?: number; courseAt?: number; heading?: number; laserDamage?: number;
 };
 type Drop = Point & { weapon: WingWeapon };
@@ -64,7 +66,7 @@ const wingShots = {
 
 type Wave = { time: number; lanes: number[]; carrier?: number; drop?: WingWeapon;
   raptor?: number; ant?: 'worker' | 'soldier'; marine?: MarineKind; formation?: MarineFormation; mirror?: number;
-  centipede?: number; cicada?: Omit<CicadaCourse, 'slot' | 'count'> };
+  centipede?: number; cicada?: Omit<CicadaCourse, 'slot' | 'count'>; skipper?: boolean; crucible?: boolean };
 
 const stageWaves: Wave[] = [
   { time: 0.6, lanes: [-2.6, 0, 2.6], carrier: 1, drop: 'homing' },
@@ -110,6 +112,7 @@ export const iceWaves: Wave[] = [
 export const titanWaves: Wave[] = titanInsectWaves;
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
+const enemyRadius=(enemy:Enemy,ordinary=.52)=>enemy.crucible?CRUCIBLE_RADIUS:enemy.slag?SLAG_RADIUS:ordinary;
 const near = (a: Point, b: Point, radius: number) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 < radius ** 2;
 
 function moveWithinField(point: Point, dx: number, dy: number) {
@@ -181,6 +184,7 @@ export class Flight {
   private cooldown = 0;
   private droneCooldown = 0;
   private volley = 0;
+  private ioCollapseAge = -1;
   private towlineEnemies = new Set<Enemy>();
   private towlineHitCannon = false;
 
@@ -195,6 +199,7 @@ export class Flight {
   ) {
     this.droneWeapon = droneWeapon;
     this.pilot = pilot;
+    if (level === 'io') this.bossHealth=IO_HP;
     if (level === 'titan') this.bossHealth=CICADA_HP;
     if (level === 'broodlock') this.obstacles = new HiveCollision();
     if (level === 'ice') { this.obstacles = new IceCollision(); this.bossHealth=LEVIATHAN_HP; }
@@ -205,9 +210,13 @@ export class Flight {
     }
   }
 
-  get transitionDuration() { return this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
+  get transitionDuration() { return this.level === 'io' ? IO_APPROACH : this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
 
-  get bossMaxHealth() { return this.level === 'titan' ? CICADA_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
+  get bossMaxHealth() { return this.level === 'io' ? IO_HP : this.level === 'titan' ? CICADA_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
+
+  get ioLegBroken() { return this.ioCollapseAge >= 0; }
+  get ioCollapse() { return this.ioLegBroken ? smooth01(this.ioCollapseAge / 1.2) : 0; }
+  get bossAimY() { return this.level === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).y : BOSS_Y; }
 
   get stageDuration() { return levels[this.level].duration; }
 
@@ -244,7 +253,7 @@ export class Flight {
   }
 
   get exposedCannonX() {
-    return this.level === 'ice' ? 0 : this.volley % 2 === 0 ? -BOSS_CANNON_X : BOSS_CANNON_X;
+    return this.level === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).x : this.level === 'ice' ? 0 : this.volley % 2 === 0 ? -BOSS_CANNON_X : BOSS_CANNON_X;
   }
 
   wingOrigin(side: WingSide) {
@@ -257,9 +266,10 @@ export class Flight {
   }
 
   get cannonWindup() {
-    if (this.phase !== 'boss' || this.volley !== Math.floor(this.time / (this.level === 'titan' ? CICADA_INTERVAL : this.level === 'ice' ? LEVIATHAN_INTERVAL : BOSS_VOLLEY_INTERVAL))) return 0;
-    const interval = this.level === 'titan' ? CICADA_INTERVAL : this.level === 'ice' ? LEVIATHAN_INTERVAL : BOSS_VOLLEY_INTERVAL;
+    if (this.phase !== 'boss' || this.volley !== Math.floor(this.time / (this.level === 'io' ? IO_INTERVAL : this.level === 'titan' ? CICADA_INTERVAL : this.level === 'ice' ? LEVIATHAN_INTERVAL : BOSS_VOLLEY_INTERVAL))) return 0;
+    const interval = this.level === 'io' ? IO_INTERVAL : this.level === 'titan' ? CICADA_INTERVAL : this.level === 'ice' ? LEVIATHAN_INTERVAL : BOSS_VOLLEY_INTERVAL;
     const elapsed = this.time % interval;
+    if(this.level === 'io') return elapsed < IO_FIRE ? clamp((elapsed-IO_WINDUP)/(IO_FIRE-IO_WINDUP),0,1) : 0;
     if(this.level === 'titan') return clamp((elapsed-CICADA_WINDUP)/(CICADA_FIRE-CICADA_WINDUP),0,1);
     if(this.level === 'ice') return clamp((elapsed-LEVIATHAN_WINDUP)/(LEVIATHAN_FIRE-LEVIATHAN_WINDUP),0,1);
     return clamp((elapsed - BOSS_WINDUP_AT) / (BOSS_FIRE_AT - BOSS_WINDUP_AT), 0, 1);
@@ -319,6 +329,7 @@ export class Flight {
   step(dt: number) {
     if (this.phase === 'won' || this.phase === 'lost') return;
     this.time += dt;
+    if (this.level === 'io' && this.ioLegBroken && this.phase === 'boss') this.ioCollapseAge += dt;
     if (this.phase === 'stage') this.stageProgress = this.hiveProgress;
     this.prepareObstacles();
     if (this.obstacles?.move(this.player, 0, 0, FIGHTER_HULL)) this.clearAim();
@@ -370,8 +381,9 @@ export class Flight {
         if (shot.z > BOSS_DEPTH) return true;
         const untilImpact = (BOSS_DEPTH - shot.z) / shot.vz;
         const impact = { x: shot.x + shot.vx * untilImpact, y: shot.y + shot.vy * untilImpact };
-        if (shot.targetsBoss ||
-          ((shot.drone || shot.wing) && near(impact, { x: this.exposedCannonX, y: BOSS_Y }, BOSS_CANNON_RADIUS))) {
+        const lockedTarget = shot.targetsBoss && (this.level !== 'io' || shot.bossSupport === !this.ioLegBroken);
+        if (lockedTarget ||
+          ((shot.drone || shot.wing) && near(impact, { x: this.exposedCannonX, y: this.bossAimY }, BOSS_CANNON_RADIUS))) {
           this.damageBoss(shot.damage ?? 1);
         }
         return false;
@@ -379,9 +391,9 @@ export class Flight {
       for (const enemy of this.enemies) {
         if (enemy.hp <= 0 || shot.pierced?.has(enemy)) continue;
         const hit = enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, previous, shot) : shot.wing === 'homing'
-          ? nearSegment(enemy, previous, shot, .52)
-          : Math.abs(shot.x - enemy.x) < .52 &&
-            shot.y >= enemy.y - .46 && previous.y <= enemy.y + .46;
+          ? nearSegment(enemy, previous, shot, enemyRadius(enemy))
+          : Math.abs(shot.x - enemy.x) < enemyRadius(enemy) &&
+            shot.y >= enemy.y - enemyRadius(enemy,.46) && previous.y <= enemy.y + enemyRadius(enemy,.46);
         if (!hit) continue;
         this.damageEnemy(enemy, shot.damage ?? 1);
         if (!shot.pierced) return false;
@@ -389,7 +401,7 @@ export class Flight {
       }
       return shot.y < 9 && Math.abs(shot.x) < 5;
     });
-    this.enemies = this.enemies.filter((enemy) => enemy.hp > 0 && enemy.y > -9 && (!enemy.centipede || Math.abs(enemy.x) < 5.8));
+    this.enemies = this.enemies.filter((enemy) => enemy.hp > 0 && enemy.y > -9 && (!enemy.centipede || Math.abs(enemy.x) < 5.8) && (!(enemy.crucible || enemy.slag) || Math.abs(enemy.x)<6.8) && (!enemy.slag || (enemy.y<10 && enemy.age<10)));
 
     this.threats = this.threats.filter((shot) => {
       this.advance(shot, dt);
@@ -492,7 +504,7 @@ export class Flight {
     this.shots.push({
       ...origin, z: 0, wing: wing.weapon, damage: spec.damage,
       vx: boss ? origin.x * (1 / BOSS_PROJECTION - 1) / duration : 0,
-      vy: boss ? (BOSS_Y - origin.y) / duration : spec.speed,
+      vy: boss ? (this.bossAimY - origin.y) / duration : spec.speed,
       vz: boss ? BOSS_DEPTH / duration : 0,
       pierced: wing.weapon === 'omega' ? new Set<Enemy>() : undefined,
     });
@@ -503,14 +515,14 @@ export class Flight {
     let target: Enemy | number | undefined;
     let endY = 8;
     if (boss) {
-      endY = BOSS_Y * BOSS_PROJECTION;
+      endY = this.bossAimY * BOSS_PROJECTION;
       if (Math.abs(origin.x - this.exposedCannonX * BOSS_PROJECTION) < BOSS_CANNON_RADIUS * BOSS_PROJECTION) {
         target = this.exposedCannonX;
       }
     } else {
       for (const candidate of this.enemies) {
         if (candidate.hp > 0 && (candidate.marine ? marineBodyHit(candidate as Enemy & {marine: MarineKind}, origin, {x: origin.x, y: 9})
-          : Math.abs(candidate.x - origin.x) < .43 && candidate.y >= origin.y) && (!enemy || candidate.y < enemy.y)) {
+          : Math.abs(candidate.x - origin.x) < enemyRadius(candidate,.43) && candidate.y >= origin.y) && (!enemy || candidate.y < enemy.y)) {
           enemy = candidate;
         }
       }
@@ -576,7 +588,7 @@ export class Flight {
     if (this.towlineFlash === 0) return;
 
     if (this.phase === 'boss') {
-      const cannon = { x: this.exposedCannonX * BOSS_PROJECTION, y: BOSS_Y * BOSS_PROJECTION };
+      const cannon = { x: this.exposedCannonX * BOSS_PROJECTION, y: this.bossAimY * BOSS_PROJECTION };
       if (!this.towlineHitCannon &&
         nearSegment(cannon, this.player, this.drone, BOSS_CANNON_RADIUS * BOSS_PROJECTION)) {
         this.towlineHitCannon = true;
@@ -586,7 +598,7 @@ export class Flight {
     }
     for (const enemy of this.enemies) {
       if (enemy.hp > 0 && !this.towlineEnemies.has(enemy) &&
-        (enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, this.player, this.drone) : nearSegment(enemy, this.player, this.drone, .52))) {
+        (enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, this.player, this.drone) : nearSegment(enemy, this.player, this.drone, enemyRadius(enemy)))) {
         this.towlineEnemies.add(enemy);
         this.damageEnemy(enemy, this.towlineDamage);
       }
@@ -594,7 +606,7 @@ export class Flight {
   }
 
   private stepStage(dt: number) {
-    const wave = (this.level === 'broodlock' ? hiveWaves : this.level === 'ice' ? iceWaves : this.level === 'titan' ? titanWaves : stageWaves)[this.nextWave];
+    const wave: Wave | undefined = (this.level === 'broodlock' ? hiveWaves : this.level === 'ice' ? iceWaves : this.level === 'io' ? ioWaves : this.level === 'titan' ? titanWaves : stageWaves)[this.nextWave];
     if (wave && this.time >= wave.time) {
       this.nextWave++;
       if (wave.centipede) {
@@ -608,11 +620,11 @@ export class Flight {
       } else this.enemies.push(...wave.lanes.map((lane, index) => {
         const school = wave.formation ? {formation: wave.formation, slot: index, count: wave.lanes.length, mirror: wave.mirror ?? 1} : undefined;
         const course = wave.cicada ? { ...wave.cicada, slot: index, count: wave.lanes.length } : undefined;
-        const start = course ? cicadaMotion(0, lane, course) : wave.marine ? marineMotion(wave.marine, 0, lane, school) : {x: lane, y: 8.6};
+        const start = wave.crucible ? crucibleMotion(0,lane) : wave.skipper ? skipperMotion(0,lane,index) : course ? cicadaMotion(0, lane, course) : wave.marine ? marineMotion(wave.marine, 0, lane, school) : {x: lane, y: 8.6};
         return {
-          x: start.x, y: start.y, lane, age: 0, school, cicada: course,
-          fire: schoolDelay(school) + (wave.marine === 'plesiosaur' ? 1.8 : wave.ant === 'soldier' ? 1.6 : 1.1) + index * 0.28,
-          hp: wave.marine ? marineSpecs[wave.marine].hp : wave.ant === 'soldier' ? 5 : 2, ant: wave.ant, marine: wave.marine,
+          x: start.x, y: start.y, lane, age: 0, school, cicada: course, skipper: wave.skipper, crucible: wave.crucible, slot: index,
+          fire: wave.crucible ? CRUCIBLE_FIRST_POUR : schoolDelay(school) + (wave.marine === 'plesiosaur' ? 1.8 : wave.ant === 'soldier' ? 1.6 : 1.1) + index * 0.28,
+          hp: wave.crucible ? CRUCIBLE_HP : wave.marine ? marineSpecs[wave.marine].hp : wave.ant === 'soldier' ? 5 : 2, ant: wave.ant, marine: wave.marine,
           drop: index === wave.carrier ? wave.drop : undefined,
           raptor: index === wave.raptor,
         };
@@ -624,7 +636,19 @@ export class Flight {
       if (enemy.hp <= 0) continue;
       enemy.age += dt;
       const motion = enemy.raptor ? raptorFlight(enemy.age) : undefined;
-      if (enemy.centipede) {
+      if (enemy.crucible) {
+        const p=crucibleMotion(enemy.age,enemy.lane);enemy.x=p.x;enemy.y=p.y;
+        if(enemy.age>=enemy.fire){
+          enemy.fire+=CRUCIBLE_POUR_INTERVAL;
+          const y=enemy.y+CRUCIBLE_MUZZLE_Y,angle=Math.atan2(this.player.x-enemy.x,this.player.y-y);
+          for(const spread of [-.28,0,.28])this.enemies.push({x:enemy.x,y,lane:0,age:0,fire:Infinity,hp:1,
+            slag:{vx:Math.sin(angle+spread)*3.4,vy:Math.cos(angle+spread)*3.4}});
+        }
+      } else if (enemy.slag) {
+        const speed=slagSpeed(enemy.age);enemy.x+=enemy.slag.vx*speed*dt;enemy.y+=enemy.slag.vy*speed*dt;
+      } else if (enemy.skipper) {
+        const p=skipperMotion(enemy.age,enemy.lane,enemy.slot); enemy.x=p.x; enemy.y=p.y; enemy.heading=p.heading;
+      } else if (enemy.centipede) {
         // Shared chain motion above keeps each plate connected.
       } else if (enemy.cicada) {
         const course = cicadaMotion(enemy.age, enemy.lane, enemy.cicada);
@@ -642,7 +666,7 @@ export class Flight {
         const hull = enemy.marine ? [{x:0,y:0,radius:marineSpecs[enemy.marine].radius}] : enemy.raptor ? [{ x: 0, y: 0, radius: 1.05 }] : DRONE_HULL;
         this.obstacles.move(enemy, 0, 0, hull, { minX: -2.4, maxX: 2.4, minY: -10, maxY: 10 });
       }
-      if (!motion && (!enemy.centipede || (enemy.centipede.slot === 0 && !enemy.centipede.chain.escape)) && enemy.age >= enemy.fire && enemy.y < 8) {
+      if (!enemy.crucible && !enemy.slag && !motion && (!enemy.centipede || (enemy.centipede.slot === 0 && !enemy.centipede.chain.escape)) && enemy.age >= enemy.fire && enemy.y < 8) {
         enemy.fire += enemy.centipede ? 3.5 : enemy.cicada ? 3 : enemy.marine === 'plesiosaur' ? 3.2 : enemy.ant === 'soldier' ? 3.1 : 2.4;
         const dx = this.player.x - enemy.x;
         const dy = this.player.y - enemy.y;
@@ -655,7 +679,7 @@ export class Flight {
             vx: Math.sin(angle + offset) * speed, vy: Math.cos(angle + offset) * speed, vz: 0 });
         }
       }
-      if (enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind},this.player,this.player,.2-marineSpecs[enemy.marine].radius*.2) : near(enemy, this.player, 0.68)) {
+      if (enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind},this.player,this.player,.2-marineSpecs[enemy.marine].radius*.2) : near(enemy, this.player, enemyRadius(enemy)+.16)) {
         enemy.hp = 0;
         if (enemy.centipede) severCentipede(enemy);
         this.hit();
@@ -664,6 +688,7 @@ export class Flight {
   }
 
   private stepBoss() {
+    if(this.level === 'io') { this.stepCaldera(); return; }
     if(this.level === 'titan') { this.stepCicada(); return; }
     if(this.level === 'ice') { this.stepLeviathan(); return; }
     const elapsed = this.time % BOSS_VOLLEY_INTERVAL;
@@ -681,13 +706,28 @@ export class Flight {
       this.firedCannonX = x;
       this.bossRecoil = BOSS_RECOIL_TIME;
       this.threats.push(...this.markers.map((target) => ({
-        x, y: BOSS_Y, z,
-        vx: (target.x - x) / BOSS_IMPACT_TRAVEL, vy: (target.y - BOSS_Y) / BOSS_IMPACT_TRAVEL,
+        x, y: this.bossAimY, z,
+        vx: (target.x - x) / BOSS_IMPACT_TRAVEL, vy: (target.y - this.bossAimY) / BOSS_IMPACT_TRAVEL,
         vz: -z / BOSS_IMPACT_TRAVEL,
       })));
       this.volley++;
     }
     if (elapsed >= BOSS_FIRE_AT + BOSS_IMPACT_TRAVEL + 0.02) this.markers = [];
+  }
+
+  private stepCaldera() {
+    const elapsed=this.time%IO_INTERVAL,volley=Math.floor(this.time/IO_INTERVAL);
+    if(elapsed>=IO_WINDUP && elapsed<IO_FIRE && !this.markers.length){
+      const x=clamp(this.player.x,-2.4,2.4),y=clamp(this.player.y,-5.8,5.1);
+      this.markers=[-1.5,0,1.5].map(offset=>({x:x+(this.ioLegBroken?offset*.55:offset),y:y+(this.ioLegBroken?offset:0)}));
+    }
+    if(elapsed>=IO_FIRE && this.markers.length && this.volley===volley){
+      const origin=calderaWheel(IO_DURATION+IO_APPROACH+this.time,this.ioCollapse);
+      this.firedCannonX=origin.x;this.bossRecoil=BOSS_RECOIL_TIME;
+      this.threats.push(...this.markers.map(target=>({...origin,vx:(target.x-origin.x)/IO_TRAVEL,vy:(target.y-origin.y)/IO_TRAVEL,vz:-origin.z/IO_TRAVEL})));
+      this.volley++;
+    }
+    if(elapsed>IO_FIRE+IO_TRAVEL+.05)this.markers=[];
   }
 
   private stepCicada() {
@@ -699,7 +739,7 @@ export class Flight {
     if(elapsed>=CICADA_FIRE && this.markers.length && this.volley===volley){
       const x=this.exposedCannonX,z=BOSS_DEPTH+BOSS_MUZZLE_Z;
       this.firedCannonX=x;this.bossRecoil=BOSS_RECOIL_TIME;
-      this.threats.push(...this.markers.map(target=>({x,y:BOSS_Y,z,vx:(target.x-x)/CICADA_TRAVEL,vy:(target.y-BOSS_Y)/CICADA_TRAVEL,vz:-z/CICADA_TRAVEL})));
+      this.threats.push(...this.markers.map(target=>({x,y:this.bossAimY,z,vx:(target.x-x)/CICADA_TRAVEL,vy:(target.y-this.bossAimY)/CICADA_TRAVEL,vz:-z/CICADA_TRAVEL})));
       this.volley++;
     }
     if(elapsed>CICADA_FIRE+CICADA_TRAVEL+.05)this.markers=[];
@@ -714,8 +754,8 @@ export class Flight {
     if(elapsed>=LEVIATHAN_FIRE && this.markers.length && this.volley===volley) {
       const z=BOSS_DEPTH+BOSS_MUZZLE_Z;
       this.firedCannonX=0;this.bossRecoil=BOSS_RECOIL_TIME;
-      this.threats.push(...this.markers.map(target=>({x:0,y:BOSS_Y,z,
-        vx:target.x/LEVIATHAN_TRAVEL,vy:(target.y-BOSS_Y)/LEVIATHAN_TRAVEL,vz:-z/LEVIATHAN_TRAVEL})));
+      this.threats.push(...this.markers.map(target=>({x:0,y:this.bossAimY,z,
+        vx:target.x/LEVIATHAN_TRAVEL,vy:(target.y-this.bossAimY)/LEVIATHAN_TRAVEL,vz:-z/LEVIATHAN_TRAVEL})));
       this.volley++;
     }
     if(elapsed>LEVIATHAN_FIRE+LEVIATHAN_TRAVEL+.05)this.markers=[];
@@ -731,10 +771,10 @@ export class Flight {
     const targetsBoss = !drone && Math.abs(x) < 1.65;
     // Drone shots follow the sight line through their launch point, with no lock-on.
     const expansion = 1 / BOSS_PROJECTION - 1;
-    const dx = drone ? x * expansion : (targetsBoss ? -x : 0);
-    const dy = drone ? y * expansion : (targetsBoss ? BOSS_Y - y : 0);
+    const dx = drone ? x * expansion : (targetsBoss ? (this.level === 'io' ? this.exposedCannonX : 0) - x : 0);
+    const dy = drone ? y * expansion : (targetsBoss ? this.bossAimY - y : 0);
     this.shots.push({ x, y, z: 0, vx: dx / duration, vy: dy / duration,
-      vz: BOSS_DEPTH / duration, targetsBoss, drone, damage });
+      vz: BOSS_DEPTH / duration, targetsBoss, bossSupport: this.level === 'io' ? !this.ioLegBroken : undefined, drone, damage });
   }
 
   private advance(shot: Shot, dt: number) {
@@ -750,7 +790,7 @@ export class Flight {
     if (laser) enemy.laserDamage = (enemy.laserDamage ?? 0) + before - enemy.hp;
     if (enemy.hp === 0) {
       if (enemy.centipede) severCentipede(enemy);
-      this.score += 100;
+      this.score += enemy.crucible?300:enemy.slag?10:100;
       if (enemy.drop) this.drops.push({ x: enemy.x, y: enemy.y, weapon: enemy.drop });
     }
   }
@@ -759,6 +799,12 @@ export class Flight {
     if (this.phase !== 'boss') return;
     const before = this.bossHealth;
     this.bossHealth = Math.max(0, this.bossHealth - damage);
+    if (this.level === 'io' && !this.ioLegBroken && this.bossHealth <= IO_HP-IO_LEG_HP) {
+      this.bossHealth = IO_HP-IO_LEG_HP;
+      this.ioCollapseAge = 0;
+      for(const wing of this.wings){wing.laserHold=0;wing.laserTarget=undefined;}
+      this.pickupMessage = 'Support broken · Machinery exposed'; this.pickupTime=2.4;
+    }
     if (laser) this.bossLaserDamage += before - this.bossHealth;
     if (this.bossHealth === 0) {
       this.score += 1000;

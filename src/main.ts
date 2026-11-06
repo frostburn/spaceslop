@@ -1,3 +1,4 @@
+import {ioSection,IO_SCREENS} from './io-layout';
 import { titanSection } from './titan-layout';
 import { registerSW } from 'virtual:pwa-register';
 import { BOSS_HP, Flight, HEIGHT, STEP, WIDTH } from './game';
@@ -36,6 +37,7 @@ if (import.meta.env.DEV) {
   workshop.textContent = 'Asset workshop';
   workshop.style.cssText = 'margin-top: .8rem; color: var(--accent); font-size: .75rem';
   panel.append(workshop);
+  const ioStudy=document.createElement('a');ioStudy.id='io-study';ioStudy.href=import.meta.env.BASE_URL+'io-study.html';ioStudy.textContent='Io camera study';ioStudy.style.cssText=workshop.style.cssText;panel.append(ioStudy);
 }
 const heading = element('heading');
 const message = element('message');
@@ -111,11 +113,12 @@ function syncUI() {
   const active = screen === 'active';
   const fighting = flight.phase === 'stage' || flight.phase === 'boss';
   const label = {
-    stage: levels[flight.level].sector, approach: flight.level==='titan'?'ASCENT':'CONTACT', boss: 'BOSS', won: 'CLEAR', lost: 'SIGNAL LOST',
+    stage: levels[flight.level].sector, approach: flight.level==='io'?'CALDERA APPROACH':flight.level==='titan'?'ASCENT':'CONTACT', boss: 'BOSS', won: 'CLEAR', lost: 'SIGNAL LOST',
   }[flight.phase];
   sector.textContent = (flight.level === 'ice' || flight.level === 'titan') && flight.phase === 'stage'
     ? `${label} · ${Math.min(10, Math.floor(flight.hiveProgress * 10) + 1)}/10` : label;
-  sector.title = flight.level === 'titan' ? titanSection(flight.hiveProgress) : flight.level === 'ice' ? iceSection(flight.hiveProgress) : levels[flight.level].name;
+  if(flight.level==='io' && flight.phase==='stage') sector.textContent=`IO · ${Math.min(IO_SCREENS,Math.floor(flight.hiveProgress*IO_SCREENS)+1)}/${IO_SCREENS}`;
+  sector.title = flight.level==='io'&&flight.phase==='stage'?ioSection(flight.time):flight.level === 'titan' ? titanSection(flight.hiveProgress) : flight.level === 'ice' ? iceSection(flight.hiveProgress) : levels[flight.level].name;
   score.textContent = String(flight.score).padStart(6, '0');
   hull.textContent = String(flight.hull).padStart(2, '0');
   charges.textContent = String(flight.charges).padStart(2, '0');
@@ -130,7 +133,8 @@ function syncUI() {
   if (import.meta.env.DEV) {
     const bossStart = element<HTMLButtonElement>('dev-boss');
     bossStart.hidden = !betweenRuns;
-    bossStart.textContent=flight.level==='titan'?'Launch at transition':'Launch at boss';
+    element('io-study').hidden = !betweenRuns || flight.level !== 'io';
+    bossStart.textContent=flight.level==='titan'||flight.level==='io'?'Launch at transition':'Launch at boss';
     bossStart.disabled = start.disabled || !view;
   }
   pilotPicker.setVisible(betweenRuns);
@@ -144,8 +148,8 @@ function syncUI() {
   if (preparing) tip = 'Preparing graphics…';
   else if (screen === 'title' && offlineReady) tip = 'Ready offline';
   else if (flight.droneWeapon === 'towline') {
-    tip = flight.phase === 'boss' ? (flight.level === 'ice' ? 'Sweep the arc across the mouth marker.' : flight.level==='titan'?'Sweep the arc across the glowing thorax vent.':'Sweep the arc across the green cannon.') : 'Park the drone · Sweep the arc';
-  } else if (flight.phase === 'boss') tip = flight.level === 'ice' ? 'Tap the mouth marker. Dodge amber rings.' : flight.level==='titan'?'Tap the glowing thorax vent. Dodge amber rings.':'Tap the green cannon. Dodge amber rings.';
+    tip = flight.phase === 'boss' ? (flight.level === 'ice' ? 'Sweep the arc across the mouth marker.' : flight.level==='io'?'Sweep the arc across the cyan support, then exposed machinery.':flight.level==='titan'?'Sweep the arc across the glowing thorax vent.':'Sweep the arc across the green cannon.') : 'Park the drone · Sweep the arc';
+  } else if (flight.phase === 'boss') tip = flight.level === 'ice' ? 'Tap the mouth marker. Dodge amber rings.' : flight.level==='io'?(flight.ioLegBroken?'Machinery exposed · Dodge the wheel shots.':'Break the cyan front support.'):flight.level==='titan'?'Tap the glowing thorax vent. Dodge amber rings.':'Tap the green cannon. Dodge amber rings.';
   if (active && flight.perkTime > 0) {
     tip = flight.perkMessage;
   } else if (active && flight.pickupTime > 0) {

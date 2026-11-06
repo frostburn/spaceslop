@@ -7,7 +7,7 @@ import { setAntMoldTexture } from './ant-mold';
 import { setTitanChitinTexture } from './titan-insect-surfaces';
 
 type EncounterTexture = 'armor' | 'feathers' | 'scales' | 'preserve' | 'shipyard' |
-  'hive' | 'hiveMask' | 'hiveStars' | 'hiveMines' | 'chitin' | 'fungus' | 'mold' | 'ice' | 'rock' | 'galaxy' | 'marine' | 'titan' | 'titanRobot' | 'titanChitin';
+  'hive' | 'hiveMask' | 'hiveStars' | 'hiveMines' | 'chitin' | 'fungus' | 'mold' | 'ice' | 'rock' | 'galaxy' | 'marine' | 'titan' | 'titanRobot' | 'titanChitin' | 'ioBasalt' | 'ioCeramic';
 declare const __ENCOUNTER_TEXTURES__: Partial<Record<EncounterTexture, string>>;
 
 export function encounterTextureUrl(name: EncounterTexture) {
