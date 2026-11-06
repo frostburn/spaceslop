@@ -26,7 +26,7 @@ test('both claws and the gills remain in front of the terrain through the reveal
  for(const time of [107,107.5,108,110,111,113,114.5,116,119,122]){
   const rise=v.ventCameraRise(time),fight=Math.max(0,time-108),boss=v.ventBossPose(v.ventBossReveal(time),fight),origin=eye(time,rise),orbit=v.ventOrbit(fight);
   const rotation=new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),-orbit.yaw).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(1,0,0),v.VENT_PITCH));
-  for(const x of [-2.4,0,2.4]){const target=new T.Vector3(x,0,.815).applyQuaternion(rotation).add(new T.Vector3(boss.x,boss.y,boss.z)),direction=target.clone().sub(origin),length=direction.length();const ray=new T.Raycaster(origin,direction.normalize(),0,length-.05);assert.equal(ray.intersectObject(geology,true).length,0,'terrain obscures weakpoint at '+time);}
+  for(const x of [-c.CRAB_TARGET_X,0,c.CRAB_TARGET_X]){const target=new T.Vector3(x,0,.815).applyQuaternion(rotation).add(new T.Vector3(boss.x,boss.y,boss.z)),direction=target.clone().sub(origin),length=direction.length();const ray=new T.Raycaster(origin,direction.normalize(),0,length-.05);assert.equal(ray.intersectObject(geology,true).length,0,'terrain obscures weakpoint at '+time);}
  }
  const fronts=createVentFormations().filter(f=>f.front);assert(fronts.length>100);for(const f of fronts)assert(Math.hypot(f.x,f.y-v.VENT_SHAFT_Y)>v.VENT_CRAB_RADIUS+2,'wall artwork intrudes into the crab space');
 });
@@ -62,5 +62,5 @@ test('the camera settles before the raster crab descends from above into combat 
  }
  const settled=v.ventFrame(105,1);let last=Infinity;
  for(let time=105;time<=108;time+=.1){assert.equal(v.ventCameraRise(time),1);assert.deepEqual(v.ventFrame(time,1),settled);const boss=v.ventBossPose(v.ventBossReveal(time));assert(boss.z<=last);last=boss.z;}
- assert.equal(v.ventBossReveal(108),1);assert.equal(v.ventBossPose(1).z,v.VENT_CRAB_Z);
+ assert.equal(v.ventBossReveal(107),1);assert.equal(v.ventBossReveal(108),1);assert.equal(v.ventBossPose(1).z,v.VENT_CRAB_Z);
 });

@@ -28,3 +28,17 @@ test('landscape modules progress from pale terraces and colonies to chimney clus
  assert(route.some(p=>p.y<36&&p.cell===8));assert(route.some(p=>p.y>36&&p.y<76&&p.cell===10));assert(route.some(p=>p.y>112&&p.cell===11));assert(!route.some(p=>p.y>112&&p.cell===8));
  assert(f.some(p=>p.front&&p.cell>=12));assert(f.every(p=>p.cell>=0&&p.cell<16));
 });
+
+test('fine bubbles disperse at different velocities and clear within seven tenths after emission stops',()=>{
+ const b=createBurnerBubbles(128),plane=new T.Group(),nozzle=new T.Group(),flame=new T.Mesh();plane.add(nozzle,b.root);nozzle.add(flame);const renderer={getDrawingBufferSize:v=>v.set(720,1280)};
+ for(let i=0;i<8;i++)b.update(plane,[flame],.05,i*.05,renderer);
+ const g=b.root.geometry;assert(Math.max(...g.attributes.radius.array)<.075);assert(new Set(Array.from(g.attributes.position.array).filter(x=>x!==0).map(x=>x.toFixed(3))).size>12);
+ nozzle.visible=false;for(let i=0;i<7;i++)b.update(plane,[flame],.1,1+i*.1,renderer);assert(g.attributes.opacity.array.every(x=>x===0));
+});
+
+test('decorative mollusks share barnacle shell resources and remain rooted while breathing',async()=>{
+ const {createMortarAssets}=await server.ssrLoadModule('/src/vent-mortar-rig.ts'),{createVentColonies,ventColonyPlacements}=await server.ssrLoadModule('/src/vent-colonies.ts');
+ const assets=createMortarAssets(new T.Texture()),colonies=createVentColonies(assets),placements=ventColonyPlacements();assert(placements.length>40);assert(placements.every(p=>p.size<.6));assert.deepEqual(placements,ventColonyPlacements());
+ const base=colonies.root.children[0],shell=colonies.root.children[1],a=new T.Matrix4(),b=new T.Matrix4();base.getMatrixAt(0,a);shell.getMatrixAt(0,b);colonies.update(3);const c=new T.Matrix4(),d=new T.Matrix4();base.getMatrixAt(0,c);shell.getMatrixAt(0,d);assert.deepEqual(a.elements,c.elements);assert.notDeepEqual(b.elements,d.elements);assert.equal(shell.material,assets.material);assert.equal(shell.geometry,assets.geometries[2]);
+ const texture=new T.Texture();assets.setAtlas(texture);assert.equal(shell.material.map,texture);
+});

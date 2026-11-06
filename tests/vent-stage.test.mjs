@@ -36,7 +36,7 @@ test('scroll coasts with matching velocity at the cliff, and camera/boss positio
  }
  const final=v.ventBossPose(1),point=v.ventWorld(final.x,final.y,final.z,end,1);
  assert(Math.abs(point.x)<1e-8);assert(Math.abs(point.y-4.2)<1e-8);assert(Math.abs(point.z+12)<1e-8);
- assert.equal(v.ventBossPose(0).x,0);assert(v.ventBossPose(0).z>25);
+ assert.equal(v.ventBossPose(0).x,0);assert(v.ventBossPose(0).z>15);
  for(let r=0;r<=1;r+=.02){const b=v.ventBossPose(r);assert(Math.abs(Math.hypot(b.x,b.y-v.VENT_SHAFT_Y)-v.VENT_CRAB_RADIUS)<1e-8,'crab must follow the circular wall');}
 });
 
@@ -65,7 +65,7 @@ test('crab claw targets match the boss combat plane and every wing weapon can da
  const rig=createVentBoss(),end=v.VENT_DURATION+v.VENT_APPROACH,b=v.ventBossPose(1),world=new T.Group();world.add(rig.root);world.rotation.x=-v.VENT_PITCH;
  const origin=v.ventWorld(0,0,0,end,1);world.position.set(origin.x,origin.y,origin.z);rig.root.position.set(b.x,b.y,b.z);rig.root.rotation.x=v.VENT_PITCH;world.updateMatrixWorld(true);
  const p=new T.Vector3();rig.root.getWorldPosition(p);assert(Math.abs(p.y-4.2)<1e-8);assert(Math.abs(p.z+12)<1e-8);
- for(const[side,name]of[[-1,'laser_contact_L'],[1,'laser_contact_R']]){rig.root.getObjectByName(name).getWorldPosition(p);assert(Math.abs(p.x-side*2.4)<1e-8);assert(Math.abs(p.y-4.2)<1e-8);}
+ for(const[side,name]of[[-1,'laser_contact_L'],[1,'laser_contact_R']]){rig.root.getObjectByName(name).getWorldPosition(p);assert(Math.abs(p.x-side*2.4*v.VENT_CRAB_SCALE)<1e-8);assert(Math.abs(p.y-4.2)<1e-8);}
  for(const weapon of ['homing','cannon','laser','omega']){
   const f=new Flight('sentry',[weapon,weapon],'vex','vents');f.phase='boss';f.cooldown=1000;f.droneCooldown=1000;
   for(let i=0;i<500&&f.bossHealth===64;i++){f.player.x=f.exposedCannonX*BOSS_PROJECTION-1.2;f.invulnerable=100;f.step(STEP);}

@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {VENT_CRAB_SCALE} from './vent-layout';
 import {BOSS_MUZZLE_Z} from './encounters';
 import {crabFeet,CRAB_LEGS} from './vent-crab';
 
@@ -19,7 +20,7 @@ function fallbackAtlas(){
  const texture=new T.DataTexture(data,w,h);texture.flipY=true;texture.colorSpace=T.SRGBColorSpace;texture.generateMipmaps=true;texture.minFilter=T.LinearMipmapLinearFilter;texture.anisotropy=4;texture.needsUpdate=true;return texture;
 }
 export function createVentBoss(fallback?:T.Texture){
- const root=new T.Group();root.name='barnacled-rim-crab';
+ const root=new T.Group();root.name='barnacled-rim-crab';root.scale.setScalar(VENT_CRAB_SCALE);
  let map=fallback??fallbackAtlas();const materials=new Map<string,T.MeshBasicMaterial>();
  function material(layer:number,color=0xffffff){const key=layer+':'+color;let m=materials.get(key);if(!m){m=new T.MeshBasicMaterial({map,alphaTest:.45,side:T.DoubleSide,color,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-layer*2});materials.set(key,m);}return m;}
  function geometry(cell:number,half?:number){
@@ -62,7 +63,7 @@ export function createVentBoss(fallback?:T.Texture){
  });
  function pose(reveal:number,windup:number,targetX:number,firedX:number,recoil:number,time=0,broken:readonly number[]=[0,0],opening=0){
   const feet=crabFeet(reveal,Math.max(0,time-108));
-  legs.forEach((leg,i)=>{const side=i%2?1:-1,row=Math.floor(i/2),foot=feet[i],hip={x:side*1.7,y:.15-row*.12,z:0},knee={x:side*(2.9+row*.65),y:-.8-row*.12,z:foot.z*.35+.25};span(leg.upper,hip,knee,1.35-row*.04);span(leg.lower,knee,foot,1.12-row*.025);leg.toe.position.set(foot.x,foot.y+.18,foot.z+.04);leg.toe.rotation.z=-side*.3;});
+  legs.forEach((leg,i)=>{const side=i%2?1:-1,row=Math.floor(i/2),foot={x:feet[i].x/VENT_CRAB_SCALE,y:feet[i].y/VENT_CRAB_SCALE,z:feet[i].z/VENT_CRAB_SCALE},hip={x:side*1.7,y:.15-row*.12,z:0},knee={x:side*(2.9+row*.65),y:-.8-row*.12,z:foot.z*.35+.25};span(leg.upper,hip,knee,1.35-row*.04);span(leg.lower,knee,foot,1.12-row*.025);leg.toe.position.set(foot.x,foot.y+.18,foot.z+.04);leg.toe.rotation.z=-side*.3;});
   for(const{pivot,side}of eyes)pivot.rotation.z=side*(.08+Math.sin(time*.7)*.035);
   for(const{side,hinge}of plates)hinge.rotation.y=side*opening*1.3;
   core.scale.set(1.85*(1+Math.sin(time*3)*.025+opening*windup*.05),1.7,1);core.position.z=.76-(targetX===0?recoil*.06:0);coreGlow.visible=targetX===0&&opening>0;coreGlow.material.opacity=.12+windup*.3;

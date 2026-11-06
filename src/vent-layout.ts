@@ -7,6 +7,7 @@ export const VENT_SPEED=1.5;
 export const VENT_CAMERA_DISTANCE=40;
 export const VENT_STAGE_PITCH=22*Math.PI/180;
 export const VENT_PITCH=50*Math.PI/180;
+export const VENT_CRAB_SCALE=1.12;
 export const VENT_SHAFT_Y=177,VENT_SHAFT_RADIUS=24,VENT_CRAB_RADIUS=21,VENT_CRAB_Z=-7;
 export const VENT_END_SCROLL=VENT_SHAFT_Y+VENT_CRAB_RADIUS-4.2*Math.cos(VENT_PITCH)-12*Math.sin(VENT_PITCH);
 export const VENT_END_HEIGHT=VENT_CRAB_Z-4.2*Math.sin(VENT_PITCH)+12*Math.cos(VENT_PITCH);
@@ -14,7 +15,7 @@ export const VENT_CLIFF_Y=153;
 export const ventSmooth=(t:number)=>{const v=Math.max(0,Math.min(1,t));return v*v*(3-2*v);};
 // Finish moving the view before revealing the flat articulated boss.
 export const ventCameraRise=(time:number)=>ventSmooth((time-VENT_DURATION)/VENT_CAMERA_SWING);
-export const ventBossReveal=(time:number)=>ventSmooth((time-VENT_DURATION-VENT_CAMERA_SWING)/(VENT_APPROACH-VENT_CAMERA_SWING));
+export const ventBossReveal=(time:number)=>ventSmooth((time-VENT_DURATION-VENT_CAMERA_SWING)/(VENT_APPROACH-VENT_CAMERA_SWING-1));
 export function ventScroll(time:number){
  if(time<=VENT_DURATION)return Math.max(0,time)*VENT_SPEED;
  const t=Math.min(1,(time-VENT_DURATION)/VENT_CAMERA_SWING),t2=t*t,t3=t2*t;
@@ -49,7 +50,7 @@ export function ventFloor(x:number,y:number){
 }
 export function ventBossPose(reveal:number,fightTime=0){
  const orbit=ventOrbit(fightTime),a=orbit.angle,radius=VENT_CRAB_RADIUS/Math.cos(orbit.angle-orbit.yaw);
- return{x:Math.sin(a)*radius,y:VENT_SHAFT_Y+Math.cos(a)*radius,z:30+(VENT_CRAB_Z-30)*reveal};
+ return{x:Math.sin(a)*radius,y:VENT_SHAFT_Y+Math.cos(a)*radius,z:18+(VENT_CRAB_Z-18)*reveal};
 }
 export const VENT_SPAWN_LEAD=3;
 const anchorTimes=[8,23,39,54,70,84];

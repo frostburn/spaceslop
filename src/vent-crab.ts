@@ -1,6 +1,6 @@
-import {VENT_PITCH,ventBossPose,ventOrbit,VENT_SHAFT_Y,VENT_SHAFT_RADIUS} from './vent-layout';
+import {VENT_CRAB_SCALE,VENT_PITCH,ventBossPose,ventOrbit,VENT_SHAFT_Y,VENT_SHAFT_RADIUS} from './vent-layout';
 export const CRAB_CLAW_HP=12,CRAB_CORE_HP=40,CRAB_HP=CRAB_CLAW_HP*2+CRAB_CORE_HP;
-export const CRAB_TARGET_X=2.4,CRAB_LEGS=8;
+export const CRAB_TARGET_X=2.4*VENT_CRAB_SCALE,CRAB_LEGS=8;
 export const crabSmooth=(value:number)=>{const t=Math.max(0,Math.min(1,value));return t*t*(3-2*t);};
 export function crabTarget(claws:readonly number[],volley:number){
  if(claws[0]<=0&&claws[1]<=0)return 0;

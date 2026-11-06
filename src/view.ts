@@ -89,9 +89,9 @@ export class FlightView {
   private crucibles=Array.from({length:CRUCIBLE_POOL},createCrucible);
   private slags=Array.from({length:SLAG_POOL},createSlag);
   private crucibleModels:(T.Object3D|undefined)[]=[];
-  private vents=createVentScenery();
-  private ventBoss=createVentBoss();
   private mortarAssets=createMortarAssets();
+  private vents=createVentScenery(this.mortarAssets);
+  private ventBoss=createVentBoss();
   private mortars=Array.from({length:MORTAR_POOL},()=>createVentMortar(this.mortarAssets));
   private mortarModels:(T.Object3D|undefined)[]=[];
   private faunaAssets=createFaunaAssets();

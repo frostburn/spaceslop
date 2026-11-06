@@ -8,7 +8,7 @@ const {createBossLaserContact}=await server.ssrLoadModule('/src/laser-contact.ts
 
 test('the crab has two individually breakable claws and a protected core, with capped phase damage',()=>{
  const f=new Flight('sentry',[],'vex','vents');f.phase='boss';assert.equal(f.bossHealth,c.CRAB_HP);assert.equal(f.bossMaxHealth,c.CRAB_HP);
- f.damageBoss(100);assert.deepEqual(f.crabClawHealth,[0,12]);assert.equal(f.bossHealth,52);assert.equal(f.exposedCannonX,2.4);assert(!f.crabCoreOpen);
+ f.damageBoss(100);assert.deepEqual(f.crabClawHealth,[0,12]);assert.equal(f.bossHealth,52);assert.equal(f.exposedCannonX,c.CRAB_TARGET_X);assert(!f.crabCoreOpen);
  f.damageBoss(100);assert.equal(f.bossHealth,40);assert(f.crabCoreOpen);assert.equal(f.exposedCannonX,0);assert.equal(f.crabOpening,0);
  f.time+=.8;assert.equal(f.crabOpening,1);assert.deepEqual(f.crabBreakPose,[1,1]);f.damageBoss(39);assert.equal(f.bossHealth,1);f.damageBoss(1);assert.equal(f.phase,'won');assert.equal(f.score,1000);
  const restart=new Flight('sentry',[],'vex','vents');assert.deepEqual(restart.crabClawHealth,[12,12]);assert(!restart.crabCoreOpen);
@@ -16,7 +16,7 @@ test('the crab has two individually breakable claws and a protected core, with c
 
 test('ship shots committed to a broken claw cannot hit a different claw or the newly exposed core',()=>{
  for(const both of [false,true]){
-  const f=new Flight('sentry',[],'vex','vents');f.phase='boss';f.fire(f.player);const shot=f.shots[0];assert.equal(shot.crabTarget,-2.4);
+  const f=new Flight('sentry',[],'vex','vents');f.phase='boss';f.fire(f.player);const shot=f.shots[0];assert.equal(shot.crabTarget,-c.CRAB_TARGET_X);
   f.damageBoss(12);if(both)f.damageBoss(12);const health=f.bossHealth;shot.x=-2.4;shot.y=4.2;shot.z=-11.99;
   f.cooldown=f.droneCooldown=1000;f.stepBoss=()=>{};f.step(STEP);assert.equal(f.bossHealth,health);
  }
@@ -60,5 +60,5 @@ test('raster rig has independent claws/apron, continuous limbs, extra barnacles 
 
 test('claw and central laser contacts follow posed anchors and recoil after either phase change',()=>{
  const plane=new T.Group(),r=createVentBoss();plane.add(r.root);r.root.position.set(0,4.2,-12);const contact=createBossLaserContact(plane,r.root);
- for(const target of [-2.4,2.4,0]){r.pose(1,1,target,target,1,2,[0,0],target===0?1:0);plane.updateMatrixWorld(true);const p=contact(target,22),anchor=r.root.getObjectByName(target<0?'laser_contact_L':target>0?'laser_contact_R':'laser_contact_C'),q=anchor.getWorldPosition(new T.Vector3()),scale=22/(22-q.z);assert(Math.hypot(p.x-q.x*scale,p.y-q.y*scale)<1e-8);assert.equal(q.x,target);}
+ for(const target of [-c.CRAB_TARGET_X,c.CRAB_TARGET_X,0]){r.pose(1,1,target,target,1,2,[0,0],target===0?1:0);plane.updateMatrixWorld(true);const p=contact(target,22),anchor=r.root.getObjectByName(target<0?'laser_contact_L':target>0?'laser_contact_R':'laser_contact_C'),q=anchor.getWorldPosition(new T.Vector3()),scale=22/(22-q.z);assert(Math.hypot(p.x-q.x*scale,p.y-q.y*scale)<1e-8);assert.equal(q.x,target);}
 });

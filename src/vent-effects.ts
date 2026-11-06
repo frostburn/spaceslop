@@ -33,7 +33,7 @@ export function createVentHeat(emitters:readonly {x:number;y:number;z:number}[])
 // Pooled trails live in the flight plane, so emitted bubbles stay behind when a
 // ship changes direction. Neither the particles nor their geometry grow in play.
 export function createBurnerBubbles(capacity=640){
- const positions=new Float32Array(capacity*3),radii=new Float32Array(capacity),opacity=new Float32Array(capacity),velocity=new Float32Array(capacity*3),ages=new Float32Array(capacity).fill(10);
+ const positions=new Float32Array(capacity*3),radii=new Float32Array(capacity),opacity=new Float32Array(capacity),velocity=new Float32Array(capacity*3),lifetimes=new Float32Array(capacity),ages=new Float32Array(capacity).fill(10);
  const g=new T.BufferGeometry();g.setAttribute('position',new T.BufferAttribute(positions,3).setUsage(T.DynamicDrawUsage));g.setAttribute('radius',new T.BufferAttribute(radii,1).setUsage(T.DynamicDrawUsage));g.setAttribute('opacity',new T.BufferAttribute(opacity,1).setUsage(T.DynamicDrawUsage));
  const uniforms={height:{value:1}};
  const material=new T.ShaderMaterial({transparent:true,depthWrite:false,uniforms,
@@ -48,14 +48,14 @@ export function createBurnerBubbles(capacity=640){
   renderer.getDrawingBufferSize(size);uniforms.height.value=size.y;if(dt<=0)return;
   dt=Math.min(dt,.1);plane.updateWorldMatrix(true,false);inverse.copy(plane.matrixWorld).invert();
   for(let i=0;i<capacity;i++){
-   ages[i]+=dt;const age=ages[i];if(age>1.6){opacity[i]=0;continue;}const a=i*3;
-   positions[a]+=velocity[a]*dt+Math.sin(time*4+i)*dt*.12;positions[a+1]+=velocity[a+1]*dt;positions[a+2]+=(velocity[a+2]+age*.3)*dt;
-   radii[i]=(.08+(i%7)*.009)*(1+age*.65);opacity[i]=Math.sin(Math.PI*Math.min(1,age/1.6))*.65;
+   ages[i]+=dt;const age=ages[i];if(age>lifetimes[i]){opacity[i]=0;continue;}const a=i*3;
+   positions[a]+=velocity[a]*dt+Math.sin(time*11+i*2.3)*dt*.45;positions[a+1]+=(velocity[a+1]+Math.cos(time*9+i)*.35)*dt;positions[a+2]+=(velocity[a+2]+age*.3)*dt;
+   radii[i]=(.024+(i%11)*.0028)*(1+age*.35);opacity[i]=Math.sin(Math.PI*Math.min(1,age/lifetimes[i]))*.55;
   }
-  carry+=dt;while(carry>=.045){carry-=.045;for(const flame of sources){
+  carry+=dt;while(carry>=.028){carry-=.028;for(const flame of sources){
    let visible=true;for(let o:T.Object3D|null=flame;o&&o!==plane;o=o.parent)if(!o.visible){visible=false;break;}if(!visible||!flame.parent)continue;
    flame.parent.updateWorldMatrix(true,false);matrix.multiplyMatrices(inverse,flame.parent.matrixWorld);p.set(0,-.12,0).applyMatrix4(matrix);direction.set(0,-1,0).transformDirection(matrix).multiplyScalar(2.2+flame.scale.y);
-   const i=cursor++%capacity,a=i*3;positions[a]=p.x+(i%3-1)*.035;positions[a+1]=p.y;positions[a+2]=p.z+.08;velocity[a]=direction.x;velocity[a+1]=direction.y;velocity[a+2]=direction.z+.45;ages[i]=carry;radii[i]=.09;opacity[i]=.15;
+   const i=cursor++%capacity,a=i*3;positions[a]=p.x+Math.sin(i*78.23)*.1;positions[a+1]=p.y;positions[a+2]=p.z+.08;velocity[a]=direction.x+Math.sin(i*12.7)*.7;velocity[a+1]=direction.y*(.55+(i%13)/16);velocity[a+2]=direction.z+.3+Math.cos(i*9.3)*.3;lifetimes[i]=.3+(i%17)/50;ages[i]=carry;radii[i]=.03;opacity[i]=.15;
   }}
   for(const name of ['position','radius','opacity'])g.attributes[name].needsUpdate=true;
  }

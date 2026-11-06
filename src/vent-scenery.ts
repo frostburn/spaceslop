@@ -3,14 +3,17 @@ import {createVentFormations,ventTierTint,type VentFormation} from './vent-forma
 import {createVentGeology} from './vent-geology';
 import {createVentAtlas,ventCardGeometry,ventCardRelief,ventTallCell} from './vent-atlas';
 import {loadEncounterTexture} from './encounter-texture';
+import {type createMortarAssets} from './vent-mortar-rig';
+import {createVentColonies} from './vent-colonies';
 import {createVentHeat} from './vent-effects';
 import {ioNoise} from './io-layout';
 import {VENT_SHAFT_Y,VENT_STAGE_PITCH,ventFrame,ventWorld,ventBossPose} from './vent-layout';
 
 function random(seed:number){return()=>{seed=(Math.imul(seed,1664525)+1013904223)|0;return(seed>>>0)/4294967296;};}
-export function createVentScenery(){
+export function createVentScenery(molluskAssets:ReturnType<typeof createMortarAssets>){
  const root=new T.Group();root.name='hydrothermal-vents';root.visible=false;
  const world=new T.Group();root.add(world);world.add(createVentGeology());
+ const colonies=createVentColonies(molluskAssets);world.add(colonies.root);
  const atlas=createVentAtlas(),material=new T.MeshBasicMaterial({map:atlas,alphaTest:.15,side:T.DoubleSide});
  const extraMaterial=material.clone();extraMaterial.map=createVentAtlas(true);
  const ready=Promise.all([loadEncounterTexture('ventAtlas',texture=>{texture.anisotropy=4;material.map=texture;material.needsUpdate=true;}),loadEncounterTexture('ventExtras',texture=>{texture.anisotropy=4;extraMaterial.map=texture;extraMaterial.needsUpdate=true;})]);
@@ -45,7 +48,7 @@ export function createVentScenery(){
  const moteMaterial=new T.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{clock:{value:0}},vertexShader:`uniform float clock;void main(){vec3 p=position;p.x+=sin(clock*.18+position.y)*.12;p.z+=sin(clock*.1+position.x)*.12;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);gl_PointSize=1.6;}`,fragmentShader:`void main(){float r=length(gl_PointCoord-.5)*2.;gl_FragColor=vec4(.45,.67,.69,(1.-smoothstep(.2,1.,r))*.18);}`});
  const particles=new T.Points(motesGeometry,moteMaterial);particles.name='suspended-vent-particles';world.add(particles);
  function update(time:number,rise:number,_alive=true){
-  const frame=ventFrame(time,rise),origin=ventWorld(0,0,0,time,rise);world.rotation.set(-frame.pitch,0,frame.yaw,'XYZ');world.position.set(origin.x,origin.y,origin.z);moteMaterial.uniforms.clock.value=time;heat.update(time);
+  const frame=ventFrame(time,rise),origin=ventWorld(0,0,0,time,rise);world.rotation.set(-frame.pitch,0,frame.yaw,'XYZ');world.position.set(origin.x,origin.y,origin.z);moteMaterial.uniforms.clock.value=time;heat.update(time);colonies.update(time);
   for(let i=0;i<count;i++){
    const e=emitters[Math.floor(i/10)],t=(time*.10+(i%10)/10+Math.floor(i/10)*.37)%1;
    p.set(e.x+Math.sin(i*2.4+t*3)*t*.65,e.y+t*.45,e.z+t*5.5);q.identity();scale.set(1+t*2.4,1.2+t*2.7,1);matrix.compose(p,q,scale);clouds.setMatrixAt(i,matrix);alpha.setX(i,Math.sin(t*Math.PI)*(e.pale?.19:.4));tint.setXYZ(i,e.pale?.38:.035,e.pale?.50:.065,e.pale?.51:.08);
