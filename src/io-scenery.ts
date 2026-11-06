@@ -1,4 +1,5 @@
 import {createIoActivity} from './io-activity';
+import {createIoShadowAnchor} from './io-shadow';
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ioRock,ioGround,ioCrust,ioCeramic,ioSafety,ioSteel,ioChrome,ioDark,ioHot,ioRust,ioWeather,ioRandom,poseIoEnvironment } from './io-materials';
@@ -10,8 +11,9 @@ export function createIoScenery(){
   const world=new T.Group();root.add(world);const activity=createIoActivity();world.add(activity.root);
   const sun=new T.DirectionalLight(0xffecd0,3.5);sun.castShadow=true;
   sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=sun.shadow.camera.bottom=-22;sun.shadow.camera.right=sun.shadow.camera.top=22;
-  sun.shadow.camera.near=.5;sun.shadow.camera.far=120;sun.shadow.bias=-.00025;sun.shadow.normalBias=.035;
+  sun.shadow.camera.near=.5;sun.shadow.camera.far=120;sun.shadow.bias=-.0004;sun.shadow.normalBias=.06;
   world.add(sun,sun.target);
+  const anchorShadow=createIoShadowAnchor(sun,world);
   const lavaFill=new T.PointLight(0xff500f,95,45,2);lavaFill.position.set(0,54,-3.5);world.add(lavaFill);
   const boss=createCaldera();boss.root.position.set(0,IO_BOSS_Y,IO_BOSS_Z);boss.root.rotation.x=Math.PI/2;world.add(boss.root);
   const land=new T.PlaneGeometry(120,168,240,336);land.translate(0,48,0);
@@ -171,7 +173,7 @@ export function createIoScenery(){
   world.traverse(o=>{if(o instanceof T.Mesh&&o!==lava&&!([o.material].flat().some(m=>m.transparent))){o.castShadow=o.receiveShadow=true;}});
   function update(time:number,rise:number){
     const frame=ioFrame(time,rise),origin=ioWorld(0,0,time,rise);world.rotation.x=-frame.pitch;world.position.set(0,origin.y,origin.z);lavaMaterial.uniforms.clock.value=time;activity.update(time);
-    sun.position.set(-26,frame.scroll-21,38);sun.target.position.set(0,frame.scroll+7,-3);poseIoEnvironment(rise);
+    anchorShadow(frame.scroll);poseIoEnvironment(rise);
   }
   update(0,0);
   return {root,world,boss,update,prime(active:boolean){root.traverse(o=>{if(o instanceof T.Mesh)o.frustumCulled=!active;});}};

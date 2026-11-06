@@ -146,3 +146,19 @@ test('reviewed surfaces propagate to every Io terrain and painted material, whil
  for(const material of [m.ioCeramic,m.ioBand]){assert.equal(material.map,paint);assert.equal(material.bumpMap,paint);}
  for(const rise of [0,.3,.7,1]){m.poseIoEnvironment(rise);assert(Number.isFinite(m.ioChrome.envMapRotation.x));}
 });
+
+test('shadow texel phase stays fixed to terrain during scrolling and the entire camera rotation',()=>{
+ const scene=createIoScenery(),sun=scene.world.children.find(o=>o.isDirectionalLight),plane=new T.Group();plane.add(scene.root);
+ const point=new T.Vector3(),reference=[];
+ for(let i=0;i<=280;i++){
+  const time=i/10,rise=layout.smooth01((time-20)/8);plane.rotation.x=(rise-1)*Math.PI/2;
+  scene.update(time,rise);plane.updateMatrixWorld(true);sun.shadow.updateMatrices(sun);
+  const phase=[];
+  for(const [x,y,z] of [[1,14,-3],[-3,27,0],[6,51,-2]]){
+   point.set(x,y,z);scene.world.localToWorld(point);point.project(sun.shadow.camera);
+   phase.push((point.x+1)*sun.shadow.mapSize.x/2,(point.y+1)*sun.shadow.mapSize.y/2);
+  }
+  if(!i)reference.push(...phase);
+  else phase.forEach((v,j)=>assert(Math.abs(v-reference[j]-Math.round(v-reference[j]))<1e-7,'terrain slides between light texels'));
+ }
+});
