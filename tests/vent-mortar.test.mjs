@@ -45,6 +45,6 @@ test('all projectile and laser weapon paths damage an anchored mortar; Towline a
 
 test('the full route fits the prewarmed mortar pool even when the player never shoots',()=>{
  const f=new Flight('sentry',[],'vex','vents');f.fire=()=>{};f.stepDroneWeapon=()=>{};let max=0;const seen=new Set();
- for(let i=0;i<6002;i++){f.invulnerable=100;f.step(STEP);const active=f.enemies.filter(e=>e.ventAnchor!==undefined);max=Math.max(max,active.length);active.forEach(e=>seen.add(e.ventAnchor));}
+ for(let i=0;i<6002;i++){f.invulnerable=100;f.step(STEP);const active=f.enemies.filter(e=>e.ventAnchor!==undefined&&!e.ventWorm);max=Math.max(max,active.length);active.forEach(e=>seen.add(e.ventAnchor));}
  assert.equal(seen.size,6);assert(max>0&&max<=m.MORTAR_POOL);assert.equal(f.phase,'approach');assert.equal(f.enemies.length,0);
 });

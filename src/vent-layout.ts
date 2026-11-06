@@ -1,5 +1,5 @@
-// One world: X across the corridor, Y forward, Z up. Rendering and anchored
-// placeholder enemies use this same transform throughout the abyss approach.
+// One world: X across the corridor, Y forward, Z up. Rendering and rooted
+// enemies use this same transform throughout the abyss approach.
 export const VENT_DURATION=100;
 export const VENT_APPROACH=8;
 export const VENT_SPEED=1.5;
@@ -38,13 +38,14 @@ export function ventBossPose(rise:number){
  return{x,y:endY+ventFarEdge(x)-ventFarEdge(0),z:-7+(endZ+7)*climb};
 }
 const anchorTimes=[8,23,39,54,70,84];
-export const ventAnchors=anchorTimes.map((time,i)=>({time,x:(i%2?-1:1)*3.8,y:time*VENT_SPEED+13,z:1.25}));
+export const ventAnchors=[...anchorTimes.map((time,i)=>({time,x:(i%2?-1:1)*3.8,y:time*VENT_SPEED+13,z:1.25,worm:false})),
+ ...[17,47,77,90].map((time,i)=>({time,x:(i%2?1:-1)*3.65,y:time*VENT_SPEED+13,z:1.25,worm:true}))];
 export function ventAnchorPoint(index:number,time:number){
  const a=ventAnchors[index],p=ventWorld(a.x,a.y,a.z,time,0),scale=VENT_CAMERA_DISTANCE/(VENT_CAMERA_DISTANCE-p.z);
  return{x:p.x*scale,y:p.y*scale,scale};
 }
 const drops=['homing','cannon','laser','omega'] as const;
-type VentWave={time:number;lanes:number[];carrier?:number;drop?:typeof drops[number];ventAnchor?:number};
-const patrols:VentWave[]=Array.from({length:18},(_,i)=>({time:.7+i*5.15,lanes:i%3===0?[-2.4,0,2.4]:i%3===1?[-1.8,1.8]:[-2.5,-.8,.8,2.5],carrier:i%2,drop:drops[i%4]}));
-export const ventWaves:VentWave[]=[...patrols,...ventAnchors.map((a,i)=>({time:a.time,lanes:[0],ventAnchor:i}))].sort((a,b)=>a.time-b.time);
+type VentWave={time:number;lanes:number[];carrier?:number;drop?:typeof drops[number];ventAnchor?:number;ventWorm?:boolean;shrimp?:{formation:'weave'|'cross'|'curl';mirror:number}};
+const patrols:VentWave[]=Array.from({length:18},(_,i)=>({time:.7+i*5.15,lanes:i%3===0?[-2.1,0,2.1]:i%3===1?[-1.9,1.9]:[0,0,0,0],carrier:i%2,drop:drops[i%4],shrimp:{formation:i%3===0?'weave':i%3===1?'cross':'curl',mirror:i%2?1:-1}}));
+export const ventWaves:VentWave[]=[...patrols,...ventAnchors.map((a,i)=>({time:a.time,lanes:[0],ventAnchor:i,ventWorm:a.worm}))].sort((a,b)=>a.time-b.time);
 export function ventSection(time:number){return time<24?'MINERAL GARDENS':time<50?'BLACK SMOKERS':time<76?'CHIMNEY CANYON':time<94?'FRACTURED SHELF':'ABYSSAL DROP';}

@@ -10,8 +10,8 @@ const {createVentBoss}=await server.ssrLoadModule('/src/vent-boss.ts');
 const {ventCardGeometry}=await server.ssrLoadModule('/src/vent-atlas.ts');
 const {levels,readLevel}=await server.ssrLoadModule('/src/levels.ts');
 
-test('Hadal has ten screens of prototype patrols and scenery sentries, a quiet approach and a winnable media-free boss',()=>{
- assert.equal(readLevel('vents'),'vents');assert.equal(levels.vents.duration,100);assert.equal(v.ventWaves.filter(w=>w.ventAnchor!==undefined).length,6);
+test('Hadal has ten screens of shrimp patrols and rooted threats, a quiet approach and a winnable media-free boss',()=>{
+ assert.equal(readLevel('vents'),'vents');assert.equal(levels.vents.duration,100);assert.equal(v.ventWaves.filter(w=>w.ventAnchor!==undefined).length,10);
  const f=new Flight('sentry',[],'vex','vents'),drops=new Set(),anchors=new Set();let peak=0,sawApproach=false,sawBoss=false;
  for(let i=0;i<11000&&!['won','lost'].includes(f.phase);i++){
   f.invulnerable=100;f.step(STEP);peak=Math.max(peak,f.enemies.length);
@@ -19,7 +19,7 @@ test('Hadal has ten screens of prototype patrols and scenery sentries, a quiet a
   if(f.phase==='approach'){sawApproach=true;assert.equal(f.transitionDuration,8);assert.equal(f.enemies.length+f.shots.length+f.threats.length,0);}
   if(f.phase==='boss')sawBoss=true;
  }
- assert(sawApproach&&sawBoss);assert.equal(f.phase,'won');assert.equal(anchors.size,6);assert.equal(drops.size,4);assert(peak<=12);
+ assert(sawApproach&&sawBoss);assert.equal(f.phase,'won');assert.equal(anchors.size,10);assert.equal(drops.size,4);assert(peak<=12);
  const again=new Flight('sentry',[],'vex','vents');assert.equal(again.time,0);assert.equal(again.bossHealth,30);
 });
 
