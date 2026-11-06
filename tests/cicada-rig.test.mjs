@@ -67,3 +67,13 @@ test('the ocellar triangle clears the face ribs and main eyes and rostrum stay c
  for(const eye of eyes)assert(Math.max(...eye.scale.toArray())<.6);
  const box=new Box3().setFromObject(rostrum);assert(box.max.y-box.min.y<.7);
 });
+
+test('reference face ribs lie on the continuous clypeus and ocelli point downward',async()=>{
+ const {Vector3,Raycaster}=await import('three'),rig=createCicada(),ribs=[],ocelli=[];let shield;
+ rig.root.updateMatrixWorld(true);rig.root.traverse(n=>{if(n.name==='clypeal-rib')ribs.push(n);if(n.name==='clypeus')shield=n;if(n.name==='ocellus')ocelli.push(n);});
+ assert.equal(ribs.length,16);const centre=ocelli.find(n=>Math.abs(n.position.x)<.01);assert(ocelli.filter(n=>n!==centre).every(n=>n.position.y>centre.position.y));
+ const ray=new Raycaster(),point=new Vector3(),direction=new Vector3(0,0,-1);
+ for(const rib of ribs)for(const t of [0,.25,.5,.75,1]){
+  point.copy(rib.geometry.parameters.path.getPoint(t));rib.parent.localToWorld(point);ray.set(new Vector3(point.x,point.y,point.z+1),direction);const hit=ray.intersectObject(shield,false)[0];assert(hit,'rib misses face surface');assert(point.z-hit.point.z>0&&point.z-hit.point.z<.06,'floating or buried face rib');
+ }
+});

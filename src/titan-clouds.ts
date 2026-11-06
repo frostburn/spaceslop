@@ -1,16 +1,23 @@
+import {titanCloudField,TITAN_CLOUD_RELIEF} from './titan-cloud-relief';
 import * as T from 'three';
 import { titanFrame,titanWorld } from './titan-frame';
 export function createTitanClouds(){
- const root=new T.Group(),geometry=new T.PlaneGeometry(400,400);
- const deck=new T.Mesh(geometry,new T.ShaderMaterial({transparent:true,depthWrite:false,side:T.DoubleSide,uniforms:{time:{value:0},density:{value:0}},
- vertexShader:'varying vec2 ground;void main(){ground=position.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1);}',
- fragmentShader:`varying vec2 ground;uniform float time,density;
- float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
- float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
- float fbm(vec2 p){float n=0.0,w=.55;for(int i=0;i<5;i++){n+=noise(p)*w;p=p*2.03+17.3;w*=.48;}return n;}
- void main(){vec2 p=ground*.3+vec2(time*.035,time*.13);float n=fbm(p);n=fbm(p+vec2(n*2.4,n));
- float light=smoothstep(.2,.76,n);vec3 cloud=mix(vec3(.19,.09,.03),vec3(.95,.58,.22),light);
- float farFog=smoothstep(30.0,170.0,length(ground));cloud=mix(cloud,vec3(.50,.30,.15),farFog);
+ const root=new T.Group(),geometry=new T.PlaneGeometry(400,400,180,180);
+ // Concentrate vertices near the flight corridor instead of wasting the same
+ // spacing on the distant horizon; the banks stay rounded at low altitude.
+ const vertices=geometry.attributes.position;
+ for(let i=0;i<vertices.count;i++){const warp=(v:number)=>Math.sign(v)*200*(Math.abs(v)/200)**2;vertices.setXY(i,warp(vertices.getX(i)),warp(vertices.getY(i)));}
+ const deck=new T.Mesh(geometry,new T.ShaderMaterial({transparent:true,depthWrite:false,side:T.DoubleSide,uniforms:{time:{value:0},density:{value:0},heightScale:{value:2.6},sun:{value:new T.Vector3(3,5,6).normalize()}},
+ vertexShader:`varying vec2 field;varying vec3 cloudNormal;varying float crest,cloudDistance;uniform float time,heightScale,density;${titanCloudField}
+ void main(){field=position.xy+vec2(time*.12,time*.43);cloudDistance=length(position.xy);float amount=1.0-smoothstep(100.0,180.0,cloudDistance),h=0.0;cloudNormal=vec3(0,0,1);
+ if(density>.001&&amount>.01){h=cloudHeight(field);float dx=(cloudHeight(field+vec2(.4,0))-h)/.4,dy=(cloudHeight(field+vec2(0,.4))-h)/.4;cloudNormal=normalize(vec3(-dx*heightScale*amount,-dy*heightScale*amount,1));h*=amount;}
+ crest=h;
+ vec3 puff=position;puff.z+=h*heightScale;gl_Position=projectionMatrix*modelViewMatrix*vec4(puff,1);}`,
+ fragmentShader:`varying vec2 field;varying vec3 cloudNormal;varying float crest,cloudDistance;uniform float density;uniform vec3 sun;${titanCloudField}
+ void main(){if(density<.001)discard;float diffuse=max(0.0,dot(normalize(cloudNormal),sun));float detail=cloudNoise(field*.6)*.7+cloudNoise(field*1.4)*.3;
+ float light=clamp(diffuse*diffuse*.8+crest*.2+(detail-.5)*.12,0.0,1.0);
+ vec3 cloud=mix(vec3(.18,.085,.028),vec3(.97,.62,.28),light);cloud*=.83+crest*.17;
+ float farFog=smoothstep(70.0,190.0,cloudDistance);cloud=mix(cloud,vec3(.50,.30,.15),farFog);
  gl_FragColor=vec4(cloud,density);
  #include <colorspace_fragment>
  }`}));deck.name='titan-cloud-surface';root.add(deck);
@@ -21,6 +28,7 @@ export function createTitanClouds(){
  return{root,update(time:number,rise:number,distance:number){
   const frame=titanFrame(rise),density=T.MathUtils.smoothstep(rise,0,.5);
   [deck,...upper].forEach((sheet,i)=>{const point=titanWorld(0,1+i*1.2,rise);sheet.rotation.x=-frame.pitch;sheet.position.set(0,point.y,point.z);sheet.material.uniforms.time.value=time+i*1.3;sheet.material.uniforms.density.value=density*(i===0?1:.18);});
+  [deck,...upper].forEach((sheet,i)=>{sheet.material.uniforms.heightScale.value=TITAN_CLOUD_RELIEF[i];sheet.material.uniforms.sun.value.set(3,5*Math.cos(frame.pitch)-6*Math.sin(frame.pitch),5*Math.sin(frame.pitch)+6*Math.cos(frame.pitch)).normalize();});
   sky.scale.setScalar((distance+120)/distance);
  }};
 }

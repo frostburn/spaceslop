@@ -32,19 +32,39 @@ export function createCicada() {
     const w=1.05*(1-i*.115);volume(root,i%2?rim:chitin,0,-1.3-i*.38,-.35-i*.09,w,.4,.57*(1-i*.08));
   }
   const head=new T.Group();root.add(head);head.position.set(0,1.2,.65);
-  volume(head,chitin,0,0,0,1.7,.98,.8);
+  const faceCuticle=new T.MeshStandardMaterial({color:0x302b20,roughness:.77});
+  const paleFace=new T.MeshStandardMaterial({color:0xd2c7a4,roughness:.8});
+  paleFace.onBeforeCompile=shader=>{shader.vertexShader='varying float faceY;\n'+shader.vertexShader;shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nfaceY=position.y;');shader.fragmentShader='varying float faceY;\n'+shader.fragmentShader;shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+    diffuseColor.rgb*=mix(vec3(1),vec3(.18,.16,.12),smoothstep(-.7,-.2,faceY));`);};
+  volume(head,faceCuticle,0,0,0,1.7,.72,.8);
   for(const side of [-1,1]){
-    volume(head,chitin,side*1.4,.4,.43,.42,.4,.53);
-    const compound=volume(head,eye,side*1.65,.58,.83,.50,.56,.42,new T.IcosahedronGeometry(1,3));compound.name='compound-eye';
-    link(new T.Vector3(side*.48,.6,.6),new T.Vector3(side*.75,1.45,.55),.055,rim,head);
-    link(new T.Vector3(side*.75,1.45,.55),new T.Vector3(side*1.3,1.75,.48),.029,chitin,head);
+    volume(head,chitin,side*1.4,.15,.43,.42,.3,.53);
+    const compound=volume(head,eye,side*1.65,.15,.83,.50,.50,.42,new T.IcosahedronGeometry(1,3));compound.name='compound-eye';
+    link(new T.Vector3(side*1.02,-.23,.6),new T.Vector3(side*1.5,-.65,.7),.045,faceCuticle,head);
+    link(new T.Vector3(side*1.5,-.65,.7),new T.Vector3(side*2.1,-1.3,.5),.022,faceCuticle,head);
   }
-  // Paired vertical rows of clypeal ribs; these are cuticular ridges, not jaws.
-  volume(head,rim,0,-.15,.76,.55,.6,.27);
-  for(const side of [-1,1])for(let j=0;j<7;j++){const rib=volume(head,rim,side*(.23+Math.sin(j/6*Math.PI)*.11),.29-j*.125,1.01,.15,.052,.105);rib.rotation.z=side*(.28+j*.025);rib.name='clypeal-rib';}
-  volume(head,chitin,0,.68,.55,.57,.43,.37);
-  for(const [x,y] of [[0,.95],[-.29,.65],[.29,.65]]){const ocellus=volume(head,eye,x,y,.98,.12,.12,.09);ocellus.name='ocellus';}
-  const rostrum=volume(head,rim,0,-.65,.87,.13,.30,.12,new T.ConeGeometry(1,2,14));rostrum.rotation.z=Math.PI;rostrum.name='rostrum';
+  // Pear-shaped clypeus and swept ribs follow the supplied face reference.
+  // All grooves/ridges sit on this same closed surface, not floating teeth.
+  const width=(u:number)=>.82*(.62+.38*T.MathUtils.smoothstep(u,-1,.15));
+  const front=(x:number,y:number)=>{const u=(y+.75)/.72;return .78+.32*Math.sqrt(Math.max(0,1-u*u-(x/width(u))**2));};
+  const faceGeometry=new T.SphereGeometry(1,48,32),vertices=faceGeometry.attributes.position;
+  for(let i=0;i<vertices.count;i++){const x=vertices.getX(i),y=vertices.getY(i),z=vertices.getZ(i);vertices.setXYZ(i,x*width(y),-.75+y*.72,.78+z*.32);}
+  faceGeometry.computeVertexNormals();const clypeus=new T.Mesh(faceGeometry,paleFace);clypeus.name='clypeus';head.add(clypeus);
+  for(const side of [-1,1])for(let j=0;j<8;j++){
+    const y=-.30-j*.13,outerY=y+.1,u=(outerY+.75)/.72,outerX=.89*width(u)*Math.sqrt(Math.max(0,1-u*u));
+    const points=Array.from({length:13},(_,k)=>{const t=k/12,x=side*(.065+(outerX-.065)*t),py=y+.1*t*t;return new T.Vector3(x,py,front(x,py)+.004);});
+    const rib=new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(points),20,.017,6,false),faceCuticle);rib.name='clypeal-rib';head.add(rib);
+  }
+  const seam=Array.from({length:17},(_,i)=>{const y=-.13-i/16*1.24;return new T.Vector3(0,y,front(0,y)+.009);});
+  const groove=new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(seam),24,.018,5,false),faceCuticle);groove.name='clypeal-seam';head.add(groove);
+  for(const [x,y] of [[-.27,.5],[.27,.5],[0,.25]]){const z=.8*Math.sqrt(1-(x/1.7)**2-(y/.72)**2);const ocellus=volume(head,eye,x,y,z+.06,.10,.10,.085);ocellus.name='ocellus';}
+  const browGuide=new T.CatmullRomCurve3([new T.Vector3(-1.3,.25,.7),new T.Vector3(-.8,.52,.85),new T.Vector3(0,.7,.66),new T.Vector3(.8,.52,.85),new T.Vector3(1.3,.25,.7)]);
+  const brow=new T.CatmullRomCurve3(Array.from({length:41},(_,i)=>{const p=browGuide.getPoint(i/40),core=1-(p.x/1.7)**2-(p.y/.72)**2;p.z=(core>0?.8*Math.sqrt(core):0)+.028;return p;}));
+  head.add(new T.Mesh(new T.TubeGeometry(brow,48,.042,8,false),rim));
+  const hairs:number[]=[];
+  for(let i=0;i<220;i++){const t=i/219,base=brow.getPoint(t),angle=i*2.39996;hairs.push(base.x,base.y,base.z,base.x+Math.cos(angle)*.035,base.y+.025+Math.sin(angle)*.025,base.z+.045+(i%5)*.007);}
+  const fuzzGeometry=new T.BufferGeometry();fuzzGeometry.setAttribute('position',new T.Float32BufferAttribute(hairs,3));head.add(new T.LineSegments(fuzzGeometry,new T.LineBasicMaterial({color:0xa89163,transparent:true,opacity:.7,depthWrite:false})));
+  const rostrum=volume(head,faceCuticle,0,-1.38,.82,.11,.24,.10,new T.ConeGeometry(1,2,14));rostrum.rotation.z=Math.PI;rostrum.name='rostrum';
   const vents:T.Mesh[]=[];
   for(const side of [-1,1]){
     volume(root,chitin,side*1.45,-.1,0,.8,.95,.58);
