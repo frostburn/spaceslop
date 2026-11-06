@@ -11,3 +11,10 @@
 - A fresh checkout must build and play without any owner-uploaded media. Make external media optional and retain a code-drawn fallback when a file is absent or fails to load. Keep audio optional.
 - Keep controls, combat geometry, collision, and progression independent of visual assets. A placeholder must preserve enough silhouette, size, and contrast to read the ship, hazards, and boss telegraphs.
 - Verify that a placeholder-only run can start, play the scrolling stage, fight the head-on boss, and reach results. Test the production build offline after precaching when touching the PWA or asset loading.
+
+## Architecture and maintenance
+
+- Read `docs/architecture.md` before changing startup, loading, level rendering or offline behavior. `src/assets/catalog.ts` owns media paths and per-level requirements.
+- Keep the main menu free of renderer/game imports and media requests. Construct, load and warm only the chosen level through `src/rendering/levels/` and its typed contract.
+- Preserve scoped session cleanup, procedural fallbacks, fixed-step simulation and pause/results freezing. Own offscreen targets and release them when leaving a level.
+- Run `npm test`, `npm run build` and `npm run test:build` for relevant changes. Loading/PWA changes also need browser checks for level isolation, cancellation/switching, and production offline play with and without media.

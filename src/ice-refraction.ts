@@ -19,7 +19,7 @@ export function iceRefraction() {
   const size = new T.Vector2(), clear = new T.Color();
   let decorations: T.Object3D[] | undefined;
   const visible: boolean[] = [];
-  return { uniforms, empty, capture(renderer: T.WebGLRenderer, camera: T.Camera, root: T.Group, field: T.Group) {
+  return { uniforms, empty, dispose(){for(const layer of layers)layer.dispose();empty.dispose();},capture(renderer: T.WebGLRenderer, camera: T.Camera, root: T.Group, field: T.Group) {
     if (!root.visible || !root.parent) return;
     renderer.getDrawingBufferSize(size);
     // Bound mobile fill cost; all bodies remain instanced in six shared batches.

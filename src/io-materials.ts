@@ -2,7 +2,7 @@ import * as T from 'three';
 import { texturedSurface } from './encounter-surfaces';
 import { IO_PITCH } from './io-layout';
 import {ioDustCoating} from './io-dust-surface';
-import {ioTriplanar} from './io-surface';
+import {applyTriplanar} from './rendering/triplanar';
 
 export function ioRandom(seed:number) {
   return () => { seed=(Math.imul(seed,1664525)+1013904223)|0;return (seed>>>0)/4294967296; };
@@ -84,8 +84,8 @@ ioCrust.onBeforeCompile=(shader,renderer)=>{
  shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=vec3(2.5,.38,.012)*vTemperature;');
 };
 ioCrust.customProgramCacheKey=()=> 'io-fracture-hot-walls-v1';
-for(const m of [ioRock,ioCrust])ioTriplanar(m,.45);
-ioTriplanar(ioGround,.19);for(const m of [ioSilo,ioSiloBand])ioTriplanar(m,.65);
+for(const m of [ioRock,ioCrust])applyTriplanar(m,.45);
+applyTriplanar(ioGround,.19);for(const m of [ioSilo,ioSiloBand])applyTriplanar(m,.65);
 
 // Dust scatters highlights; sheltered vertical surfaces retain irregular grime.
 // Keep furnace emissions, target paint and sulfur payloads clean/readable.

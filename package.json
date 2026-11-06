@@ -8,7 +8,8 @@
     "check": "tsc --noEmit",
     "test": "node --test tests/*.test.mjs",
     "build": "npm run check && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:build": "node scripts/check-build.mjs"
   },
   "dependencies": {
     "three": "^0.187.0"

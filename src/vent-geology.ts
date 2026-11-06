@@ -1,6 +1,6 @@
 import * as T from 'three';
 import {ioNoise} from './io-layout';
-import {ioTriplanar} from './io-surface';
+import {applyTriplanar} from './rendering/triplanar';
 import {ventFloor,ventCliffEdge,ventRimHeight,VENT_SHAFT_Y,VENT_SHAFT_RADIUS} from './vent-layout';
 
 let basalt:T.DataTexture|undefined;
@@ -21,7 +21,7 @@ function basaltRelief(){
 }
 export function createVentGeology(){
  const root=new T.Group();root.name='vent-cliff-geology';
- const relief=basaltRelief(),material=ioTriplanar(new T.MeshStandardMaterial({vertexColors:true,map:relief,bumpMap:relief,bumpScale:.42,roughness:.98,side:T.DoubleSide}),.20);
+ const relief=basaltRelief(),material=applyTriplanar(new T.MeshStandardMaterial({vertexColors:true,map:relief,bumpMap:relief,bumpScale:.42,roughness:.98,side:T.DoubleSide}),.20);
  const positions:number[]=[],colors:number[]=[],indices:number[]=[];
  function vertex(x:number,y:number,z:number,shade:number){positions.push(x,y,z);colors.push(.012*shade,.018*shade,.020*shade);}
  const cols=96,rows=90;

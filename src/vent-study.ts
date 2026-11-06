@@ -1,9 +1,9 @@
 import {Flight} from './game';
-import {FlightView} from './view';
+import {createFlightView} from './view';
 import {VENT_DURATION,VENT_APPROACH,VENT_CAMERA_SWING,ventSection} from './vent-layout';
 if(import.meta.env.DEV){
  const canvas=document.querySelector<HTMLCanvasElement>('#preview')!,slider=document.querySelector<HTMLInputElement>('#time')!,play=document.querySelector<HTMLButtonElement>('#play')!,label=document.querySelector<HTMLOutputElement>('#phase')!;
- const view=new FlightView(canvas),bossStart=VENT_DURATION+VENT_APPROACH,end=bossStart+24;let playing=false,last=0;
+ const view=await createFlightView(canvas,'vents'),bossStart=VENT_DURATION+VENT_APPROACH,end=bossStart+24;let playing=false,last=0;
  function preview(){
   const t=slider.valueAsNumber,f=new Flight('sentry',[],'vex','vents');
   f.phase=t<VENT_DURATION?'stage':t<bossStart?'approach':'boss';f.time=t<VENT_DURATION?t:t<bossStart?t-VENT_DURATION:t-bossStart;

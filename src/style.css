@@ -264,3 +264,32 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .pilot-card { font-size: .76rem; }
   #panel small { display: block; }
 }
+
+/* The menu has no canvas, WebGL context, animated loop or level media. */
+.main-menu {
+  display: flex; flex-direction: column; align-items: stretch; justify-content: safe center;
+  width: min(100%, 68rem); height: auto; min-height: 100dvh; margin: auto;
+  padding: max(1.25rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right)) max(1.25rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left)); gap: 1.4rem;
+}
+.menu-heading h1 {font: italic 900 clamp(2.8rem,8vw,5.2rem)/1 system-ui,sans-serif;letter-spacing:-.065em;text-transform:uppercase;margin:0;color:#eef8ff;}
+.menu-heading p {color:var(--muted);font-size:.85rem;line-height:1.5;}
+.menu-heading .eyebrow {font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);}
+.level-cards {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem;}
+.level-card {text-align:left;min-height:6.2rem;padding:1rem;display:grid;align-content:center;gap:.6rem;background:#101a29;}
+.level-card strong {font-size:1rem;font-weight:normal;color:#eef8ff;}
+.level-card span {font-size:.68rem;color:var(--muted);line-height:1.4;}
+.level-card[aria-pressed=true] {border-color:var(--accent);background:#172b35;box-shadow:inset 3px 0 var(--accent);}
+.menu-actions {display:grid;justify-items:start;gap:.5rem;}
+#prepare-flight {background:#b7f4f4;color:#06111b;border-color:#b7f4f4;font-weight:bold;padding:.6rem 1.5rem;}
+#menu-status {font-size:.78rem;color:var(--muted);line-height:1.5;min-height:2.5em;margin:0;max-width:70ch;}
+#return-menu {margin-top:.7rem;font-size:.7rem;}
+@media(max-width:520px){.main-menu{gap:1rem;justify-content:flex-start;}.level-cards{grid-template-columns:1fr;gap:.45rem;}.level-card{min-height:4.4rem;padding:.75rem;gap:.35rem;}.menu-heading p{margin:.5rem 0;}}
+.offline-settings {font-size:.75rem;color:var(--muted);max-width:42ch;}
+.offline-settings summary {padding:.7rem 0;cursor:pointer;}
+.offline-settings p {line-height:1.5;}
+.offline-settings button {font-size:.7rem;}
+.level-card.saved-offline span {color:var(--accent);}
+
+.dev-links {display:grid;gap:.65rem;justify-items:start;margin-top:.65rem;}
+.dev-links a {display:block;color:var(--accent);font-size:.75rem;line-height:1.4;}
+#dev-tools {justify-items:center;}

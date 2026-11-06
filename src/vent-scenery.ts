@@ -10,13 +10,13 @@ import {ioNoise} from './io-layout';
 import {VENT_SHAFT_Y,VENT_STAGE_PITCH,ventFrame,ventWorld,ventBossPose} from './vent-layout';
 
 function random(seed:number){return()=>{seed=(Math.imul(seed,1664525)+1013904223)|0;return(seed>>>0)/4294967296;};}
-export function createVentScenery(molluskAssets:ReturnType<typeof createMortarAssets>){
+export function createVentScenery(molluskAssets:ReturnType<typeof createMortarAssets>,signal?:AbortSignal){
  const root=new T.Group();root.name='hydrothermal-vents';root.visible=false;
  const world=new T.Group();root.add(world);world.add(createVentGeology());
  const colonies=createVentColonies(molluskAssets);world.add(colonies.root);
  const atlas=createVentAtlas(),material=new T.MeshBasicMaterial({map:atlas,alphaTest:.15,side:T.DoubleSide});
  const extraMaterial=material.clone();extraMaterial.map=createVentAtlas(true);
- const ready=Promise.all([loadEncounterTexture('ventAtlas',texture=>{texture.anisotropy=4;material.map=texture;material.needsUpdate=true;}),loadEncounterTexture('ventExtras',texture=>{texture.anisotropy=4;extraMaterial.map=texture;extraMaterial.needsUpdate=true;})]);
+ const ready=Promise.all([loadEncounterTexture('ventAtlas',texture=>{texture.anisotropy=4;material.map=texture;material.needsUpdate=true;}, undefined, signal),loadEncounterTexture('ventExtras',texture=>{texture.anisotropy=4;extraMaterial.map=texture;extraMaterial.needsUpdate=true;}, undefined, signal)]);
  const rng=random(52391),formations=createVentFormations(),batches=Array.from({length:16},()=>[] as VentFormation[]),emitters:{x:number;y:number;z:number;pale:boolean}[]=[];
  const matrix=new T.Matrix4(),p=new T.Vector3(),q=new T.Quaternion(),scale=new T.Vector3();
  for(const f of formations){
@@ -57,5 +57,5 @@ export function createVentScenery(molluskAssets:ReturnType<typeof createMortarAs
 
  }
  update(0,0);
- return{root,world,ready,update,capture(renderer:T.WebGLRenderer,scene:T.Scene,camera:T.Camera){if(root.visible)heat.capture(renderer,scene,camera);},frame:ventFrame,bossPose:ventBossPose};
+ return{root,world,ready,update,dispose:heat.dispose,capture(renderer:T.WebGLRenderer,scene:T.Scene,camera:T.Camera){if(root.visible)heat.capture(renderer,scene,camera);},frame:ventFrame,bossPose:ventBossPose};
 }

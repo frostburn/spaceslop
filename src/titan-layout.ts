@@ -1,5 +1,6 @@
+import {levels} from './levels';
 export const TITAN_ROUTE_DURATION=90;
-export const TITAN_DURATION=84;
+export const TITAN_DURATION=levels.titan.duration;
 export const TITAN_ROUTE_END=TITAN_DURATION/TITAN_ROUTE_DURATION;
 export const TITAN_SCREENS=10;
 export const TITAN_FRAME_HEIGHT=16;

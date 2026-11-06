@@ -7,11 +7,18 @@
     <title>Spaceslop</title>
   </head>
   <body>
-    <main>
+    <main id="front-menu" class="main-menu" aria-labelledby="menu-title">
+      <div class="menu-heading"><p class="eyebrow">Vertical arcade shooter</p><h1 id="menu-title">Spaceslop</h1><p>Choose your next sector.</p></div>
+      <div id="level-cards" class="level-cards" role="group" aria-label="Select a level"></div>
+      <div class="menu-actions"><button id="prepare-flight" type="button">Prepare flight</button><p id="menu-status" role="status">Select a sector to prepare its flight.</p><details class="offline-settings"><summary>Offline storage</summary><p>Prepared levels are saved on this device. Clearing them keeps the menu and pilot choice.</p><button id="clear-offline" type="button">Clear saved levels</button></details><button id="menu-update" type="button" hidden>Apply update</button></div>
+      <noscript>Enable JavaScript to launch Spaceslop.</noscript>
+    </main>
+    <main id="game-app" hidden>
       <div class="console">
         <header class="hud" aria-label="Flight status">
           <div><span id="sector">SECTOR 01</span><strong id="score">000000</strong></div>
           <div><span>HULL</span><strong id="hull">04</strong></div>
+          <button id="menu-button" type="button">Menu</button>
           <button id="pause" type="button" hidden>Pause</button>
         </header>
         <aside class="pilot-console" aria-label="Pilot">
@@ -42,7 +49,7 @@
                   Level
                   <select id="level">
                     <option value="vents">Hadal · Hydrothermal vents</option>
-                    <option value="io">Io · Caldera slice</option>
+                    <option value="io">Io · Caldera</option>
                     <option value="titan">Titan · Research station</option>
                     <option value="ice">Frostwake · Ice field</option>
                     <option value="broodlock">Broodlock · Ant hive</option>
@@ -70,7 +77,7 @@
             </div>
             <button id="start" type="button" disabled>Launch</button>
             <small>Keyboard · WASD or arrows · Space for pulse</small>
-            <button id="update" type="button" hidden>Apply update</button>
+            <button id="return-menu" type="button">Choose another sector</button>
           </section>
         </div>
       </div>

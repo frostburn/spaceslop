@@ -36,7 +36,7 @@ function createFallback() {
   return root;
 }
 
-export function createHiveScenery() {
+export function createHiveScenery(signal?:AbortSignal) {
   const root = new T.Group();
   const fallback = createFallback();
   const fungi = createHiveFungi();
@@ -91,22 +91,22 @@ export function createHiveScenery() {
     loadEncounterTexture('hive', (texture) => {
       uniforms.foreground.value = texture;
       uniforms.hasForeground.value = 1;
-    }),
+    }, undefined, signal),
     loadEncounterTexture('hiveMask', (texture) => {
       texture.colorSpace = T.NoColorSpace;
       uniforms.mask.value = texture;
       uniforms.hasMask.value = 1;
-    }),
+    }, undefined, signal),
     loadEncounterTexture('hiveStars', (texture) => {
       uniforms.stars.value = texture;
       uniforms.hasStars.value = 1;
       crop(texture, uniforms.starCrop.value);
-    }),
+    }, undefined, signal),
     loadEncounterTexture('hiveMines', (texture) => {
       uniforms.mines.value = texture;
       uniforms.hasMines.value = 1;
       crop(texture, uniforms.mineCrop.value);
-    }),
+    }, undefined, signal),
   ]);
 
   function crop(texture: T.Texture, target: T.Vector2) {

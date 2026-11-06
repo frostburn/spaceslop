@@ -1,5 +1,6 @@
+import {levels} from './levels';
 export const IO_SCREENS = 10;
-export const IO_DURATION = 100;
+export const IO_DURATION=levels.io.duration;
 export const IO_APPROACH = 8;
 export const IO_SPEED = 1.6;
 export const IO_PITCH = 55 * Math.PI / 180;

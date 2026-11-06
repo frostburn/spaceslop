@@ -1,11 +1,11 @@
 import { Flight, STEP } from './game';
-import { FlightView } from './view';
+import { createFlightView } from './view';
 import { IO_DURATION,IO_APPROACH,ioSection } from './io-layout';
 
 if(import.meta.env.DEV){
   const canvas=document.querySelector<HTMLCanvasElement>('#preview')!,slider=document.querySelector<HTMLInputElement>('#time')!,play=document.querySelector<HTMLButtonElement>('#play')!,broken=document.querySelector<HTMLInputElement>('#broken')!,label=document.querySelector<HTMLOutputElement>('#phase')!;
   const end=IO_DURATION+IO_APPROACH;slider.max=String(end);slider.value=String(IO_DURATION);
-  const view=new FlightView(canvas);let playing=false,last=0;
+  const view=await createFlightView(canvas,'io');let playing=false,last=0;
   function preview(){
     const f=new Flight('sentry',[],'vex','io'),t=slider.valueAsNumber;
     if(t<IO_DURATION){f.phase='stage';f.time=t;}else{f.phase=t<IO_DURATION+IO_APPROACH?'approach':'boss';f.time=t<IO_DURATION+IO_APPROACH?t-IO_DURATION:0;}

@@ -7,7 +7,7 @@ import {titanMask} from './titan-mask';
 import {createTitanClouds} from './titan-clouds';
 import {createTitanAmbient} from './titan-ambient';
 
-export function createTitanScenery(){
+export function createTitanScenery(signal?:AbortSignal){
  const root=new T.Group();root.name='titan-research-station';root.visible=false;
  const tiles:T.Mesh<T.PlaneGeometry,T.ShaderMaterial>[]=[],textures:T.Texture[]=[];
  const copies:{mesh:T.Mesh;index:number;column:number;repeat:number}[]=[];
@@ -50,9 +50,11 @@ export function createTitanScenery(){
  let hasArt=false;
  const backdropReady=new Promise<T.Texture[]>(resolve=>{
   const url=encounterTextureUrl('titan');if(!url){resolve(textures);return;}
-  const image=new Image();let pending=true;
-  const deadline=window.setTimeout(()=>{pending=false;image.onload=null;image.onerror=null;resolve(textures);},20000);
-  image.onerror=()=>{if(!pending)return;pending=false;clearTimeout(deadline);resolve(textures);};
+  const image=new Image();let pending=true,deadline:number|undefined;
+  const cancel=()=>{if(deadline!==undefined)clearTimeout(deadline);signal?.removeEventListener('abort',cancel);pending=false;image.onload=null;image.onerror=null;image.src='';resolve(textures);};
+  signal?.addEventListener('abort',cancel,{once:true});if(signal?.aborted){cancel();return;}
+  deadline=window.setTimeout(cancel,20000);
+  image.onerror=()=>{if(!pending)return;signal?.removeEventListener('abort',cancel);pending=false;clearTimeout(deadline);resolve(textures);};
   image.onload=async()=>{
    if(!pending)return;clearTimeout(deadline);pending=false;
    try{
@@ -60,7 +62,9 @@ export function createTitanScenery(){
     // Decode/slice in small preflight batches. Two-row gutters keep filtering
     // continuous; no GPU texture is taller than one screen plus its gutters.
     for(let i=0;i<10;i++){
+     if(signal?.aborted)break;
      await new Promise<void>(r=>requestAnimationFrame(()=>r()));
+     if(signal?.aborted)break;
      const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h+4;
      const context=canvas.getContext('2d',{willReadFrequently:true})!;
      context.drawImage(image,0,0,image.naturalWidth,image.naturalHeight,0,2-i*h,w,fullHeight);
@@ -74,11 +78,11 @@ export function createTitanScenery(){
     }
     hasArt=true;
    }catch{for(const mesh of tiles)mesh.material.uniforms.hasMap.value=0;}
-   image.onload=null;image.onerror=null;image.src='';resolve(textures);
+   signal?.removeEventListener('abort',cancel);image.onload=null;image.onerror=null;image.src='';resolve(textures);
   };
   image.src=url;
  });
- const ready=Promise.all([backdropReady,loadEncounterTexture('titanRobot',ambient.setRobotTexture).then(texture=>texture?[texture]:[])]).then(parts=>parts.flat());
+ const ready=Promise.all([backdropReady,loadEncounterTexture('titanRobot',ambient.setRobotTexture, undefined, signal).then(texture=>texture?[texture]:[])]).then(parts=>parts.flat());
  return{root,ready,get hasArt(){return hasArt;},update(progress:number,time=progress*TITAN_DURATION,ascent=0,distance=95){clock.value=time;ambient.update(progress,time);ambient.root.visible=true;clouds.update(time,ascent,distance);
   const frame=titanFrame(ascent),point=titanWorld(0,-4,ascent);terrain.rotation.x=-frame.pitch;terrain.position.set(0,point.y,point.z);
   mountains.position.y=-progress*TITAN_TRAVEL;
