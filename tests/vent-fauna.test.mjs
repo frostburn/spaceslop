@@ -101,8 +101,8 @@ test('fixed foes spawn beyond the viewport while attack times retain their origi
 });
 test('defeated worms retain a disabled hole and restart clears the defeat state',()=>{
  const f=new Flight('sentry',[],'vex','vents'),e=worm();f.enemies=[e];f.damageEnemy(e,8);assert(f.defeatedVentWorms.has(6));assert.equal(new Flight('sentry',[],'vex','vents').defeatedVentWorms.size,0);
- const rig=createVentWorm(wormAssets),hole=rig.root.getObjectByName('worm-fixed-hole');rig.pose(4.3,10.2,0);rig.setDisabled(true);assert(!rig.combat.visible);assert(rig.root.getObjectByName('worm-disabled-plug').visible);assert.notEqual(hole.material,wormAssets.material);
- rig.setDisabled(false);assert.equal(hole.material,wormAssets.material);assert(!rig.root.getObjectByName('worm-disabled-plug').visible);assert(!rig.root.getObjectByName('worm-hole-lip'));
+ const rig=createVentWorm(wormAssets),hole=rig.root.getObjectByName('worm-fixed-hole');rig.pose(4.3,10.2,0);rig.setDisabled(true);assert(!rig.combat.visible);assert(!rig.root.getObjectByName('worm-disabled-plug'));assert.notEqual(hole.material,wormAssets.material);
+ rig.setDisabled(false);assert.equal(hole.material,wormAssets.material);assert(!rig.root.getObjectByName('worm-disabled-plug'));assert(!rig.root.getObjectByName('worm-hole-lip'));
 });
 test('shrimp atlases accept both the cropped top two rows and the original square sheet',()=>{
  const fallback=new T.DataTexture(new Uint8Array([255,255,255,255]),1,1),a=createFaunaAssets(fallback),root=new T.Group(),joint=a.part(root,6,0,0,0,1,1);
@@ -110,3 +110,9 @@ test('shrimp atlases accept both the cropped top two rows and the original squar
  for(let cell=0;cell<6;cell++){const uv=a.geometries[cell].attributes.uv;for(let i=0;i<uv.count;i++)assert(uv.getY(i)>1-(Math.floor(cell/3)+1)/2&&uv.getY(i)<1-Math.floor(cell/3)/2);}
  const square=new T.Texture({width:768,height:768});a.setAtlas(square);assert.equal(joint.material.map,square);
 });
+
+ test('worm overlapping sprite layers have ordered depth bias and track atlas replacement',()=>{
+ const a=createWormAssets(new T.DataTexture(new Uint8Array([255,255,255,255]),1,1)),r=createVentWorm(a);let previous=0;
+ for(let i=0;i<34;i++){const mesh=r.root.getObjectByName('worm-segment-'+i);assert(mesh.material.polygonOffset);assert(mesh.material.polygonOffsetUnits<previous);previous=mesh.material.polygonOffsetUnits;assert(mesh.material.depthWrite);}
+ const image=new T.Texture();a.setAtlas(image);assert.equal(r.root.getObjectByName('worm-segment-10').material.map,image);
+ });

@@ -20,6 +20,7 @@ function fallbackAtlas(){
 function rasterAssets(columns:number,rows:number,texture:T.Texture,flexible=false){
  const material=new T.MeshBasicMaterial({map:texture,alphaTest:.5,side:T.DoubleSide});
  const jointMaterial=material.clone();
+ const layers=new Map<number,T.MeshBasicMaterial>();
  const geometries=Array.from({length:columns*rows},(_,cell)=>{
   const geometry=new T.CircleGeometry(.5,28),uv=geometry.attributes.uv,pad=.012;
   for(let i=0;i<uv.count;i++)uv.setXY(i,(cell%columns+pad+uv.getX(i)*(1-2*pad))/columns,1-(Math.floor(cell/columns)+1-pad-uv.getY(i)*(1-2*pad))/rows);
@@ -27,7 +28,7 @@ function rasterAssets(columns:number,rows:number,texture:T.Texture,flexible=fals
  });
  function part(parent:T.Object3D,cell:number,x:number,y:number,z:number,w:number,h:number){const mesh=new T.Mesh(geometries[cell],flexible&&cell>=6?jointMaterial:material);mesh.position.set(x,y,z);mesh.scale.set(w,h,1);parent.add(mesh);return mesh;}
  material.userData.fallback=texture;
- return{material,geometries,part,setAtlas(texture:T.Texture){texture.anisotropy=4;material.map=texture;material.needsUpdate=true;
+ return{material,geometries,part,layerMaterial(layer:number){let m=layers.get(layer);if(!m){m=material.clone();m.polygonOffset=true;m.polygonOffsetFactor=-1;m.polygonOffsetUnits=-2*layer;layers.set(layer,m);}return m;},setAtlas(texture:T.Texture){texture.anisotropy=4;material.map=texture;material.needsUpdate=true;for(const m of layers.values()){m.map=texture;m.needsUpdate=true;}
   if(flexible){const image=texture.image as {width:number;height:number},rowCount=image.width/image.height>1.3?2:3;
    for(let cell=0;cell<6;cell++){const uv=geometries[cell].attributes.uv,base=new T.CircleGeometry(.5,28).attributes.uv;for(let i=0;i<uv.count;i++)uv.setXY(i,(cell%3+.012+base.getX(i)*.976)/3,1-(Math.floor(cell/3)+1-.012-base.getY(i)*.976)/rowCount);uv.needsUpdate=true;}
    jointMaterial.map=rowCount===3?texture:material.userData.fallback;jointMaterial.needsUpdate=true;
@@ -80,15 +81,14 @@ export function createVentWorm(assets:Assets){
  const foot=assets.part(root,0,0,0,.03,2.15,2.15);foot.name='worm-fixed-hole';
 
  const disabledMaterial=assets.material.clone();disabledMaterial.color.setHex(0x626d72);
- const plug=new T.Mesh(new T.CircleGeometry(.55,7),new T.MeshBasicMaterial({color:0x263238}));plug.position.z=.08;plug.name='worm-disabled-plug';root.add(plug);
  const combat=new T.Group();combat.name='worm-living-parts';root.add(combat);
  const aim=new T.Group();aim.name='worm-aim';combat.add(aim);
  const warningGeometry=new T.BufferGeometry(),warningPoints=new T.BufferAttribute(new Float32Array(17*3),3);warningGeometry.setAttribute('position',warningPoints);
  const warning=new T.Line(warningGeometry,new T.LineBasicMaterial({color:0xffb37a,transparent:true,opacity:.3,depthWrite:false}));warning.name='worm-lunge-warning';warning.frustumCulled=false;aim.add(warning);
- const body=Array.from({length:WORM_SEGMENTS},(_,i)=>{const m=assets.part(aim,1,0,0,.12+i*.001,.86,.7);m.name='worm-segment-'+i;return m;});
+ const body=Array.from({length:WORM_SEGMENTS},(_,i)=>{const m=assets.part(aim,1,0,0,.12+i*.001,.86,.7);m.name='worm-segment-'+i;m.material=assets.layerMaterial(i+1);return m;});
  const head=new T.Group();head.name='worm-head';head.position.z=.24;aim.add(head);
- assets.part(head,5,0,.18,0,.95,.7);assets.part(head,2,0,-.04,.01,1.1,1.1);
- const jaws=[-1,1].map(side=>{const p=new T.Group();p.name='worm-jaw-'+side;p.position.set(side*.25,-.26,.03);head.add(p);assets.part(p,side<0?3:4,side*.10,-.21,0,.52,.68);return{side,p};});
+ assets.part(head,5,0,.18,0,.95,.7).material=assets.layerMaterial(WORM_SEGMENTS+1);assets.part(head,2,0,-.04,.01,1.1,1.1).material=assets.layerMaterial(WORM_SEGMENTS+2);
+ const jaws=[-1,1].map(side=>{const p=new T.Group();p.name='worm-jaw-'+side;p.position.set(side*.25,-.26,.03);head.add(p);assets.part(p,side<0?3:4,side*.10,-.21,0,.52,.68).material=assets.layerMaterial(WORM_SEGMENTS+3+(side>0?1:0));return{side,p};});
  const muzzle=new T.Object3D();muzzle.name='worm-muzzle';muzzle.position.z=.28;aim.add(muzzle);
  function pose(age:number,nextAttack:number,angle:number,reach=8.5,bend=1){
   const p=wormPose(age,nextAttack,reach,bend),exposure=Math.min(1,p.length/.8);aim.rotation.z=angle;combat.visible=p.visible;
@@ -100,5 +100,5 @@ export function createVentWorm(assets:Assets){
   return p;
  }
  // Prime every sprite cell before play; the initial live pose may be fully hidden.
- pose(WORM_FIRST_ATTACK+.7,WORM_FIRST_ATTACK+WORM_INTERVAL,0);warning.visible=true;return{root,combat,pose,setDisabled(disabled:boolean){if(disabledMaterial.map!==assets.material.map){disabledMaterial.map=assets.material.map;disabledMaterial.needsUpdate=true;}foot.material=disabled?disabledMaterial:assets.material;plug.visible=disabled;if(disabled)combat.visible=false;}};
+ pose(WORM_FIRST_ATTACK+.7,WORM_FIRST_ATTACK+WORM_INTERVAL,0);warning.visible=true;return{root,combat,pose,setDisabled(disabled:boolean){if(disabledMaterial.map!==assets.material.map){disabledMaterial.map=assets.material.map;disabledMaterial.needsUpdate=true;}foot.material=disabled?disabledMaterial:assets.material;if(disabled)combat.visible=false;}};
 }
