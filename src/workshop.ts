@@ -27,6 +27,8 @@ import {
 import { BOSS_CANNON_X, TRANSITION_TIME } from './game';
 import { createMushroomCluster } from './hive-fungi';
 import { createIceScenery } from './ice-scenery';
+import { createPreserveScenery } from './preserve-scenery';
+import { levels } from './levels';
 import { ICE_DURATION, iceSection } from './ice-layout';
 import { createDroneRig, createFighterRig, createScoutRig } from './ship-rigs';
 import { createWingPod } from './wing-pod';
@@ -148,7 +150,11 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   void loadEncounterTexture('ventFauna',faunaAssets.setAtlas);
   void loadEncounterTexture('ventWorm',wormAssets.setAtlas);
   const crab=createVentBoss();void loadEncounterTexture('ventCrab',crab.setAtlas);
+  const preserve = createPreserveScenery();
   const assets = {
+    preserve_section: { root: preserve.root, duration: levels.preserve.duration,
+      bounds: new T.Box3(new T.Vector3(-5, -8, -6), new T.Vector3(5, 8, 1)),
+      pose(time: number) { preserve.update(time, 0); return 'orbital habitat · root gardens / broken greenhouse'; } },
     vent_crab:{root:crab.root,duration:12,bounds:new T.Box3(new T.Vector3(-6,-5,-5),new T.Vector3(6,3.5,1.5)),pose(time:number){const left=crabSmooth((time-3)/.8),right=crabSmooth((time-6)/.8),opening=crabSmooth((time-6)/.8),target=time<3?-2.4:time<6?2.4:0;crab.pose(1,Math.max(0,Math.sin(time*3)),target,target,Math.max(0,Math.sin(time*3+1))*.2,108+time,[left,right],opening);return time<3?'crusher charge / barnacle colonies':time<6?'crusher disabled / cutter charge':'both claws disabled / gill chamber';}},
     vent_shrimp:{root:shrimp.root,duration:6,pose(time:number){const next=SHRIMP_FIRST_FIRE+Math.max(0,Math.floor((time-SHRIMP_FIRST_FIRE)/SHRIMP_INTERVAL)+1)*SHRIMP_INTERVAL;shrimp.pose(time,next);return 'swimmerets / abdomen / paired pincers';}},
     vent_worm:{root:worm.root,duration:WORM_INTERVAL+WORM_FIRST_ATTACK,bounds:new T.Box3(new T.Vector3(-2,-10,-.1),new T.Vector3(2,1.5,.6)),pose(time:number){const next=WORM_FIRST_ATTACK+Math.max(0,Math.floor((time-WORM_FIRST_ATTACK)/WORM_INTERVAL)+1)*WORM_INTERVAL;const p=worm.pose(time,next,.12,8.5,.8);return p.phase==='hidden'?'concealed in hole':p.phase==='windup'?'locked aim / warning':p.phase==='retreat'?'withdrawing into hole':'body lunge / bite';}},
@@ -336,6 +342,8 @@ if (import.meta.env.DEV) {
   let renderer: T.WebGLRenderer | undefined;
   try {
     renderer = new T.WebGLRenderer({ canvas, antialias: true });
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = T.PCFShadowMap;
   } catch {
     element('viewer-error').hidden = false;
   }

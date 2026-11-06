@@ -17,7 +17,7 @@ const descriptions: Record<LevelId, string> = {
   titan: 'An overgrown research station beneath amber haze. Rise to face the cicada.',
   ice: 'Tumbling ice, remote industry and ancient marine predators.',
   broodlock: 'An infected ant hive threaded with parasitic growth.',
-  preserve: 'A short prototype flight through the overgrown preserve.',
+  preserve: 'First orbital habitat section: broken greenhouse ribs, root gardens and open space.',
 };
 function select(id: LevelId) {
   selected = id;

@@ -294,7 +294,7 @@ export class FlightView {
     if (orientation)
       this.keyLight?.position.set(-5, -5, 12).applyEuler(new T.Euler(-this.pitch, this.bank, 0));
     const stageDistance = this.level.stageDistance;
-    const camera = this.swing === 0 && flight.level === 'preserve' ? this.ortho : this.perspective;
+    const camera = this.perspective;
     const distance = T.MathUtils.lerp(stageDistance, BOSS_CAMERA_DISTANCE, eased);
     this.perspective.fov = T.MathUtils.radToDeg(2 * Math.atan(HEIGHT / 2 / distance));
     this.perspective.updateProjectionMatrix();
@@ -365,7 +365,7 @@ export class FlightView {
       const p = this.level.contact(flight.exposedCannonX, distance, flight);
       this.cannonMarker.position.set(p.x, p.y, 0);
     }
-    this.drawWings(flight, eased, fighterVelocity, flight.level === 'io' ? distance : flight.level === 'titan' ? (eased > 0 ? distance / eased : undefined) : camera === this.ortho ? undefined : distance);
+    this.drawWings(flight, eased, fighterVelocity, flight.level === 'titan' ? (eased > 0 ? distance / eased : undefined) : distance);
     for (const [index, model] of this.drops.entries()) {
       const drop = flight.drops[index];
       model.root.visible = Boolean(drop);

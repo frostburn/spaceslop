@@ -19,7 +19,7 @@
 | `scripts/level-packages.ts` | Build the menu's static dependency closure and each level's offline package. |
 | `scripts/check-build.mjs` | Enforce menu budget, package isolation and production exclusions. |
 
-Existing level geometry, rig and layout modules retain their descriptive prefixes (`vent-*`, `io-*`, `titan-*`, `ice-*`, `hive-*`, marine/ant helpers). The renderer entry point shows which pieces a stage uses. Shared effects stay separate from simulation geometry. The asset workshop intentionally loads the full model collection and its texture helper; it is a development entry point only.
+Existing level geometry, rig and layout modules retain their descriptive prefixes (`preserve-*`, `vent-*`, `io-*`, `titan-*`, `ice-*`, `hive-*`, marine/ant helpers). The renderer entry point shows which pieces a stage uses. Shared effects stay separate from simulation geometry. The asset workshop intentionally loads the full model collection and its texture helper; it is a development entry point only.
 
 ## Startup and session lifecycle
 
@@ -54,3 +54,7 @@ Rebuild after owner art uploads. Test changed media at the same filename to catc
 5. Verify stage, approach, boss phases, lasers, restart, pause/resume, cancellation and switching away/back. For loading changes, complete a production offline run with art and a media-free run. Include a portrait viewport and clean console check.
 
 `npm test` covers simulation, geometry, contacts and effects. `npm run build` also checks unused locals/parameters. `npm run test:build` checks delivery boundaries. Browser checks cover actual WebGL, lifecycle and service-worker behavior; a successful TypeScript build alone cannot establish those.
+
+## Orbital preserve scenery
+
+`preserve-layout.ts` owns deterministic terrain sampling, route extent and the fixed flight frame. `preserve-scenery.ts` composes the world and its stable sun; `preserve-station.ts`, `preserve-terrain.ts` and `preserve-foliage.ts` own the three layers. Geometry helpers and scene-local materials stay in `preserve-geometry.ts` and `preserve-materials.ts`. The workshop creates the same scenery as the level. It does not load the retired preserve plate. Ground, rooted plant placement and deck structure share world coordinates; optional maps cannot change their geometry or gameplay.
