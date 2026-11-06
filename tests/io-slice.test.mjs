@@ -272,6 +272,6 @@ test('burner side fade is restricted to near-overhead views and the workshop sha
  assert(Math.abs(ioFlameTopWeight(.945)-.5)<1e-12);
  let previous=0;for(let i=0;i<=100;i++){const w=ioFlameTopWeight(i/100);assert(w>=previous&&w>=0&&w<=1);previous=w;}
  const rig=createIoBurnerStudy(),side=rig.root.getObjectByName('io-burner-jets'),top=rig.root.getObjectByName('io-burner-cores');
- assert.equal(side.count,1);rig.pose(2.5);assert.equal(side.material.uniforms.clock.value,2.5);assert.equal(top.material.uniforms.clock,side.material.uniforms.clock);
+ assert.equal(side.count,1);assert.equal(side.material.uniforms.lowerHalf.value,0);assert.equal(top.material.uniforms.lowerHalf.value,1);assert.equal(side.material.vertexShader,top.material.vertexShader);assert.equal(side.material.fragmentShader,top.material.fragmentShader);rig.pose(2.5);assert.equal(side.material.uniforms.clock.value,2.5);assert.equal(top.material.uniforms.clock,side.material.uniforms.clock);
  assert.equal(top.material.uniforms.turbulence.value,side.material.uniforms.turbulence.value);
 });
