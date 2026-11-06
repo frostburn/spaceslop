@@ -4,6 +4,8 @@ export const IO_APPROACH = 8;
 export const IO_SPEED = 1.6;
 export const IO_PITCH = 55 * Math.PI / 180;
 export const IO_HEIGHT = 8;
+export const IO_STAGE_HEIGHT = 12;
+export const IO_CAMERA_DISTANCE = 40;
 export const IO_HP = 72;
 export const IO_LEG_HP = 20;
 export const IO_INTERVAL = 3.8;
@@ -27,11 +29,16 @@ export function ioScroll(time: number) {
   return IO_SPEED * (stage + t - t*t/(2*IO_APPROACH));
 }
 export function ioFrame(time: number, rise: number) {
-  return { pitch: IO_PITCH * rise, height: IO_HEIGHT, scroll: ioScroll(time) };
+  const scroll=ioScroll(time),routeTime=scroll/IO_SPEED,stage=1-rise;
+  const pitch=(28+5*Math.sin(routeTime*.11)+2*Math.sin(routeTime*.27))*Math.PI/180;
+  const bank=(11*Math.sin(routeTime*.09)+3*Math.sin(routeTime*.20))*Math.PI/180;
+  return { pitch:pitch*stage+IO_PITCH*rise,bank:bank*stage,
+    height:IO_STAGE_HEIGHT*stage+IO_HEIGHT*rise,scroll,trackX:ioChannel(scroll+6)*.55*stage };
 }
-export function ioWorld(y: number, z: number, time: number, rise: number) {
-  const f=ioFrame(time,rise),dy=y-f.scroll,dz=z-f.height;
-  return {y:dy*Math.cos(f.pitch)+dz*Math.sin(f.pitch),z:-dy*Math.sin(f.pitch)+dz*Math.cos(f.pitch)};
+export function ioWorld(y: number, z: number, time: number, rise: number,x=0) {
+  const f=ioFrame(time,rise),dx=x-f.trackX,dy=y-f.scroll,dz=z-f.height;
+  const side=dx*Math.cos(f.bank)+dz*Math.sin(f.bank),depth=-dx*Math.sin(f.bank)+dz*Math.cos(f.bank);
+  return {x:side,y:dy*Math.cos(f.pitch)+depth*Math.sin(f.pitch),z:-dy*Math.sin(f.pitch)+depth*Math.cos(f.pitch)};
 }
 
 // The same rigid pose drives the rig, projectile origins, marker and weapon aim.
@@ -41,8 +48,7 @@ export function calderaLocal(x:number,y:number,z:number,collapse:number) {
 }
 export function calderaPoint(x:number,y:number,z:number,collapse:number) {
   const p=calderaLocal(x,y,z,collapse);
-  const q=ioWorld(IO_BOSS_Y-p.z,IO_BOSS_Z+p.y,IO_DURATION+IO_APPROACH,1);
-  return {x:p.x,...q};
+  return ioWorld(IO_BOSS_Y-p.z,IO_BOSS_Z+p.y,IO_DURATION+IO_APPROACH,1,p.x);
 }
 export function calderaContact(collapse:number,broken:boolean) {
   return calderaPoint(broken?0:-2.4,-.4,broken?1.32:1.25,collapse);
@@ -58,14 +64,17 @@ export function ioNoise(x:number,y:number){
   const at=(a:number,b:number)=>{let h=Math.imul(a,374761393)+Math.imul(b,668265263);h=Math.imul(h^(h>>>13),1274126177);return((h^(h>>>16))>>>0)/4294967296;};
   return (at(ix,iy)*(1-u)+at(ix+1,iy)*u)*(1-v)+(at(ix,iy+1)*(1-u)+at(ix+1,iy+1)*u)*v;
 }
-export function ioChannel(y:number){return .9*Math.sin(y*.095)+.36*Math.sin(y*.23);}
+export function ioChannel(y:number){
+  const rim=1-smooth01((y-145)/22);
+  return(2.15*Math.sin(y*.16)+.7*Math.sin(y*.31+.4))*rim;
+}
 export function ioBreach(y:number,x:number){return y-IO_BREACH_Y-x*.48-Math.sin(x*.8)*.45;}
 export function ioGroundHeight(x:number,y:number) {
   const lake=Math.hypot(x/17,(y-IO_CALDERA_Y)/19),edge=Math.abs(x-ioChannel(y))+.15*Math.sin(y*1.7)+.1*Math.sin(y*3.1);
   const bank=smooth01((edge-1.85)/.42),detail=(ioNoise(x*.8,y*.8)-.5)*.32+(ioNoise(x*2.3,y*2.3)-.5)*.13;
   // Successive ledges expose rock strata instead of two uniformly smooth banks.
   const terraces=bank*(1.1+smooth01((edge-3.5)/.35)*.85+smooth01((edge-5.5)/.5)*.65);
-  const quarry=Math.exp(-((x-5.2)**2/6+(y-53)**2/100))*3.4;
+  const quarry=Math.exp(-((x-ioChannel(y)-5.2)**2/6+(y-53)**2/100))*3.4;
   const low=-3+detail+Math.sin(y*.27-x*.13)*.13+terraces*(.7+ioNoise(x*.35,y*.23)*.4)-quarry;
   const lip=Math.exp(-(((lake-1)/.16)**2))*2.0,basin=1-smooth01((lake-.68)/.23);
   const breach=(1-smooth01((Math.abs(ioBreach(y,x))-1.1)/1.8))*5.6;

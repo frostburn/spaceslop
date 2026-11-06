@@ -27,7 +27,7 @@ test('world travel coasts to rest without a velocity discontinuity and all ancho
  assert.equal(ioScroll(200),layout.IO_FINAL_SCROLL);
  for(let i=0;i<=100;i++){
   const rise=i/100,p=ioWorld(48,-2,layout.IO_DURATION+layout.IO_APPROACH*rise,rise),q=ioWorld(52,3,layout.IO_DURATION+layout.IO_APPROACH*rise,rise);
-  assert(Math.abs(Math.hypot(p.y-q.y,p.z-q.z)-Math.sqrt(41))<1e-10);
+  assert(Math.abs(Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z)-Math.sqrt(41))<1e-10);
  }
  const below=ioWorld(layout.IO_FINAL_SCROLL,-3,layout.IO_DURATION+layout.IO_APPROACH,1);assert(below.z<0);
 });
@@ -195,4 +195,35 @@ test('conveyors, ore, burners, smoke and lava animate from the same pausable clo
  const after=new Set();scene.root.traverse(o=>{if(o.geometry)after.add(o.geometry);});assert.deepEqual(after,geometry);
  assert.equal(lava.material.uniforms.thermal.value.magFilter,T.LinearFilter);
  scene.prime(true);scene.prime(false);assert(!smoke.frustumCulled);assert(!jets.frustumCulled);assert(!scene.root.getObjectByName('conveyor-ore').frustumCulled);
+});
+
+test('the perspective tour varies viewing direction, follows broad bends and joins the boss frame smoothly',()=>{
+ const scene=createIoScenery(),point=new T.Vector3(),pitches=[],banks=[],path=[];
+ const rise=t=>layout.smooth01((t-layout.IO_DURATION)/layout.IO_APPROACH);
+ for(let time=0;time<=108;time+=.5){
+  const f=layout.ioFrame(time,rise(time));pitches.push(f.pitch);banks.push(f.bank);path.push(layout.ioChannel(f.scroll));
+  scene.update(time,rise(time));scene.root.updateMatrixWorld(true);
+  point.set(-2,126,3);scene.world.localToWorld(point);
+  const expected=layout.ioWorld(126,3,time,rise(time),-2);
+  assert(point.distanceTo(new T.Vector3(expected.x,expected.y,expected.z))<1e-8,'render and authored world must use the same complete 3D frame');
+ }
+ assert(Math.max(...path)-Math.min(...path)>4);assert(Math.min(...banks)<-.15);assert(Math.max(...banks)>.15);
+ assert(Math.max(...pitches)-Math.min(...pitches)>.4);
+ const sample=t=>{const p=layout.ioWorld(160,0,t,rise(t),3);return new T.Vector3(p.x,p.y,p.z);},h=1e-4;
+ for(const boundary of [100,108]){
+  const center=sample(boundary),before=center.clone().sub(sample(boundary-h)).divideScalar(h),after=sample(boundary+h).sub(center).divideScalar(h);
+  assert(before.distanceTo(after)<.002,'camera velocity must not jump at stage/approach/boss boundaries');
+ }
+ const final=layout.ioFrame(108,1);assert.equal(final.pitch,layout.IO_PITCH);assert.equal(final.bank,0);assert.equal(final.trackX,0);assert.equal(final.height,layout.IO_HEIGHT);
+});
+
+test('conveyor loads are rough yellow sulfur and burner ribbons keep their registered roots and shared clock',async()=>{
+ const {createIoIndustry}=await server.ssrLoadModule('/src/io-industry.ts'),{createIoBurnerFlames}=await server.ssrLoadModule('/src/io-flames.ts');
+ const industry=createIoIndustry(),ore=industry.root.getObjectByName('conveyor-ore');
+ assert(ore.material.color.r>.8&&ore.material.color.g>.5&&ore.material.color.b<.1);assert(ore.material.roughness>.8);assert(ore.instanceColor);
+ const flame=createIoBurnerFlames(industry.burners),jets=flame.root.getObjectByName('io-burner-jets'),cores=flame.root.getObjectByName('io-burner-cores'),matrix=new T.Matrix4(),p=new T.Vector3();
+ assert.equal(jets.count,industry.burners.length);assert.equal(jets.geometry.type,'PlaneGeometry');assert(!jets.frustumCulled);assert(!cores.material.depthWrite);
+ for(let i=0;i<jets.count;i++){jets.getMatrixAt(i,matrix);p.setFromMatrixPosition(matrix);assert(p.distanceTo(industry.burners[i])<1e-4);}
+ const map=jets.material.uniforms.turbulence.value,data=map.image.data;assert(map.generateMipmaps);assert.equal(map.magFilter,T.LinearFilter);
+ flame.update(4.25);assert.equal(jets.material.uniforms.clock.value,4.25);assert.equal(cores.material.uniforms.clock,jets.material.uniforms.clock);assert.equal(map.image.data,data);
 });

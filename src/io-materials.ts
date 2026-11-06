@@ -24,6 +24,7 @@ export const ioGround=texturedSurface(ioRock.clone(),.08,6);ioGround.color.setHe
 export const ioCeramic=new T.MeshStandardMaterial({color:0xe8ddc0,map:detail,bumpMap:detail,bumpScale:.045,roughness:.66,vertexColors:true});
 export const ioBand=ioCeramic.clone();ioBand.color.setHex(0x824438);
 export const ioSafety=new T.MeshStandardMaterial({color:0xb38a39,roughness:.7,metalness:.28});
+export const ioSulfur=texturedSurface(new T.MeshStandardMaterial({color:0xffdc28,map:detail,bumpMap:detail,bumpScale:.07,roughness:.94}),.45,1.4);
 export const ioSteel=texturedSurface(new T.MeshStandardMaterial({color:0x777d81,metalness:.68,roughness:.42,map:detail,bumpMap:detail,bumpScale:.035}),.12,2.5);
 ioSteel.userData.shipAlloy=true;
 export const ioChrome=new T.MeshStandardMaterial({color:0xbac8d0,metalness:.88,roughness:.24});
@@ -56,9 +57,9 @@ for(let y=0;y<height;y++)for(let x=0;x<width;x++){
 export const ioEnvironment=new T.DataTexture(data,width,height,T.RGBAFormat,T.HalfFloatType);
 ioEnvironment.mapping=T.EquirectangularReflectionMapping;ioEnvironment.needsUpdate=true;
 for(const m of [ioSteel,ioChrome,ioCeramic,ioBand,ioDark]){m.envMap=ioEnvironment;m.envMapIntensity=(m===ioCeramic||m===ioBand)?.22:.75;}
-export function poseIoEnvironment(rise:number){
- const angle=(rise-1)*Math.PI/2-rise*IO_PITCH;
- for(const m of [ioSteel,ioChrome,ioCeramic,ioBand,ioDark])m.envMapRotation.set(angle,0,0);
+export function poseIoEnvironment(rise:number,pitch=rise*IO_PITCH,bank=0){
+ const angle=(rise-1)*Math.PI/2-pitch;
+ for(const m of [ioSteel,ioChrome,ioCeramic,ioBand,ioDark])m.envMapRotation.set(angle,bank,0);
 }
 
 export const ioFurnace=new T.MeshStandardMaterial({color:0x542407,emissive:0xff8b16,emissiveIntensity:2.4,emissiveMap:detail,bumpMap:detail,bumpScale:.15,roughness:.55});

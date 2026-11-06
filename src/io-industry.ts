@@ -1,7 +1,7 @@
 import * as T from 'three';
 import {IoDetail} from './io-detail';
-import {ioGroundHeight,ioChannel,IO_BREACH_Y} from './io-layout';
-import {ioCeramic,ioBand,ioSafety,ioSteel,ioChrome,ioDark,ioRust,ioHot,ioRock} from './io-materials';
+import {ioGroundHeight,ioChannel,IO_BREACH_Y,IO_HEIGHT} from './io-layout';
+import {ioCeramic,ioBand,ioSafety,ioSteel,ioChrome,ioDark,ioRust,ioHot,ioSulfur} from './io-materials';
 
 export interface IoVent {x:number;y:number;z:number;height:number;spread:number;size:number;opacity:number}
 export const ioSites=[
@@ -27,7 +27,7 @@ export function createIoIndustry(){
   const vents:IoVent[]=[],burners:T.Vector3[]=[],belts:{a:T.Vector3;b:T.Vector3;q:T.Quaternion;length:number}[]=[];
   const beltMap=beltTexture(),beltMaterial=new T.MeshStandardMaterial({map:beltMap,bumpMap:beltMap,bumpScale:.035,roughness:.85});
   for(const [sx,y,kind]of ioSites){
-    const side=Math.sign(sx),x=sx-side*.55+ioChannel(y)*.4,z=ioGroundHeight(x,y),assembly=new T.Group();
+    const side=Math.sign(sx),x=sx-side*.55+ioChannel(y),z=ioGroundHeight(x,y),assembly=new T.Group();
     assembly.position.set(x,y,z);assembly.name='io-site-'+kind;root.add(assembly);
     const d=new IoDetail();
     const box=(x:number,y:number,z:number,w:number,depth:number,h:number,m:T.Material)=>d.box(x,y,z,w,depth,h,m);
@@ -74,17 +74,18 @@ export function createIoIndustry(){
       }
       const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(vertices,3));g.setAttribute('uv',new T.Float32BufferAttribute(uvs,2));g.computeVertexNormals();d.geometry(g,ioCeramic);
       box(0,0,.68,.74,.74,.08,ioDark);
-      for(let j=0;j<5;j++)d.geometry(new T.DodecahedronGeometry(.15,0).translate(Math.sin(j*4)*.2,Math.cos(j*2)*.2,.79),ioRock);
+      for(let j=0;j<5;j++)d.geometry(new T.DodecahedronGeometry(.18,0).translate(Math.sin(j*4)*.2,Math.cos(j*2)*.2,.83),ioSulfur);
     }
     function stack(cx:number,cy:number,h:number){
       d.rod([cx,cy,.5],[cx,cy,h],.17,ioRust);
       for(let j=1;j<h;j+=.7)d.geometry(new T.TorusGeometry(.21,.035,5,12).translate(cx,cy,j),ioSteel);
       d.geometry(new T.CylinderGeometry(.23,.24,.15,12).rotateX(Math.PI/2).translate(cx,cy,h),ioDark);
       burners.push(new T.Vector3(x+cx,y+cy,z+h+.08));
-      vents.push({x:x+cx,y:y+cy,z:z+h+.9,height:2.8,spread:.8,size:.75,opacity:.4});
+      const exhaustZ=Math.min(z+h+1.65,IO_HEIGHT-1);
+      vents.push({x:x+cx,y:y+cy,z:exhaustZ,height:Math.min(2.2,IO_HEIGHT-.3-exhaustZ),spread:.8,size:.75,opacity:.4});
     }
     function pipeBranch(cx:number,cy:number,h:number){
-      const end=side*(2.7-x*side);
+      const end=ioChannel(y+cy-2)+side*2.7-x;
       d.pipe([[cx,cy,h],[cx-side*.45,cy-.6,h],[end,cy-1.25,.35],[end,cy-4,.3]],.12,ioSteel);
       for(let j=0;j<4;j++)d.geometry(new T.TorusGeometry(.16,.035,5,12).rotateX(Math.PI/2).translate(end,cy-1.5-j*.7,.3),ioRust);
     }
@@ -129,7 +130,8 @@ export function createIoIndustry(){
     [5.8,72,2.7,78], [-5.5,93,-2.6,100], [5.5,109,2.8,115], [-5.7,119,5.4,124]];
   const details=new IoDetail(),right=new T.Vector3(),forward=new T.Vector3(),normal=new T.Vector3(),basis=new T.Matrix4();
   for(const[x1,y1,x2,y2]of routes){
-    const a=new T.Vector3(x1,y1,ioGroundHeight(x1,y1)+1.2),b=new T.Vector3(x2,y2,ioGroundHeight(x2,y2)+1.2);
+    const ax=x1+ioChannel(y1),bx=x2+ioChannel(y2);
+    const a=new T.Vector3(ax,y1,ioGroundHeight(ax,y1)+1.2),b=new T.Vector3(bx,y2,ioGroundHeight(bx,y2)+1.2);
     forward.copy(b).sub(a).normalize();right.copy(forward).cross(new T.Vector3(0,0,1)).normalize();normal.copy(right).cross(forward);
     const q=new T.Quaternion().setFromRotationMatrix(basis.makeBasis(right,forward,normal)),length=a.distanceTo(b);
     const g=new T.PlaneGeometry(.66,length);g.translate(0,length/2,0);g.applyQuaternion(q);g.translate(a.x,a.y,a.z);
@@ -166,7 +168,11 @@ export function createIoIndustry(){
   details.pipe([[-6,bridgeY-2.9,1.35],[-2,bridgeY-.95,1.35],[1,bridgeY+.48,1.2],[6,bridgeY+2.9,1.35]],.22,ioCeramic);
   details.pipe([[.4,bridgeY+.2,1],[.7,bridgeY-.3,-.5],[1.8,bridgeY+.5,-1.1],[2.1,bridgeY+1.1,1]],.045,ioDark);
   details.finish(root,'belt-gantry-frames');
-  const ore=new T.InstancedMesh(new T.DodecahedronGeometry(.12,0),ioRock,belts.length*6);ore.name='conveyor-ore';ore.castShadow=true;ore.frustumCulled=false;root.add(ore);
+  const chunks=new T.DodecahedronGeometry(.18,0),vertices=chunks.attributes.position;
+  for(let i=0;i<vertices.count;i++){const x=vertices.getX(i),y=vertices.getY(i),z=vertices.getZ(i),s=.85+.22*Math.sin(x*31+y*27+z*13);vertices.setXYZ(i,x*s,y*s,z*s);}
+  chunks.computeVertexNormals();
+  const ore=new T.InstancedMesh(chunks,ioSulfur,belts.length*6);ore.name='conveyor-ore';ore.castShadow=true;ore.frustumCulled=false;root.add(ore);
+  const color=new T.Color();for(let i=0;i<ore.count;i++)ore.setColorAt(i,color.setHSL(.14+(i%5)*.004,.25,.84+(i%3)*.03));
   const matrix=new T.Matrix4(),p=new T.Vector3(),scale=new T.Vector3(.9,1.4,.65),q=new T.Quaternion();
   function update(time:number){
     beltMap.offset.y=-time*.256;

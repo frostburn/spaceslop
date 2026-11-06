@@ -2,6 +2,7 @@ import * as T from 'three';
 import {ioRandom} from './io-materials';
 import {ioGroundHeight,IO_CALDERA_Y} from './io-layout';
 import type {IoVent} from './io-industry';
+import {createIoBurnerFlames} from './io-flames';
 
 // A finite shared mask, not a high-frequency noise shader at game scale.
 function dustMask(){
@@ -29,20 +30,9 @@ export function createIoActivity(exhaust:IoVent[]=[],burners:T.Vector3[]=[]){
       }`});
   const smoke=new T.InstancedMesh(geometry,material,count);smoke.frustumCulled=false;smoke.name='ballistic-vent-plumes';root.add(smoke);
   const matrix=new T.Matrix4(),p=new T.Vector3(),q=new T.Quaternion(),scale=new T.Vector3();
-  const flameMaterial=new T.ShaderMaterial({transparent:true,depthWrite:false,side:T.DoubleSide,uniforms:{clock:{value:0}},
-    vertexShader:`uniform float clock;varying float height;varying float flicker;
-      void main(){height=position.z/1.6;float phase=instanceMatrix[3].x*13.+instanceMatrix[3].y;
-      flicker=.78+.22*sin(clock*21.+phase);vec3 p=position;p.xy*=.85+.15*sin(clock*17.+height*13.+phase);p.z*=flicker;
-      gl_Position=projectionMatrix*modelViewMatrix*instanceMatrix*vec4(p,1.);}`,
-    fragmentShader:`varying float height;varying float flicker;void main(){float a=(1.-smoothstep(.15,1.,height))*.65;
-      vec3 c=mix(vec3(3.5,1.9,.65),vec3(3.,.7,.04),smoothstep(.05,.45,height));gl_FragColor=vec4(c*flicker,a);
-      #include <colorspace_fragment>
-    }`});
-  const jets=new T.InstancedMesh(new T.CylinderGeometry(.015,.23,1.6,10,6,true).rotateX(Math.PI/2).translate(0,0,.8),flameMaterial,burners.length);
-  jets.name='io-burner-jets';jets.frustumCulled=false;root.add(jets);
-  burners.forEach((position,i)=>{matrix.makeTranslation(position.x,position.y,position.z);jets.setMatrixAt(i,matrix);});
+  const flames=createIoBurnerFlames(burners);root.add(flames.root);
   function update(time:number){
-    flameMaterial.uniforms.clock.value=time;
+    flames.update(time);
     for(let i=0;i<count;i++){
       const site=Math.floor(i/12),j=i%12,t=(time*.075+j/12+site*.31)%1;
       const vent=sites[site],{x,y,z}=vent;

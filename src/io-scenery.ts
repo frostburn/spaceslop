@@ -121,12 +121,12 @@ export function createIoScenery(){
   }
   for(let i=0;i<160;i++){
     const side=i%2?-1:1,x=side*(5.5+rng()*18),y=-15+rng()*(IO_CALDERA_Y+45);
-    if(Math.hypot(x/19,(y-IO_CALDERA_Y)/22)<1.1)continue;
+    if(Math.hypot(x/19,(y-IO_CALDERA_Y)/22)<1.1||ioSites.some(([sx,sy])=>Math.hypot(sx-Math.sign(sx)*.55+ioChannel(sy)-x,sy+1-y)<3.1))continue;
     rock(x,y,ioGroundHeight(x,y)+.2,.5+rng()*1.2,.7+rng()*1.2,.6+rng()*1.3);
   }
   for(let i=0;i<100;i++){
     const y=-12+rng()*(IO_CALDERA_Y-12),x=(i%2?-1:1)*(3.2+rng()*2.1)+ioChannel(y);
-    if(ioSites.some(([sx,sy])=>Math.hypot(sx-x,sy-y)<3.1))continue;
+    if(ioSites.some(([sx,sy])=>Math.hypot(sx-Math.sign(sx)*.55+ioChannel(sy)-x,sy-y)<3.1))continue;
     rock(x,y,ioGroundHeight(x,y)+.12,.45+rng()*.6,.6+rng()*.65,.6+rng()*.75);
   }
   // Six fixed rock shelves beneath the six load-bearing foot anchors.
@@ -155,8 +155,8 @@ export function createIoScenery(){
   }
   world.traverse(o=>{if(o instanceof T.Mesh&&o!==lava&&o!==apron&&o!==breach&&!([o.material].flat().some(m=>m.transparent))){o.castShadow=o.receiveShadow=true;}});
   function update(time:number,rise:number){
-    const frame=ioFrame(time,rise),origin=ioWorld(0,0,time,rise);world.rotation.x=-frame.pitch;world.position.set(0,origin.y,origin.z);lavaFlow.update(time);industry.update(time);activity.update(time);ioHot.emissiveIntensity=1.5+Math.sin(time*1.7)*.12;
-    anchorShadow(frame.scroll);poseIoEnvironment(rise);
+    const frame=ioFrame(time,rise),origin=ioWorld(0,0,time,rise);world.rotation.set(-frame.pitch,frame.bank,0);world.position.set(origin.x,origin.y,origin.z);lavaFlow.update(time);industry.update(time);activity.update(time);ioHot.emissiveIntensity=1.5+Math.sin(time*1.7)*.12;
+    anchorShadow(frame.scroll,frame.trackX);poseIoEnvironment(rise,frame.pitch,frame.bank);
   }
   update(0,0);
   const culling=new Map<T.Mesh,boolean>();

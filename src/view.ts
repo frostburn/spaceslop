@@ -1,7 +1,7 @@
 import { setIoRockTexture, setIoCeramicTexture } from './io-materials';
 import { createIoScenery } from './io-scenery';
 import { createSkipper } from './io-rigs';
-import { IO_DURATION, IO_APPROACH, IO_PITCH, IO_SKIPPER_POOL, skipperMotion } from './io-layout';
+import { IO_DURATION, IO_APPROACH, IO_CAMERA_DISTANCE, IO_SKIPPER_POOL, ioFrame, skipperMotion } from './io-layout';
 import { titanBossPoint, titanFrame, TITAN_PITCH } from './titan-frame';
 import { createCicada } from './cicada-rig';
 import { createCicadaScout, createCentipedeSection } from './titan-insect-rigs';
@@ -77,6 +77,9 @@ export class FlightView {
   private skippers = Array.from({length:IO_SKIPPER_POOL},createSkipper);
   private skipperModels: (T.Object3D | undefined)[] = [];
   private ioTime = 0;
+  private ioPitch = 0;
+  private ioBank = 0;
+  private ioOrientation = new T.Euler();
   private cicadaScouts = Array.from({ length: CICADA_SCOUT_POOL }, createCicadaScout);
   private centipedeParts = Array.from({ length: CENTIPEDE_POOL }, createCentipedeSection);
   private insectModels: (T.Object3D | undefined)[] = [];
@@ -314,6 +317,8 @@ export class FlightView {
     if (flight.phase === 'approach') this.swing = Math.min(flight.time / flight.transitionDuration, 1);
     if (flight.phase === 'boss') this.swing = 1;
     const eased = this.swing ** 2 * (3 - 2 * this.swing);
+    const ioPose=flight.level==='io'?ioFrame(this.ioTime,eased):undefined;
+    this.ioPitch=ioPose?.pitch??0;this.ioBank=ioPose?.bank??0;
     const angle = (eased - 1) * Math.PI / 2;
     this.rotation.setFromAxisAngle(this.axis, angle);
     this.plane.quaternion.copy(this.rotation);
@@ -324,15 +329,15 @@ export class FlightView {
     if(flight.level==='io'){
       this.keyLight?.color.setHex(0xfff0dc);this.skyLight?.color.setHex(0xb9c9e0);this.skyLight?.groundColor.setHex(0x35251c);
       if(this.keyLight)this.keyLight.intensity=.15;if(this.skyLight)this.skyLight.intensity=.48;
-      this.keyLight?.position.set(-5,-5*Math.cos(IO_PITCH*eased)+12*Math.sin(IO_PITCH*eased),5*Math.sin(IO_PITCH*eased)+12*Math.cos(IO_PITCH*eased));
+      this.ioOrientation.set(-this.ioPitch,this.ioBank,0);this.keyLight?.position.set(-5,-5,12).applyEuler(this.ioOrientation);
     } else {this.keyLight?.position.set(3,5,6);if(this.keyLight)this.keyLight.intensity=2.7;if(this.skyLight)this.skyLight.intensity=1.75;}
     const hive = flight.level === 'broodlock';
-    const stageDistance = hive ? HIVE_CAMERA_DISTANCE : flight.level === 'io' ? 65 : flight.level === 'ice' ? ICE_CAMERA_DISTANCE : 95;
+    const stageDistance = hive ? HIVE_CAMERA_DISTANCE : flight.level === 'io' ? IO_CAMERA_DISTANCE : flight.level === 'ice' ? ICE_CAMERA_DISTANCE : 95;
     const camera = this.swing === 0 && flight.level === 'preserve' ? this.ortho : this.perspective;
     const distance = T.MathUtils.lerp(stageDistance, BOSS_CAMERA_DISTANCE, eased);
     this.perspective.fov = T.MathUtils.radToDeg(2 * Math.atan(HEIGHT / 2 / distance));
     this.perspective.updateProjectionMatrix();
-    if (flight.level === 'titan' || flight.level === 'io') {
+    if (flight.level === 'titan') {
       // Normalize perspective at the flight plane, then continuously introduce
       // depth foreshortening instead of switching projections on the first frame.
       this.perspective.projectionMatrix.multiplyScalar(1 / distance);
@@ -345,12 +350,14 @@ export class FlightView {
     camera.lookAt(0, 0, 0);
 
     this.player.root.position.set(flight.player.x, flight.player.y, 0);
-    this.player.root.rotation.x = -(flight.level === 'io' ? IO_PITCH : flight.level === 'ice' ? ICE_CORRIDOR_PITCH : 1.18) * eased;
+    this.player.root.rotation.x = flight.level==='io'?-this.ioPitch:-(flight.level === 'ice' ? ICE_CORRIDOR_PITCH : 1.18) * eased;
+    this.player.root.rotation.y = this.ioBank;
     this.player.root.visible = flight.hull > 0 && Math.floor(flight.invulnerable * 12) % 2 === 0;
     const fighterVelocity = this.fighterMotion(flight.player, elapsed, newFlight);
     const fighterSpeed = fighterVelocity.length();
     poseBurners(this.playerBurners, this.animationTime, Math.min(1, 0.36 + fighterSpeed * 0.1 + 0.34 * Math.sin(eased * Math.PI)));
-    this.drone.rotation.x = flight.level === 'io' ? -IO_PITCH * eased : flight.level === 'ice' ? -ICE_CORRIDOR_PITCH * eased : 0;
+    this.drone.rotation.x = flight.level === 'io' ? -this.ioPitch : flight.level === 'ice' ? -ICE_CORRIDOR_PITCH * eased : 0;
+    this.drone.rotation.y = this.ioBank;
     this.drone.position.set(flight.drone.x, flight.drone.y, 0.23);
     this.drone.visible = flight.hull > 0;
     const droneVelocity = this.droneMotion(flight.drone, elapsed, newFlight);
@@ -473,9 +480,10 @@ export class FlightView {
       const motion=skipperMotion(enemy.age,enemy.lane,enemy.slot);
       rig.root.visible=true;rig.root.position.set(enemy.x,enemy.y,0);rig.root.rotation.z=-motion.heading;
       rig.pose(enemy.age,motion.bank,motion.jet);this.skipperModels[index]=rig.root;
+      rig.root.rotation.x-=this.ioPitch;rig.root.rotation.y+=this.ioBank;
     }
 
-    this.drawWings(flight, eased, fighterVelocity, (flight.level === 'titan' || flight.level === 'io') ? (eased > 0 ? distance / eased : undefined) : camera === this.ortho ? undefined : distance);
+    this.drawWings(flight, eased, fighterVelocity, flight.level==='io'?distance:flight.level === 'titan' ? (eased > 0 ? distance / eased : undefined) : camera === this.ortho ? undefined : distance);
     for (const [index, model] of this.drops.entries()) {
       const drop = flight.drops[index];
       model.root.visible = Boolean(drop);
@@ -579,8 +587,8 @@ export class FlightView {
         if (!pod.root.visible) continue;
         const time = this.animationTime + index * 0.47;
         pod.root.position.set(origin.x, origin.y, 0);
-        pod.root.rotation.set(-(flight.level === 'io' ? IO_PITCH : flight.level === 'ice' ? ICE_CORRIDOR_PITCH : 1.18) * reveal + 0.09 * Math.sin(time * 6),
-          -0.046 * velocity.x + 0.14 * Math.sin(time * 5), 0.08 * Math.sin(time * 4));
+        pod.root.rotation.set((flight.level==='io'?-this.ioPitch:-(flight.level === 'ice' ? ICE_CORRIDOR_PITCH : 1.18)*reveal) + 0.09 * Math.sin(time * 6),
+          this.ioBank-0.046 * velocity.x + 0.14 * Math.sin(time * 5), 0.08 * Math.sin(time * 4));
         const recoil = fighting ? wing.flash / WING_FLASH_TIME : 0;
         const charge = pod.weapon === 'omega' && fighting ? Math.max(0, 1 - wing.cooldown / 0.28) : 0;
         const activity = wing.beamEnd && fighting ? 0.55 + 0.13 * Math.sin(time * 31) : Math.max(recoil, charge);
