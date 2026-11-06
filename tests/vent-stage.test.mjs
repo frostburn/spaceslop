@@ -1,0 +1,107 @@
+import assert from 'node:assert/strict';
+import {after,test} from 'node:test';
+import * as T from 'three';
+import {createServer} from 'vite';
+const server=await createServer({root:new URL('..',import.meta.url).pathname,configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true,entries:[]},appType:'custom'});after(()=>server.close());
+const v=await server.ssrLoadModule('/src/vent-layout.ts');
+const {Flight,STEP,BOSS_PROJECTION}=await server.ssrLoadModule('/src/game.ts');
+const {createVentGeology}=await server.ssrLoadModule('/src/vent-geology.ts');
+const {createVentBoss}=await server.ssrLoadModule('/src/vent-boss.ts');
+const {ventCardGeometry}=await server.ssrLoadModule('/src/vent-atlas.ts');
+const {levels,readLevel}=await server.ssrLoadModule('/src/levels.ts');
+
+test('Hadal has ten screens of shrimp patrols and rooted threats, a quiet approach and a winnable media-free boss',()=>{
+ assert.equal(readLevel('vents'),'vents');assert.equal(levels.vents.duration,100);assert.equal(v.ventWaves.filter(w=>w.ventAnchor!==undefined).length,10);
+ const f=new Flight('sentry',[],'vex','vents'),drops=new Set(),anchors=new Set();let peak=0,sawApproach=false,sawBoss=false;
+ for(let i=0;i<11000&&!['won','lost'].includes(f.phase);i++){
+  f.invulnerable=100;f.step(STEP);peak=Math.max(peak,f.enemies.length);
+  for(const e of f.enemies){if(e.ventAnchor!==undefined)anchors.add(e.ventAnchor);if(e.drop)drops.add(e.drop);}
+  if(f.phase==='approach'){sawApproach=true;assert.equal(f.transitionDuration,8);assert.equal(f.enemies.length+f.shots.length+f.threats.length,0);}
+  if(f.phase==='boss')sawBoss=true;
+ }
+ assert(sawApproach&&sawBoss);assert.equal(f.phase,'won');assert.equal(anchors.size,10);assert.equal(drops.size,4);assert(peak<=12);
+ const again=new Flight('sentry',[],'vex','vents');assert.equal(again.time,0);assert.equal(again.bossHealth,64);
+});
+
+test('scroll coasts with matching velocity at the cliff, and camera/boss positions are continuous with settled endpoints',()=>{
+ const h=1e-5,d=v.VENT_DURATION,end=d+v.VENT_APPROACH;
+ assert(Math.abs((v.ventScroll(d)-v.ventScroll(d-h))/h-v.VENT_SPEED)<1e-6);
+ assert(Math.abs((v.ventScroll(d+h)-v.ventScroll(d))/h-v.VENT_SPEED)<2e-4);
+ assert(Math.abs(v.ventScroll(end+h)-v.ventScroll(end-h))<5e-8);
+ const pose=(t)=>{const rise=v.ventCameraRise(t),boss=v.ventBossPose(v.ventBossReveal(t));return {...v.ventWorld(2,153,-2,t,rise),boss:v.ventWorld(boss.x,boss.y,boss.z,t,rise),frame:v.ventFrame(t,rise)};};
+ for(let t=0;t<end;t+=.05){const a=pose(t),b=pose(t+.05);assert(Number.isFinite(a.x+a.y+a.z+a.boss.x+a.boss.y+a.boss.z));assert(Math.abs(b.frame.pitch-a.frame.pitch)<.03);}
+ for(const t of [d,d+v.VENT_CAMERA_SWING,end]){
+  const a=pose(t-h),b=pose(t),c=pose(t+h);
+  for(const key of ['x','y','z'])assert(Math.abs((c[key]-b[key])/h-(b[key]-a[key])/h)<.001);
+ }
+ const final=v.ventBossPose(1),point=v.ventWorld(final.x,final.y,final.z,end,1);
+ assert(Math.abs(point.x)<1e-8);assert(Math.abs(point.y-4.2)<1e-8);assert(Math.abs(point.z+12)<1e-8);
+ assert.equal(v.ventBossPose(0).x,0);assert(v.ventBossPose(0).z>15);
+ for(let r=0;r<=1;r+=.02){const b=v.ventBossPose(r);assert(Math.abs(Math.hypot(b.x,b.y-v.VENT_SHAFT_Y)-v.VENT_CRAB_RADIUS)<1e-8,'crab must follow the circular wall');}
+});
+
+test('the corridor has an actual abyss gap and a cliff drop, with floor cards separated from head-on cells',()=>{
+ const geology=createVentGeology(),shelf=geology.getObjectByName('finite-corridor-shelves'),wall=geology.getObjectByName('abyss-cliff-faces');
+ const p=shelf.geometry.attributes.position;
+ for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i);assert(Math.hypot(x,y-v.VENT_SHAFT_Y)>=v.VENT_SHAFT_RADIUS-.0001,'seabed caps the shaft');}
+ wall.geometry.computeBoundingBox();assert(wall.geometry.boundingBox.min.z<-35);assert(wall.geometry.boundingBox.max.z>=1.4);
+ for(let cell=0;cell<16;cell++){
+  const uv=ventCardGeometry(cell).attributes.uv;
+  for(let i=0;i<uv.count;i++){assert(uv.getX(i)>cell%4/4&&uv.getX(i)<(cell%4+1)/4);assert(cell%8<4?uv.getY(i)>.5:uv.getY(i)<.5);}
+ }
+});
+
+test('anchored targets project from fixed world points and remain stationary relative to their shelves',()=>{
+ for(let i=0;i<v.ventAnchors.length;i++)for(let t=v.ventAnchors[i].time;t<v.ventAnchors[i].time+12;t+=.2){
+  const a=v.ventAnchors[i],point=v.ventWorld(a.x,a.y,a.z,t,0),actual=v.ventAnchorPoint(i,t),scale=40/(40-point.z);
+  assert(Math.abs(actual.x-point.x*scale)<1e-9);assert(Math.abs(actual.y-point.y*scale)<1e-9);assert(actual.scale>0&&actual.scale<1);
+ }
+ const f=new Flight('sentry',[],'vex','vents');f.fire=()=>{};f.stepDroneWeapon=()=>{};
+ const enemy={...v.ventAnchorPoint(0,9),ventAnchor:0,lane:0,age:0,fire:20,hp:2};f.enemies=[enemy];f.time=9;f.step(STEP);
+ const expected=v.ventAnchorPoint(0,f.time);assert.equal(enemy.x,expected.x);assert.equal(enemy.y,expected.y);
+});
+
+test('crab claw targets match the boss combat plane and every wing weapon can damage it',()=>{
+ const rig=createVentBoss(),end=v.VENT_DURATION+v.VENT_APPROACH,b=v.ventBossPose(1),world=new T.Group();world.add(rig.root);world.rotation.x=-v.VENT_PITCH;
+ const origin=v.ventWorld(0,0,0,end,1);world.position.set(origin.x,origin.y,origin.z);rig.root.position.set(b.x,b.y,b.z);rig.root.rotation.x=v.VENT_PITCH;world.updateMatrixWorld(true);
+ const p=new T.Vector3();rig.root.getWorldPosition(p);assert(Math.abs(p.y-4.2)<1e-8);assert(Math.abs(p.z+12)<1e-8);
+ for(const[side,name]of[[-1,'laser_contact_L'],[1,'laser_contact_R']]){rig.root.getObjectByName(name).getWorldPosition(p);assert(Math.abs(p.x-side*2.4*v.VENT_CRAB_SCALE)<1e-8);assert(Math.abs(p.y-4.2)<1e-8);}
+ for(const weapon of ['homing','cannon','laser','omega']){
+  const f=new Flight('sentry',[weapon,weapon],'vex','vents');f.phase='boss';f.cooldown=1000;f.droneCooldown=1000;
+  for(let i=0;i<500&&f.bossHealth===64;i++){f.player.x=f.exposedCannonX*BOSS_PROJECTION-1.2;f.invulnerable=100;f.step(STEP);}
+  assert(f.bossHealth<64,weapon);
+ }
+});
+
+test('middle and distant formations clear the seabed across their footprints and scroll at distinct projected depths',async()=>{
+ const {createVentFormations}=await server.ssrLoadModule('/src/vent-formations.ts'),formations=createVentFormations();
+ const middle=formations.filter(f=>f.tier==='middle'),deep=formations.filter(f=>f.tier==='deep');assert(middle.length>30);assert(deep.length>30);
+ for(const f of [...middle,...deep]){
+  for(const dx of [-f.w/2,0,f.w/2])for(const dy of [-f.h/2,0,f.h/2]){
+   const x=f.x+dx*Math.cos(f.angle)-dy*Math.sin(f.angle),y=f.y+dx*Math.sin(f.angle)+dy*Math.cos(f.angle);
+   assert(f.z-v.ventFloor(x,y)>1,'opaque seabed covers a raster formation');
+  }
+ }
+ const projected=(z,t)=>{const p=v.ventWorld(4,50,z,t,0),scale=v.VENT_CAMERA_DISTANCE/(v.VENT_CAMERA_DISTANCE-p.z);return p.y*scale;};
+ const rates=[-2,-7,-13].map(z=>projected(z,25.1)-projected(z,25));
+ assert(Math.abs(rates[0]-rates[1])>.005);assert(Math.abs(rates[1]-rates[2])>.005);
+ const geology=createVentGeology(),material=geology.getObjectByName('finite-corridor-shelves').material;
+ assert(material.map.isDataTexture);assert.equal(material.map,material.bumpMap);assert(material.map.generateMipmaps);
+});
+
+test('vent mouths stand above base shelves and the chasm steps inward towards the deep seabed',async()=>{
+ const {createVentFormations}=await server.ssrLoadModule('/src/vent-formations.ts'),{ventCardRelief}=await server.ssrLoadModule('/src/vent-atlas.ts');
+ const f=createVentFormations(),near=f.filter(p=>p.tier==='near'),low=near.filter(p=>p.cell<2),towers=near.filter(p=>p.cell===2||p.cell===3||p.cell===10);
+ const highestShelf=Math.max(...low.map(p=>p.z));
+ for(const p of towers){assert(p.z+ventCardRelief(p.cell,.77)*p.h/7.5>highestShelf+.1,'base-level shelf can cover a vent mouth');assert.equal(p.angle,0);}
+ const mean=tier=>{const a=f.filter(p=>p.tier===tier);return a.reduce((n,p)=>n+Math.abs(p.x),0)/a.length;};
+ assert(mean('near')>mean('middle'));assert(mean('middle')>mean('deep'));
+ for(const cell of [2,3,10]){
+  const g=ventCardGeometry(cell);g.computeBoundingBox();assert(g.boundingBox.max.z-g.boundingBox.min.z>5);
+  const p=g.attributes.position;for(let i=0;i<p.count;i++){
+   const originalV=1-Math.floor(i/2)/g.parameters.heightSegments;
+   const projected=p.getY(i)*Math.cos(v.VENT_STAGE_PITCH)+p.getZ(i)/7.5*Math.sin(v.VENT_STAGE_PITCH);
+   assert(Math.abs(projected-(originalV-.5)*Math.cos(v.VENT_STAGE_PITCH))<1e-6,'depth relief stretches the painted tower');
+  }
+ }
+});
