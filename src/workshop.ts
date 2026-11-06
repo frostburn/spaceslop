@@ -1,5 +1,6 @@
 import {setIoRockTexture,setIoCeramicTexture} from './io-materials';
 import {createCaldera,createSkipper} from './io-rigs';
+import {createIoBurnerStudy} from './io-burner';
 import { createCicada } from './cicada-rig';
 import { createCicadaScout, createCentipedeSection } from './titan-insect-rigs';
 import { bindCentipede, severCentipede, stepCentipedes, CENTIPEDE_SPACING, type CentipedePart } from './centipede';
@@ -132,7 +133,9 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const centipedeRoot = new T.Group(), centipede = Array.from({ length: 7 }, createCentipedeSection);
   for (const part of centipede) centipedeRoot.add(part.root);
   const caldera=createCaldera(),skipper=createSkipper();skipper.root.rotation.z=Math.PI;
+  const burner=createIoBurnerStudy();
   const assets = {
+    burner: {root:burner.root,duration:6,bounds:new T.Box3(new T.Vector3(-.6,-.6,0),new T.Vector3(.6,.6,3.6)),pose:burner.pose},
     caldera: {root:caldera.root,duration:8,bounds:new T.Box3(new T.Vector3(-7,-7,-4),new T.Vector3(7,7.5,5)),pose(time:number){const sag=T.MathUtils.smoothstep(time,3,4.2);caldera.pose(time,sag,time>=3,0);return time<3?'braced · dredging wheel':'failed support · chassis sag';}},
     skipper: {root:skipper.root,duration:3,pose(time:number){skipper.pose(time,Math.sin(time*2)*.16,(1+Math.sin(time*5))*.5);return 'corrective jets';}},
     cicada_scout: { root: cicadaScout.root, duration: 3, pose(time: number) { cicadaScout.pose(time, Math.sin(time * 2) * .25); return 'wingbeat'; } },

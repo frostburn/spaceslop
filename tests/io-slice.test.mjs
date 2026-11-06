@@ -228,7 +228,7 @@ test('conveyor loads are rough yellow sulfur and burner ribbons keep their regis
  const industry=createIoIndustry(),ore=industry.root.getObjectByName('conveyor-ore');
  assert(ore.material.color.r>.8&&ore.material.color.g>.5&&ore.material.color.b<.1);assert(ore.material.roughness>.8);assert(ore.instanceColor);
  const flame=createIoBurnerFlames(industry.burners),jets=flame.root.getObjectByName('io-burner-jets'),cores=flame.root.getObjectByName('io-burner-cores'),matrix=new T.Matrix4(),p=new T.Vector3();
- assert.equal(jets.count,industry.burners.length);const sheets=new Set(jets.geometry.attributes.sheet.array);assert.deepEqual([...sheets],[0,1]);const normals=jets.geometry.attributes.normal;assert(Math.abs(new T.Vector3().fromBufferAttribute(normals,0).dot(new T.Vector3().fromBufferAttribute(normals,normals.count/2)))<1e-6);assert.equal(cores.geometry.type,'PlaneGeometry');assert(!jets.frustumCulled);assert(!cores.material.depthWrite);
+ assert.equal(jets.count,industry.burners.length);assert.equal(jets.geometry.type,'PlaneGeometry');assert(!jets.geometry.attributes.sheet);assert.equal(cores.geometry.type,'PlaneGeometry');assert(!jets.frustumCulled);assert(!cores.material.depthWrite);
  for(let i=0;i<jets.count;i++){jets.getMatrixAt(i,matrix);p.setFromMatrixPosition(matrix);assert(p.distanceTo(industry.burners[i])<1e-4);}
  const map=jets.material.uniforms.turbulence.value,data=map.image.data;assert(map.generateMipmaps);assert.equal(map.magFilter,T.LinearFilter);
  flame.update(4.25);assert.equal(jets.material.uniforms.clock.value,4.25);assert.equal(cores.material.uniforms.clock,jets.material.uniforms.clock);assert.equal(map.image.data,data);
@@ -263,4 +263,14 @@ test('painted silo bands share one tapered shell without overlapping wall surfac
    assert.equal(distances.length,1,'only one outward-facing wall may occupy a radial ray at any paint height');
   }
  }
+});
+
+
+test('burner elevation crossfade has complementary smooth weights and the workshop shares the stage renderer',async()=>{
+ const {ioFlameTopWeight}=await server.ssrLoadModule('/src/io-flames.ts'),{createIoBurnerStudy}=await server.ssrLoadModule('/src/io-burner.ts');
+ assert.equal(ioFlameTopWeight(0),0);assert.equal(ioFlameTopWeight(1),1);
+ let previous=0;for(let i=0;i<=100;i++){const w=ioFlameTopWeight(i/100);assert(w>=previous&&w>=0&&w<=1);assert(Math.abs(w+(1-w)-1)<1e-12);previous=w;}
+ const rig=createIoBurnerStudy(),side=rig.root.getObjectByName('io-burner-jets'),top=rig.root.getObjectByName('io-burner-cores');
+ assert.equal(side.count,1);rig.pose(2.5);assert.equal(side.material.uniforms.clock.value,2.5);assert.equal(top.material.uniforms.clock,side.material.uniforms.clock);
+ assert.equal(top.material.uniforms.turbulence.value,side.material.uniforms.turbulence.value);
 });
