@@ -6,6 +6,7 @@ const profile = [[.75, .38, -.22, .51], [.5, .63, -.22, .76], [.25, .72, -.22, .
   [-.1, .73, -.2, .73], [-.35, .70, -.19, .61], [-.65, .64, -.18, .52],
   [-1.2, .57, -.17, .43], [-1.9, .53, -.15, .37], [-2.4, .43, -.12, .32]];
 const openings = [12, 52].map(i => ({ i0: i - 4, i1: i + 4, j0: 45, j1: 59 }));
+export const GROUNDSKEEPER_EYE = { x: .55, y: -.30, z: .52 };
 
 // The scalp, socket and narial rim all sample the same skull surface. Nostrils
 // replace patches of that surface with an inset tunnel, rather than covering it.
@@ -16,7 +17,7 @@ export function gkSkullPoint(y: number, angle: number, out = new T.Vector3()) {
   const width = T.MathUtils.lerp(a[1], b[1], t), floor = T.MathUtils.lerp(a[2], b[2], t), crown = T.MathUtils.lerp(a[3], b[3], t);
   const sine = Math.sin(angle), x = Math.sign(sine) * Math.abs(sine) ** .72 * width;
   const z = floor + (crown - floor) * (.5 + .5 * Math.cos(angle)) ** .82;
-  const socket = Math.exp(-((y + .12) ** 2 / .07 + (z - .43) ** 2 / .018)) * T.MathUtils.smoothstep(Math.abs(x), .4, .65);
+  const socket = Math.exp(-((y - GROUNDSKEEPER_EYE.y) ** 2 / .065 + (z - GROUNDSKEEPER_EYE.z) ** 2 / .018)) * T.MathUtils.smoothstep(Math.abs(x), .35, .6);
   return out.set(x - Math.sign(x) * socket * .15, y, z);
 }
 
@@ -39,7 +40,7 @@ export function gkSkullGeometry() {
   function vertex(p: T.Vector3, angle: number, depth = 0) {
     const index = positions.length / 3;
     positions.push(p.x, p.y, p.z); uv.push(angle / (Math.PI * 2), (back - p.y) / length);
-    const eye = Math.exp(-((Math.abs(p.x) - .62) ** 2 / .07 + (p.y + .03) ** 2 / .45 + (p.z - .43) ** 2 / .12));
+    const eye = Math.exp(-((Math.abs(p.x) - GROUNDSKEEPER_EYE.x) ** 2 / .07 + (p.y - GROUNDSKEEPER_EYE.y) ** 2 / .30 + (p.z - GROUNDSKEEPER_EYE.z) ** 2 / .10));
     color.copy(base).lerp(patch, eye * .75).multiplyScalar(.87 + T.MathUtils.smoothstep(p.z, -.1, .7) * .13);
     color.lerp(inner, T.MathUtils.smoothstep(depth, .025, .23)); colors.push(color.r, color.g, color.b);
     return index;
@@ -120,7 +121,7 @@ export function gkScalpPlumage(feather: T.BufferGeometry, material: T.Material) 
   for (let i = 0; i < count; i++) {
     let y = .75 - 1.6 * (i + .5) / count + .035 * Math.sin(i * 1.7);
     const a = ((i * 2.399963) % (Math.PI * 2)) / (Math.PI * 2) * 3.5 - 1.75;
-    if (Math.abs(y + .12) < .27 && Math.abs(Math.abs(a) - 1.05) < .55) y = .40 + random() * .30;
+    if (Math.abs(y - GROUNDSKEEPER_EYE.y) < .32 && Math.abs(Math.abs(a) - .95) < .52) y = .40 + random() * .30;
     transform.position.copy(gkSkullPoint(y, a)); gkSkullNormal(y, a, normal); transform.position.addScaledVector(normal, .018);
     shaft.copy(flow).addScaledVector(normal, -normal.dot(flow)).normalize();
     across.crossVectors(shaft, normal).normalize(); shaft.crossVectors(normal, across).normalize();

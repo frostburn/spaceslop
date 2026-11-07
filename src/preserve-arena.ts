@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { preserveBatch, preserveBeam, preserveFrond, preserveLimb, preservePart, type PreservePart } from './preserve-geometry';
-import { PRESERVE_ARENA_Y, preserveNoise, preserveRandom } from './preserve-layout';
+import { PRESERVE_ARENA_Y, PRESERVE_ARENA_RADIUS, PRESERVE_ARENA_FLOOR, PRESERVE_ARENA_UNDERLAY, preserveNoise, preserveRandom } from './preserve-layout';
 import { GROUNDSKEEPER_FLOOR } from './groundskeeper';
 import type { PreserveMaterials } from './preserve-materials';
 import { mergeGkFixed } from './groundskeeper-geometry';
@@ -13,7 +13,11 @@ export function createPreserveArena(m: PreserveMaterials) {
   const ellipse = (a: number, radius: number, z: number) => new T.Vector3(Math.sin(a) * radius, Math.cos(a) * radius * 1.1, z);
   // A structural floor beneath the flyable apron, and a genuinely raised soil bed.
   const apron = m.metal.clone(); apron.color.setHex(0x697365);
-  const floor = new T.Mesh(new T.CircleGeometry(11.2, 80), apron); floor.position.z = -4.45; floor.scale.y = 1.1; floor.receiveShadow = true; root.add(floor);
+  const floor = new T.Mesh(new T.CircleGeometry(PRESERVE_ARENA_RADIUS, 80), apron); floor.name = 'rotunda-base-floor'; floor.position.z = PRESERVE_ARENA_FLOOR; floor.scale.y = 1.1; floor.receiveShadow = true; root.add(floor);
+  const skirtBottom = PRESERVE_ARENA_UNDERLAY - .1;
+  const skirt = new T.Mesh(new T.CylinderGeometry(PRESERVE_ARENA_RADIUS, PRESERVE_ARENA_RADIUS, PRESERVE_ARENA_FLOOR - skirtBottom, 80, 1, true), apron);
+  skirt.name = 'rotunda-floor-edge'; skirt.rotation.x = Math.PI / 2; skirt.scale.z = 1.1;
+  skirt.position.z = (PRESERVE_ARENA_FLOOR + skirtBottom) / 2; skirt.receiveShadow = true; root.add(skirt);
   const wall = new T.Mesh(new T.CylinderGeometry(6.3, 6.5, 1.55, 64, 1, true), apron);
   wall.rotation.x = Math.PI / 2; wall.scale.z = 1.05; wall.position.z = GROUNDSKEEPER_FLOOR - .8; wall.receiveShadow = wall.castShadow = true; root.add(wall);
   const soil = new T.CircleGeometry(6.3, 80, 0, Math.PI * 2), pos = soil.attributes.position, colors = [];
@@ -23,16 +27,26 @@ export function createPreserveArena(m: PreserveMaterials) {
   }
   soil.setAttribute('color', new T.Float32BufferAttribute(colors, 3)); soil.computeVertexNormals();
   const bed = new T.Mesh(soil, m.soil); bed.receiveShadow = true; bed.name = 'nesting-bed'; root.add(bed);
+  // Sector-shaped plates partition the apron, with a real gap between neighbors.
+  // The old rectangular plates overlapped coplanar top faces around the ring.
+  const half = Math.PI / 72 - .006, shape = new T.Shape();
+  for (const [i, [radius, angle]] of [[6.6, -half], [9.1, -half], [9.1, half], [6.6, half]].entries()) {
+    const x = Math.sin(angle) * radius, y = Math.cos(angle) * radius;
+    if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+  }
+  shape.closePath();
+  const sector = new T.ExtrudeGeometry(shape, { depth: .12, bevelEnabled: false }).translate(0, 0, -.12), panels: PreservePart[] = [];
   for (let i = 0; i < 72; i++) {
     const a = i / 72 * Math.PI * 2, b = (i + 1) / 72 * Math.PI * 2;
     beam(ellipse(a, 6.34, GROUNDSKEEPER_FLOOR + .03), ellipse(b, 6.34, GROUNDSKEEPER_FLOOR + .03), .16, .14, 0x8c8e72);
     // Individual worn apron plates make the floor's scale legible.
-    const p = ellipse(a, 8.0, -4.37), q = preservePart(p.x, p.y, p.z, 1.45, 1.1, .12, i % 4 ? 0x5e665b : 0x868575, -a);
-    parts.push(q);
+    panels.push(preservePart(0, 0, PRESERVE_ARENA_FLOOR + .15, 1, 1, 1, i % 4 ? 0x5e665b : 0x868575, -a));
     if (i % 6 === 0) {
       const l = ellipse(a, 6.45, -3.65); lamps.push(preservePart(l.x, l.y, l.z, .55, .12, .19, 0xffd7a0, -a));
     }
   }
+  const apronRing = new T.Group(); apronRing.name = 'rotunda-apron-assembly'; apronRing.scale.y = 1.1;
+  apronRing.add(preserveBatch('rotunda-apron-plates', sector, m.metal, panels)); root.add(apronRing);
   for (let i = 0; i < 32; i++) {
     const a = i / 32 * Math.PI * 2, b = (i + 1) / 32 * Math.PI * 2;
     // Preserve an open corridor entrance on the near side.

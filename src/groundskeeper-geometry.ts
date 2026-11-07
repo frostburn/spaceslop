@@ -105,10 +105,13 @@ export function gkTube(rows = 22, sides = 16) {
   const pos = new T.BufferAttribute(p, 3).setUsage(T.DynamicDrawUsage);
   geometry.setAttribute('position', pos); geometry.setAttribute('uv', new T.Float32BufferAttribute(uv, 2)); geometry.setIndex(indices);
   const across = new T.Vector3(), up = new T.Vector3(), normal = new T.Vector3(), q = new T.Vector3();
-  return { geometry, pose(curve: T.CatmullRomCurve3, startRadius: number, endRadius: number, claw = false) {
+  return { geometry, pose(curve: T.CatmullRomCurve3, startRadius: number, endRadius: number, claw = false, frameAxis?: T.Vector3) {
     for (let j = 0; j <= rows; j++) {
       const t = j / rows, c = curve.getPoint(t); normal.copy(curve.getTangent(t));
-      across.set(1, 0, 0); if (Math.abs(normal.x) > .9) across.set(0, 1, 0);
+      // Anchor a flattened claw to its hand, then transport that cross-section
+      // along the curve. A world-X frame would roll it as the wrist turned.
+      if (frameAxis) { if (j === 0) across.copy(frameAxis); }
+      else { across.set(1, 0, 0); if (Math.abs(normal.x) > .9) across.set(0, 1, 0); }
       across.addScaledVector(normal, -across.dot(normal)).normalize(); up.crossVectors(normal, across).normalize();
       const r = j === 0 || j === rows ? .008 : claw ? startRadius * (1 - t) ** .53 + endRadius * t : T.MathUtils.lerp(startRadius, endRadius, t);
       for (let i = 0; i <= sides; i++) {

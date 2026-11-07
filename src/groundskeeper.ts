@@ -8,8 +8,8 @@ export const GROUNDSKEEPER_END = 3.25;
 export const GROUNDSKEEPER_FLOOR = -2.8;
 export const GROUNDSKEEPER_RADIUS = 1.75;
 export const GROUNDSKEEPER_BELLY = { x: 0, y: -2.65, z: 6.95 };
-export const GROUNDSKEEPER_UPPER_ARM = 4.35;
-export const GROUNDSKEEPER_FOREARM = 4.5;
+export const GROUNDSKEEPER_UPPER_ARM = 3.2;
+export const GROUNDSKEEPER_FOREARM = 3.45;
 export const GROUNDSKEEPER_RAKE_FOLLOW = 2.5;
 export type GkPoint = { x: number; y: number; z: number };
 export type GkAim = { x: number; y: number };
@@ -21,6 +21,7 @@ const add = (a: GkPoint, b: GkPoint) => point(a.x + b.x, a.y + b.y, a.z + b.z);
 const sub = (a: GkPoint, b: GkPoint) => point(a.x - b.x, a.y - b.y, a.z - b.z);
 const mul = (a: GkPoint, s: number) => point(a.x * s, a.y * s, a.z * s);
 const dot = (a: GkPoint, b: GkPoint) => a.x * b.x + a.y * b.y + a.z * b.z;
+const cross = (a: GkPoint, b: GkPoint) => point(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
 const norm = (a: GkPoint) => mul(a, 1 / Math.max(1e-8, Math.hypot(a.x, a.y, a.z)));
 const mix = (a: GkPoint, b: GkPoint, t: number) => add(mul(a, 1 - t), mul(b, t));
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -47,20 +48,19 @@ export function groundskeeperAttack(time: number) {
     recovery: gkSmooth((age - GROUNDSKEEPER_END) / 1.1) };
 }
 
-// Fixed-length, two-link arms. Use a vertical bend frame rotated toward the
-// wrist's horizontal heading. The forward wrist gate keeps its vertical pole
-// unreachable, avoiding the zero-vector flips of a projected moving pole.
-function arm(shoulder: GkPoint, goal: GkPoint) {
+// A lateral elbow pole, canted slightly back, keeps the elbow outside the rib
+// cage and lets the forearm fold forward. Both bones and the hand use this same
+// hinge frame; aiming a bone alone leaves its longitudinal roll unconstrained.
+function arm(shoulder: GkPoint, goal: GkPoint, side: number) {
   const upper = GROUNDSKEEPER_UPPER_ARM, lower = GROUNDSKEEPER_FOREARM, delta = sub(goal, shoulder), direction = norm(delta);
   const d = clamp(Math.hypot(delta.x, delta.y, delta.z), .3, upper + lower - .025);
   const wrist = add(shoulder, mul(direction, d));
   const along = (upper * upper - lower * lower + d * d) / (2 * d);
-  const up = norm(sub(point(0, 0, 1), mul(direction, direction.z)));
-  const tangent = point(direction.y * up.z - direction.z * up.y,
-    direction.z * up.x - direction.x * up.z, direction.x * up.y - direction.y * up.x);
-  const angle = Math.atan2(direction.x, -direction.y), bend = add(mul(up, Math.cos(angle)), mul(tangent, Math.sin(angle)));
+  const outward = norm(sub(point(side, 0, 0), mul(direction, side * direction.x)));
+  const tangent = cross(direction, outward), angle = -side * .6;
+  const bend = add(mul(outward, Math.cos(angle)), mul(tangent, Math.sin(angle))), hinge = norm(cross(direction, bend));
   const elbow = add(add(shoulder, mul(direction, along)), mul(bend, Math.sqrt(Math.max(0, upper * upper - along * along))));
-  return { shoulder, elbow, wrist };
+  return { shoulder, elbow, wrist, hinge };
 }
 
 export function groundskeeperPose(time: number, aim: GkAim = { x: 0, y: -5.3 }, cancelledAt = -100) {
@@ -70,7 +70,7 @@ export function groundskeeperPose(time: number, aim: GkAim = { x: 0, y: -5.3 }, 
   const moving = gkSmooth((attack.age - GROUNDSKEEPER_STRIKE + .2) / .5) * strength;
   const side = kind === 'right rake' ? 1 : -1;
   const lunge = kind === 'lunge' ? moving : 0;
-  const torso = point((side * .24 + aim.x * .35) * moving, -moving * (kind === 'lunge' ? 4.8 : 3.0), -moving * (kind === 'lunge' ? 1.35 : .55));
+  const torso = point((side * .24 + aim.x * .35) * moving, -moving * (kind === 'lunge' ? 4.8 : 3.6), -moving * (kind === 'lunge' ? 1.35 : .55));
   const jaw = (windup * .37 + lunge * .20) * strength;
   const headPitch = .12 + lunge * .40 + .015 * Math.sin(time * .7);
   const headYaw = (.34 + .065 * Math.sin(time * .55)) * (1 - lunge);
@@ -80,8 +80,8 @@ export function groundskeeperPose(time: number, aim: GkAim = { x: 0, y: -5.3 }, 
     head = mix(head, sub(target, headOffset(headPitch, headYaw)), moving * (1 - recovery));
   }
   const arms = [-1, 1].map(handSide => {
-    const shoulder = add(point(handSide * 2.3, -2.4, 9.4), torso);
-    const rest = add(point(handSide * 4.6, handSide < 0 ? -3.5 : -2.8, handSide < 0 ? 5.6 : 4.9), torso);
+    const shoulder = add(point(handSide * 2.6, -2.2, 8.5), torso);
+    const rest = add(point(handSide * 4.5, -4, handSide < 0 ? 5.2 : 4.9), torso);
     const striking = kind === 'double slam' || (kind !== 'lunge' && side === handSide);
     const restDirection = norm(point(-handSide * .14, -.35, -.93));
     let wrist = rest, direction = restDirection;
@@ -108,14 +108,17 @@ export function groundskeeperPose(time: number, aim: GkAim = { x: 0, y: -5.3 }, 
     // Cross-body travel and recovery follow the front of the abdomen. A soft
     // lateral gate leaves the outside windup free while keeping the wrist clear.
     const crossing = 1 - gkSmooth((handSide * (wrist.x - torso.x) - 2.6) / 1.4);
-    wrist.y = Math.min(wrist.y, torso.y - 3.6 - 1.1 * crossing);
-    const solved = arm(shoulder, wrist);
+    wrist.y = Math.min(wrist.y, torso.y - 3.6 - 2.4 * crossing);
+    wrist.z = Math.max(wrist.z, torso.z + 3 + 2 * crossing);
+    const solved = arm(shoulder, wrist, handSide);
+    const across = norm(sub(solved.hinge, mul(direction, dot(solved.hinge, direction))));
+    const palmNormal = cross(across, direction);
     const claws = [-1, 0, 1].map((finger) => {
-      const base = add(solved.wrist, point(finger * .46, -Math.abs(finger) * .18, finger * .04));
-      return [base, add(base, add(mul(direction, 2.2), point(handSide * 1.1 + finger * .22, -1.15, .8))),
-        add(base, add(mul(direction, 4.55 - Math.abs(finger) * .24), point(finger * .4, 0, 0)))];
+      const base = add(solved.wrist, add(mul(across, finger * .46), mul(direction, Math.abs(finger) * .1)));
+      return [base, add(base, add(mul(direction, 2.2), add(mul(across, handSide * .9 + finger * .22), mul(palmNormal, -1.2)))),
+        add(base, add(mul(direction, 4.55 - Math.abs(finger) * .24), mul(across, finger * .4)))];
     });
-    return { ...solved, direction, claws, side: handSide };
+    return { ...solved, across, direction, claws, side: handSide };
   });
   const feet = [-1, 1].map(s => point(s * 2.15, -.35 - (s === side ? moving * (kind === 'lunge' ? 3.5 : 1.2) : 0),
     s === side ? Math.sin(moving * Math.PI) * (kind === 'lunge' ? .45 : .22) : 0));

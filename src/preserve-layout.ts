@@ -14,6 +14,9 @@ export const PRESERVE_BOSS_PITCH = 70 * Math.PI / 180;
 export const PRESERVE_RISE = 6;
 export const PRESERVE_FINAL_SCROLL = levels.preserve.duration * PRESERVE_SPEED + PRESERVE_SPEED * PRESERVE_APPROACH / 2;
 export const PRESERVE_ARENA_Y = PRESERVE_FINAL_SCROLL + 11;
+export const PRESERVE_ARENA_RADIUS = 11.2;
+export const PRESERVE_ARENA_FLOOR = -4.45;
+export const PRESERVE_ARENA_UNDERLAY = -4.8;
 
 export function preserveRandom(seed: number) {
   return () => {
@@ -53,7 +56,11 @@ export function preserveGround(x: number, y: number) {
     const r = Math.hypot((x - pool.x) / pool.rx, (y - pool.y) / pool.ry);
     z -= (1 - smooth((r - .72) / .5)) * .56;
   }
-  return z;
+  // The rotunda owns its floor. Ease the incoming soil down outside its rim,
+  // then keep the entire underlay below the slab rather than intersecting it.
+  const distance = Math.hypot(x, (y - PRESERVE_ARENA_Y) / 1.1);
+  const buried = smooth((PRESERVE_ARENA_RADIUS + 1.4 - distance) / 1.4);
+  return z + (PRESERVE_ARENA_UNDERLAY - z) * buried;
 }
 
 export function preserveScroll(time: number) {

@@ -146,3 +146,54 @@ test('arm bends keep their lengths and avoid frame flips through attacks, recove
   }
  }
 });
+
+test('resting elbows fold back and down, and both arm sections preserve the elbow hinge axis',()=>{
+ const rig=createGroundskeeper(),v=p=>new T.Vector3(p.x,p.y,p.z),xAxis=new T.Vector3(1,0,0),yAxis=new T.Vector3(0,1,0);
+ const rest=rig.pose(0);
+ for(const arm of rest.arms){
+  const upper=v(arm.elbow).sub(v(arm.shoulder)),lower=v(arm.wrist).sub(v(arm.elbow));
+  const bend=T.MathUtils.radToDeg(upper.angleTo(lower));
+  assert(bend>60&&bend<115,'resting elbow has an open flexion angle');
+  assert(arm.elbow.z<arm.shoulder.z-1.2&&arm.elbow.y>arm.shoulder.y+.3,'humerus descends back toward the elbow');
+ }
+ for(const x of[-3.5,0,3.5])for(const y of[-6.8,0,5.5])for(const t of[0,1.8,2.5,2.85,3.25,3.85,8.5,8.85,14.1,19.4]){
+  const p=rig.pose(t,{x,y});
+  for(const arm of p.arms){
+   const upper=rig.root.getObjectByName(`upper-arm-${arm.side}`),lower=rig.root.getObjectByName(`forearm-${arm.side}`);
+   const u=v(arm.elbow).sub(v(arm.shoulder)).normalize(),l=v(arm.wrist).sub(v(arm.elbow)).normalize(),hinge=u.clone().cross(l).normalize();
+   const ux=xAxis.clone().applyQuaternion(upper.quaternion),lx=xAxis.clone().applyQuaternion(lower.quaternion);
+   assert(Math.abs(ux.dot(hinge))>1-1e-6&&ux.dot(lx)>1-1e-6,'a bone rolls away from the shared hinge plane');
+   assert(yAxis.clone().applyQuaternion(upper.quaternion).dot(u)>1-1e-6&&yAxis.clone().applyQuaternion(lower.quaternion).dot(l)>1-1e-6);
+   const palm=rig.root.getObjectByName(`palm-${arm.side}`),direction=v(arm.direction),across=ux.clone().addScaledVector(direction,-ux.dot(direction)).normalize();
+   assert(xAxis.clone().applyQuaternion(palm.quaternion).dot(across)>1-1e-6,'hand acquires independent forearm twist');
+   const claw=rig.root.getObjectByName(`claw-${arm.side}-1`),positions=claw.geometry.attributes.position,curve=new T.CatmullRomCurve3(arm.claws[1].map(v)),tangent=curve.getTangent(0);
+   const expected=across.clone().addScaledVector(tangent,-across.dot(tangent)).normalize(),actual=new T.Vector3().fromBufferAttribute(positions,0).sub(new T.Vector3().fromBufferAttribute(positions,6)).normalize();
+   assert(actual.dot(expected)>1-1e-6,'flattened claw cross-section rolls independently of its hand');
+  }
+ }
+});
+
+test('both pupils face forward and have clear sight past the skull and feather hood',()=>{
+ const rig=createGroundskeeper();rig.pose(0);rig.root.updateMatrixWorld(true);
+ const head=rig.root.getObjectByName('dinosaur-head'),skull=head.getObjectByName('long-scaled-muzzle'),coat=head.children.filter(o=>o.isInstancedMesh),ray=new T.Raycaster();
+ for(const side of[-1,1]){
+  const socket=head.getObjectByName(`eye-${side}`),axis=new T.Vector3(0,0,1).applyQuaternion(socket.quaternion);
+  assert(axis.dot(new T.Vector3(0,-1,0))>.9,'eye points laterally instead of toward the snout');
+  const pupil=head.getObjectByName(`pupil-${side}`),origin=pupil.getWorldPosition(new T.Vector3());
+  for(const x of[-.5,0,.5]){
+   const direction=head.localToWorld(new T.Vector3(x,-6,.52)).sub(origin).normalize();ray.set(origin.clone().addScaledVector(direction,.015),direction);ray.far=6;
+   assert.equal(ray.intersectObjects([skull,...coat]).length,0,'snout or scalp obstructs the forward field of view');
+  }
+ }
+});
+
+test('neck feathers retain seeded placement while varying their width, length and cant',()=>{
+ const rig=createGroundskeeper(),neck=rig.root.getObjectByName('raised-neck-hackles'),matrix=new T.Matrix4(),position=new T.Vector3(),rotation=new T.Quaternion(),scale=new T.Vector3();
+ rig.pose(0);const initial=neck.instanceMatrix.array.slice(),widths=[],lengths=[];
+ for(let i=0;i<neck.count;i++){neck.getMatrixAt(i,matrix);matrix.decompose(position,rotation,scale);widths.push(scale.x);lengths.push(scale.y);}
+ const average=a=>a.reduce((s,v)=>s+v,0)/a.length,mean=average(lengths),variance=average(lengths.map(v=>(v-mean)**2));
+ const adjacent=lengths.slice(1).reduce((sum,v,i)=>sum+(v-mean)*(lengths[i]-mean),0)/(lengths.length-1)/variance;
+ assert(Math.max(...widths)-Math.min(...widths)>.2,'neck vanes all have the same width');
+ assert(Math.abs(adjacent)<.15,'periodic feather sizing creates repeating rows');
+ rig.pose(1.8);rig.pose(0);assert.deepEqual(neck.instanceMatrix.array,initial,'variation must not reroll during animation or reset');
+});

@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { part, pivot } from './rig-geometry';
 import { gkPlumage, gkSnout } from './groundskeeper-geometry';
-import { gkScalpPlumage, gkSkullGeometry } from './groundskeeper-skull';
+import { gkScalpPlumage, gkSkullGeometry, GROUNDSKEEPER_EYE } from './groundskeeper-skull';
 import type { createGroundskeeperMaterials } from './groundskeeper-materials';
 
 export function createGroundskeeperFace(parent: T.Group, m: ReturnType<typeof createGroundskeeperMaterials>, feather: T.BufferGeometry) {
@@ -19,11 +19,11 @@ export function createGroundskeeperFace(parent: T.Group, m: ReturnType<typeof cr
   const tooth = new T.ConeGeometry(.043, .095, 6);
   for (const side of [-1, 1]) {
     // Orbital bone grows into the cranium. Small eyes sit behind the rim.
-    const socket = pivot(head, `eye-${side}`, side * .60, -.12, .43);
-    socket.quaternion.setFromUnitVectors(new T.Vector3(0, 0, 1), new T.Vector3(side * .87, -.43, .14).normalize());
+    const socket = pivot(head, `eye-${side}`, side * GROUNDSKEEPER_EYE.x, GROUNDSKEEPER_EYE.y, GROUNDSKEEPER_EYE.z);
+    socket.quaternion.setFromUnitVectors(new T.Vector3(0, 0, 1), new T.Vector3(side * .25, -.96, .12).normalize());
     part(socket, sphere, m.dark, 0, 0, 0).scale.set(.135, .10, .045);
     part(socket, sphere, m.eye, 0, -.014, .025).scale.set(.08, .061, .028);
-    part(socket, sphere, m.pupil, 0, -.014, .05).scale.set(.031, .035, .009);
+    const pupil = part(socket, sphere, m.pupil, 0, -.014, .05); pupil.name = `pupil-${side}`; pupil.scale.set(.031, .035, .009);
     part(socket, sphere, m.ochre, 0, .055, .015).scale.set(.13, .035, .038);
     for (let i = 0; i < 8; i++) {
       const y = .03 - i * .145;

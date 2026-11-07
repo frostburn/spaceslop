@@ -4,6 +4,7 @@ import { groundskeeperPose, GROUNDSKEEPER_BELLY, GROUNDSKEEPER_UPPER_ARM, GROUND
 import { gkFeatherGeometry, gkPlumage, gkTorsoSurface, gkTube, mergeGkFixed } from './groundskeeper-geometry';
 import { createGroundskeeperMaterials } from './groundskeeper-materials';
 import { createGroundskeeperFace } from './groundskeeper-face';
+import { preserveRandom } from './preserve-layout';
 
 const vec = (p: GkPoint) => new T.Vector3(p.x, p.y, p.z);
 
@@ -22,8 +23,8 @@ export function createGroundskeeper() {
   part(body, sphere, m.down, 0, 3.65, 6.6).scale.set(1.2, 3.5, .85);
   body.add(gkPlumage(feather, m.feathers, new T.Vector3(0, 3.7, 6.6), new T.Vector3(1.2, 3.5, .85), 300, 93, .48, true, new T.Vector3(0, 1, -.1)));
   for (const side of [-1, 1]) {
-    part(body, sphere, m.darkDown, side * 2.06, -1.7, 9.0).scale.set(.75, 1.05, 1.0);
-    body.add(gkPlumage(feather, m.feathers, new T.Vector3(side * 2.06, -1.7, 9.0), new T.Vector3(.77, 1.07, 1.02), 240, 110 + side, .48, true));
+    part(body, sphere, m.darkDown, side * 2.2, -1.5, 8.5).scale.set(.8, 1.0, .9);
+    body.add(gkPlumage(feather, m.feathers, new T.Vector3(side * 2.2, -1.5, 8.5), new T.Vector3(.82, 1.02, .92), 240, 110 + side, .48, true));
   }
 
   function segment(name: string, radius: number, length: number, plumage: boolean) {
@@ -48,7 +49,7 @@ export function createGroundskeeper() {
   }
   const arms = [-1, 1].map(side => {
     const upper = segment(`upper-arm-${side}`, .78, GROUNDSKEEPER_UPPER_ARM, true), lower = segment(`forearm-${side}`, .49, GROUNDSKEEPER_FOREARM, true);
-    const palm = part(root, sphere, m.hand, 0, 0, 0); palm.scale.set(.83, .62, .42);
+    const palm = part(root, sphere, m.hand, 0, 0, 0); palm.name = `palm-${side}`; palm.scale.set(.83, .62, .42);
     const claws = Array.from({ length: 3 }, (_, i) => {
       const tube = gkTube(22, 12), color = [], p = tube.geometry.attributes.position;
       for (let j = 0; j < p.count; j++) {
@@ -86,6 +87,13 @@ export function createGroundskeeper() {
   const neck = gkTube(28, 24), neckMesh = part(root, neck.geometry, m.down, 0, 0, 0); neckMesh.name = 'continuous-neck';
   const neckFeathers = new T.InstancedMesh(feather, m.feathers, 1600); root.add(neckFeathers);
   neckFeathers.name = 'raised-neck-hackles'; neckFeathers.instanceMatrix.setUsage(T.DynamicDrawUsage); neckFeathers.frustumCulled = false;
+  const random = preserveRandom(2719);
+  const neckScatter = Array.from({ length: neckFeathers.count }, (_, i) => ({
+    t: T.MathUtils.clamp(.02 + .975 * ((i + .5) / neckFeathers.count) + (random() - .5) * .012, .015, .995),
+    angle: i * 2.399963 + (random() - .5) * .65,
+    width: .51 * (.75 + random() * .5), length: .44 * (.76 + random() * .48),
+    cant: (random() - .5) * .32, lift: (random() - .5) * .016, shade: .91 + random() * .18,
+  }));
   const face = createGroundskeeperFace(root,m,feather), head = face.head;
   const throat = gkTube(8, 14); part(root, throat.geometry, m.skin, 0, 0, 0).name = 'jaw-throat-connection';
   pivot(root, 'laser_contact_C', 0, -2.35, 7.1);
@@ -99,17 +107,23 @@ export function createGroundskeeper() {
     group.position.copy(vec(a)); direction.copy(vec(b)).sub(group.position);
     group.quaternion.setFromUnitVectors(axis, direction.clone().normalize()); group.scale.y = direction.length() / nominal;
   }
+  function armSpan(group: T.Group, a: GkPoint, b: GkPoint, hinge: GkPoint, nominal: number) {
+    group.position.copy(vec(a)); direction.copy(vec(b)).sub(group.position); const length = direction.length(); direction.divideScalar(length);
+    across.copy(vec(hinge)); n.crossVectors(across, direction).normalize();
+    group.quaternion.setFromRotationMatrix(basis.makeBasis(across, direction, n)); group.scale.y = length / nominal;
+  }
   function pose(time: number, aim = { x: 0, y: -5.3 }, cancelledAt = -100) {
     const p = groundskeeperPose(time, aim, cancelledAt);
     body.position.copy(vec(p.torso)); m.puff.value = p.feathers;
     head.position.copy(vec(p.head)); head.rotation.set(p.headPitch,0,p.headYaw,'ZYX');
     face.pose(p.jaw);
     for (const [i, a] of p.arms.entries()) {
-      const rig = arms[i]; span(rig.upper, a.shoulder, a.elbow, GROUNDSKEEPER_UPPER_ARM); span(rig.lower, a.elbow, a.wrist, GROUNDSKEEPER_FOREARM);
+      const rig = arms[i]; armSpan(rig.upper, a.shoulder, a.elbow, a.hinge, GROUNDSKEEPER_UPPER_ARM); armSpan(rig.lower, a.elbow, a.wrist, a.hinge, GROUNDSKEEPER_FOREARM);
       rig.palm.position.copy(vec(a.wrist)).addScaledVector(vec(a.direction), .28);
-      rig.palm.quaternion.setFromUnitVectors(axis, vec(a.direction)); rig.palm.scale.set(.6, .62, .28);
+      across.copy(vec(a.across)); direction.copy(vec(a.direction)); n.crossVectors(across, direction).normalize();
+      rig.palm.quaternion.setFromRotationMatrix(basis.makeBasis(across, direction, n)); rig.palm.scale.set(.6, .62, .28);
       for (const [j, claw] of rig.claws.entries()) {
-        claw.pose(new T.CatmullRomCurve3(a.claws[j].map(vec)), .34, .01, true);
+        claw.pose(new T.CatmullRomCurve3(a.claws[j].map(vec)), .34, .01, true, vec(a.across));
         rig.digits[j].position.copy(vec(a.claws[j][0])).addScaledVector(vec(a.direction),.12);
         rig.digits[j].quaternion.copy(rig.palm.quaternion);
       }
@@ -124,16 +138,17 @@ export function createGroundskeeper() {
     const curve = new T.CatmullRomCurve3([start.clone(), start.clone().lerp(finish, .37).add(new T.Vector3(0, .55, .25)), start.clone().lerp(finish, .72).add(new T.Vector3(0, -.5, 0)), finish.clone()]);
     neck.pose(curve, 1.05, .60);
     for (let i = 0; i < neckFeathers.count; i++) {
-      const t = .02 + .975 * (i / neckFeathers.count), a = i * 2.399963;
+      const scatter = neckScatter[i], t = scatter.t, a = scatter.angle + .16 * Math.sin(t * 11);
       curve.getPoint(t,center); curve.getPoint(Math.max(0,t-.001),before); curve.getPoint(Math.min(1,t+.001),after);
       direction.subVectors(after,before).normalize(); const r=T.MathUtils.lerp(1.07,.62,t);
       across.set(1, 0, 0).addScaledVector(direction, -direction.x).normalize(); n.crossVectors(direction, across).normalize();
       outward.copy(across).multiplyScalar(Math.cos(a)).addScaledVector(n, Math.sin(a));
       shaft.copy(direction).negate(); across.crossVectors(shaft, outward).normalize();
-      transform.position.copy(center).addScaledVector(outward, r);
+      shaft.applyAxisAngle(outward, scatter.cant); across.crossVectors(shaft, outward).normalize();
+      transform.position.copy(center).addScaledVector(outward, r + scatter.lift);
       transform.quaternion.setFromRotationMatrix(basis.makeBasis(across, shaft, outward));
-      transform.scale.set(.51, .44 + .09 * Math.sin(i * 3), .65); transform.updateMatrix(); neckFeathers.setMatrixAt(i, transform.matrix);
-      if (time === 0) { tint.setHex(0x66503e).lerp(neckLight, T.MathUtils.smoothstep(-outward.y,-.1,.7)); neckFeathers.setColorAt(i, tint); }
+      transform.scale.set(scatter.width, scatter.length, .65); transform.updateMatrix(); neckFeathers.setMatrixAt(i, transform.matrix);
+      if (time === 0) { tint.setHex(0x66503e).lerp(neckLight, T.MathUtils.smoothstep(-outward.y,-.1,.7)).multiplyScalar(scatter.shade); neckFeathers.setColorAt(i, tint); }
     }
     neckFeathers.instanceMatrix.needsUpdate = true;
     head.updateMatrix();

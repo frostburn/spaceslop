@@ -88,3 +88,32 @@ test('straight travel, actor wakes, pause, restart and approach reuse the same g
   scenery.prime(false);
   scenery.root.traverse(o => { if (o.isMesh) assert(o.frustumCulled); });
 });
+
+test('rotunda floor plates have disjoint top faces and real clearance above the base floor',()=>{
+ const arena=scenery.arena.root,plates=arena.getObjectByName('rotunda-apron-plates'),floor=arena.getObjectByName('rotunda-base-floor');
+ assert(plates&&floor);arena.updateWorldMatrix(true,true);
+ const relative=arena.matrixWorld.clone().invert().multiply(plates.matrixWorld),instance=new T.Matrix4(),matrix=new T.Matrix4(),v=new T.Vector3(),polygons=[];
+ const positions=plates.geometry.attributes.position;
+ for(let i=0;i<plates.count;i++){
+  plates.getMatrixAt(i,instance);matrix.multiplyMatrices(relative,instance);const vertices=new Map();
+  for(let j=0;j<positions.count;j++){
+   v.fromBufferAttribute(positions,j).applyMatrix4(matrix);assert(v.z>floor.position.z+.02,'panel bottom is coplanar with the floor');
+   if(positions.getZ(j)<-.001)continue;vertices.set(`${v.x.toFixed(5)},${v.y.toFixed(5)}`,{x:v.x,y:v.y});
+  }
+  const polygon=[...vertices.values()],center={x:polygon.reduce((s,p)=>s+p.x,0)/polygon.length,y:polygon.reduce((s,p)=>s+p.y,0)/polygon.length};
+  polygon.sort((a,b)=>Math.atan2(a.y-center.y,a.x-center.x)-Math.atan2(b.y-center.y,b.x-center.x));polygons.push(polygon);
+ }
+ const overlaps=(a,b)=>{
+  for(const polygon of[a,b])for(let i=0;i<polygon.length;i++){
+   const p=polygon[i],q=polygon[(i+1)%polygon.length],nx=q.y-p.y,ny=p.x-q.x;
+   const pa=a.map(v=>v.x*nx+v.y*ny),pb=b.map(v=>v.x*nx+v.y*ny);
+   if(Math.max(...pa)<Math.min(...pb)+1e-5||Math.max(...pb)<Math.min(...pa)+1e-5)return false;
+  }
+  return true;
+ };
+ for(let i=0;i<polygons.length;i++)for(let j=i+1;j<polygons.length;j++)assert(!overlaps(polygons[i],polygons[j]),`floor plates ${i} and ${j} overlap`);
+ for(let x=-3.5;x<=3.5;x+=.25)for(let y=layout.PRESERVE_ARENA_Y-13;y<=layout.PRESERVE_END;y+=.25){
+  if(Math.hypot(x,(y-layout.PRESERVE_ARENA_Y)/1.1)>layout.PRESERVE_ARENA_RADIUS)continue;
+  assert(layout.preserveGround(x,y)<layout.PRESERVE_ARENA_FLOOR-.3,'incoming terrain intersects the arena floor');
+ }
+});
