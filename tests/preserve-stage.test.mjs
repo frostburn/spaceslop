@@ -53,8 +53,8 @@ test('roots meet terrain, leave the play plane clear and use bounded shared foli
     }
     if (o.name === 'fern-crowns') assert(o.geometry === scenery.foliage.root.getObjectByName('fern-crowns').geometry);
   });
-  assert(triangles < 300_000, `scenery triangle budget: ${triangles}`);
-  assert(batches < 60, `scenery batch budget: ${batches}`);
+  assert(triangles < 500_000, `whole preserve + rotunda + boss triangle budget: ${triangles}`);
+  assert(batches < 85, `scenery batch budget: ${batches}`);
   assert(!levelTextures.preserve.includes('preserve'), 'the mirrored raster plate must not load');
   const sky = scenery.root.getObjectByName('preserve-distant-stars').geometry.attributes.position;
   for (let i = 0; i < sky.count; i++) assert(sky.getZ(i) < -50, 'stars must stay behind the whole habitat');

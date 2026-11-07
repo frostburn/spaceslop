@@ -11,7 +11,6 @@ export const textureFiles = {
   armor: 'encounters/interceptor-metal.png',
   feathers: 'encounters/feather-vane.png',
   scales: 'encounters/draconian-scales.png',
-  shipyard: 'encounters/shipyard-backdrop.png',
   hive: 'encounters/broodlock-foreground.png',
   hiveMask: 'encounters/broodlock-mines-mask.png',
   hiveStars: 'encounters/broodlock-stars.png',
@@ -29,7 +28,7 @@ export const textureFiles = {
 } as const;
 export type EncounterTexture = keyof typeof textureFiles;
 export const levelTextures: Record<LevelId, readonly EncounterTexture[]> = {
-  preserve: ['armor', 'feathers', 'scales', 'shipyard'],
+  preserve: ['armor', 'feathers', 'scales'],
   broodlock: ['armor', 'hive', 'hiveMask', 'hiveStars', 'hiveMines', 'chitin', 'fungus', 'mold'],
   ice: ['armor', 'ice', 'rock', 'galaxy', 'marine'],
   titan: ['armor', 'titan', 'titanRobot', 'titanChitin'],

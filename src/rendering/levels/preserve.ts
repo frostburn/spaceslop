@@ -1,31 +1,27 @@
 import * as T from 'three';
-import { addRoots, genericBoss, type LevelFactory } from '../level';
+import { addRoots, type LevelFactory } from '../level';
 import { createBossLaserContact } from '../../laser-contact';
 import { loadEncounterTexture } from '../../encounter-texture';
-import { BOSS_RECOIL_TIME } from '../../encounters';
-import { createInterceptorRig, createRaptorRig, setFeatherTexture } from '../../encounter-rigs';
+import { createRaptorRig, setFeatherTexture } from '../../encounter-rigs';
 import { setFaceTexture } from '../../creature-faces';
 import { createPreserveScenery } from '../../preserve-scenery';
-import { PRESERVE_DISTANCE } from '../../preserve-layout';
-import { createShipyard } from '../../shipyard';
-import { createShipyardBackdrop } from '../../shipyard-backdrop';
+import { PRESERVE_DISTANCE, preserveFrame } from '../../preserve-layout';
 import { poseBurners, shipBurners } from '../../burners';
 import { raptorFlight } from '../../encounters';
 import { createScoutRig } from '../../ship-rigs';
+import { createGroundskeeperEffects } from '../../groundskeeper-effects';
 export const createLevel: LevelFactory = ({ plane, signal }) => {
   const root = new T.Group();
   const scout = createScoutRig();
   const scouts = Array.from({ length: 12 }, () => { const root = scout.clone(); return { root, burners: shipBurners(root) }; });
-  const boss = createInterceptorRig(2.4);
   const raptor = createRaptorRig();
   const preserve = createPreserveScenery();
-  const shipyard = createShipyard();
-  const backdrops = createShipyardBackdrop(signal);
-  const burners = shipBurners(boss.root);
+  const boss = preserve.boss;
+  const effects = createGroundskeeperEffects();
   const models: (T.Object3D | undefined)[] = [];
-  addRoots(root, boss, raptor, preserve, shipyard, backdrops, ...scouts);
+  addRoots(root, raptor, preserve, effects, ...scouts);
   const contact = createBossLaserContact(plane, boss.root);
-  const ready = Promise.all([backdrops.ready, loadEncounterTexture('feathers', setFeatherTexture, undefined, signal), loadEncounterTexture('scales', texture => {
+  const ready = Promise.all([loadEncounterTexture('feathers', texture => { setFeatherTexture(texture); boss.setFeatherTexture(texture); }, undefined, signal), loadEncounterTexture('scales', texture => {
     texture.repeat.set(.62, .68);
     texture.offset.set(.19, .16);
     setFaceTexture(texture);
@@ -44,20 +40,17 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
     ground: 0x25332a,
     keyIntensity: 1.2,
     skyIntensity: 1.2,
-    applyArmor: boss.setArmorTexture,
+    orientation: (_time, reveal) => preserveFrame(reveal),
     surfaces: [preserve.root, ...scouts.map(r => r.root)],
-    warmup: [[scouts[0].root, raptor.root, preserve.root], [boss.root, shipyard.root, backdrops.root]],
-    prepare: () => preserve.prime(true),
+    warmup: [[scouts[0].root, raptor.root, preserve.root], [boss.root, effects.root]],
+    prepare() { preserve.prime(true); effects.prime(); },
     afterWarmup: () => preserve.prime(false),
     contacts: [boss.root, raptor.root, ...scouts.map(r => r.root)],
     contact,
     update(frame) {
-      const { flight, reveal: eased, time, animationTime, elapsed, newFlight, fighterSpeed, droneSpeed, distance } = frame;
-      genericBoss(boss.root, flight, eased);
-      if (boss.root.visible) {
-        boss.pose(eased, flight.cannonWindup, flight.exposedCannonX, flight.firedCannonX, flight.bossRecoil / BOSS_RECOIL_TIME);
-        poseBurners(burners, animationTime, .42 + .48 * Math.sin(eased * Math.PI));
-      }
+      const { flight, reveal: eased, time, animationTime, elapsed, newFlight, fighterSpeed, droneSpeed } = frame;
+      boss.pose(flight.groundskeeperTime, flight.groundskeeperAim, flight.groundskeeperCancelledAt);
+      effects.update(flight.groundskeeperTime, flight.groundskeeperAim, flight.groundskeeperCancelledAt, flight.phase === 'boss');
       models.length = flight.enemies.length;
       models.fill(undefined);
       const enemy = flight.enemies.find((enemy) => enemy.raptor);
@@ -76,8 +69,6 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
         poseBurners(burners, enemy.age + index * .27, .55 + .16 * Math.sin(enemy.age * 4 + index)); models[index] = root;
       }
       const reveal = eased;
-      backdrops.update(reveal, distance);
-      shipyard.update(reveal, !backdrops.hasShipyard);
       const wakes = flight.hull > 0 && reveal < 0.7 ? [
         { ...flight.player, strength: Math.min(1.4, 0.93 + fighterSpeed * 0.1) },
         { ...flight.drone, strength: Math.min(1, 0.3 + droneSpeed * 0.05) },

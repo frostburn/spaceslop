@@ -9,6 +9,11 @@ export const PRESERVE_START = -16;
 export const PRESERVE_BAY = 8;
 export const PRESERVE_END = Math.ceil((levels.preserve.duration * PRESERVE_SPEED + 16) / PRESERVE_BAY) * PRESERVE_BAY;
 export const PRESERVE_DECK = -3.05;
+export const PRESERVE_APPROACH = 6;
+export const PRESERVE_BOSS_PITCH = 70 * Math.PI / 180;
+export const PRESERVE_RISE = 6;
+export const PRESERVE_FINAL_SCROLL = levels.preserve.duration * PRESERVE_SPEED + PRESERVE_SPEED * PRESERVE_APPROACH / 2;
+export const PRESERVE_ARENA_Y = PRESERVE_FINAL_SCROLL + 11;
 
 export function preserveRandom(seed: number) {
   return () => {
@@ -51,11 +56,14 @@ export function preserveGround(x: number, y: number) {
   return z;
 }
 
-export function preserveScroll(time: number, exit = 0) {
+export function preserveScroll(time: number) {
   // The habitat passes beneath the aircraft; no path-following camera or wrap.
-  return Math.max(0, Math.min(levels.preserve.duration, time)) * PRESERVE_SPEED + exit * 34;
+  const stage = Math.max(0, Math.min(levels.preserve.duration, time));
+  const coast = Math.max(0, Math.min(PRESERVE_APPROACH, time - levels.preserve.duration));
+  return PRESERVE_SPEED * (stage + coast - coast * coast / (2 * PRESERVE_APPROACH));
 }
 
 export function preserveFrame(exit: number) {
-  return { pitch: PRESERVE_PITCH * (1 - exit), bank: 0 };
+  return { pitch: PRESERVE_PITCH + (PRESERVE_BOSS_PITCH - PRESERVE_PITCH) * exit,
+    height: PRESERVE_RISE * exit, bank: 0 };
 }

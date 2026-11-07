@@ -3,7 +3,10 @@ import { createPreserveMaterials } from './preserve-materials';
 import { createPreserveTerrain } from './preserve-terrain';
 import { createPreserveStation } from './preserve-station';
 import { createPreserveFoliage, type PreserveWake } from './preserve-foliage';
-import { preserveFrame, preserveRandom, preserveScroll, PRESERVE_SPEED, PRESERVE_WIDTH_SCALE } from './preserve-layout';
+import { preserveFrame, preserveRandom, preserveScroll, PRESERVE_SPEED, PRESERVE_WIDTH_SCALE, PRESERVE_ARENA_Y } from './preserve-layout';
+import { createPreserveArena } from './preserve-arena';
+import { createGroundskeeper } from './groundskeeper-rig';
+import { GROUNDSKEEPER_FLOOR } from './groundskeeper';
 
 export function createPreserveScenery() {
   const root = new T.Group(); root.name = 'orbital-preserve';
@@ -11,6 +14,9 @@ export function createPreserveScenery() {
   world.scale.x = PRESERVE_WIDTH_SCALE;
   const materials = createPreserveMaterials(), foliage = createPreserveFoliage(materials);
   world.add(createPreserveTerrain(materials), createPreserveStation(materials), foliage.root);
+  const arena = createPreserveArena(materials), boss = createGroundskeeper();
+  boss.root.position.set(0, PRESERVE_ARENA_Y, GROUNDSKEEPER_FLOOR);
+  world.add(arena.root, boss.root);
 
   // The sun and its shadow raster stay attached to the habitat. No moving texel
   // origin as the deck scrolls, and no broad colored fog hiding outer space.
@@ -35,15 +41,15 @@ export function createPreserveScenery() {
   const stars = new T.Points(sky, new T.PointsMaterial({ vertexColors: true, size: .16 }));
   stars.name = 'preserve-distant-stars'; stars.frustumCulled = false; root.add(stars);
   return {
-    root, world, foliage,
+    root, world, foliage, boss, arena,
     prime(active: boolean) {
       // Upload every bay before launch, even ones outside the warm-up camera.
       world.traverse(o => { if (o instanceof T.Mesh) o.frustumCulled = !active; });
     },
     update(time: number, exit: number, animationTime = time, elapsed = 0, actors: readonly PreserveWake[] = [], reset = false) {
-      const scroll = preserveScroll(time, exit), { pitch } = preserveFrame(exit);
+      const scroll = preserveScroll(time), { pitch, height } = preserveFrame(exit);
       world.rotation.x = -pitch;
-      world.position.set(0, -scroll * Math.cos(pitch), scroll * Math.sin(pitch));
+      world.position.set(0, -scroll * Math.cos(pitch) - height * Math.sin(pitch), scroll * Math.sin(pitch) - height * Math.cos(pitch));
       // The station leaves the view physically. Keep its sun registered so the
       // boss does not trigger a new lighting/shadow shader variant at contact.
       stars.position.y = -Math.min(scroll, time * PRESERVE_SPEED) * .024;

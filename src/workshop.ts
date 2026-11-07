@@ -28,6 +28,9 @@ import { BOSS_CANNON_X, TRANSITION_TIME } from './game';
 import { createMushroomCluster } from './hive-fungi';
 import { createIceScenery } from './ice-scenery';
 import { createPreserveScenery } from './preserve-scenery';
+import { createGroundskeeper } from './groundskeeper-rig';
+import { groundskeeperAttack, GROUNDSKEEPER_CYCLE } from './groundskeeper';
+import { PRESERVE_APPROACH } from './preserve-layout';
 import { levels } from './levels';
 import { ICE_DURATION, iceSection } from './ice-layout';
 import { createDroneRig, createFighterRig, createScoutRig } from './ship-rigs';
@@ -151,10 +154,17 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   void loadEncounterTexture('ventWorm',wormAssets.setAtlas);
   const crab=createVentBoss();void loadEncounterTexture('ventCrab',crab.setAtlas);
   const preserve = createPreserveScenery();
+  const keeper = createGroundskeeper(), keeperPreview = new T.Group();
+  keeperPreview.rotation.x = -Math.PI / 2; keeperPreview.position.y = -7; keeperPreview.add(keeper.root);
+  void loadEncounterTexture('feathers', texture => { keeper.setFeatherTexture(texture); preserve.boss.setFeatherTexture(texture); });
+  void loadEncounterTexture('scales', texture => { keeper.setScaleTexture(texture); preserve.boss.setScaleTexture(texture); });
   const assets = {
-    preserve_section: { root: preserve.root, duration: levels.preserve.duration,
+    groundskeeper: { root: keeperPreview, duration: GROUNDSKEEPER_CYCLE * 4,
+      bounds: new T.Box3(new T.Vector3(-8, -8, -5), new T.Vector3(8, 9, 6)),
+      pose(time: number) { return keeper.pose(time).kind; } },
+    preserve_section: { root: preserve.root, duration: levels.preserve.duration + PRESERVE_APPROACH + GROUNDSKEEPER_CYCLE * 4,
       bounds: new T.Box3(new T.Vector3(-5, -8, -6), new T.Vector3(5, 8, 1)),
-      pose(time: number) { preserve.update(time, 0); return 'orbital habitat · root gardens / broken greenhouse'; } },
+      pose(time: number) { const rise=T.MathUtils.smoothstep(time, levels.preserve.duration, levels.preserve.duration+PRESERVE_APPROACH); preserve.update(time, rise); const fight=Math.max(0,time-levels.preserve.duration-PRESERVE_APPROACH); preserve.boss.pose(fight); return time<levels.preserve.duration?'orbital habitat':rise<1?'observation rotunda approach':groundskeeperAttack(fight).kind; } },
     vent_crab:{root:crab.root,duration:12,bounds:new T.Box3(new T.Vector3(-6,-5,-5),new T.Vector3(6,3.5,1.5)),pose(time:number){const left=crabSmooth((time-3)/.8),right=crabSmooth((time-6)/.8),opening=crabSmooth((time-6)/.8),target=time<3?-2.4:time<6?2.4:0;crab.pose(1,Math.max(0,Math.sin(time*3)),target,target,Math.max(0,Math.sin(time*3+1))*.2,108+time,[left,right],opening);return time<3?'crusher charge / barnacle colonies':time<6?'crusher disabled / cutter charge':'both claws disabled / gill chamber';}},
     vent_shrimp:{root:shrimp.root,duration:6,pose(time:number){const next=SHRIMP_FIRST_FIRE+Math.max(0,Math.floor((time-SHRIMP_FIRST_FIRE)/SHRIMP_INTERVAL)+1)*SHRIMP_INTERVAL;shrimp.pose(time,next);return 'swimmerets / abdomen / paired pincers';}},
     vent_worm:{root:worm.root,duration:WORM_INTERVAL+WORM_FIRST_ATTACK,bounds:new T.Box3(new T.Vector3(-2,-10,-.1),new T.Vector3(2,1.5,.6)),pose(time:number){const next=WORM_FIRST_ATTACK+Math.max(0,Math.floor((time-WORM_FIRST_ATTACK)/WORM_INTERVAL)+1)*WORM_INTERVAL;const p=worm.pose(time,next,.12,8.5,.8);return p.phase==='hidden'?'concealed in hole':p.phase==='windup'?'locked aim / warning':p.phase==='retreat'?'withdrawing into hole':'body lunge / bite';}},

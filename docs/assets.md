@@ -26,7 +26,7 @@ The encounter textures and backdrops are optional PNGs. Add the reviewed files a
 | `public/encounters/feather-vane.png` | Raptor wing and tail feathers and the ace's crest. Orient the root down and tip up. |
 | `public/encounters/draconian-scales.png` | Tileable draconian face, snout, and jaw |
 | `public/encounters/preserve-backdrop.png` | Retired prototype artwork. The orbital preserve now uses procedural 3D terrain/structure; this image is neither loaded nor cached in its level package. |
-| `public/encounters/shipyard-backdrop.png` | Portrait backdrop for the boss approach and fight. |
+| `public/encounters/shipyard-backdrop.png` | Retired preserve-boss artwork, retained for a future draconian stage. Not requested or cached by the preserve. |
 | `public/encounters/broodlock-foreground.png` | RGBA 720 × 3840 three-screen hive strip. Preserve its alpha and orientation; it traverses bottom to top once, without mirroring or repeating. |
 | `public/encounters/broodlock-mines-mask.png` | Grayscale mask with the exact foreground dimensions and alignment. White reveals mines through the central channel and bridge grating; black reveals stars through exterior holes. Loaded as linear data. |
 | `public/encounters/broodlock-stars.png` | Opaque portrait starfield, fixed in screen space. sRGB; no tiling required. |
@@ -35,7 +35,7 @@ The encounter textures and backdrops are optional PNGs. Add the reviewed files a
 | `public/encounters/broodlock-fungus.png` | Optional tileable 512 × 512 RGB albedo for mushroom caps, stems, and ant infection growths. sRGB, repeated 1.1 times across the model UVs. |
 | `public/encounters/ant-mold.png` | Optional 512 × 512 RGBA fuzzy mold patch for camera-facing body infection. Preserve soft alpha, use sRGB and clamp-to-edge; no tiling or opaque background. |
 
-The orbital preserve uses code-built terrain, trunks, soil-following roots, fern crowns, retaining walls, service walks and greenhouse ribs. Its small soil, bark and leaf surface maps are generated in-engine. Metal can reuse the reviewed armor texture. The orbital shipyard keeps a procedural fallback. Neither scene requires background images.
+The orbital preserve uses code-built terrain, trunks, soil-following roots, fern crowns, retaining walls, service walks and greenhouse ribs. Its small soil, bark and leaf surface maps are generated in-engine. Metal can reuse the reviewed armor texture. The observation rotunda and Groundskeeper are also modeled in code. The boss can reuse the reviewed feather map for fine vane grain and scale map for skin relief, with runtime mip-filtered fallbacks. Neither section requires background images.
 
 Broodlock composites the two distant plates under the alpha foreground, using the matching mask to distinguish the central mine channel from the holes into space. Neither plate is baked into the foreground. The scene freezes at the end of the strip for the guardian. Each file is optional: missing plates use code-drawn stars or mine ribs, and a missing foreground uses procedural side rails and brood chambers. Without a mask, a simple central-channel split is used. New hive geometry and textures join the preflight warm-up so the first ant and guardian do not trigger their initial uploads during play.
 

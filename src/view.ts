@@ -81,7 +81,7 @@ export class FlightView {
     transparent: true,
     depthWrite: false
   }));
-  private cannonMarker = new T.Mesh(new T.RingGeometry(BOSS_CANNON_RADIUS * BOSS_PROJECTION - 0.06, BOSS_CANNON_RADIUS * BOSS_PROJECTION, 24), new T.MeshBasicMaterial({ color: mint, depthTest: false }));
+  private cannonMarker = new T.Mesh(new T.RingGeometry(BOSS_CANNON_RADIUS * BOSS_PROJECTION - 0.06, BOSS_CANNON_RADIUS * BOSS_PROJECTION, 24), new T.MeshBasicMaterial({ color: mint, depthTest: false, depthWrite: false }));
   private projectiles = Object.fromEntries(projectileKinds.map((kind) => [kind, createProjectileBatch(kind)])) as Record<ProjectileKind, ReturnType<typeof createProjectileBatch>>;
   private playerMuzzle = createMuzzleFlash(teal);
   private droneMuzzle = createMuzzleFlash(mint);
@@ -132,6 +132,7 @@ export class FlightView {
     this.renderer.shadowMap.type = T.PCFShadowMap;
     this.scene.add(this.plane);
     this.level = createLevel({ plane: this.plane, scene: this.scene, signal });
+    this.cannonMarker.renderOrder = 12;
     const p = this.level;
     this.scene.background = new T.Color(p.background ?? sceneColor);
     this.keyLight = new T.DirectionalLight(p.key ?? 0xb9e8ff, p.keyIntensity ?? 2.7);
@@ -364,6 +365,7 @@ export class FlightView {
     if (this.cannonMarker.visible) {
       const p = this.level.contact(flight.exposedCannonX, distance, flight);
       this.cannonMarker.position.set(p.x, p.y, 0);
+      this.cannonMarker.scale.setScalar(Math.min(1.25, flight.bossTargetRadius / BOSS_CANNON_RADIUS));
     }
     this.drawWings(flight, eased, fighterVelocity, flight.level === 'titan' ? (eased > 0 ? distance / eased : undefined) : distance);
     for (const [index, model] of this.drops.entries()) {

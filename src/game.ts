@@ -20,6 +20,8 @@ import { DRONE_HULL, FIGHTER_HULL, HiveCollision, POD_BOUNDS, POD_HULL } from '.
 import { HIVE_CAMERA_DISTANCE } from './hive-layout';
 import { steerHiveAnt } from './ant-navigation';
 import { HEIGHT, WIDTH } from './playfield';
+import { GROUNDSKEEPER_HP, GROUNDSKEEPER_RADIUS, groundskeeperContact, groundskeeperAttack, groundskeeperHits } from './groundskeeper';
+import { PRESERVE_APPROACH } from './preserve-layout';
 import { CLOSE_CALLS_REQUIRED, HOT_DOCK_COOLDOWN, HOT_DOCK_DISTANCE, type PilotId } from './pilot-data';
 import { WING_FLASH_TIME, WING_FORMATION, wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
 
@@ -158,6 +160,10 @@ export class Flight {
   charges = 2;
   score = 0;
   bossHealth = BOSS_HP;
+  groundskeeperAim = { x: 0, y: -5.3 };
+  groundskeeperCancelledAt = -100;
+  private groundskeeperAimCycle = -1;
+  private groundskeeperFinalTime = 0;
   crabClawHealth=[CRAB_CLAW_HP,CRAB_CLAW_HP];
   private crabBreakTimes=[-1,-1];
   bossLaserDamage = 0;
@@ -208,6 +214,7 @@ export class Flight {
   ) {
     this.droneWeapon = droneWeapon;
     this.pilot = pilot;
+    if (level === 'preserve') this.bossHealth = GROUNDSKEEPER_HP;
     if (level === 'vents')this.bossHealth=CRAB_HP;
     if (level === 'io') this.bossHealth=IO_HP;
     if (level === 'titan') this.bossHealth=CICADA_HP;
@@ -220,9 +227,11 @@ export class Flight {
     }
   }
 
-  get transitionDuration() { return this.level === 'vents' ? VENT_APPROACH : this.level === 'io' ? IO_APPROACH : this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
+  get transitionDuration() { return this.level === 'preserve' ? PRESERVE_APPROACH : this.level === 'vents' ? VENT_APPROACH : this.level === 'io' ? IO_APPROACH : this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
 
-  get bossMaxHealth() { return this.level === 'vents' ? CRAB_HP : this.level === 'io' ? IO_HP : this.level === 'titan' ? CICADA_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
+  get bossMaxHealth() { return this.level === 'preserve' ? GROUNDSKEEPER_HP : this.level === 'vents' ? CRAB_HP : this.level === 'io' ? IO_HP : this.level === 'titan' ? CICADA_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
+  get bossTargetRadius() { return this.level === 'preserve' ? GROUNDSKEEPER_RADIUS : BOSS_CANNON_RADIUS; }
+  get groundskeeperTime() { return this.phase === 'boss' ? this.time : this.groundskeeperFinalTime; }
 
   get crabTargetX(){return crabTarget(this.crabClawHealth,this.volley);}
   get crabOffsetX(){return this.phase==='boss'?ventOrbit(this.time).offsetX:0;}
@@ -232,7 +241,10 @@ export class Flight {
 
   get ioLegBroken() { return this.ioCollapseAge >= 0; }
   get ioCollapse() { return this.ioLegBroken ? smooth01(this.ioCollapseAge / 1.2) : 0; }
-  get bossAimY() { return this.level === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).y : BOSS_Y; }
+  get bossAimY() {
+    if (this.level === 'preserve') { const p = groundskeeperContact(this.groundskeeperTime, this.groundskeeperAim, this.groundskeeperCancelledAt); return p.y * 34 / (22 - p.z); }
+    return this.level === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).y : BOSS_Y;
+  }
 
   get stageDuration() { return levels[this.level].duration; }
 
@@ -269,6 +281,7 @@ export class Flight {
   }
 
   get exposedCannonX() {
+    if (this.level === 'preserve') return 0;
     return this.level==='vents'?this.crabTargetX+this.crabOffsetX:this.level === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).x : this.level === 'ice' ? 0 : this.volley % 2 === 0 ? -BOSS_CANNON_X : BOSS_CANNON_X;
   }
 
@@ -338,6 +351,7 @@ export class Flight {
       }
       this.enemies = [];
     } else {
+      if (this.level === 'preserve') this.groundskeeperCancelledAt = this.time;
       this.damageBoss(6);
     }
   }
@@ -384,7 +398,7 @@ export class Flight {
       this.fire(this.player);
     }
     const boss = this.phase === 'boss';
-    if (boss) this.stepBoss();
+    if (boss) this.stepBoss(dt);
     else this.stepStage(dt);
     this.stepDroneWeapon(dt);
     for (const wing of this.wings) this.stepWing(wing, boss, dt);
@@ -399,7 +413,7 @@ export class Flight {
         const impact = { x: shot.x + shot.vx * untilImpact, y: shot.y + shot.vy * untilImpact };
         const lockedTarget = shot.targetsBoss && (this.level !== 'io' || shot.bossSupport === !this.ioLegBroken) && (this.level!=='vents'||shot.crabTarget===this.crabTargetX);
         if (lockedTarget ||
-          ((shot.drone || shot.wing) && near(impact, { x: this.exposedCannonX, y: this.bossAimY }, BOSS_CANNON_RADIUS))) {
+          ((shot.drone || shot.wing) && near(impact, { x: this.exposedCannonX, y: this.bossAimY }, this.bossTargetRadius))) {
           this.damageBoss(shot.damage ?? 1);
         }
         return false;
@@ -532,7 +546,7 @@ export class Flight {
     let endY = 8;
     if (boss) {
       endY = this.bossAimY * BOSS_PROJECTION;
-      if (Math.abs(origin.x - this.exposedCannonX * BOSS_PROJECTION) < BOSS_CANNON_RADIUS * BOSS_PROJECTION) {
+      if (Math.abs(origin.x - this.exposedCannonX * BOSS_PROJECTION) < this.bossTargetRadius * BOSS_PROJECTION) {
         target = this.exposedCannonX;
       }
     } else {
@@ -608,7 +622,7 @@ export class Flight {
     if (this.phase === 'boss') {
       const cannon = { x: this.exposedCannonX * BOSS_PROJECTION, y: this.bossAimY * BOSS_PROJECTION };
       if (!this.towlineHitCannon &&
-        nearSegment(cannon, this.player, this.drone, BOSS_CANNON_RADIUS * BOSS_PROJECTION)) {
+        nearSegment(cannon, this.player, this.drone, this.bossTargetRadius * BOSS_PROJECTION)) {
         this.towlineHitCannon = true;
         this.damageBoss(this.towlineDamage);
       }
@@ -733,7 +747,16 @@ export class Flight {
     }
   }
 
-  private stepBoss() {
+  private stepBoss(dt: number) {
+    if (this.level === 'preserve') {
+      const attack = groundskeeperAttack(this.time);
+      if (attack.warning && this.groundskeeperAimCycle !== attack.cycle) {
+        this.groundskeeperAim = { x: clamp(this.player.x, -3.5, 3.5), y: clamp(this.player.y, -6.8, 5.5) };
+        this.groundskeeperAimCycle = attack.cycle;
+      }
+      if (groundskeeperHits(this.time, this.time - dt, this.groundskeeperAim, this.player, this.groundskeeperCancelledAt)) this.hit();
+      return;
+    }
     if(this.level === 'io') { this.stepCaldera(); return; }
     if(this.level === 'titan') { this.stepCicada(); return; }
     if(this.level === 'ice') { this.stepLeviathan(); return; }
@@ -871,6 +894,7 @@ export class Flight {
   }
 
   private enter(phase: Phase) {
+    if (this.level === 'preserve' && this.phase === 'boss' && (phase === 'won' || phase === 'lost')) this.groundskeeperFinalTime = this.time;
     this.phase = phase;
     this.time = 0;
     if (phase === 'approach' || phase === 'won') {

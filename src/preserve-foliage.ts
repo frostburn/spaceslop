@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { preserveBatch, preserveFrond, preserveLimb, preservePart } from './preserve-geometry';
-import { PRESERVE_BAY, PRESERVE_END, PRESERVE_PITCH, PRESERVE_START, PRESERVE_WIDTH_SCALE, preserveGround, preserveRandom } from './preserve-layout';
+import { PRESERVE_BAY, PRESERVE_END, PRESERVE_START, PRESERVE_WIDTH_SCALE, preserveFrame, preserveGround, preserveRandom } from './preserve-layout';
 import type { PreserveMaterials } from './preserve-materials';
 
 export type PreserveWake = { x: number; y: number; strength: number };
@@ -97,13 +97,13 @@ export function createPreserveFoliage(materials: PreserveMaterials) {
   return {
     root, rootPaths, crowns,
     update(time: number, scroll: number, exit: number, elapsed: number, actors: readonly PreserveWake[], reset = false) {
-      const pitch = PRESERVE_PITCH * (1 - exit), cos = Math.cos(pitch), sin = Math.sin(pitch);
+      const { pitch, height } = preserveFrame(exit), cos = Math.cos(pitch), sin = Math.sin(pitch);
       for (const { mesh, crowns } of batches) {
         let index = 0;
         for (const c of crowns) {
           let dx = 0, dy = 0;
           for (const actor of actors) {
-            const x = c.x * PRESERVE_WIDTH_SCALE - actor.x, y = (c.y - scroll) * cos + c.z * sin - actor.y;
+            const x = c.x * PRESERVE_WIDTH_SCALE - actor.x, y = (c.y - scroll) * cos + (c.z - height) * sin - actor.y;
             const distance = Math.hypot(x, y);
             const force = (1 - T.MathUtils.smoothstep(distance, .35, 2)) * actor.strength / Math.max(.3, distance);
             dx += x * force; dy += y * force;
