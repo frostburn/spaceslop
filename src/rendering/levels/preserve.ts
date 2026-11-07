@@ -14,19 +14,19 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
   const root = new T.Group();
   const scout = createScoutRig();
   const scouts = Array.from({ length: 12 }, () => { const root = scout.clone(); return { root, burners: shipBurners(root) }; });
-  const raptor = createRaptorRig();
+  const raptors = Array.from({length:3},createRaptorRig);
   const preserve = createPreserveScenery();
   const boss = preserve.boss;
   const effects = createGroundskeeperEffects();
   const models: (T.Object3D | undefined)[] = [];
-  addRoots(root, raptor, preserve, effects, ...scouts);
+  addRoots(root, ...raptors, preserve, effects, ...scouts);
   const contact = createBossLaserContact(plane, boss.root);
   const ready = Promise.all([loadEncounterTexture('feathers', texture => { setFeatherTexture(texture); boss.setFeatherTexture(texture); }, undefined, signal), loadEncounterTexture('scales', texture => {
     texture.repeat.set(.62, .68);
     texture.offset.set(.19, .16);
     setFaceTexture(texture);
     boss.setScaleTexture(texture);
-    raptor.setScaleTexture(texture);
+    raptors.forEach(raptor => raptor.setScaleTexture(texture));
   }, undefined, signal)]).then(t => t.flat());
   return {
     root,
@@ -42,10 +42,10 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
     skyIntensity: 1.2,
     orientation: (_time, reveal) => preserveFrame(reveal),
     surfaces: [preserve.root, ...scouts.map(r => r.root)],
-    warmup: [[scouts[0].root, raptor.root, preserve.root], [boss.root, effects.root]],
+    warmup: [[scouts[0].root, ...raptors.map(r => r.root), preserve.root], [boss.root, effects.root]],
     prepare() { preserve.prime(true); effects.prime(); },
     afterWarmup: () => preserve.prime(false),
-    contacts: [boss.root, raptor.root, ...scouts.map(r => r.root)],
+    contacts: [boss.root, ...raptors.map(r => r.root), ...scouts.map(r => r.root)],
     contact,
     update(frame) {
       const { flight, reveal: eased, time, animationTime, elapsed, newFlight, fighterSpeed, droneSpeed } = frame;
@@ -53,15 +53,13 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
       effects.update(flight.groundskeeperTime, flight.groundskeeperAim, flight.groundskeeperCancelledAt, flight.phase === 'boss');
       models.length = flight.enemies.length;
       models.fill(undefined);
-      const enemy = flight.enemies.find((enemy) => enemy.raptor);
-      raptor.root.visible = Boolean(enemy);
-      if (enemy) {
-        raptor.root.position.set(enemy.x, enemy.y, 0);
-        raptor.root.rotation.z = Math.PI;
-        raptor.pose(enemy.age);
+      const patrol = flight.enemies.filter(enemy => enemy.raptor);
+      for (const [i,raptor] of raptors.entries()) {
+        const enemy=patrol[i];raptor.root.visible=Boolean(enemy);
+        if (!enemy) continue;
+        raptor.root.position.set(enemy.x,enemy.y,0);raptor.root.rotation.z=Math.PI;
+        raptor.pose(enemy.age);models[flight.enemies.indexOf(enemy)]=raptor.root;
       }
-      if (enemy)
-        models[flight.enemies.indexOf(enemy)] = raptor.root;
       for (const [index, { root, burners }] of scouts.entries()) {
         const enemy = flight.enemies[index]; root.visible = Boolean(enemy && !enemy.raptor);
         if (!root.visible || !enemy) continue;

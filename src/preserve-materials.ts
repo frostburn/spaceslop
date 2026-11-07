@@ -5,7 +5,7 @@ import { preserveNoise, preserveRandom } from './preserve-layout';
 
 // Runtime surface relief keeps this section independent of new raster assets.
 // Each scene owns these small mip-filtered maps, including workshop instances.
-function grain(kind: 'earth' | 'bark' | 'leaf') {
+function grain(kind: 'earth' | 'bark' | 'leaf' | 'stone') {
   const size = 128, data = new Uint8Array(size * size * 4), random = preserveRandom(781);
   const tileNoise = (x: number, y: number, period: number) => {
     const ix = Math.floor(x), iy = Math.floor(y);
@@ -22,7 +22,8 @@ function grain(kind: 'earth' | 'bark' | 'leaf') {
     const grooves = Math.sin(a * 13 + Math.sin(b) * 2 + Math.sin(a * 5)) * .055;
     const veins = Math.exp(-Math.abs(Math.sin(a)) * 24) * .09;
     // Dirt is granular, without the folded/swirl appearance of bark grain.
-    const value = kind === 'earth'
+    const value = kind === 'stone' ? .74 + (broad - .5) * .18 + .05 * Math.sin(b * 19 + Math.sin(a * 3) * 1.2) + (random() - .5) * .08
+      : kind === 'earth'
       ? .83 + (tileNoise(x / 16, y / 16, 8) - .5) * .12 + (random() - .5) * .09
       : Math.max(.52, Math.min(.98, .81 + (broad - .5) * .22 + fine + (kind === 'bark' ? grooves : veins)));
     const c = value * 255;
@@ -39,13 +40,13 @@ function grain(kind: 'earth' | 'bark' | 'leaf') {
 }
 
 export function createPreserveMaterials() {
-  const earth = grain('earth'), wood = grain('bark'), leaf = grain('leaf');
+  const earth = grain('earth'), wood = grain('bark'), leaf = grain('leaf'), stone = grain('stone');
   const soil = new T.MeshStandardMaterial({ color: 0xffffff, vertexColors: true,
-    map: earth, bumpMap: earth, bumpScale: .003, roughness: .96 });
+    map: earth, bumpMap: earth, bumpScale: .025, roughness: .96 });
   const bark = new T.MeshStandardMaterial({ color: 0x887656, vertexColors: true,
     map: wood, bumpMap: wood, bumpScale: .045, roughness: .94 });
-  const rock = applyTriplanar(new T.MeshStandardMaterial({ color: 0x9a9d83,
-    map: earth, bumpMap: earth, bumpScale: .045, roughness: .93 }), 1.8);
+  const rock = applyTriplanar(new T.MeshStandardMaterial({ color: 0xffffff, vertexColors: true,
+    map: stone, bumpMap: stone, bumpScale: .07, roughness: .92 }), 1.8);
   const foliage = new T.MeshStandardMaterial({ color: 0xffffff, vertexColors: true,
     map: leaf, bumpMap: leaf, bumpScale: .016, roughness: .83,
     side: T.DoubleSide, forceSinglePass: true });
@@ -54,8 +55,8 @@ export function createPreserveMaterials() {
   const dark = new T.MeshStandardMaterial({ color: 0x182322, roughness: .94 });
   const glass = new T.MeshStandardMaterial({ color: 0xa4b8a7, transparent: true,
     opacity: .15, metalness: .25, roughness: .24, side: T.DoubleSide, depthWrite: false });
-  const water = new T.MeshStandardMaterial({ color: 0x20352e, roughness: .18,
-    metalness: .4, bumpMap: earth, bumpScale: .025 });
+  const water = new T.MeshStandardMaterial({ color: 0x33534e, roughness: .26,
+    metalness: .15, bumpMap: earth, bumpScale: .025 });
   const lamp = new T.MeshBasicMaterial({ color: 0xffd39a });
   return { soil, bark, rock, foliage, metal, dark, glass, water, lamp };
 }

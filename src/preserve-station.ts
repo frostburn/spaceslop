@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { preserveBatch, preserveBeam, preservePart, type PreservePart } from './preserve-geometry';
-import { PRESERVE_BAY, PRESERVE_DECK, PRESERVE_END, PRESERVE_START, preserveGround, preserveRandom } from './preserve-layout';
+import { PRESERVE_BAY, PRESERVE_DECK, PRESERVE_END, PRESERVE_START, preserveGround, preserveRandom, preserveHabitat } from './preserve-layout';
 import type { PreserveMaterials } from './preserve-materials';
 
 export function createPreserveStation(materials: PreserveMaterials) {
@@ -15,7 +15,7 @@ export function createPreserveStation(materials: PreserveMaterials) {
       parts.push(preserveBeam(new T.Vector3(ax, y + ay, az), new T.Vector3(bx, y + by, bz), w, d, color));
     for (const side of [-1, 1]) {
       // Separate soil-retaining wall, grated service walk and external hull.
-      block(side * 3.58, 4, -3.8, .16, 8, 1.52, 0x5b5744);
+      block(side * 3.58, 4, -4.6, .16, 8, 3.12, 0x5b5744);
       block(side * 3.58, 4, -3.00, .2, 8, .12, 0x999078);
       for (const x of [3.66, 4.46, 4.8]) block(side * x, 4, PRESERVE_DECK - .13, .12, 8, .22, 0x807d6b);
       block(side * 4.83, 4, -3.65, .24, 8, 1.2, 0x63665c);
@@ -79,8 +79,19 @@ export function createPreserveStation(materials: PreserveMaterials) {
         block(side * 2.52, py, -2.59, .03, 1.55, .03, 0x7a8068);
       }
     }
+    block(0, 4, -6.2, 7.2, 8, .3, 0x424e45);
+    // Nursery curbs and irrigation headers make the maintained opening read
+    // differently from the root-bound ravine and later rocky habitat.
+    if (y >= 16 && y < 40) for (const side of [-1,1]) {
+      for (const dy of [1.5,5.5]) {
+        block(side*2.9,dy,-3.05,1.0,.12,.18,0x989274);
+        block(side*2.4,dy+1.2,-3.15,.1,2.4,.3,0x737b61);
+      }
+      block(side*3.43,4,-2.85,.06,8,.07,0x8b9b7c);
+      block(side*3.37,2,-2.78,.18,.22,.13,0xa59259);
+    }
     // Buried, cracked paving interrupts the recess instead of a repeating flat path.
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < (preserveHabitat(y+4).wet > .1 ? 0 : 4); i++) {
       const x = (random() - .5) * 2.3, dy = random() * 8, z = preserveGround(x, y + dy);
       block(x, dy, z - .03, .4 + random() * .6, .5 + random() * .7, .09, i % 3 === 0 ? 0x666855 : 0x7d7c65, (random() - .5) * .4);
     }

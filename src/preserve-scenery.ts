@@ -4,6 +4,9 @@ import { createPreserveTerrain } from './preserve-terrain';
 import { createPreserveStation } from './preserve-station';
 import { createPreserveFoliage, type PreserveWake } from './preserve-foliage';
 import { preserveFrame, preserveRandom, preserveScroll, PRESERVE_SPEED, PRESERVE_WIDTH_SCALE, PRESERVE_ARENA_Y } from './preserve-layout';
+import { createPreserveTraces } from './preserve-traces';
+import { createPreserveDock } from './preserve-dock';
+import { createPreserveWater } from './preserve-water';
 import { createPreserveArena } from './preserve-arena';
 import { createGroundskeeper } from './groundskeeper-rig';
 import { GROUNDSKEEPER_FLOOR } from './groundskeeper';
@@ -13,7 +16,8 @@ export function createPreserveScenery() {
   const world = new T.Group(); world.name = 'preserve-world'; root.add(world);
   world.scale.x = PRESERVE_WIDTH_SCALE;
   const materials = createPreserveMaterials(), foliage = createPreserveFoliage(materials);
-  world.add(createPreserveTerrain(materials), createPreserveStation(materials), foliage.root);
+  const dock = createPreserveDock(materials), irrigation = createPreserveWater(materials);
+  world.add(createPreserveTerrain(materials), createPreserveStation(materials), foliage.root, dock.root, irrigation.root, createPreserveTraces(materials));
   const arena = createPreserveArena(materials), boss = createGroundskeeper();
   boss.root.position.set(0, PRESERVE_ARENA_Y, GROUNDSKEEPER_FLOOR);
   world.add(arena.root, boss.root);
@@ -29,6 +33,18 @@ export function createPreserveScenery() {
   sun.shadow.bias = -.00015; sun.shadow.normalBias = .035;
   sun.shadow.camera.updateProjectionMatrix();
   world.add(sun, sun.target);
+  // Snap the moving shadow window in both axes of the light's projection.
+  // Geometry and its dirt/relief stay in habitat coordinates as the view scrolls.
+  const lightBasis = new T.Matrix4().lookAt(sun.position,sun.target.position,new T.Vector3(0,1,0));
+  const lightRight = new T.Vector3().setFromMatrixColumn(lightBasis,0), lightUp = new T.Vector3().setFromMatrixColumn(lightBasis,1);
+  const anchor = new T.Vector3(), lightOffset = new T.Vector3(-22,-12,35);
+  const shadowAnchor = (scroll: number) => {
+    anchor.set(0,scroll+12,-3);
+    for (const [axis,texel] of [[lightRight,28/2048],[lightUp,72/2048]] as const) {
+      const q=anchor.dot(axis);anchor.addScaledVector(axis,Math.round(q/texel)*texel-q);
+    }
+    sun.target.position.copy(anchor);sun.position.copy(anchor).add(lightOffset);
+  };
   // Low, broad bounce from the observation deck keeps the underside of the
   // curved neck legible against space without flattening the sun's key light.
   const bounce = new T.DirectionalLight(0x8eaaa4, 0);
@@ -47,7 +63,7 @@ export function createPreserveScenery() {
   const stars = new T.Points(sky, new T.PointsMaterial({ vertexColors: true, size: .16 }));
   stars.name = 'preserve-distant-stars'; stars.frustumCulled = false; root.add(stars);
   return {
-    root, world, foliage, boss, arena,
+    root, world, foliage, boss, arena, irrigation, dock,
     prime(active: boolean) {
       // Upload every bay before launch, even ones outside the warm-up camera.
       world.traverse(o => { if (o instanceof T.Mesh) o.frustumCulled = !active; });
@@ -57,6 +73,7 @@ export function createPreserveScenery() {
       world.rotation.x = -pitch;
       world.position.set(0, -scroll * Math.cos(pitch) - height * Math.sin(pitch), scroll * Math.sin(pitch) - height * Math.cos(pitch));
       bounce.intensity = exit * .85;
+      shadowAnchor(scroll); dock.update(animationTime); irrigation.update(animationTime);
       // The station leaves the view physically. Keep its sun registered so the
       // boss does not trigger a new lighting/shadow shader variant at contact.
       stars.position.y = -Math.min(scroll, time * PRESERVE_SPEED) * .024;

@@ -1,3 +1,4 @@
+import { preserveWaves } from './preserve-waves';
 import {CRAB_HP,CRAB_CLAW_HP,CRAB_CORE_HP,crabTarget,crabSmooth} from './vent-crab';
 import {wormPose,WORM_WINDUP,WORM_REACH} from './vent-worm';
 import {SHRIMP_HP,SHRIMP_FIRST_FIRE,SHRIMP_INTERVAL,WORM_HP,WORM_FIRST_ATTACK,WORM_INTERVAL,shrimpMotion,faunaMuzzle,faunaBodyHit,faunaBeamEntry,type ShrimpCourse} from './vent-fauna';
@@ -75,12 +76,7 @@ type Wave = { time: number; lanes: number[]; carrier?: number; drop?: WingWeapon
   raptor?: number; ant?: 'worker' | 'soldier'; marine?: MarineKind; formation?: MarineFormation; mirror?: number;
   centipede?: number; cicada?: Omit<CicadaCourse, 'slot' | 'count'>; skipper?: boolean; crucible?: boolean; ventAnchor?:number; ventWorm?:boolean; shrimp?:Omit<ShrimpCourse,'slot'> };
 
-const stageWaves: Wave[] = [
-  { time: 0.6, lanes: [-2.6, 0, 2.6], carrier: 1, drop: 'homing' },
-  { time: 3.6, lanes: [-2, 2], raptor: 0, carrier: 1, drop: 'cannon' },
-  { time: 6.6, lanes: [-3, 0, 3], carrier: 0, drop: 'laser' },
-  { time: 9.6, lanes: [-1.3, 1.3], carrier: 1, drop: 'omega' },
-];
+const stageWaves: Wave[] = preserveWaves.map(wave => ({ ...wave, lanes: [...wave.lanes] }));
 
 const hiveWaves: Wave[] = [
   { time: 0.8, lanes: [-2.6, 0, 2.6], ant: 'worker', carrier: 1, drop: 'homing' },

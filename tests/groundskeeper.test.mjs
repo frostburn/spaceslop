@@ -58,14 +58,14 @@ test('ordinary fire, sentry, every sidearm, Towline and Pulse damage the animal 
 });
 
 test('rotunda transform coasts continuously, and posed claw geometry/contact anchors agree with combat math',()=>{
- const d=14,h=1e-4;assert(Math.abs((layout.preserveScroll(d)-layout.preserveScroll(d-h))/h-layout.PRESERVE_SPEED)<1e-5);
+ const d=new Flight('sentry',[],'vex','preserve').stageDuration,h=1e-4;assert(Math.abs((layout.preserveScroll(d)-layout.preserveScroll(d-h))/h-layout.PRESERVE_SPEED)<1e-5);
  assert(Math.abs((layout.preserveScroll(d+h)-layout.preserveScroll(d))/h-layout.PRESERVE_SPEED)<1e-4);
- assert.equal(layout.preserveScroll(80),layout.PRESERVE_FINAL_SCROLL);
+ assert.equal(layout.preserveScroll(d+80),layout.PRESERVE_FINAL_SCROLL);
  const scene=createPreserveScenery(),plane=new T.Group();plane.add(scene.root);
  const contact=createBossLaserContact(plane,scene.boss.root),buffers=[];
  scene.boss.root.traverse(o=>{if(o.isMesh)buffers.push([o.geometry,o.geometry.attributes.position.array]);});
  for(const time of [0,1.9,2.93,3.25,8.5,14.1,19.4]){
-  scene.update(20+time,1);const aim={x:.7,y:-5.3},pose=scene.boss.pose(time,aim);
+  scene.update(d+6+time,1);const aim={x:.7,y:-5.3},pose=scene.boss.pose(time,aim);
   plane.updateMatrixWorld(true);const pure=g.groundskeeperContact(time,aim,-100),actual=contact(0,22);
   assert(Math.abs(actual.y-pure.y*22/(22-pure.z))<1e-6);assert(Math.abs(actual.x-pure.x*22/(22-pure.z))<1e-6);
   for(let hand=0;hand<2;hand++)for(let finger=0;finger<3;finger++){

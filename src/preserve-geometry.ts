@@ -4,6 +4,10 @@ export type PreservePart = { position: T.Vector3; scale: T.Vector3; rotation: T.
 
 // All repeated station details in a bay share one geometry and draw call.
 export function preserveBatch(name: string, geometry: T.BufferGeometry, material: T.Material, parts: PreservePart[]) {
+  // Standard materials do not supply a white fallback for a missing color
+  // attribute. Keep instance tints usable on uncolored primitive geometries.
+  if (material.vertexColors && !geometry.getAttribute('color'))
+    geometry.setAttribute('color', new T.Float32BufferAttribute(Array(geometry.attributes.position.count * 3).fill(1), 3));
   const mesh = new T.InstancedMesh(geometry, material, parts.length), matrix = new T.Matrix4();
   mesh.name = name;
   for (const [i, p] of parts.entries()) {
