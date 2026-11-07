@@ -66,6 +66,7 @@ export function createPreserveArena(m: PreserveMaterials) {
   }
   root.add(preserveBatch('rotunda-ferns', preserveFrond(), m.foliage, fronds), preserveBatch('rotunda-rocks', new T.IcosahedronGeometry(1, 1), m.rock, rocks));
   const nest = new T.Group(); nest.name = 'nest-behind-groundskeeper'; root.add(nest);
+  nest.position.set(3.8, -.6, 0); nest.scale.set(.68, .68, 1);
   for (let i = 0; i < 24; i++) {
     const a = i / 24 * Math.PI * 2, radius = 1.8 + random() * .5, y = 3.2;
     const points = [a - .65, a, a + .65].map((t, j) => new T.Vector3(Math.cos(t) * radius, y + Math.sin(t) * radius, GROUNDSKEEPER_FLOOR + .1 + (j === 1 ? .3 : .08) + random() * .15));

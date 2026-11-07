@@ -29,6 +29,12 @@ export function createPreserveScenery() {
   sun.shadow.bias = -.00015; sun.shadow.normalBias = .035;
   sun.shadow.camera.updateProjectionMatrix();
   world.add(sun, sun.target);
+  // Low, broad bounce from the observation deck keeps the underside of the
+  // curved neck legible against space without flattening the sun's key light.
+  const bounce = new T.DirectionalLight(0x8eaaa4, 0);
+  bounce.position.set(6, PRESERVE_ARENA_Y - 24, -1);
+  bounce.target.position.set(0, PRESERVE_ARENA_Y, 7);
+  world.add(bounce, bounce.target);
 
   const random = preserveRandom(927), points: number[] = [], colors: number[] = [];
   for (let i = 0; i < 600; i++) {
@@ -50,6 +56,7 @@ export function createPreserveScenery() {
       const scroll = preserveScroll(time), { pitch, height } = preserveFrame(exit);
       world.rotation.x = -pitch;
       world.position.set(0, -scroll * Math.cos(pitch) - height * Math.sin(pitch), scroll * Math.sin(pitch) - height * Math.cos(pitch));
+      bounce.intensity = exit * .85;
       // The station leaves the view physically. Keep its sun registered so the
       // boss does not trigger a new lighting/shadow shader variant at contact.
       stars.position.y = -Math.min(scroll, time * PRESERVE_SPEED) * .024;

@@ -71,6 +71,13 @@ test('rotunda transform coasts continuously, and posed claw geometry/contact anc
    const tip=new T.Vector3();for(let i=22*13;i<22*13+12;i++){v.fromBufferAttribute(p,i);tip.add(v);}tip.multiplyScalar(1/12);mesh.localToWorld(tip);
    const expected=g.groundskeeperFlight(pose.arms[hand].claws[finger][2]);assert(tip.distanceTo(new T.Vector3(expected.x,expected.y,expected.z))<1e-5);
   }
+  const muzzle=new T.Vector3(0,-1.75,-.05);scene.boss.root.getObjectByName('dinosaur-head').localToWorld(muzzle);
+  const pureMuzzle=g.groundskeeperFlight(g.groundskeeperMuzzle(pose));assert(muzzle.distanceTo(new T.Vector3(pureMuzzle.x,pureMuzzle.y,pureMuzzle.z))<1e-5,'posed muzzle matches lunge collision');
+  for(let foot=0;foot<2;foot++){
+   const shadow=scene.boss.root.getObjectByName(`foot-${foot===0?-1:1}`).getObjectByName('foot-contact-shadow');
+   const anchor=shadow.getWorldPosition(new T.Vector3()),f=pose.feet[foot],expected=g.groundskeeperFlight({x:f.x,y:f.y-.55,z:.01});
+   assert(anchor.distanceTo(new T.Vector3(expected.x,expected.y,expected.z))<1e-5,'contact shadow stays on deck during a lifted step');
+  }
   for(const[geometry,array]of buffers){assert.equal(geometry.attributes.position.array,array);assert(array.every(Number.isFinite));}
  }
  const skull=scene.boss.root.getObjectByName('long-scaled-muzzle').geometry;skull.computeBoundingBox();const size=skull.boundingBox.getSize(new T.Vector3());assert(size.y>size.x*1.8,'face retains an elongated dinosaur muzzle');

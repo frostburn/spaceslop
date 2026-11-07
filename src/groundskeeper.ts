@@ -7,6 +7,7 @@ export const GROUNDSKEEPER_STRIKE = 2.35;
 export const GROUNDSKEEPER_END = 3.25;
 export const GROUNDSKEEPER_FLOOR = -2.8;
 export const GROUNDSKEEPER_RADIUS = 1.75;
+export const GROUNDSKEEPER_BELLY = { x: 0, y: -2.65, z: 6.95 };
 export type GkPoint = { x: number; y: number; z: number };
 export type GkAim = { x: number; y: number };
 export type GkAttack = 'left rake' | 'right rake' | 'double slam' | 'lunge';
@@ -60,18 +61,21 @@ export function groundskeeperPose(time: number, aim: GkAim = { x: 0, y: -5.3 }, 
   const strength = (1 - recovery) * (cancelled ? 1 - gkSmooth((time - cancelledAt) / .45) : 1);
   const moving = gkSmooth((attack.age - GROUNDSKEEPER_STRIKE + .2) / .5) * strength;
   const side = kind === 'right rake' ? 1 : -1;
-  const torso = point((side * .24 + aim.x * .35) * moving, -moving * (kind === 'lunge' ? 3.6 : 3.0), -moving * .55);
-  const jaw = (.06 + windup * .65 + (kind === 'lunge' ? moving * .35 : 0)) * strength;
-  let head = add(point(.17 * Math.sin(time * .6), -1.3, 14.1), torso);
+  const lunge = kind === 'lunge' ? moving : 0;
+  const torso = point((side * .24 + aim.x * .35) * moving, -moving * (kind === 'lunge' ? 4.8 : 3.0), -moving * (kind === 'lunge' ? 1.35 : .55));
+  const jaw = (windup * .37 + lunge * .20) * strength;
+  const headPitch = .12 + lunge * .40 + .015 * Math.sin(time * .7);
+  const headYaw = (.34 + .065 * Math.sin(time * .55)) * (1 - lunge);
+  let head = add(point(.08 * Math.sin(time * .6), -4.0, 11.8), torso);
   if (kind === 'lunge') {
     const target = fromFlight(point(aim.x, aim.y, -.2));
-    head = mix(head, add(target, point(0, 1.4, .2)), moving * (1 - recovery));
+    head = mix(head, sub(target, headOffset(headPitch, headYaw)), moving * (1 - recovery));
   }
   const arms = [-1, 1].map(handSide => {
-    const shoulder = add(point(handSide * 2.35, -1.1, 9.6), torso);
-    const rest = add(point(handSide * 4.9, -2.4, 5.0), torso);
+    const shoulder = add(point(handSide * 2.0, -.9, 8.6), torso);
+    const rest = add(point(handSide * 4.6, handSide < 0 ? -3.5 : -2.8, handSide < 0 ? 5.6 : 4.9), torso);
     const striking = kind === 'double slam' || (kind !== 'lunge' && side === handSide);
-    let wrist = rest, direction = norm(point(0, -.28, -.96));
+    let wrist = rest, direction = norm(point(-handSide * .14, -.35, -.93));
     if (striking) {
       const ready = add(point(handSide * 5.1, -.1, 12.1), torso);
       wrist = mix(rest, ready, windup * strength);
@@ -90,21 +94,28 @@ export function groundskeeperPose(time: number, aim: GkAim = { x: 0, y: -5.3 }, 
     }
     const solved = arm(shoulder, wrist, handSide);
     const claws = [-1, 0, 1].map((finger) => {
-      const base = add(solved.wrist, point(finger * .46, 0, 0));
-      return [base, add(base, add(mul(direction, 2.2), point(0, -.65, .4))),
-        add(base, mul(direction, 4.55 - Math.abs(finger) * .24))];
+      const base = add(solved.wrist, point(finger * .46, -Math.abs(finger) * .18, finger * .04));
+      return [base, add(base, add(mul(direction, 2.2), point(handSide * 1.1 + finger * .22, -1.15, .8))),
+        add(base, add(mul(direction, 4.55 - Math.abs(finger) * .24), point(finger * .4, 0, 0)))];
     });
     return { ...solved, direction, claws, side: handSide };
   });
-  const feet = [-1, 1].map(s => point(s * 2.05, -.35 - (s === side ? moving * 1.2 : 0), 0));
-  return { ...attack, cancelled, torso, head, jaw, feathers: windup * strength, arms, feet,
-    neckBase: add(point(0, -.75, 10.0), torso) };
+  const feet = [-1, 1].map(s => point(s * 2.15, -.35 - (s === side ? moving * (kind === 'lunge' ? 3.5 : 1.2) : 0),
+    s === side ? Math.sin(moving * Math.PI) * (kind === 'lunge' ? .45 : .22) : 0));
+  return { ...attack, cancelled, torso, head, headPitch, headYaw, jaw, feathers: windup * strength, arms, feet,
+    neckBase: add(point(0, -1.4, 8.9), torso) };
 }
 export type GroundskeeperPose = ReturnType<typeof groundskeeperPose>;
 
+function headOffset(pitch: number, yaw: number) {
+  const y = -1.75 * Math.cos(pitch) + .05 * Math.sin(pitch);
+  return point(-y * Math.sin(yaw), y * Math.cos(yaw), -1.75 * Math.sin(pitch) - .05 * Math.cos(pitch));
+}
+export function groundskeeperMuzzle(p: GroundskeeperPose) { return add(p.head, headOffset(p.headPitch, p.headYaw)); }
+
 export function groundskeeperContact(time: number, aim: GkAim, cancelledAt: number) {
   const p = groundskeeperPose(time, aim, cancelledAt);
-  return groundskeeperFlight(add(point(0, -2.35, 7.1), p.torso));
+  return groundskeeperFlight(add(GROUNDSKEEPER_BELLY, p.torso));
 }
 
 function segmentDistance(p: GkPoint, a: GkPoint, b: GkPoint) {
@@ -114,7 +125,7 @@ function segmentDistance(p: GkPoint, a: GkPoint, b: GkPoint) {
 export function groundskeeperHits(time: number, previous: number, aim: GkAim, player: GkAim, cancelledAt = -100) {
   const p = point(player.x, player.y, 0), old = groundskeeperPose(previous, aim, cancelledAt), now = groundskeeperPose(time, aim, cancelledAt);
   if (!now.active || now.cancelled) return false;
-  if (now.kind === 'lunge') return segmentDistance(p, groundskeeperFlight(add(old.head, point(0, -1.4, -.2))), groundskeeperFlight(add(now.head, point(0, -1.4, -.2)))) < 1.15;
+  if (now.kind === 'lunge') return segmentDistance(p, groundskeeperFlight(groundskeeperMuzzle(old)), groundskeeperFlight(groundskeeperMuzzle(now))) < 1.15;
   for (const [a, hand] of now.arms.entries()) {
     if (now.kind !== 'double slam' && hand.side !== (now.kind === 'right rake' ? 1 : -1)) continue;
     for (const [i, curve] of hand.claws.entries()) for (let j = 0; j < curve.length; j++) {
