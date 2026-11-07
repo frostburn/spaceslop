@@ -8,6 +8,8 @@ const g=await server.ssrLoadModule('/src/groundskeeper.ts'),layout=await server.
 const {Flight,STEP,BOSS_PROJECTION}=await server.ssrLoadModule('/src/game.ts');
 const {createPreserveScenery}=await server.ssrLoadModule('/src/preserve-scenery.ts');
 const {createBossLaserContact}=await server.ssrLoadModule('/src/laser-contact.ts');
+const {createGroundskeeper}=await server.ssrLoadModule('/src/groundskeeper-rig.ts');
+const {gkSkullGeometry,gkNaris,gkSkullPoint,gkSkullNormal}=await server.ssrLoadModule('/src/groundskeeper-skull.ts');
 const quiet=()=>{const f=new Flight('sentry',[],'vex','preserve');f.phase='boss';f.cooldown=f.droneCooldown=1e5;return f;};
 
 test('preserve enters a quiet six-second rotunda approach, then a dedicated dinosaur fight',()=>{
@@ -81,4 +83,66 @@ test('rotunda transform coasts continuously, and posed claw geometry/contact anc
   for(const[geometry,array]of buffers){assert.equal(geometry.attributes.position.array,array);assert(array.every(Number.isFinite));}
  }
  const skull=scene.boss.root.getObjectByName('long-scaled-muzzle').geometry;skull.computeBoundingBox();const size=skull.boundingBox.getSize(new T.Vector3());assert(size.y>size.x*1.8,'face retains an elongated dinosaur muzzle');
+});
+
+test('diagonal attacks, paired slams and recovery keep the rendered limbs outside the abdomen',()=>{
+ const rig=createGroundskeeper(),torso=rig.root.getObjectByName('heavy-torso');
+ const skin=torso.children.find(o=>o.isMesh&&o.material===rig.materials.down);
+ const shell=new T.Mesh(skin.geometry,new T.MeshBasicMaterial({side:T.DoubleSide}));shell.updateMatrixWorld();
+ const center=new T.Vector3(0,-.1,6.9),ray=new T.Raycaster(),q=new T.Vector3(),direction=new T.Vector3(),offset=new T.Vector3();
+ for(const x of[-3.5,0,3.5])for(const y of[-6.8,-5.3,0,5.5])for(const cycle of[0,1,2])for(const age of[0,1.8,2.35,2.6,2.85,3.05,3.25,3.5,3.8,4.1,4.35]){
+  const time=cycle*g.GROUNDSKEEPER_CYCLE+age,p=rig.pose(time,{x,y});rig.root.updateMatrixWorld(true);offset.set(p.torso.x,p.torso.y,p.torso.z);
+  for(const arm of p.arms){
+   assert(Math.abs(Math.hypot(arm.elbow.x-arm.shoulder.x,arm.elbow.y-arm.shoulder.y,arm.elbow.z-arm.shoulder.z)-g.GROUNDSKEEPER_UPPER_ARM)<1e-6);
+   assert(Math.abs(Math.hypot(arm.wrist.x-arm.elbow.x,arm.wrist.y-arm.elbow.y,arm.wrist.z-arm.elbow.z)-g.GROUNDSKEEPER_FOREARM)<1e-6);
+  }
+  for(const side of[-1,1])for(const[name,length]of[['upper-arm',g.GROUNDSKEEPER_UPPER_ARM],['forearm',g.GROUNDSKEEPER_FOREARM]]){
+   const mesh=rig.root.getObjectByName(`${name}-${side}`).children.find(o=>o.isMesh&&!o.isInstancedMesh),positions=mesh.geometry.attributes.position;
+   // Probe the actual tapered limb surface, allowing only the shoulder's first
+   // fifth to merge into its attachment. No proxy hitbox supplies the verdict.
+   for(let i=0;i<positions.count;i+=8){
+    const t=(positions.getY(i)+mesh.position.y)/length;if(t<(name==='upper-arm'?.2:0)||t>1)continue;
+    q.fromBufferAttribute(positions,i);mesh.localToWorld(q);q.sub(offset);direction.subVectors(q,center);const distance=direction.length();direction.normalize();ray.set(center,direction);
+    const surface=ray.intersectObject(shell)[0];assert(surface&&distance>surface.distance+.03,`${name} enters abdomen: time=${time}, aim=${x},${y}, side=${side}`);
+   }
+  }
+ }
+ shell.material.dispose();
+});
+
+test('nostrils are recessed skin openings with lined passages and a closed manifold skull',()=>{
+ const geometry=gkSkullGeometry(),mesh=new T.Mesh(geometry,new T.MeshBasicMaterial({side:T.FrontSide}));mesh.updateMatrixWorld();
+ const ray=new T.Raycaster();
+ for(const side of[-1,1]){
+  const naris=gkNaris(side);ray.set(naris.surface.clone().addScaledVector(naris.normal,.5),naris.normal.clone().negate());
+  const hit=ray.intersectObject(mesh)[0];assert(hit&&hit.distance>.70&&hit.distance<.86,'ray enters a deep passage instead of hitting an unbroken snout');
+  const y=naris.y+.42,skin=gkSkullPoint(y,naris.angle),normal=gkSkullNormal(y,naris.angle);
+  ray.set(skin.addScaledVector(normal,.5),normal.negate());assert(Math.abs(ray.intersectObject(mesh)[0].distance-.5)<.03,'adjacent skin stays at the outer surface');
+ }
+ const p=geometry.attributes.position,ids=[],vertices=new Map(),edges=new Map();
+ for(let i=0;i<p.count;i++){
+  const key=[p.getX(i),p.getY(i),p.getZ(i)].map(v=>Math.round(v*1e6)).join(',');if(!vertices.has(key))vertices.set(key,vertices.size);ids.push(vertices.get(key));
+ }
+ for(let i=0;i<geometry.index.count;i+=3){
+  const triangle=[0,1,2].map(j=>ids[geometry.index.getX(i+j)]);
+  for(let j=0;j<3;j++){const a=triangle[j],b=triangle[(j+1)%3],key=a<b?`${a}:${b}`:`${b}:${a}`;edges.set(key,(edges.get(key)??0)+1);}
+ }
+ assert([...edges.values()].every(count=>count===2),'nasal rims and tunnel caps share a watertight skin boundary');
+ geometry.dispose();mesh.material.dispose();
+});
+
+test('arm bends keep their lengths and avoid frame flips through attacks, recovery and Pulse',()=>{
+ const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
+ for(const x of[-3.5,0,3.5])for(const y of[-6.8,-5.3,0,5.5])for(const cancelledAt of[-100,2.5,8.5]){
+  let previous;
+  for(let frame=0;frame<=g.GROUNDSKEEPER_CYCLE*4*60;frame++){
+   const time=frame/60,p=g.groundskeeperPose(time,{x,y},cancelledAt);
+   for(const[i,arm]of p.arms.entries()){
+    assert(Math.abs(distance(arm.shoulder,arm.elbow)-g.GROUNDSKEEPER_UPPER_ARM)<1e-6);
+    assert(Math.abs(distance(arm.elbow,arm.wrist)-g.GROUNDSKEEPER_FOREARM)<1e-6);
+    if(previous)assert(distance(arm.elbow,previous.arms[i].elbow)<2,'an elbow flips across its bend circle in a single simulation step');
+   }
+   previous=p;
+  }
+ }
 });

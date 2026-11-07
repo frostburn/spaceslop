@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { part, pivot } from './rig-geometry';
-import { groundskeeperPose, GROUNDSKEEPER_BELLY, type GkPoint } from './groundskeeper';
+import { groundskeeperPose, GROUNDSKEEPER_BELLY, GROUNDSKEEPER_UPPER_ARM, GROUNDSKEEPER_FOREARM, type GkPoint } from './groundskeeper';
 import { gkFeatherGeometry, gkPlumage, gkTorsoSurface, gkTube, mergeGkFixed } from './groundskeeper-geometry';
 import { createGroundskeeperMaterials } from './groundskeeper-materials';
 import { createGroundskeeperFace } from './groundskeeper-face';
@@ -18,9 +18,13 @@ export function createGroundskeeper() {
   }
   torso.computeVertexNormals();
   part(body, torso, m.down, 0, -.1, 6.9);
-  body.add(gkPlumage(feather, m.feathers, new T.Vector3(0, -.1, 6.9), new T.Vector3(3.14, 2.67, 3.07), 4800, 80, .36, false, new T.Vector3(0, 0, -1), gkTorsoSurface));
+  body.add(gkPlumage(feather, m.feathers, new T.Vector3(0, -.1, 6.9), new T.Vector3(3.14, 2.67, 3.07), 4200, 80, .43, false, new T.Vector3(0, 0, -1), gkTorsoSurface));
   part(body, sphere, m.down, 0, 3.65, 6.6).scale.set(1.2, 3.5, .85);
   body.add(gkPlumage(feather, m.feathers, new T.Vector3(0, 3.7, 6.6), new T.Vector3(1.2, 3.5, .85), 300, 93, .48, true, new T.Vector3(0, 1, -.1)));
+  for (const side of [-1, 1]) {
+    part(body, sphere, m.darkDown, side * 2.06, -1.7, 9.0).scale.set(.75, 1.05, 1.0);
+    body.add(gkPlumage(feather, m.feathers, new T.Vector3(side * 2.06, -1.7, 9.0), new T.Vector3(.77, 1.07, 1.02), 240, 110 + side, .48, true));
+  }
 
   function segment(name: string, radius: number, length: number, plumage: boolean) {
     const group = pivot(root, name, 0, 0, 0);
@@ -43,7 +47,7 @@ export function createGroundskeeper() {
     return group;
   }
   const arms = [-1, 1].map(side => {
-    const upper = segment(`upper-arm-${side}`, .78, 4.05, true), lower = segment(`forearm-${side}`, .49, 4.25, true);
+    const upper = segment(`upper-arm-${side}`, .78, GROUNDSKEEPER_UPPER_ARM, true), lower = segment(`forearm-${side}`, .49, GROUNDSKEEPER_FOREARM, true);
     const palm = part(root, sphere, m.hand, 0, 0, 0); palm.scale.set(.83, .62, .42);
     const claws = Array.from({ length: 3 }, (_, i) => {
       const tube = gkTube(22, 12), color = [], p = tube.geometry.attributes.position;
@@ -80,7 +84,7 @@ export function createGroundskeeper() {
   });
 
   const neck = gkTube(28, 24), neckMesh = part(root, neck.geometry, m.down, 0, 0, 0); neckMesh.name = 'continuous-neck';
-  const neckFeathers = new T.InstancedMesh(feather, m.feathers, 1200); root.add(neckFeathers);
+  const neckFeathers = new T.InstancedMesh(feather, m.feathers, 1600); root.add(neckFeathers);
   neckFeathers.name = 'raised-neck-hackles'; neckFeathers.instanceMatrix.setUsage(T.DynamicDrawUsage); neckFeathers.frustumCulled = false;
   const face = createGroundskeeperFace(root,m,feather), head = face.head;
   const throat = gkTube(8, 14); part(root, throat.geometry, m.skin, 0, 0, 0).name = 'jaw-throat-connection';
@@ -101,7 +105,7 @@ export function createGroundskeeper() {
     head.position.copy(vec(p.head)); head.rotation.set(p.headPitch,0,p.headYaw,'ZYX');
     face.pose(p.jaw);
     for (const [i, a] of p.arms.entries()) {
-      const rig = arms[i]; span(rig.upper, a.shoulder, a.elbow, 4.05); span(rig.lower, a.elbow, a.wrist, 4.25);
+      const rig = arms[i]; span(rig.upper, a.shoulder, a.elbow, GROUNDSKEEPER_UPPER_ARM); span(rig.lower, a.elbow, a.wrist, GROUNDSKEEPER_FOREARM);
       rig.palm.position.copy(vec(a.wrist)).addScaledVector(vec(a.direction), .28);
       rig.palm.quaternion.setFromUnitVectors(axis, vec(a.direction)); rig.palm.scale.set(.6, .62, .28);
       for (const [j, claw] of rig.claws.entries()) {
@@ -120,7 +124,7 @@ export function createGroundskeeper() {
     const curve = new T.CatmullRomCurve3([start.clone(), start.clone().lerp(finish, .37).add(new T.Vector3(0, .55, .25)), start.clone().lerp(finish, .72).add(new T.Vector3(0, -.5, 0)), finish.clone()]);
     neck.pose(curve, 1.05, .60);
     for (let i = 0; i < neckFeathers.count; i++) {
-      const t = .06 + .86 * (i / neckFeathers.count), a = i * 2.399963;
+      const t = .02 + .975 * (i / neckFeathers.count), a = i * 2.399963;
       curve.getPoint(t,center); curve.getPoint(Math.max(0,t-.001),before); curve.getPoint(Math.min(1,t+.001),after);
       direction.subVectors(after,before).normalize(); const r=T.MathUtils.lerp(1.07,.62,t);
       across.set(1, 0, 0).addScaledVector(direction, -direction.x).normalize(); n.crossVectors(direction, across).normalize();
@@ -128,7 +132,7 @@ export function createGroundskeeper() {
       shaft.copy(direction).negate(); across.crossVectors(shaft, outward).normalize();
       transform.position.copy(center).addScaledVector(outward, r);
       transform.quaternion.setFromRotationMatrix(basis.makeBasis(across, shaft, outward));
-      transform.scale.set(.37, .34 + .07 * Math.sin(i * 3), .5); transform.updateMatrix(); neckFeathers.setMatrixAt(i, transform.matrix);
+      transform.scale.set(.51, .44 + .09 * Math.sin(i * 3), .65); transform.updateMatrix(); neckFeathers.setMatrixAt(i, transform.matrix);
       if (time === 0) { tint.setHex(0x66503e).lerp(neckLight, T.MathUtils.smoothstep(-outward.y,-.1,.7)); neckFeathers.setColorAt(i, tint); }
     }
     neckFeathers.instanceMatrix.needsUpdate = true;

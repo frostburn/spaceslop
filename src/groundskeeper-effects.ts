@@ -1,5 +1,5 @@
 import * as T from 'three';
-import { groundskeeperAttack, GROUNDSKEEPER_CYCLE, type GkAim } from './groundskeeper';
+import { groundskeeperAttack, GROUNDSKEEPER_CYCLE, GROUNDSKEEPER_RAKE_FOLLOW, type GkAim } from './groundskeeper';
 
 // Camera-plane warnings show the locked danger lane, with a fixed geometry pool.
 // Dust/debris is emitted only after contact and cannot become hostile projectiles.
@@ -27,7 +27,8 @@ export function createGroundskeeperEffects() {
         let n = 0;
         for (let claw = -1; claw <= 1; claw++) for (let dash = 0; dash < 28; dash++) for (const edge of [0, .6]) {
           const t = (dash + edge) / 28, split = .62;
-          const x = t < split ? T.MathUtils.lerp(side * 3.8, aim.x, t / split) : T.MathUtils.lerp(aim.x, -side * 3.8, (t - split) / (1 - split));
+          const end = T.MathUtils.clamp(aim.x - side * GROUNDSKEEPER_RAKE_FOLLOW, -3.8, 3.8);
+          const x = t < split ? T.MathUtils.lerp(side * 3.8, aim.x, t / split) : T.MathUtils.lerp(aim.x, end, (t - split) / (1 - split));
           const y = t < split ? T.MathUtils.lerp(3.3, aim.y, t / split) : T.MathUtils.lerp(aim.y, aim.y - 1, (t - split) / (1 - split));
           points[n++] = x + claw * .32; points[n++] = y; points[n++] = .1;
         }

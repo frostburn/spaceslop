@@ -8,6 +8,9 @@ export const GROUNDSKEEPER_END = 3.25;
 export const GROUNDSKEEPER_FLOOR = -2.8;
 export const GROUNDSKEEPER_RADIUS = 1.75;
 export const GROUNDSKEEPER_BELLY = { x: 0, y: -2.65, z: 6.95 };
+export const GROUNDSKEEPER_UPPER_ARM = 4.35;
+export const GROUNDSKEEPER_FOREARM = 4.5;
+export const GROUNDSKEEPER_RAKE_FOLLOW = 2.5;
 export type GkPoint = { x: number; y: number; z: number };
 export type GkAim = { x: number; y: number };
 export type GkAttack = 'left rake' | 'right rake' | 'double slam' | 'lunge';
@@ -44,13 +47,18 @@ export function groundskeeperAttack(time: number) {
     recovery: gkSmooth((age - GROUNDSKEEPER_END) / 1.1) };
 }
 
-// Fixed-length, two-link arms. The renderer and collision share the solved wrist.
-function arm(shoulder: GkPoint, goal: GkPoint, side: number) {
-  const upper = 4.05, lower = 4.25, delta = sub(goal, shoulder), direction = norm(delta);
+// Fixed-length, two-link arms. Use a vertical bend frame rotated toward the
+// wrist's horizontal heading. The forward wrist gate keeps its vertical pole
+// unreachable, avoiding the zero-vector flips of a projected moving pole.
+function arm(shoulder: GkPoint, goal: GkPoint) {
+  const upper = GROUNDSKEEPER_UPPER_ARM, lower = GROUNDSKEEPER_FOREARM, delta = sub(goal, shoulder), direction = norm(delta);
   const d = clamp(Math.hypot(delta.x, delta.y, delta.z), .3, upper + lower - .025);
-  const wrist = add(shoulder, mul(direction, d)), pole = point(side * .35, .4, -1);
-  const bend = norm(sub(pole, mul(direction, dot(pole, direction))));
+  const wrist = add(shoulder, mul(direction, d));
   const along = (upper * upper - lower * lower + d * d) / (2 * d);
+  const up = norm(sub(point(0, 0, 1), mul(direction, direction.z)));
+  const tangent = point(direction.y * up.z - direction.z * up.y,
+    direction.z * up.x - direction.x * up.z, direction.x * up.y - direction.y * up.x);
+  const angle = Math.atan2(direction.x, -direction.y), bend = add(mul(up, Math.cos(angle)), mul(tangent, Math.sin(angle)));
   const elbow = add(add(shoulder, mul(direction, along)), mul(bend, Math.sqrt(Math.max(0, upper * upper - along * along))));
   return { shoulder, elbow, wrist };
 }
@@ -72,10 +80,11 @@ export function groundskeeperPose(time: number, aim: GkAim = { x: 0, y: -5.3 }, 
     head = mix(head, sub(target, headOffset(headPitch, headYaw)), moving * (1 - recovery));
   }
   const arms = [-1, 1].map(handSide => {
-    const shoulder = add(point(handSide * 2.0, -.9, 8.6), torso);
+    const shoulder = add(point(handSide * 2.3, -2.4, 9.4), torso);
     const rest = add(point(handSide * 4.6, handSide < 0 ? -3.5 : -2.8, handSide < 0 ? 5.6 : 4.9), torso);
     const striking = kind === 'double slam' || (kind !== 'lunge' && side === handSide);
-    let wrist = rest, direction = norm(point(-handSide * .14, -.35, -.93));
+    const restDirection = norm(point(-handSide * .14, -.35, -.93));
+    let wrist = rest, direction = restDirection;
     if (striking) {
       const ready = add(point(handSide * 5.1, -.1, 12.1), torso);
       wrist = mix(rest, ready, windup * strength);
@@ -86,13 +95,21 @@ export function groundskeeperPose(time: number, aim: GkAim = { x: 0, y: -5.3 }, 
         } else {
           const target = point(aim.x, aim.y, 0), t = stroke / .7;
           tip = t < 1 ? mix(point(side * 3.8, 3.3, -9), target, t)
-            : mix(target, point(-side * 3.8, aim.y - 1, -8), (stroke - .7) / .3);
+            : mix(target, point(clamp(aim.x - side * GROUNDSKEEPER_RAKE_FOLLOW, -3.8, 3.8), aim.y - 1, -4), (stroke - .7) / .3);
         }
-        direction = norm(point(0, -.84, -.54));
-        wrist = mix(rest, sub(fromFlight(tip), mul(direction, 4.55)), strength);
+        // Turn the claws across the lane while the wrist stays ahead of the
+        // chest. Sending the wrist to the far side pulled the arm through it.
+        const reach = gkSmooth(stroke / .4);
+        const sweepDirection = norm(point(kind === 'double slam' ? 0 : -side * .8 * gkSmooth(stroke / .4), -.65, -.65 + 1.05 * gkSmooth((aim.y + 3) / 8.5)));
+        direction = norm(mix(restDirection, sweepDirection, reach * strength));
+        wrist = mix(rest, mix(ready, sub(fromFlight(tip), mul(sweepDirection, 4.55)), reach), strength);
       }
     }
-    const solved = arm(shoulder, wrist, handSide);
+    // Cross-body travel and recovery follow the front of the abdomen. A soft
+    // lateral gate leaves the outside windup free while keeping the wrist clear.
+    const crossing = 1 - gkSmooth((handSide * (wrist.x - torso.x) - 2.6) / 1.4);
+    wrist.y = Math.min(wrist.y, torso.y - 3.6 - 1.1 * crossing);
+    const solved = arm(shoulder, wrist);
     const claws = [-1, 0, 1].map((finger) => {
       const base = add(solved.wrist, point(finger * .46, -Math.abs(finger) * .18, finger * .04));
       return [base, add(base, add(mul(direction, 2.2), point(handSide * 1.1 + finger * .22, -1.15, .8))),

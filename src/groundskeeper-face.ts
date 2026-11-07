@@ -1,27 +1,16 @@
 import * as T from 'three';
 import { part, pivot } from './rig-geometry';
 import { gkPlumage, gkSnout } from './groundskeeper-geometry';
+import { gkScalpPlumage, gkSkullGeometry } from './groundskeeper-skull';
 import type { createGroundskeeperMaterials } from './groundskeeper-materials';
 
 export function createGroundskeeperFace(parent: T.Group, m: ReturnType<typeof createGroundskeeperMaterials>, feather: T.BufferGeometry) {
   const head = pivot(parent, 'dinosaur-head', 0, 0, 12.5), sphere = new T.SphereGeometry(1, 24, 16);
-  const skull = gkSnout([[.75, .38, -.22, .51], [.5, .63, -.22, .76], [.25, .72, -.22, .78],
-    [-.1, .73, -.2, .73], [-.35, .70, -.19, .61], [-.65, .64, -.18, .52],
-    [-1.2, .57, -.17, .43], [-1.9, .53, -.15, .37], [-2.4, .43, -.12, .32]]);
-  const pos = skull.attributes.position, colors: number[] = [], base = new T.Color(0x9b9179), patch = new T.Color(0x9d754c), c = new T.Color();
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-    const socket = Math.exp(-((y + .12) ** 2 / .07 + (z - .43) ** 2 / .018)) * T.MathUtils.smoothstep(Math.abs(x), .4, .65);
-    pos.setX(i, x - Math.sign(x) * socket * .15);
-    const eyePatch = Math.exp(-((Math.abs(x) - .62) ** 2 / .07 + (y + .03) ** 2 / .45 + (z - .43) ** 2 / .12));
-    c.copy(base).lerp(patch, eyePatch * .8).multiplyScalar(.87 + T.MathUtils.smoothstep(z, -.1, .7) * .13);
-    colors.push(c.r, c.g, c.b);
-  }
-  skull.setAttribute('color', new T.Float32BufferAttribute(colors, 3));
-  skull.computeVertexNormals();
+  const skull = gkSkullGeometry();
   part(head, skull, m.face, 0, 0, 0).name = 'long-scaled-muzzle';
   const hinge = new T.Vector3(0, .4, -.22), jaw = pivot(head, 'jaw-hinge', hinge.x, hinge.y, hinge.z);
-  const mandible = gkSnout([[.35, .36, -.30, .035], [-.2, .59, -.38, .07], [-.85, .54, -.34, .09], [-1.65, .49, -.29, .11], [-2.75, .40, -.18, .12]]);
+  const mandible = gkSnout([[.35, .36, -.30, .035], [-.2, .59, -.38, .07], [-.85, .54, -.34, .09], [-1.65, .49, -.29, .11],
+    [-2.75, .34, -.12, .10], [-2.88, .18, -.08, .06], [-2.92, .03, -.03, .02]]);
   part(jaw, mandible, m.skin, 0, 0, 0).name = 'continuous-lower-jaw';
   part(head, sphere, m.dark, 0, -.82, -.17).scale.set(.49, 1.43, .075);
   part(jaw, sphere, m.dark, 0, -1.12, .13).scale.set(.45, 1.42, .05);
@@ -36,15 +25,14 @@ export function createGroundskeeperFace(parent: T.Group, m: ReturnType<typeof cr
     part(socket, sphere, m.eye, 0, -.014, .025).scale.set(.08, .061, .028);
     part(socket, sphere, m.pupil, 0, -.014, .05).scale.set(.031, .035, .009);
     part(socket, sphere, m.ochre, 0, .055, .015).scale.set(.13, .035, .038);
-    const nostril = part(head, sphere, m.dark, side * .51, -1.92, .23);
-    nostril.scale.set(.025, .095, .042); nostril.rotation.z = side * .19;
     for (let i = 0; i < 8; i++) {
       const y = .03 - i * .145;
       part(upperTeeth, tooth, m.claw, side * .44, y, -.03).rotation.x = -Math.PI / 2;
       part(lowerTeeth, tooth, m.claw, side * .41, y - .4, .11).rotation.x = Math.PI / 2;
     }
   }
-  head.add(gkPlumage(feather, m.feathers, new T.Vector3(0, .43, .43), new T.Vector3(.64, .7, .52), 100, 201, .4, true, new T.Vector3(0, 1, -.2)));
+  head.add(gkScalpPlumage(feather, m.feathers));
+  head.add(gkPlumage(feather, m.feathers, new T.Vector3(0, .42, -.16), new T.Vector3(.64, .73, .70), 240, 202, .43, true, new T.Vector3(0, .6, -.8)));
   const web = new T.BufferGeometry(), webPositions = new T.Float32BufferAttribute(new Float32Array(36), 3);
   webPositions.setUsage(T.DynamicDrawUsage); web.setAttribute('position', webPositions);
   const lining = m.flesh.clone(); lining.color.setHex(0x30251f);
