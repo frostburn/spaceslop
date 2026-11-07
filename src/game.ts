@@ -1,3 +1,4 @@
+import { AMBUSHER_HP, AMBUSHER_SPAWN_LEAD, ambusherSites, ambusherHome, createAmbusherState, stepAmbusher, ambusherPose, ambusherHulls, ambusherBodyHit, ambusherBeamEntry, ambusherHits, type AmbusherState } from './preserve-ambusher';
 import { preserveWaves } from './preserve-waves';
 import {CRAB_HP,CRAB_CLAW_HP,CRAB_CORE_HP,crabTarget,crabSmooth} from './vent-crab';
 import {wormPose,WORM_WINDUP,WORM_REACH} from './vent-worm';
@@ -47,6 +48,7 @@ type Shot = Point & {
 };
 type Threat = Shot & { graze?: 'near' | 'counted' };
 type Enemy = Point & {
+  ambusher?: AmbusherState;
   lane: number; age: number; fire: number; hp: number; drop?: WingWeapon; raptor?: boolean; ant?: 'worker' | 'soldier'; marine?: MarineKind; school?: MarineSchool;
   centipede?: CentipedeLink; cicada?: CicadaCourse; skipper?: boolean; crucible?: boolean; slag?: {vx:number;vy:number}; ventAnchor?:number; ventScale?:number; slot?: number; mortarAngle?:number; ventWorm?:boolean; shrimp?:ShrimpCourse; wormReach?:number; wormBend?:number; wormLocked?:boolean;
   course?: number; courseAt?: number; heading?: number; laserDamage?: number;
@@ -192,6 +194,7 @@ export class Flight {
   private towlineDamage = TOWLINE_DAMAGE;
   private aim?: Point;
   private nextWave = 0;
+  private nextAmbusher = 0;
   private cooldown = 0;
   private droneCooldown = 0;
   private volley = 0;
@@ -421,7 +424,7 @@ export class Flight {
       }
       for (const enemy of this.enemies) {
         if (enemy.hp <= 0 || shot.pierced?.has(enemy)) continue;
-        const hit = enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,previous,shot) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, previous, shot) : shot.wing === 'homing'
+        const hit = enemy.ambusher ? ambusherBodyHit(enemy.ambusher,this.time,previous,shot) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,previous,shot) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, previous, shot) : shot.wing === 'homing'
           ? nearSegment(enemy, previous, shot, enemyRadius(enemy))
           : Math.abs(shot.x - enemy.x) < enemyRadius(enemy) &&
             shot.y >= enemy.y - enemyRadius(enemy,.46) && previous.y <= enemy.y + enemyRadius(enemy,.46);
@@ -432,7 +435,7 @@ export class Flight {
       }
       return shot.y < 9 && Math.abs(shot.x) < 5;
     });
-    this.enemies = this.enemies.filter((enemy) => enemy.hp > 0 && enemy.y > -9 && (!enemy.centipede || Math.abs(enemy.x) < 5.8) && (!(enemy.crucible || enemy.slag) || Math.abs(enemy.x)<6.8) && (!enemy.slag || (enemy.y<10 && enemy.age<10)));
+    this.enemies = this.enemies.filter((enemy) => enemy.hp > 0 && (enemy.ambusher ? ambusherHome(enemy.ambusher.site,this.time).y > -12 : enemy.y > -9) && (!enemy.centipede || Math.abs(enemy.x) < 5.8) && (!(enemy.crucible || enemy.slag) || Math.abs(enemy.x)<6.8) && (!enemy.slag || (enemy.y<10 && enemy.age<10)));
 
     this.threats = this.threats.filter((shot) => {
       this.advance(shot, dt);
@@ -553,14 +556,14 @@ export class Flight {
     } else {
       let firstContact=Infinity;
       for (const candidate of this.enemies) {
-        const entry=candidate.shrimp||candidate.ventWorm?faunaBeamEntry(candidate,origin):candidate.y;
-        if (candidate.hp > 0 && (candidate.shrimp||candidate.ventWorm ? faunaBodyHit(candidate,origin,{x:origin.x,y:9}) : candidate.marine ? marineBodyHit(candidate as Enemy & {marine: MarineKind}, origin, {x: origin.x, y: 9})
+        const entry=candidate.ambusher?ambusherBeamEntry(candidate.ambusher,this.time,origin):candidate.shrimp||candidate.ventWorm?faunaBeamEntry(candidate,origin):candidate.y;
+        if (candidate.hp > 0 && (candidate.ambusher ? ambusherBodyHit(candidate.ambusher,this.time,origin,{x:origin.x,y:9}) : candidate.shrimp||candidate.ventWorm ? faunaBodyHit(candidate,origin,{x:origin.x,y:9}) : candidate.marine ? marineBodyHit(candidate as Enemy & {marine: MarineKind}, origin, {x: origin.x, y: 9})
           : Math.abs(candidate.x - origin.x) < enemyRadius(candidate,.43) && candidate.y >= origin.y) && entry<firstContact) {
           enemy = candidate;firstContact=entry;
         }
       }
       target = enemy;
-      if (enemy) endY = enemy.ventWorm ? 9 : enemy.y + (enemy.shrimp ? 1.4 : enemy.marine ? marineSpecs[enemy.marine].halfLength : 0);
+      if (enemy) endY = enemy.ambusher || enemy.ventWorm ? 9 : enemy.y + (enemy.shrimp ? 1.4 : enemy.marine ? marineSpecs[enemy.marine].halfLength : 0);
     }
     wing.beamEnd = { x: origin.x, y: endY };
     wing.laserHold = target !== undefined && target === wing.laserTarget ? wing.laserHold + dt : 0;
@@ -581,7 +584,7 @@ export class Flight {
     let closest: Enemy | undefined;
     let distance = 36;
     for (const enemy of this.enemies) {
-      if (enemy.hp <= 0 || enemy.y <= shot.y) continue;
+      if (enemy.hp <= 0 || enemy.y <= shot.y || (enemy.ambusher && !ambusherHulls(enemy.ambusher,this.time).length)) continue;
       const squared = (enemy.x - shot.x) ** 2 + (enemy.y - shot.y) ** 2;
       if (squared < distance) {
         closest = enemy;
@@ -631,7 +634,7 @@ export class Flight {
     }
     for (const enemy of this.enemies) {
       if (enemy.hp > 0 && !this.towlineEnemies.has(enemy) &&
-        (enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,this.player,this.drone) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, this.player, this.drone) : nearSegment(enemy, this.player, this.drone, enemyRadius(enemy)))) {
+        (enemy.ambusher ? ambusherBodyHit(enemy.ambusher,this.time,this.player,this.drone) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,this.player,this.drone) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, this.player, this.drone) : nearSegment(enemy, this.player, this.drone, enemyRadius(enemy)))) {
         this.towlineEnemies.add(enemy);
         this.damageEnemy(enemy, this.towlineDamage);
       }
@@ -639,6 +642,12 @@ export class Flight {
   }
 
   private stepStage(dt: number) {
+    if(this.level==='preserve')while(this.nextAmbusher<ambusherSites.length){
+      const site=this.nextAmbusher,home=ambusherHome(site,this.time);if(home.y>AMBUSHER_SPAWN_LEAD)break;this.nextAmbusher++;
+      if(home.y<-12)continue;
+      const ambusher=createAmbusherState(site),pose=ambusherPose(ambusher,this.time);
+      this.enemies.push({x:pose.head.x,y:pose.head.y,lane:home.x,age:0,fire:Infinity,hp:AMBUSHER_HP,ambusher,drop:ambusherSites[site].drop as WingWeapon});
+    }
     const wave: Wave | undefined = (this.level === 'broodlock' ? hiveWaves : this.level === 'ice' ? iceWaves : this.level === 'vents' ? ventWaves : this.level === 'io' ? ioWaves : this.level === 'titan' ? titanWaves : stageWaves)[this.nextWave];
     if (wave && this.time >= wave.time) {
       this.nextWave++;
@@ -670,7 +679,10 @@ export class Flight {
       if (enemy.hp <= 0) continue;
       enemy.age += dt;
       const motion = enemy.raptor ? raptorFlight(enemy.age) : undefined;
-      if (enemy.ventAnchor!==undefined) {
+      if (enemy.ambusher) {
+        stepAmbusher(enemy.ambusher,this.time,this.player,dt);
+        const p=ambusherPose(enemy.ambusher,this.time);enemy.x=p.head.x;enemy.y=p.head.y;
+      } else if (enemy.ventAnchor!==undefined) {
         const p=ventAnchorPoint(enemy.ventAnchor,this.time);enemy.x=p.x;enemy.y=p.y;enemy.ventScale=p.scale;
         if(enemy.ventWorm){
           const pose=wormPose(enemy.age,enemy.fire,enemy.wormReach,enemy.wormBend);
@@ -727,7 +739,7 @@ export class Flight {
         const hull = enemy.marine ? [{x:0,y:0,radius:marineSpecs[enemy.marine].radius}] : enemy.raptor ? [{ x: 0, y: 0, radius: 1.05 }] : DRONE_HULL;
         this.obstacles.move(enemy, 0, 0, hull, { minX: -2.4, maxX: 2.4, minY: -10, maxY: 10 });
       }
-      if (!enemy.shrimp && enemy.ventAnchor===undefined && !enemy.crucible && !enemy.slag && !motion && (!enemy.centipede || (enemy.centipede.slot === 0 && !enemy.centipede.chain.escape)) && enemy.age >= enemy.fire && enemy.y < 8) {
+      if (!enemy.ambusher && !enemy.shrimp && enemy.ventAnchor===undefined && !enemy.crucible && !enemy.slag && !motion && (!enemy.centipede || (enemy.centipede.slot === 0 && !enemy.centipede.chain.escape)) && enemy.age >= enemy.fire && enemy.y < 8) {
         enemy.fire += enemy.centipede ? 3.5 : enemy.cicada ? 3 : enemy.marine === 'plesiosaur' ? 3.2 : enemy.ant === 'soldier' ? 3.1 : 2.4;
         const dx = this.player.x - enemy.x;
         const dy = this.player.y - enemy.y;
@@ -740,7 +752,9 @@ export class Flight {
             vx: Math.sin(angle + offset) * speed, vy: Math.cos(angle + offset) * speed, vz: 0 });
         }
       }
-      if (enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,this.player,this.player,.16) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind},this.player,this.player,.2-marineSpecs[enemy.marine].radius*.2) : near(enemy, this.player, enemyRadius(enemy)+.16)) {
+      if(enemy.ambusher){
+        if(ambusherHits(enemy.ambusher,this.time,this.time-dt,this.player))this.hit();
+      } else if (enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,this.player,this.player,.16) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind},this.player,this.player,.2-marineSpecs[enemy.marine].radius*.2) : near(enemy, this.player, enemyRadius(enemy)+.16)) {
         if(!enemy.ventWorm)enemy.hp = 0;
         if (enemy.centipede) severCentipede(enemy);
         this.hit();
@@ -861,7 +875,7 @@ export class Flight {
     if (enemy.hp === 0) {
       if(enemy.ventWorm&&enemy.ventAnchor!==undefined)this.defeatedVentWorms.add(enemy.ventAnchor);
       if (enemy.centipede) severCentipede(enemy);
-      this.score += enemy.crucible?300:enemy.slag?10:enemy.ventWorm?250:enemy.ventAnchor!==undefined?150:enemy.shrimp?125:100;
+      this.score += enemy.ambusher?200:enemy.crucible?300:enemy.slag?10:enemy.ventWorm?250:enemy.ventAnchor!==undefined?150:enemy.shrimp?125:100;
       if (enemy.drop) this.drops.push({ x: enemy.x, y: enemy.y, weapon: enemy.drop });
     }
   }

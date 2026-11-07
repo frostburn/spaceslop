@@ -9,6 +9,7 @@ import { createCombatEffects } from './combat-effects';
 import { createLaserContactTrace } from './laser-contact';
 import { createPowerupGraphic } from './powerup-graphics';
 import { createContinuousLaser, createMuzzleFlash, createProjectileBatch, projectileKinds, type ProjectileKind } from './projectile-graphics';
+import { ambusherFeedback } from './preserve-ambusher';
 import { faunaMuzzle } from './vent-fauna';
 import { type LevelId } from './levels';
 import { levelLoaders } from './rendering/loaders';
@@ -463,7 +464,7 @@ export class FlightView {
     for (const [enemy, previous] of this.enemyVitals) {
       const laserDamage = (enemy.laserDamage ?? 0) - previous.laserDamage;
       if (previous.hp - enemy.hp - laserDamage > 1e-6 && (enemy.hp === 0 || this.animationTime - previous.at > 0.07)) {
-        this.combat.emit(enemy.hp === 0 ? 'kill' : 'hit', enemy.ventWorm ? faunaMuzzle(enemy) : enemy, enemy.hp === 0 ? orange : teal);
+        this.combat.emit(enemy.hp === 0 ? 'kill' : 'hit', enemy.ambusher ? ambusherFeedback(enemy.ambusher,flight.time) : enemy.ventWorm ? faunaMuzzle(enemy) : enemy, enemy.hp === 0 ? orange : teal);
         previous.at = this.animationTime;
         emitted = true;
       }

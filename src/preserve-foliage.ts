@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { preserveBatch, preserveFrond, preserveLimb, preservePart } from './preserve-geometry';
 import { PRESERVE_BAY, PRESERVE_END, PRESERVE_START, PRESERVE_WIDTH_SCALE, preserveFrame, preserveGround, preserveRandom, preserveHabitat, preserveWater } from './preserve-layout';
 import { preserveCycadFrond } from './preserve-botany';
+import { ambusherClearing } from './preserve-ambusher';
 import type { PreserveMaterials } from './preserve-materials';
 
 export type PreserveWake = { x: number; y: number; strength: number };
@@ -29,6 +30,7 @@ export function createPreserveFoliage(materials: PreserveMaterials) {
         const kind: Crown['kind'] = habitat.dry > .55 ? (i === 0 ? 'cycad' : 'fan') : 'fern';
         let x = side * (habitat.wet > .5 ? 2.0 + random() * 1.2 : 2.65 + random() * .65), y = start + .6 + i * 3.8 + random() * 2;
         if (habitat.wet > .5) { const w=preserveWater(y); if(Math.abs(x-w.x)<w.width+.4)x=T.MathUtils.clamp(w.x+side*(w.width+.4),-3.3,3.3); }
+        if(ambusherClearing(x,y,1.65))continue;
         const z = preserveGround(x, y), tall = i === 0 && Math.abs(start) % 16 === 0;
         const height = kind === 'cycad' ? .45 + random() * .35 : kind === 'fan' ? 2.2 : habitat.wet > .5 ? 2 + random() * .75 : tall ? 2.85 : 1.25 + random() * .5;
         const radius = kind === 'cycad' ? .25 : height > 2 ? .38 : .20 + random() * .07;
@@ -57,6 +59,7 @@ export function createPreserveFoliage(materials: PreserveMaterials) {
       // Understory clusters vary in scale and leave stretches of visible walkway.
       for (let i = 0; i < (habitat.nest > .5 ? 3 : habitat.dry > .5 ? 2 : 4); i++) {
         const x = side * (1.8 + random() * 1.7), y = start + random() * 8;
+        if(ambusherClearing(x,y))continue;
         if(habitat.wet>.5&&preserveGround(x,y)<preserveWater(y).z+.12)continue;
         crown(x, y, preserveGround(x, y) + .08, .52 + random() * .53, random() * Math.PI * 2, habitat.dry > .5 && i % 2 === 0 ? 'cycad' : 'fern');
       }

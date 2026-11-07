@@ -2,6 +2,7 @@ import * as T from 'three';
 import { preserveBatch, preservePart, type PreservePart } from './preserve-geometry';
 import { PRESERVE_START, PRESERVE_END, PRESERVE_BAY, preserveChannel, preserveGround, preserveNoise, preservePools, preserveRandom, preserveHabitat } from './preserve-layout';
 import { preserveRockGeometry, preserveStratifiedRock } from './preserve-rocks';
+import { ambusherClearing } from './preserve-ambusher';
 import type { PreserveMaterials } from './preserve-materials';
 
 export function createPreserveTerrain(materials: PreserveMaterials) {
@@ -64,6 +65,7 @@ export function createPreserveTerrain(materials: PreserveMaterials) {
     const r = preserveRandom(start + 515), parts = [];
     for (let i = 0; i < 37; i++) {
       const x = (i % 2 ? -1 : 1) * (1.65 + r() * 1.7), y = start + r() * PRESERVE_BAY;
+      if(ambusherClearing(x,y,.95))continue;
       const scale = .13 + r() * .32;
       const h = preserveHabitat(y);
       parts.push(preservePart(x, y, preserveGround(x, y) - .04, scale * (1 + r()), scale * (.7 + r()), scale * .7, h.dry > .5 ? 0xc1ae8f : 0x9b9d85, r() * Math.PI));
@@ -74,6 +76,7 @@ export function createPreserveTerrain(materials: PreserveMaterials) {
     if (habitat.wet + habitat.dry > .3) for (let i = 0; i < 8; i++) {
       const side = habitat.dry > .5 ? -1 : i % 2 ? -1 : 1;
       const x = side * (2.1 + r() * 1.1), y = start + r() * 8;
+      if(ambusherClearing(x,y,1.45))continue;
       (habitat.dry > .5 ? ledges : parts).push(preservePart(x, y, preserveGround(x, y) - .15, .5 + r() * .4, .65 + r() * .7,
         .25 + r() * .25, habitat.dry > .5 ? 0xc4b193 : 0x6d8073, r() * .5));
     }
