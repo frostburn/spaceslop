@@ -1,95 +1,92 @@
+import { createAmbusherMaterials, createPoolAmbusher } from '../../preserve-ambusher-rig';
+import { AMBUSHER_POOL, ambusherPose } from '../../preserve-ambusher';
 import * as T from 'three';
-import { addRoots, genericBoss, type LevelFactory } from '../level';
+import { addRoots, type LevelFactory } from '../level';
 import { createBossLaserContact } from '../../laser-contact';
 import { loadEncounterTexture } from '../../encounter-texture';
-import { BOSS_RECOIL_TIME } from '../../encounters';
-import { createInterceptorRig, createRaptorRig, setFeatherTexture } from '../../encounter-rigs';
+import { createRaptorRig, setFeatherTexture } from '../../encounter-rigs';
 import { setFaceTexture } from '../../creature-faces';
-import { createPreserveEdges, PRESERVE_LOOP } from '../../preserve-edges';
-import { createCorridorBridge } from '../../corridor-bridge';
-import { createShipyard } from '../../shipyard';
-import { createStageBackdrops } from '../../stage-backdrops';
+import { createPreserveScenery } from '../../preserve-scenery';
+import { PRESERVE_DISTANCE, preserveFrame } from '../../preserve-layout';
 import { poseBurners, shipBurners } from '../../burners';
 import { raptorFlight } from '../../encounters';
 import { createScoutRig } from '../../ship-rigs';
-import { createStars } from '../stars';
+import { createGroundskeeperEffects } from '../../groundskeeper-effects';
 export const createLevel: LevelFactory = ({ plane, signal }) => {
   const root = new T.Group();
   const scout = createScoutRig();
   const scouts = Array.from({ length: 12 }, () => { const root = scout.clone(); return { root, burners: shipBurners(root) }; });
-  const boss = createInterceptorRig(2.4);
-  const raptor = createRaptorRig();
-  const preserveEdges = createPreserveEdges();
-  const bridge = createCorridorBridge();
-  const shipyard = createShipyard();
-  const backdrops = createStageBackdrops(signal);
-  const stars = createStars();
-  const burners = shipBurners(boss.root);
+  const raptors = Array.from({length:3},createRaptorRig);
+  const ambusherMaterials=createAmbusherMaterials(),ambushers=Array.from({length:AMBUSHER_POOL},()=>createPoolAmbusher(ambusherMaterials));
+  const preserve = createPreserveScenery();
+  const boss = preserve.boss;
+  const effects = createGroundskeeperEffects();
   const models: (T.Object3D | undefined)[] = [];
-  addRoots(root, boss, raptor, preserveEdges, bridge, shipyard, backdrops, stars, ...scouts);
+  addRoots(root, ...ambushers, ...raptors, preserve, effects, ...scouts);
   const contact = createBossLaserContact(plane, boss.root);
-  const ready = Promise.all([backdrops.ready, loadEncounterTexture('feathers', setFeatherTexture, undefined, signal), loadEncounterTexture('scales', texture => {
+  const ready = Promise.all([loadEncounterTexture('feathers', texture => { setFeatherTexture(texture); boss.setFeatherTexture(texture); }, undefined, signal), loadEncounterTexture('scales', texture => {
     texture.repeat.set(.62, .68);
     texture.offset.set(.19, .16);
     setFaceTexture(texture);
     boss.setScaleTexture(texture);
-    raptor.setScaleTexture(texture);
+    ambusherMaterials.setScales(texture);
+    raptors.forEach(raptor => raptor.setScaleTexture(texture));
   }, undefined, signal)]).then(t => t.flat());
   return {
     root,
     boss: boss.root,
     models,
     ready,
-    stageDistance: 95,
-    applyArmor: boss.setArmorTexture,
-    surfaces: [bridge.root, ...scouts.map(r => r.root)],
-    warmup: [[scouts[0].root, raptor.root, preserveEdges.root, bridge.root], [boss.root, shipyard.root, backdrops.root]],
-    contacts: [boss.root, raptor.root, ...scouts.map(r => r.root)],
+    stageDistance: PRESERVE_DISTANCE,
+    background: 0x020407,
+    key: 0xffedd2,
+    sky: 0xc8e0d5,
+    ground: 0x25332a,
+    keyIntensity: 1.2,
+    skyIntensity: 1.2,
+    orientation: (_time, reveal) => preserveFrame(reveal),
+    surfaces: [preserve.root, ...scouts.map(r => r.root)],
+    warmup: [[scouts[0].root, ...raptors.map(r => r.root), ...ambushers.map(r=>r.root), preserve.root], [boss.root, effects.root]],
+    prepare() { preserve.prime(true); effects.prime(); ambushers.forEach(r=>r.prime(true)); },
+    afterWarmup() {preserve.prime(false);ambushers.forEach(r=>r.prime(false));},
+    contacts: [boss.root, ...ambushers.map(r=>r.root), ...raptors.map(r => r.root), ...scouts.map(r => r.root)],
     contact,
     update(frame) {
-      const { flight, reveal: eased, time, animationTime, elapsed: frameElapsed, newFlight, fighterSpeed, droneSpeed, distance } = frame;
-      const elapsed = newFlight ? 2 : frameElapsed;
-      genericBoss(boss.root, flight, eased);
-      if (boss.root.visible) {
-        boss.pose(eased, flight.cannonWindup, flight.exposedCannonX, flight.firedCannonX, flight.bossRecoil / BOSS_RECOIL_TIME);
-        poseBurners(burners, animationTime, .42 + .48 * Math.sin(eased * Math.PI));
-      }
+      const { flight, reveal: eased, time, animationTime, elapsed, newFlight, fighterSpeed, droneSpeed } = frame;
+      boss.pose(flight.groundskeeperTime, flight.groundskeeperAim, flight.groundskeeperCancelledAt);
+      effects.update(flight.groundskeeperTime, flight.groundskeeperAim, flight.groundskeeperCancelledAt, flight.phase === 'boss');
       models.length = flight.enemies.length;
       models.fill(undefined);
-      const enemy = flight.enemies.find((enemy) => enemy.raptor);
-      raptor.root.visible = Boolean(enemy);
-      if (enemy) {
-        raptor.root.position.set(enemy.x, enemy.y, 0);
-        raptor.root.rotation.z = Math.PI;
-        raptor.pose(enemy.age);
+      const hunters=flight.enemies.filter(enemy=>enemy.ambusher);
+      for(const[i,rig]of ambushers.entries()){
+        const enemy=hunters[i];rig.root.visible=Boolean(enemy);
+        if(enemy?.ambusher){rig.pose(ambusherPose(enemy.ambusher,flight.time));models[flight.enemies.indexOf(enemy)]=rig.animal;}
       }
-      if (enemy)
-        models[flight.enemies.indexOf(enemy)] = raptor.root;
+      const patrol = flight.enemies.filter(enemy => enemy.raptor);
+      for (const [i,raptor] of raptors.entries()) {
+        const enemy=patrol[i];raptor.root.visible=Boolean(enemy);
+        if (!enemy) continue;
+        raptor.root.position.set(enemy.x,enemy.y,0);raptor.root.rotation.z=Math.PI;
+        raptor.pose(enemy.age);models[flight.enemies.indexOf(enemy)]=raptor.root;
+      }
+      const ships=flight.enemies.filter(enemy=>!enemy.raptor&&!enemy.ambusher);
       for (const [index, { root, burners }] of scouts.entries()) {
-        const enemy = flight.enemies[index]; root.visible = Boolean(enemy && !enemy.raptor);
+        const enemy = ships[index]; root.visible = Boolean(enemy);
         if (!root.visible || !enemy) continue;
         root.position.set(enemy.x, enemy.y, 0); root.rotation.z = Math.PI + .3 * Math.cos(enemy.age * 1.55); root.scale.setScalar(enemy.ventScale ?? 1);
-        poseBurners(burners, enemy.age + index * .27, .55 + .16 * Math.sin(enemy.age * 4 + index)); models[index] = root;
+        poseBurners(burners, enemy.age + index * .27, .55 + .16 * Math.sin(enemy.age * 4 + index)); models[flight.enemies.indexOf(enemy)] = root;
       }
-      const stageTime = Math.min(time, flight.stageDuration);
       const reveal = eased;
-      const perspectiveDistance = eased === 0 ? undefined : distance;
-      const scroll = stageTime * 1.65;
-      stars.position.y = -(scroll % 12) - reveal * 2;
-      const backdropScroll = stageTime * 1.2 + reveal * 6;
-      const edge = backdrops.update(reveal, backdropScroll, perspectiveDistance);
-      bridge.update(backdropScroll, edge, reveal, perspectiveDistance);
-      shipyard.update(reveal, !backdrops.hasShipyard);
       const wakes = flight.hull > 0 && reveal < 0.7 ? [
         { ...flight.player, strength: Math.min(1.4, 0.93 + fighterSpeed * 0.1) },
         { ...flight.drone, strength: Math.min(1, 0.3 + droneSpeed * 0.05) },
-        ...flight.enemies.map((enemy) => ({
+        ...flight.enemies.filter(enemy=>!enemy.ambusher).map((enemy) => ({
           x: enemy.x,
           y: enemy.y,
           strength: enemy.raptor ? 0.63 + raptorFlight(enemy.age).speed * 0.11 : 0.86,
         })),
       ] : [];
-      preserveEdges.update(scroll % PRESERVE_LOOP, reveal, !backdrops.hasPreserve, elapsed, wakes);
+      preserve.update(time, reveal, animationTime, elapsed, wakes, newFlight);
     }
   };
 };

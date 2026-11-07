@@ -30,6 +30,7 @@ export interface LevelScene {
   orientation?: (time: number, reveal: number) => {
     pitch: number;
     bank: number;
+    viewPitch?: number;
   };
   shipPitch?: number;
   dronePitch?: number;
