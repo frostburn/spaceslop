@@ -4,6 +4,7 @@ import { createPreserveTerrain } from './preserve-terrain';
 import { createPreserveStation } from './preserve-station';
 import { createPreserveFoliage, type PreserveWake } from './preserve-foliage';
 import { preserveFrame, preserveRandom, preserveScroll, PRESERVE_SPEED, PRESERVE_WIDTH_SCALE, PRESERVE_ARENA_Y } from './preserve-layout';
+import { createPreserveShadow } from './preserve-shadow';
 import { createPreserveTraces } from './preserve-traces';
 import { createPreserveDock } from './preserve-dock';
 import { createPreserveWater } from './preserve-water';
@@ -26,25 +27,11 @@ export function createPreserveScenery() {
   // origin as the deck scrolls, and no broad colored fog hiding outer space.
   const sun = new T.DirectionalLight(0xffedd2, 2.6);
   sun.position.set(-22, 0, 32); sun.target.position.set(0, 12, -3);
-  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -14; sun.shadow.camera.right = 14;
-  sun.shadow.camera.top = 36; sun.shadow.camera.bottom = -36;
-  sun.shadow.camera.near = .5; sun.shadow.camera.far = 90;
+  sun.castShadow = true; sun.name = 'preserve-sun';
   sun.shadow.bias = -.00015; sun.shadow.normalBias = .035;
   sun.shadow.camera.updateProjectionMatrix();
   world.add(sun, sun.target);
-  // Snap the moving shadow window in both axes of the light's projection.
-  // Geometry and its dirt/relief stay in habitat coordinates as the view scrolls.
-  const lightBasis = new T.Matrix4().lookAt(sun.position,sun.target.position,new T.Vector3(0,1,0));
-  const lightRight = new T.Vector3().setFromMatrixColumn(lightBasis,0), lightUp = new T.Vector3().setFromMatrixColumn(lightBasis,1);
-  const anchor = new T.Vector3(), lightOffset = new T.Vector3(-22,-12,35);
-  const shadowAnchor = (scroll: number) => {
-    anchor.set(0,scroll+12,-3);
-    for (const [axis,texel] of [[lightRight,28/2048],[lightUp,72/2048]] as const) {
-      const q=anchor.dot(axis);anchor.addScaledVector(axis,Math.round(q/texel)*texel-q);
-    }
-    sun.target.position.copy(anchor);sun.position.copy(anchor).add(lightOffset);
-  };
+  const shadowAnchor = createPreserveShadow(sun,world);
   // Low, broad bounce from the observation deck keeps the underside of the
   // curved neck legible against space without flattening the sun's key light.
   const bounce = new T.DirectionalLight(0x8eaaa4, 0);

@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { preserveGround, preserveChannel } from './preserve-layout';
+import { preserveGround, preserveChannel, PRESERVE_ARENA_Y, PRESERVE_ARENA_RADIUS } from './preserve-layout';
 import type { PreserveMaterials } from './preserve-materials';
 
 export function createPreserveTraces(m: PreserveMaterials) {
@@ -8,7 +8,7 @@ export function createPreserveTraces(m: PreserveMaterials) {
   const outlines = [[-.19,-.24],[-.31,.04],[-.63,.46],[-.5,.56],[-.14,.3],[-.08,.86],
     [.07,.91],[.14,.3],[.52,.65],[.64,.54],[.29,.02],[.17,-.25]];
   const footprint = new T.Shape(outlines.map(([x,y])=>new T.Vector2(x,y))), pieces: T.BufferGeometry[] = [];
-  for (let i=0;i<29;i++) {
+  for (let i=0;i<29&&144+i*1.3<PRESERVE_ARENA_Y-PRESERVE_ARENA_RADIUS-1;i++) {
     const y=144+i*1.3,x=preserveChannel(y)+(i%2?.48:-.48),scale=.38+i*.012,angle=.12*Math.sin(i*.8);
     const g=new T.ShapeGeometry(footprint),p=g.attributes.position;
     for(let j=0;j<p.count;j++) {
@@ -22,7 +22,7 @@ export function createPreserveTraces(m: PreserveMaterials) {
   const prints=new T.Mesh(mergeGeometries(pieces),material);prints.name='large-three-toed-tracks';root.add(prints);pieces.forEach(g=>g.dispose());
   // Sparse fallen feathers reinforce the transition from garden to nest.
   const feathers: T.BufferGeometry[]=[];
-  for(let i=0;i<24;i++) {
+  for(let i=0;i<24&&145+i*1.6<PRESERVE_ARENA_Y-PRESERVE_ARENA_RADIUS-1;i++) {
     const x=Math.sin(i*4.7)*2.7,y=145+i*1.6,z=preserveGround(x,y)+.04,angle=i*2.4;
     const p:number[]=[],c:number[]=[],uv:number[]=[];
     const point=(u:number,v:number)=>{p.push(x+u*Math.cos(angle)-v*Math.sin(angle),y+u*Math.sin(angle)+v*Math.cos(angle),z+Math.sin(v*8)*.025);c.push(.72,.66,.52);uv.push(u+.5,v);};

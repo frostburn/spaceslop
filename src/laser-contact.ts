@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { flightProjection } from './rendering/flight-camera';
 
 type Point = { x: number; y: number };
 const epsilon = 1e-7;
@@ -26,16 +27,15 @@ export function createLaserContactTrace(plane: T.Object3D) {
   const bounds = new T.Box3(), a = new T.Vector3(), b = new T.Vector3(), c = new T.Vector3();
   const result = new T.Vector2();
   const posed = new WeakMap<T.SkinnedMesh,Float32Array>();
-  return (origin: Point, end: Point, model: T.Object3D, distance?: number) => {
+  return (origin: Point, end: Point, model: T.Object3D, distance?: number, viewPitch = 0) => {
     result.set(end.x, end.y);
     const dx = end.x - origin.x, dy = end.y - origin.y, lengthSquared = dx * dx + dy * dy;
     if (lengthSquared < epsilon || !model.visible) return result;
     model.updateWorldMatrix(true, false);
     model.updateMatrixWorld(true);
     inverse.copy(plane.matrixWorld).invert();
-    // The camera always looks along the flight plane's local -Z axis. Project onto
-    // its z=0 plane, including the hive perspective and the boss camera distance.
-    projection.set(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, distance ? -1 / distance : 0, 1);
+    // Match the active camera, including a tilted view of a flat flight surface.
+    flightProjection(distance, viewPitch, projection);
     let nearest = 1;
     model.traverseVisible((object) => {
       if (!(object instanceof T.Mesh)) return;

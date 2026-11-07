@@ -6,6 +6,7 @@ import {createServer} from 'vite';
 const server = await createServer({root: new URL('..', import.meta.url).pathname, configFile: false,
   server: {middlewareMode: true, hmr: false, ws: false}, optimizeDeps: {noDiscovery: true, entries: []}, appType: 'custom'});
 after(() => server.close());
+const {tiltFlightCamera,flightProjection}=await server.ssrLoadModule('/src/rendering/flight-camera.ts');
 const layout = await server.ssrLoadModule('/src/preserve-layout.ts');
 const {createPreserveScenery} = await server.ssrLoadModule('/src/preserve-scenery.ts');
 const {Flight,STEP}=await server.ssrLoadModule('/src/game.ts');
@@ -127,7 +128,7 @@ test('rotunda floor plates have disjoint top faces and real clearance above the 
 
 test('ten-screen route starts in space, enters a genuinely open dock, and has populated habitats through the last patrol',()=>{
  const f=new Flight('sentry',[],'vex','preserve');assert.equal(f.stageDuration,100);
- const projectedTravel=f.stageDuration*layout.PRESERVE_SPEED*Math.cos(layout.PRESERVE_PITCH)*38/(38+4.25);
+ const projectedTravel=f.stageDuration*layout.PRESERVE_SPEED/(1+4.25/(38*Math.cos(layout.PRESERVE_PITCH)));
  assert(projectedTravel/16>8.8&&projectedTravel/16<9.5,'travel plus the initial view should cover about ten screens');
  const ground=scenery.root.getObjectByName('preserve-soil-chunk').geometry.attributes.position;
  assert(ground.getY(0)>=layout.PRESERVE_DOCK_Y,'the space approach has no hidden ground plate');
@@ -162,15 +163,78 @@ test('stream basins contain the water, terrain varies by habitat, and whitewater
 });
 
 test('long scenery is culled to a bounded view and shadow projection snaps while preserving sunlight direction',()=>{
- const camera=new T.PerspectiveCamera(2*Math.atan(8/38)*180/Math.PI,9/16,.1,300);camera.position.z=38;camera.lookAt(0,0,0);camera.updateMatrixWorld();
+ const camera=new T.PerspectiveCamera(2*Math.atan(8/38)*180/Math.PI,9/16,.1,300);tiltFlightCamera(camera,38,layout.PRESERVE_PITCH,new T.Quaternion());camera.updateMatrixWorld();
  const frustum=new T.Frustum().setFromProjectionMatrix(new T.Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
- const sun=scenery.world.children.find(o=>o.isDirectionalLight&&o.castShadow),offset=new T.Vector3(-22,-12,35),basis=new T.Matrix4().lookAt(offset,new T.Vector3(),new T.Vector3(0,1,0));
- const right=new T.Vector3().setFromMatrixColumn(basis,0),up=new T.Vector3().setFromMatrixColumn(basis,1);
+ const sun=scenery.world.children.find(o=>o.isDirectionalLight&&o.castShadow),offset=new T.Vector3(-22,-12,35);
  for(let time=0;time<=100;time+=3){
   scenery.update(time,0,time,1/60);scenery.root.updateMatrixWorld(true);let triangles=0,calls=0;
   scenery.root.traverse(o=>{if(!o.isMesh||o.frustumCulled&&!frustum.intersectsObject(o))return;calls++;triangles+=(o.geometry.index?.count??o.geometry.attributes.position.count)/3*(o.isInstancedMesh?o.count:1);});
   assert(triangles<300_000&&calls<65,`visible scenery budget at ${time}: ${triangles} triangles / ${calls} calls`);
   assert(sun.position.clone().sub(sun.target.position).distanceTo(offset)<1e-10);
-  for(const[axis,texel]of[[right,28/2048],[up,72/2048]]){const q=sun.target.position.dot(axis)/texel;assert(Math.abs(q-Math.round(q))<1e-8,'shadow window drifts between texels');}
+
  }
+});
+
+test('oblique camera preserves flight coordinates and real shots pass beneath the port roof',()=>{
+ const camera=new T.PerspectiveCamera(),plane=new T.Group(),projection=new T.Matrix4(),point=new T.Vector3();plane.add(scenery.root);
+ for(const reveal of[0,.001,.25,.5,.75,.999,1]){
+  const distance=38+(22-38)*reveal,frame=layout.preserveFrame(reveal);plane.rotation.x=(reveal-1)*Math.PI/2;plane.updateMatrixWorld(true);
+  camera.fov=2*Math.atan(8/distance)*180/Math.PI;camera.aspect=9/16;camera.updateProjectionMatrix();tiltFlightCamera(camera,distance,frame.viewPitch,plane.quaternion);camera.updateMatrixWorld(true);
+  flightProjection(distance,frame.viewPitch,projection);
+  for(const x of[-3.8,0,3.8])for(const y of[-7.1,0,7.1])for(const z of[0,.4,-3]){
+   const p=new T.Vector3(x,y,z),expected=p.clone().applyMatrix4(projection),actual=p.clone().applyMatrix4(plane.matrixWorld).project(camera);
+   assert(Math.abs(actual.x-expected.x*2/9)<1e-9&&Math.abs(actual.y-expected.y/8)<1e-9,'view and laser silhouette projection disagree');
+   assert(actual.z>-1&&actual.z<1,'the sheared far plane cuts through the playfield');
+   if(z===0){assert(Math.abs(actual.x-x*2/9)<1e-9);assert(Math.abs(actual.y-y/8)<1e-9,'flight controls drift with camera tilt');}
+  }
+ }
+ plane.rotation.x=0;
+ for(const time of[0,2,4,6,8,10,12]){
+  scenery.update(time,0);plane.updateMatrixWorld(true);const armor=scenery.dock.root.getObjectByName('dock-armored-structure');
+  assert(Math.abs(scenery.world.rotation.x)<1e-12,'flight must remain parallel to the habitat during patrol');
+  for(const x of[-2.6,0,2.6])for(const z of[0,.65]){
+   const ray=new T.Raycaster(new T.Vector3(x,-8,z),new T.Vector3(0,1,0),0,18);
+   assert.equal(ray.intersectObject(armor).length,0,'a physical bullet or fighter clips the dock');
+  }
+ }
+ // The user-visible girder is physically above a shot, and covers it in camera.
+ scenery.update(4,0);plane.updateMatrixWorld(true);camera.fov=2*Math.atan(8/38)*180/Math.PI;camera.updateProjectionMatrix();tiltFlightCamera(camera,38,layout.PRESERVE_PITCH,plane.quaternion);camera.updateMatrixWorld(true);
+ const header=scenery.dock.root.localToWorld(point.set(0,-1,1.45)),ndc=header.clone().project(camera),ray=new T.Raycaster();ray.setFromCamera(new T.Vector2(ndc.x,ndc.y),camera);
+ const shotDistance= -ray.ray.origin.z/ray.ray.direction.z,roof=ray.intersectObject(scenery.dock.root.getObjectByName('dock-armored-structure'))[0];
+ assert(roof&&roof.distance<shotDistance,'bullets draw over the girder instead of passing beneath it');
+ plane.remove(scenery.root);
+});
+
+test('dock soil has an exact closed edge down to the hull, and visible receivers stay inside the shadow window',()=>{
+ const face=scenery.root.getObjectByName('dock-soil-cut'),soil=scenery.root.getObjectByName('preserve-soil-chunk'),p=face.geometry.attributes.position,top=soil.geometry.attributes.position;
+ for(let i=0;i<49;i++)for(let axis=0;axis<3;axis++)assert.equal(p.array[i*3+axis],top.array[i*3+axis],'dock cap leaves a slit along the soil');
+ const ray=new T.Raycaster(),mesh=new T.Mesh(face.geometry,new T.MeshBasicMaterial({side:T.DoubleSide}));mesh.updateMatrixWorld(true);
+ for(const x of[-3.4,-2,0,2,3.4])for(const z of[-6.2,-5.5]){ray.set(new T.Vector3(x,layout.PRESERVE_START-1,z),new T.Vector3(0,1,0));assert(ray.intersectObject(mesh).length,'the stage underside is exposed at the port');}
+ const plane=new T.Group(),camera=new T.PerspectiveCamera(),sun=scenery.world.getObjectByName('preserve-sun'),point=new T.Vector3(),lightPoint=new T.Vector3();plane.add(scenery.root);
+ for(const[time,reveal]of[[0,0],[6,0],[32,0],[60,0],[99,0],[100,0],[101,.074],[103,.5],[105,.926],[106,1]]){
+  const frame=layout.preserveFrame(reveal),distance=38+(22-38)*reveal;plane.rotation.x=(reveal-1)*Math.PI/2;
+  scenery.update(time,reveal);plane.updateMatrixWorld(true);sun.shadow.updateMatrices(sun);
+  camera.fov=2*Math.atan(8/distance)*180/Math.PI;camera.aspect=9/16;camera.updateProjectionMatrix();tiltFlightCamera(camera,distance,frame.viewPitch,plane.quaternion);camera.updateMatrixWorld(true);
+  const receivers=[];scenery.world.traverse(o=>{if(o.isMesh&&o.receiveShadow&&!o.isInstancedMesh)receivers.push(o);});let visible=0;
+  for(const receiver of receivers){
+   const positions=receiver.geometry.attributes.position;
+   for(let i=0;i<positions.count;i+=16){point.fromBufferAttribute(positions,i);receiver.localToWorld(point);lightPoint.copy(point).project(sun.shadow.camera);point.project(camera);
+    if(Math.abs(point.x)>1||Math.abs(point.y)>1||Math.abs(point.z)>1)continue;visible++;
+    assert(Math.abs(lightPoint.x)<.98&&Math.abs(lightPoint.y)<.98&&Math.abs(lightPoint.z)<.98,`shadow edge enters view at ${time}: ${lightPoint.toArray()}`);
+   }
+  }
+  assert(visible>50);
+ }
+ plane.remove(scenery.root);mesh.material.dispose();
+});
+
+test('shadow raster phase stays fixed to the narrowed habitat through scrolling and the complete camera swing',()=>{
+ const plane=new T.Group(),sun=scenery.world.getObjectByName('preserve-sun'),point=new T.Vector3(),reference=[];plane.add(scenery.root);
+ for(let i=0;i<=1060;i++){
+  const time=i/10,raw=Math.max(0,Math.min(1,(time-100)/6)),reveal=raw*raw*(3-2*raw);plane.rotation.x=(reveal-1)*Math.PI/2;
+  scenery.update(time,reveal);plane.updateMatrixWorld(true);sun.shadow.updateMatrices(sun);const phase=[];
+  for(const[x,y,z]of[[1,14,-3],[-3,65,-4],[4,160,-2]]){point.set(x,y,z);scenery.world.localToWorld(point);point.project(sun.shadow.camera);phase.push((point.x+1)*sun.shadow.mapSize.x/2,(point.y+1)*sun.shadow.mapSize.y/2);}
+  if(!i)reference.push(...phase);else phase.forEach((v,j)=>assert(Math.abs(v-reference[j]-Math.round(v-reference[j]))<1e-7,'surface slides between shadow texels'));
+ }
+ plane.remove(scenery.root);
 });

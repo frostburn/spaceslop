@@ -14,6 +14,7 @@ import { type LevelId } from './levels';
 import { levelLoaders } from './rendering/loaders';
 import { type LevelFactory, type LevelScene, type LevelFrame } from './rendering/level';
 import { loadCommonTextures } from './rendering/common-textures';
+import { tiltFlightCamera } from './rendering/flight-camera';
 import { disposeScene } from './rendering/dispose';
 export async function createFlightView(canvas: HTMLCanvasElement, level: LevelId, signal = new AbortController().signal) {
   const { createLevel } = await levelLoaders[level]();
@@ -59,6 +60,7 @@ export class FlightView {
   private levelTime = 0;
   private pitch = 0;
   private bank = 0;
+  private viewPitch = 0;
   private player = createFighterRig();
   private playerBurners = shipBurners(this.player.root);
   private bubbleSources: T.Mesh[] = [];
@@ -289,6 +291,7 @@ export class FlightView {
     const orientation = this.level.orientation?.(this.levelTime, eased);
     this.pitch = orientation?.pitch ?? 0;
     this.bank = orientation?.bank ?? 0;
+    this.viewPitch = orientation?.viewPitch ?? 0;
     this.rotation.setFromAxisAngle(this.axis, (eased - 1) * Math.PI / 2);
     this.plane.quaternion.copy(this.rotation);
     this.keyLight?.position.set(flight.level === 'vents' || orientation ? -5 : 3, flight.level === 'vents' || orientation ? -4 : 5, flight.level === 'vents' || orientation ? 12 : 6);
@@ -309,9 +312,12 @@ export class FlightView {
         p[i] = o[i] * (1 - eased) + p[i] * eased;
       this.perspective.projectionMatrixInverse.copy(this.perspective.projectionMatrix).invert();
     }
-    camera.position.set(0, 0, distance).applyQuaternion(this.rotation);
-    camera.up.set(0, 1, 0).applyQuaternion(this.rotation);
-    camera.lookAt(0, 0, 0);
+    if (this.viewPitch) tiltFlightCamera(camera, distance, this.viewPitch, this.rotation);
+    else {
+      camera.position.set(0, 0, distance).applyQuaternion(this.rotation);
+      camera.up.set(0, 1, 0).applyQuaternion(this.rotation);
+      camera.lookAt(0, 0, 0);
+    }
     this.player.root.position.set(flight.player.x, flight.player.y, 0);
     this.player.root.rotation.x = orientation ? -this.pitch : -(this.level.shipPitch ?? 1.18) * eased;
     this.player.root.rotation.y = this.bank;
@@ -431,7 +437,7 @@ export class FlightView {
             model = this.level.models[index];
         }
         const end = typeof target === 'number' ? this.level.contact(target, distance ?? BOSS_CAMERA_DISTANCE, flight)
-          : model ? this.laserContact(origin, wing.beamEnd, model, distance) : wing.beamEnd;
+          : model ? this.laserContact(origin, wing.beamEnd, model, distance, this.viewPitch) : wing.beamEnd;
         laser.draw(origin, end, wing.laserHold, this.animationTime, typeof target === 'number' || Boolean(model), flight.phase === 'boss' && target === undefined);
       }
     }

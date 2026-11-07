@@ -114,3 +114,13 @@ test('laser contact follows skinned anatomy after a bone and model both move', (
   const hit=createLaserContactTrace(plane)({x:0,y:-5},{x:0,y:4},model);
   assert(Math.abs(hit.y-2.5)<1e-6,'contact uses the posed surface, not its bind-pose box');
 });
+
+test('laser silhouette contact agrees with an oblique camera over the aligned preserve flight surface',async()=>{
+ const {tiltFlightCamera}=await server.ssrLoadModule('/src/rendering/flight-camera.ts');
+ const plane=new T.Group(),model=new T.Group(),mesh=box(0,2,.7,2,1);model.add(mesh);plane.add(model);plane.rotation.x=-Math.PI/2;plane.updateMatrixWorld(true);
+ const camera=new T.PerspectiveCamera(2*Math.atan(8/38)*180/Math.PI,9/16,.1,240);tiltFlightCamera(camera,38,26*Math.PI/180,plane.quaternion);camera.updateMatrixWorld(true);
+ const vertices=mesh.geometry.attributes.position,p=new T.Vector3();let edge=Infinity;
+ for(let i=0;i<vertices.count;i++){p.fromBufferAttribute(vertices,i);mesh.localToWorld(p);p.project(camera);edge=Math.min(edge,p.y*8);}
+ const end={x:0,y:3},contact=createLaserContactTrace(plane)({x:0,y:-5},end,model,38,26*Math.PI/180);
+ assert(Math.abs(contact.y-edge)<1e-6,'contact flame misses the rendered shell');assert.deepEqual(end,{x:0,y:3});
+});

@@ -1,7 +1,7 @@
 import { levels } from './levels';
 
 export const PRESERVE_SCREENS = 10;
-export const PRESERVE_SPEED = 1.8;
+export const PRESERVE_SPEED = 1.65;
 export const PRESERVE_PITCH = 26 * Math.PI / 180;
 export const PRESERVE_DISTANCE = 38;
 export const PRESERVE_WIDTH_SCALE = .84;
@@ -91,6 +91,6 @@ export function preserveScroll(time: number) {
   return PRESERVE_SPEED * (stage + coast - coast * coast / (2 * PRESERVE_APPROACH));
 }
 export function preserveFrame(exit: number) {
-  return { pitch: PRESERVE_PITCH + (PRESERVE_BOSS_PITCH - PRESERVE_PITCH) * exit,
+  return { pitch: PRESERVE_BOSS_PITCH * exit, viewPitch: PRESERVE_PITCH * (1 - exit),
     height: PRESERVE_RISE * exit, bank: 0 };
 }
