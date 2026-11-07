@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { part, pivot } from './rig-geometry';
-import { groundskeeperPose, GROUNDSKEEPER_BELLY, GROUNDSKEEPER_UPPER_ARM, GROUNDSKEEPER_FOREARM, type GkPoint } from './groundskeeper';
+import { groundskeeperPose, GROUNDSKEEPER_UPPER_ARM, GROUNDSKEEPER_FOREARM, type GkPoint } from './groundskeeper';
 import { gkFeatherGeometry, gkPlumage, gkTorsoSurface, gkTube, mergeGkFixed } from './groundskeeper-geometry';
 import { createGroundskeeperMaterials } from './groundskeeper-materials';
 import { createGroundskeeperFace } from './groundskeeper-face';
@@ -114,7 +114,9 @@ export function createGroundskeeper() {
   }
   function pose(time: number, aim = { x: 0, y: -5.3 }, cancelledAt = -100) {
     const p = groundskeeperPose(time, aim, cancelledAt);
-    body.position.copy(vec(p.torso)); m.puff.value = p.feathers;
+    body.scale.copy(vec(p.torsoScale));
+    body.position.copy(vec(p.torso)).add(new T.Vector3(0, -.1 * (1 - p.torsoScale.y), 6.9 * (1 - p.torsoScale.z)));
+    m.puff.value = p.feathers;
     head.position.copy(vec(p.head)); head.rotation.set(p.headPitch,0,p.headYaw,'ZYX');
     face.pose(p.jaw);
     for (const [i, a] of p.arms.entries()) {
@@ -129,7 +131,7 @@ export function createGroundskeeper() {
       }
     }
     for (const [i, f] of p.feet.entries()) {
-      const hip = { x: i ? 1.7 : -1.7, y: .75 + p.torso.y, z: 5.8 + p.torso.z };
+      const hip = p.hips[i];
       const knee = { x: f.x * 1.06, y: f.y - 1.0, z: 3.4 }, hock = { x: f.x, y: f.y + .55, z: 1.65 + f.z * .5 };
       span(legs[i].thigh, hip, knee, 3.4); span(legs[i].shin, knee, hock, 2.6); span(legs[i].tarsus, hock, { ...f, z: .6 + f.z }, 1.7);
       legs[i].foot.position.copy(vec(f)); legs[i].shadow.position.z=.01-f.z; legs[i].shadow.material.opacity=1-f.z*.6;
@@ -154,7 +156,7 @@ export function createGroundskeeper() {
     head.updateMatrix();
     const chin = new T.Vector3(0, -.35, -.28).applyAxisAngle(new T.Vector3(1, 0, 0), p.jaw).add(new T.Vector3(0, .4, -.22)).applyMatrix4(head.matrix);
     throat.pose(new T.CatmullRomCurve3([finish.clone().add(new T.Vector3(0, 0, -.25)), chin.clone().lerp(finish, .5), chin]), .36, .30);
-    for (const name of ['laser_contact_C','laser_contact_L','laser_contact_R']) root.getObjectByName(name)!.position.set(p.torso.x+GROUNDSKEEPER_BELLY.x, GROUNDSKEEPER_BELLY.y+p.torso.y, GROUNDSKEEPER_BELLY.z+p.torso.z);
+    for (const name of ['laser_contact_C','laser_contact_L','laser_contact_R']) root.getObjectByName(name)!.position.copy(vec(p.belly));
     return p;
   }
   for (const group of [head, body, ...legs.map(l => l.foot)]) mergeGkFixed(group);

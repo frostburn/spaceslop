@@ -89,9 +89,9 @@ test('diagonal attacks, paired slams and recovery keep the rendered limbs outsid
  const rig=createGroundskeeper(),torso=rig.root.getObjectByName('heavy-torso');
  const skin=torso.children.find(o=>o.isMesh&&o.material===rig.materials.down);
  const shell=new T.Mesh(skin.geometry,new T.MeshBasicMaterial({side:T.DoubleSide}));shell.updateMatrixWorld();
- const center=new T.Vector3(0,-.1,6.9),ray=new T.Raycaster(),q=new T.Vector3(),direction=new T.Vector3(),offset=new T.Vector3();
+ const center=new T.Vector3(0,-.1,6.9),ray=new T.Raycaster(),q=new T.Vector3(),direction=new T.Vector3();
  for(const x of[-3.5,0,3.5])for(const y of[-6.8,-5.3,0,5.5])for(const cycle of[0,1,2])for(const age of[0,1.8,2.35,2.6,2.85,3.05,3.25,3.5,3.8,4.1,4.35]){
-  const time=cycle*g.GROUNDSKEEPER_CYCLE+age,p=rig.pose(time,{x,y});rig.root.updateMatrixWorld(true);offset.set(p.torso.x,p.torso.y,p.torso.z);
+  const time=cycle*g.GROUNDSKEEPER_CYCLE+age,p=rig.pose(time,{x,y});rig.root.updateMatrixWorld(true);
   for(const arm of p.arms){
    assert(Math.abs(Math.hypot(arm.elbow.x-arm.shoulder.x,arm.elbow.y-arm.shoulder.y,arm.elbow.z-arm.shoulder.z)-g.GROUNDSKEEPER_UPPER_ARM)<1e-6);
    assert(Math.abs(Math.hypot(arm.wrist.x-arm.elbow.x,arm.wrist.y-arm.elbow.y,arm.wrist.z-arm.elbow.z)-g.GROUNDSKEEPER_FOREARM)<1e-6);
@@ -102,7 +102,7 @@ test('diagonal attacks, paired slams and recovery keep the rendered limbs outsid
    // fifth to merge into its attachment. No proxy hitbox supplies the verdict.
    for(let i=0;i<positions.count;i+=8){
     const t=(positions.getY(i)+mesh.position.y)/length;if(t<(name==='upper-arm'?.2:0)||t>1)continue;
-    q.fromBufferAttribute(positions,i);mesh.localToWorld(q);q.sub(offset);direction.subVectors(q,center);const distance=direction.length();direction.normalize();ray.set(center,direction);
+    q.fromBufferAttribute(positions,i);mesh.localToWorld(q);torso.worldToLocal(q);direction.subVectors(q,center);const distance=direction.length();direction.normalize();ray.set(center,direction);
     const surface=ray.intersectObject(shell)[0];assert(surface&&distance>surface.distance+.03,`${name} enters abdomen: time=${time}, aim=${x},${y}, side=${side}`);
    }
   }
@@ -196,4 +196,35 @@ test('neck feathers retain seeded placement while varying their width, length an
  assert(Math.max(...widths)-Math.min(...widths)>.2,'neck vanes all have the same width');
  assert(Math.abs(adjacent)<.15,'periodic feather sizing creates repeating rows');
  rig.pose(1.8);rig.pose(0);assert.deepEqual(neck.instanceMatrix.array,initial,'variation must not reroll during animation or reset');
+});
+
+test('quiet breathing and weight shifts deform the chest while the feet stay planted and poses remain repeatable',()=>{
+ const rig=createGroundskeeper(),body=rig.root.getObjectByName('heavy-torso'),widths=[],shifts=[],heads=[],v=p=>new T.Vector3(p.x,p.y,p.z);
+ let previous;
+ for(let frame=0;frame<=360;frame++){
+  const t=-6+frame/60,p=rig.pose(t);rig.root.updateMatrixWorld(true);
+  widths.push(body.scale.y);shifts.push(body.position.x);heads.push(p.head.x-p.torso.x);
+  for(const side of[-1,1]){
+   const foot=rig.root.getObjectByName(`foot-${side}`);assert(foot.getWorldPosition(new T.Vector3()).distanceTo(new T.Vector3(side*2.15,-.35,0))<1e-8,'idle motion slides or lifts a foot');
+  }
+  const marker=rig.root.getObjectByName('laser_contact_C').getWorldPosition(new T.Vector3()),onBody=body.localToWorld(v(g.GROUNDSKEEPER_BELLY));
+  assert(marker.distanceTo(onBody)<1e-6,'breathing separates the target from its visible body');
+  if(previous){assert(v(p.head).distanceTo(v(previous.head))<.02);for(let i=0;i<2;i++)assert(v(p.arms[i].elbow).distanceTo(v(previous.arms[i].elbow))<.02);}
+  previous=p;
+ }
+ const range=a=>Math.max(...a)-Math.min(...a);
+ assert(range(widths)>.025&&range(widths)<.04,'breathing should be visible but restrained');
+ assert(range(shifts)>.15&&range(shifts)<.4,'weight shift should stay within the planted stance');
+ assert(range(heads)>.04,'head follows with some independent neck motion');
+ rig.pose(-3.7);const before=rig.root.getObjectByName('raised-neck-hackles').instanceMatrix.array.slice();rig.pose(2.9);rig.pose(-3.7);
+ assert.deepEqual(rig.root.getObjectByName('raised-neck-hackles').instanceMatrix.array,before,'scrubbing and reset must not accumulate motion');
+});
+
+test('idle clock is continuous into the approach and boss, then freezes on results',()=>{
+ const f=new Flight('sentry',[],'vex','preserve');f.time=f.stageDuration-STEP;const a=f.groundskeeperTime;f.step(STEP);
+ assert.equal(f.phase,'approach');assert(Math.abs(f.groundskeeperTime-a-STEP)<1e-7);
+ f.time=f.transitionDuration-STEP;const b=f.groundskeeperTime;f.step(STEP);
+ assert.equal(f.phase,'boss');assert(Math.abs(f.groundskeeperTime-b-STEP)<1e-7);
+ f.time=.73;f.damageBoss(1e5);assert.equal(f.groundskeeperTime,.73);f.step(5);assert.equal(f.groundskeeperTime,.73);
+ const fresh=new Flight('sentry',[],'vex','preserve');assert.equal(fresh.groundskeeperTime,-fresh.stageDuration-fresh.transitionDuration);
 });

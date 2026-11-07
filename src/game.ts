@@ -231,7 +231,12 @@ export class Flight {
 
   get bossMaxHealth() { return this.level === 'preserve' ? GROUNDSKEEPER_HP : this.level === 'vents' ? CRAB_HP : this.level === 'io' ? IO_HP : this.level === 'titan' ? CICADA_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
   get bossTargetRadius() { return this.level === 'preserve' ? GROUNDSKEEPER_RADIUS : BOSS_CANNON_RADIUS; }
-  get groundskeeperTime() { return this.phase === 'boss' ? this.time : this.groundskeeperFinalTime; }
+  get groundskeeperTime() {
+    // Negative time is a quiet idle, continuous through the camera approach.
+    if (this.phase === 'stage') return this.time - this.stageDuration - this.transitionDuration;
+    if (this.phase === 'approach') return this.time - this.transitionDuration;
+    return this.phase === 'boss' ? this.time : this.groundskeeperFinalTime;
+  }
 
   get crabTargetX(){return crabTarget(this.crabClawHealth,this.volley);}
   get crabOffsetX(){return this.phase==='boss'?ventOrbit(this.time).offsetX:0;}
