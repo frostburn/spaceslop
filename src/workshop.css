@@ -25,6 +25,7 @@ legend, label { font-size: .78rem; }
 fieldset p { color: var(--muted); margin: .65rem 0 .1rem; font-size: .72rem; line-height: 1.45; }
 button, select { min-height: 44px; padding-inline: .55rem; font: inherit; color: inherit; background: #1b293b; border: 1px solid var(--line); border-radius: 4px; }
 button { cursor: pointer; }
+select { width: 100%; min-width: 0; }
 button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .camera-views { display: grid; grid-template-columns: repeat(3, 1fr); gap: .35rem; }
 .motion, .toggle { display: flex; align-items: center; gap: .65rem; }

@@ -5,6 +5,7 @@ import { createPreserveStation } from './preserve-station';
 import { createPreserveFoliage, type PreserveWake } from './preserve-foliage';
 import { preserveFrame, preserveRandom, preserveScroll, PRESERVE_SPEED, PRESERVE_WIDTH_SCALE, PRESERVE_ARENA_Y } from './preserve-layout';
 import { createPreserveShadow } from './preserve-shadow';
+import { createPreserveUv, softenPreserveShadows } from './preserve-lighting';
 import { createPreserveTraces } from './preserve-traces';
 import { createPreserveDock } from './preserve-dock';
 import { createPreserveWater } from './preserve-water';
@@ -22,15 +23,18 @@ export function createPreserveScenery() {
   const arena = createPreserveArena(materials), boss = createGroundskeeper();
   boss.root.position.set(0, PRESERVE_ARENA_Y, GROUNDSKEEPER_FLOOR);
   world.add(arena.root, boss.root);
+  softenPreserveShadows(world);
 
-  // The sun and its shadow raster stay attached to the habitat. No moving texel
-  // origin as the deck scrolls, and no broad colored fog hiding outer space.
-  const sun = new T.DirectionalLight(0xffedd2, 2.6);
+  // A broad cool-white grow-light source retains grounding silhouettes without
+  // projecting the fine leaves and feather vanes across the entire habitat.
+  const sun = new T.DirectionalLight(0xe8f7ff, 2.2);
   sun.position.set(-22, 0, 32); sun.target.position.set(0, 12, -3);
   sun.castShadow = true; sun.name = 'preserve-sun';
   sun.shadow.bias = -.00015; sun.shadow.normalBias = .035;
+  sun.shadow.intensity = .4;
   sun.shadow.camera.updateProjectionMatrix();
   world.add(sun, sun.target);
+  const uv = createPreserveUv(); world.add(uv, uv.target);
   const shadowAnchor = createPreserveShadow(sun,world);
   // Low, broad bounce from the observation deck keeps the underside of the
   // curved neck legible against space without flattening the sun's key light.

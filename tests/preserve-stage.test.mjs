@@ -62,10 +62,26 @@ test('roots meet terrain, leave the play plane clear and use bounded shared foli
     if (o.name === 'fern-crowns') assert(o.geometry === scenery.foliage.root.getObjectByName('fern-crowns').geometry);
   });
   assert(triangles < 1_200_000, `whole preserve + rotunda + boss triangle budget: ${triangles}`);
-  assert(batches < 210, `scenery batch budget: ${batches}`);
+  assert(batches < 230, `scenery batch budget, including two grow-light batches per bay: ${batches}`);
   assert(!levelTextures.preserve.includes('preserve'), 'the mirrored raster plate must not load');
   const sky = scenery.root.getObjectByName('preserve-distant-stars').geometry.attributes.position;
   for (let i = 0; i < sky.count; i++) assert(sky.getZ(i) < -50, 'stars must stay behind the whole habitat');
+});
+
+test('fluorescent habitat keeps grounding shadows but excludes leaf and feather rasters',()=>{
+ const key=scenery.world.getObjectByName('preserve-sun'),uv=scenery.world.getObjectByName('preserve-uv-rim');
+ assert(key.castShadow&&key.shadow.intensity<.5);assert(uv.isDirectionalLight&&!uv.castShadow);
+ const direction=uv.position.clone().sub(uv.target.position);assert(direction.x>direction.z*4,'UV source should graze the side contours');
+ const fine=[],tubes=[];let broad=0;
+ scenery.root.traverse(o=>{
+  if(!o.isMesh)return;
+  if(o.isInstancedMesh&&/crowns|feather|plumage|hackles/.test(o.name))fine.push(o);
+  if(o.name==='grow-light-tubes')tubes.push(o);
+  if(o.castShadow)broad++;
+  if(o.name==='station-metal')assert(!o.castShadow,'fine service grids must not project onto the ground');
+ });
+ assert(fine.length>10&&fine.every(o=>!o.castShadow));assert(broad>10);
+ assert(tubes.length>10&&tubes.every(o=>!o.castShadow&&!o.receiveShadow));
 });
 
 test('straight travel, actor wakes, pause, restart and approach reuse the same geometry and lighting', () => {

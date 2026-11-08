@@ -7,13 +7,22 @@ export function createPreserveStation(materials: PreserveMaterials) {
   const root = new T.Group(); root.name = 'orbital-preserve-structure';
   const box = new T.BoxGeometry(), glass = new T.BoxGeometry();
   for (let y = PRESERVE_START; y < PRESERVE_END; y += PRESERVE_BAY) {
-    const parts: PreservePart[] = [], lights: PreservePart[] = [], windows: PreservePart[] = [];
+    const parts: PreservePart[] = [], lights: PreservePart[] = [], windows: PreservePart[] = [], tubes: PreservePart[] = [], halos: PreservePart[] = [];
     const random = preserveRandom(4000 + y), bay = (y - PRESERVE_START) / PRESERVE_BAY;
     const block = (x: number, dy: number, z: number, sx: number, sy: number, sz: number, color: number, angle = 0) =>
       parts.push(preservePart(x, y + dy, z, sx, sy, sz, color, angle));
     const beam = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, w: number, d: number, color: number) =>
       parts.push(preserveBeam(new T.Vector3(ax, y + ay, az), new T.Vector3(bx, y + by, bz), w, d, color));
     for (const side of [-1, 1]) {
+      // Ceiling-edge luminaires hang outside the clear flight aperture. Inner
+      // UV strips give a hot-pink edge; white paired tubes supply the grow light.
+      for (const dy of [2, 6]) {
+        block(side * 3.88, dy, .18, .27, 2.85, .12, 0x59656c);
+        for (const x of [3.84, 3.94]) tubes.push(preservePart(side * x, y + dy, .26, .045, 2.55, .045, 0xeaffff));
+        tubes.push(preservePart(side * 3.73, y + dy, .25, .045, 2.65, .035, 0xff219e));
+        halos.push(preservePart(side * 3.73, y + dy, .245, .22, 2.75, .012, 0xffffff));
+        for (const end of [-1.35, 1.35]) block(side * 3.88, dy + end, .27, .28, .10, .12, 0x73838c);
+      }
       // Separate soil-retaining wall, grated service walk and external hull.
       block(side * 3.58, 4, -4.6, .16, 8, 3.12, 0x5b5744);
       block(side * 3.58, 4, -3.00, .2, 8, .12, 0x999078);
@@ -96,8 +105,13 @@ export function createPreserveStation(materials: PreserveMaterials) {
       block(x, dy, z - .03, .4 + random() * .6, .5 + random() * .7, .09, i % 3 === 0 ? 0x666855 : 0x7d7c65, (random() - .5) * .4);
     }
     const chunk = new T.Group(); chunk.name = 'preserve-station-bay';
-    chunk.add(preserveBatch('station-metal', box, materials.metal, parts));
+    const structure = preserveBatch('station-metal', box, materials.metal, parts);
+    structure.castShadow = false; // Avoid projecting the service grating's fine grid.
+    chunk.add(structure);
     chunk.add(preserveBatch('station-lamps', box, materials.lamp, lights));
+    for (const mesh of [preserveBatch('grow-light-tubes', box, materials.fluorescent, tubes), preserveBatch('uv-strip-halos', box, materials.uvGlow, halos)]) {
+      mesh.castShadow = mesh.receiveShadow = false; chunk.add(mesh);
+    }
     if (windows.length) {
       const panes = preserveBatch('broken-greenhouse-glass', glass, materials.glass, windows);
       panes.castShadow = false; chunk.add(panes);

@@ -1,5 +1,6 @@
 import { createAmbusherMaterials, createPoolAmbusher } from './preserve-ambusher-rig';
 import { ambusherStudy, AMBUSHER_DURATION } from './preserve-ambusher';
+import { createPreserveUv, preserveLighting } from './preserve-lighting';
 import {createVentBoss} from './vent-boss';
 import {crabSmooth} from './vent-crab';
 import {createFaunaAssets,createWormAssets,createVentShrimp,createVentWorm} from './vent-fauna-rig';
@@ -57,7 +58,8 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   scene.background = new T.Color(0x0b1020);
   const light = new T.DirectionalLight(0xb9e8ff, 2.7);
   light.position.set(3, 5, 6);
-  scene.add(light, new T.HemisphereLight(0xd6e3ff, 0x514873, 1.75));
+  const fill = new T.HemisphereLight(0xd6e3ff, 0x514873, 1.75);
+  const uv = createPreserveUv(); scene.add(light, fill, uv, uv.target);
 
   const raptor = createRaptorRig();
   const interceptor = createInterceptorRig(BOSS_CANNON_X);
@@ -256,6 +258,9 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   void loadEncounterTextures(interceptor, raptor, Object.values(assets).map(({ root }) => root));
   for (const asset of Object.values(assets)) scene.add(asset.root);
   const assetSelect = element<HTMLSelectElement>('asset');
+  const sector = element<HTMLSelectElement>('sector');
+  const groups = Array.from(assetSelect.querySelectorAll('optgroup'));
+  const lastAssets = new Map<string, string>();
   const timeline = element<HTMLInputElement>('timeline');
   const play = element<HTMLButtonElement>('play');
   const motion = element('motion-controls');
@@ -296,6 +301,14 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   function selectAsset() {
     const key = assetSelect.value;
     selected = Object.hasOwn(assets, key) ? assets[key as keyof typeof assets] : assets.raptor;
+    lastAssets.set(sector.value, key);
+    const habitat = sector.value === 'preserve', scenery = key === 'preserve_section';
+    light.color.setHex(habitat ? preserveLighting.key : 0xb9e8ff);
+    light.intensity = habitat ? (scenery ? preserveLighting.keyIntensity : 2.4) : 2.7;
+    fill.color.setHex(habitat ? preserveLighting.sky : 0xd6e3ff);
+    fill.groundColor.setHex(habitat ? preserveLighting.ground : 0x514873);
+    fill.intensity = habitat ? preserveLighting.skyIntensity : 1.75;
+    uv.visible = habitat && !scenery;
     for (const asset of Object.values(assets)) asset.root.visible = asset === selected;
     time = 0;
     motion.hidden = selected.duration === 0;
@@ -307,6 +320,12 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   }
 
   assetSelect.addEventListener('change', selectAsset);
+  function selectSector() {
+    assetSelect.replaceChildren(...groups.filter(group => group.dataset.sector === sector.value));
+    assetSelect.value = lastAssets.get(sector.value) ?? assetSelect.options[0].value;
+    selectAsset();
+  }
+  sector.addEventListener('change', selectSector);
   element('game-view').addEventListener('click', () => fitCamera(gameView));
   element('angle-view').addEventListener('click', () => fitCamera(angleView));
   element('side-view').addEventListener('click', () => fitCamera(sideView));
@@ -334,7 +353,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     fitCamera(cameraView);
   }
 
-  selectAsset();
+  selectSector();
   resize();
   new ResizeObserver(resize).observe(canvas);
 

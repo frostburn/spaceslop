@@ -12,6 +12,7 @@ import { poseBurners, shipBurners } from '../../burners';
 import { raptorFlight } from '../../encounters';
 import { createScoutRig } from '../../ship-rigs';
 import { createGroundskeeperEffects } from '../../groundskeeper-effects';
+import { preserveLighting } from '../../preserve-lighting';
 export const createLevel: LevelFactory = ({ plane, signal }) => {
   const root = new T.Group();
   const scout = createScoutRig();
@@ -39,11 +40,7 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
     ready,
     stageDistance: PRESERVE_DISTANCE,
     background: 0x020407,
-    key: 0xffedd2,
-    sky: 0xc8e0d5,
-    ground: 0x25332a,
-    keyIntensity: 1.2,
-    skyIntensity: 1.2,
+    ...preserveLighting,
     orientation: (_time, reveal) => preserveFrame(reveal),
     surfaces: [preserve.root, ...scouts.map(r => r.root)],
     warmup: [[scouts[0].root, ...raptors.map(r => r.root), ...ambushers.map(r=>r.root), preserve.root], [boss.root, effects.root]],
