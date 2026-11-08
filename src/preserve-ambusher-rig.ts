@@ -3,6 +3,7 @@ import { part, pivot } from './rig-geometry';
 import { gkSnout, gkTube, mergeGkFixed } from './groundskeeper-geometry';
 import { preserveNoise, preserveRandom } from './preserve-layout';
 import { AMBUSHER_WINDUP, AMBUSHER_LEAP, AMBUSHER_BITE, AMBUSHER_RETREAT, ambusherProjection, ambusherStudy, type AmbusherPose } from './preserve-ambusher';
+import { ambusherSailGeometry, ambusherSnout, ambusherSnoutWidth } from './preserve-ambusher-geometry';
 
 export function createAmbusherMaterials() {
   const size=128,pigment=new Uint8Array(size*size*4),height=new Uint8Array(pigment.length),random=preserveRandom(7103);
@@ -47,30 +48,26 @@ export function createPoolAmbusher(m:AmbusherMaterials) {
     return skin(gkSnout(sections),belly);
   }
   const body=pivot(animal,'ambusher-torso',0,0,0);
-  part(body,skin(sphere.clone().scale(.66,1.24,.67)),m.skin,0,.1,0);
-  part(body,skin(sphere.clone().scale(.47,.91,.34),true),m.skin,0,-.03,-.39);
-  // A broken low dorsal ridge gives the wet animal a readable back silhouette.
-  for(let i=0;i<9;i++){
-    const y=-.6+i*.21,h=.12+.13*Math.sin(i*.6)**2;
-    const g=new T.ConeGeometry(.12,h,5);g.rotateX(Math.PI/2);skin(g);
-    part(body,g,m.skin,0,y,.61+h*.4);
-  }
+  part(body,skin(sphere.clone().scale(.60,1.32,.64)),m.skin,0,.1,0);
+  part(body,skin(sphere.clone().scale(.43,.99,.32),true),m.skin,0,-.03,-.39);
+  part(animal,ambusherSailGeometry(),m.skin,0,0,0).name='ambusher-sail';
   const head=pivot(animal,'ambusher-head',0,-1.1,.9);
-  const skull=snout([[.48,.32,-.16,.38],[.14,.39,-.18,.39],[-.2,.33,-.12,.28],[-.65,.23,-.085,.18],[-1.15,.15,-.07,.14],[-1.56,.055,-.035,.07]]);
+  const skull=snout(ambusherSnout);
   const muzzle=part(head,skull,m.skin,0,0,0);muzzle.name='ambusher-long-snout';
   const jaw=pivot(head,'ambusher-jaw',0,.28,-.17);
-  part(jaw,snout([[.1,.29,-.17,.04],[-.35,.29,-.16,.035],[-.85,.19,-.13,.025],[-1.4,.12,-.09,.025],[-1.85,.045,-.045,.015]],true),m.skin,0,0,0);
+  part(jaw,snout([[.1,.25,-.17,.04],[-.45,.23,-.16,.035],[-.95,.13,-.13,.025],[-1.33,.13,-.10,.025],[-1.56,.195,-.08,.025],[-1.77,.12,-.045,.02],[-1.91,.025,-.02,.01]],true),m.skin,0,0,0);
+  part(head,snout([[.17,.05,.23,.41],[-.2,.055,.22,.38],[-.64,.015,.14,.2]]),m.skin,0,0,0);
   part(jaw,sphere,m.flesh,0,-.62,.035).scale.set(.21,.79,.035);
   part(head,sphere,m.flesh,0,-.58,-.105).scale.set(.24,.88,.04);
   for(const side of[-1,1]){
     const eye=part(head,sphere,m.eye,side*.33,-.04,.33);eye.scale.set(.105,.11,.10);
     const pupil=part(head,sphere,m.pupil,side*.337,-.135,.355);pupil.scale.set(.04,.025,.055);
-    const brow=part(head,skin(sphere.clone().scale(.16,.18,.06)),m.skin,side*.30,.18,.405);
+    const brow=part(head,skin(sphere.clone().scale(.13,.17,.05)),m.skin,side*.28,.18,.37);
     brow.rotation.y=-side*.18;
-    const naris=part(head,sphere,m.dark,side*.215,-.63,.125);naris.scale.set(.026,.079,.014);naris.rotation.y=side*.5;
+    const naris=part(head,sphere,m.dark,side*.236,-.32,.17);naris.scale.set(.022,.069,.014);naris.rotation.y=side*.5;
     // Teeth emerge from the gums and stay inside the closed snout.
     for(let i=0;i<10;i++){
-      const y=-.25-i*.127,width=.3-(.3-y)*.12,upper=new T.ConeGeometry(.025,.105,7);upper.rotateX(-Math.PI/2);
+      const y=-.25-i*.127,width=ambusherSnoutWidth(y)*.87,upper=new T.ConeGeometry(.025,.105,7);upper.rotateX(-Math.PI/2);
       part(head,upper,m.horn,side*width,y,-.09);
       part(jaw,new T.ConeGeometry(.023,.088,7).rotateX(Math.PI/2),m.horn,side*(width*.9),y-.28,.045);
     }
@@ -81,12 +78,13 @@ export function createPoolAmbusher(m:AmbusherMaterials) {
   const limbGeometry=new T.CylinderGeometry(1,.8,1,12,1);limbGeometry.translate(0,.5,0);skin(limbGeometry);
   const limb=(name:string,radius:number)=>{const o=part(animal,limbGeometry,m.skin,0,0,0);o.name=name;o.scale.set(radius,1,radius);return o;};
   const legs=[-1,1].map(side=>{
-    const thigh=limb('ambusher-thigh',.35),shin=limb('ambusher-shin',.18),ankle=limb('ambusher-hock',.1),foot=pivot(animal,'ambusher-foot',0,0,0);
+    const thigh=limb('ambusher-thigh',.29),shin=limb('ambusher-shin',.14),ankle=limb('ambusher-hock',.085),foot=pivot(animal,'ambusher-foot',0,0,0);
     part(foot,skin(sphere.clone().scale(.22,.39,.12),true),m.skin,0,-.12,.06);
     for(let i=-1;i<=1;i++){
       part(foot,skin(sphere.clone().scale(.075,.34,.065),true),m.skin,i*.14,-.38,.04);
-      const claw=new T.ConeGeometry(.065,.22,8);claw.rotateX(Math.PI);part(foot,claw,m.horn,i*.14,-.73,.025);
+      part(foot,sphere,m.horn,i*.14,-.73,.025).scale.set(.065,.16,.035);
     }
+    part(foot,skin(sphere.clone().scale(.06,.19,.06),true),m.skin,-side*.27,.09,.04);
     return{side,thigh,shin,ankle,foot};
   });
   const arms=[-1,1].map(side=>{
@@ -98,17 +96,24 @@ export function createPoolAmbusher(m:AmbusherMaterials) {
   const lines=new T.LineSegments(lineGeometry,new T.LineBasicMaterial({color:0xffc879,transparent:true,opacity:.7,depthTest:false,depthWrite:false}));lines.name='ambusher-warning-line';lines.renderOrder=10;lines.frustumCulled=false;root.add(lines);
   const ring=part(root,new T.RingGeometry(.45,.5,40),m.warning,0,0,.035);ring.renderOrder=10;ring.name='ambusher-locked-target';
   const splash=new T.InstancedMesh(new T.OctahedronGeometry(1),m.foam,32);splash.name='ambusher-splash';splash.instanceMatrix.setUsage(T.DynamicDrawUsage);splash.frustumCulled=false;root.add(splash);
-  const transform=new T.Object3D(),axis=new T.Vector3(0,1,0),direction=new T.Vector3();
+  const transform=new T.Object3D(),axis=new T.Vector3(0,1,0),direction=new T.Vector3(),eyes:T.Mesh[]=[];
   function span(mesh:T.Mesh,a:T.Vector3,b:T.Vector3) {mesh.position.copy(a);direction.copy(b).sub(a);mesh.scale.y=direction.length();mesh.quaternion.setFromUnitVectors(axis,direction.normalize());}
   function pose(p:AmbusherPose) {
-    animal.position.copy(vec(p.root));animal.rotation.z=p.heading;
+    animal.position.copy(vec(p.root));animal.rotation.set(0,p.roll,p.heading,'ZYX');
     body.scale.set(1+.01*Math.sin(p.age*1.8),1,1);
     head.position.copy(vec(p.localHead));head.rotation.x=p.pitch;jaw.rotation.x=p.jaw;
+    for(const eye of eyes)eye.visible=!p.dead;
     neck.pose(new T.CatmullRomCurve3([new T.Vector3(0,-.42,.4),new T.Vector3(0,-.63,.79),new T.Vector3(0,-.88,p.localHead.z-.16),new T.Vector3(0,-.79,p.localHead.z)]),.39,.29);
     const tailPoints=[new T.Vector3(0,.78,-.1),new T.Vector3(.1*Math.sin(p.age*2),1.7,-.25),new T.Vector3(.35*Math.sin(p.age*2-.7),2.7,-.47),new T.Vector3(.45*Math.sin(p.age*2-1.3),3.4,-.5)];
     // Bend along the bank while grounded; release the curl during the leap.
     for(const point of tailPoints){const x=p.root.x+point.x*Math.cos(p.heading)-point.y*Math.sin(p.heading),delta=(T.MathUtils.clamp(x,-2.85,2.85)-x)*(1-p.out);point.x+=delta*Math.cos(p.heading);point.y-=delta*Math.sin(p.heading);}
-    tail.pose(new T.CatmullRomCurve3(tailPoints),.35,.025);
+    const tailCurve=new T.CatmullRomCurve3(tailPoints);tail.pose(tailCurve,.35,.025);
+    const vertices=tail.geometry.attributes.position;
+    for(let row=0;row<=24;row++){
+      const t=row/24,center=tailCurve.getPoint(t),radius=T.MathUtils.lerp(.35,.025,t),height=(.32+.44*Math.sin(t*Math.PI)**.8)*(1-t)**.35+.025;
+      for(let i=0;i<=12;i++){const n=row*13+i;vertices.setX(n,center.x+(vertices.getX(n)-center.x)*.56);vertices.setZ(n,center.z+(vertices.getZ(n)-center.z)*height/radius);}
+    }
+    vertices.needsUpdate=true;tail.geometry.computeVertexNormals();
     for(const tube of[neck,tail]){tube.geometry.computeBoundingBox();tube.geometry.computeBoundingSphere();}
     for(const leg of legs){const s=leg.side,foot=new T.Vector3(s*.54,-.18+p.out*.35,p.footZ),knee=new T.Vector3(s*.75,-.45+p.out*.6,-.9+p.out*.35),hock=new T.Vector3(s*.56,.55-p.out*.3,p.footZ+.5);
       span(leg.thigh,new T.Vector3(s*.43,.38,-.2),knee);span(leg.shin,knee,hock);span(leg.ankle,hock,foot);leg.foot.position.copy(foot);leg.foot.rotation.x=-p.out*.6;
@@ -117,7 +122,7 @@ export function createPoolAmbusher(m:AmbusherMaterials) {
     lines.visible=ring.visible=p.warning;ring.position.set(p.aim.x,p.aim.y,.035);
     if(p.warning){const a=lineGeometry.attributes.position,from=ambusherProjection(p.mouth);for(let i=0;i<24;i++)for(let j=0;j<2;j++){const t=(i+j*.55)/24;a.setXYZ(i*2+j,T.MathUtils.lerp(from.x,p.aim.x,t),T.MathUtils.lerp(from.y,p.aim.y,t),.035);}a.needsUpdate=true;}
     const splashAt=p.phase==='leap'?AMBUSHER_WINDUP:AMBUSHER_WINDUP+AMBUSHER_LEAP+AMBUSHER_BITE+AMBUSHER_RETREAT*.65;
-    splash.visible=p.phase==='leap'||p.phase==='retreat'&&p.age>=splashAt;
+    splash.visible=!p.dead&&(p.phase==='leap'||p.phase==='retreat'&&p.age>=splashAt);
     for(let i=0;i<splash.count;i++){
       const life=Math.max(0,p.age-splashAt-i*.008),angle=i*2.39996;
       transform.position.set(p.water.x+Math.cos(angle)*life*1.3,p.water.y+Math.sin(angle)*life*.8,p.water.z+.08+life*2-life*life*3.8);
@@ -126,7 +131,7 @@ export function createPoolAmbusher(m:AmbusherMaterials) {
     splash.instanceMatrix.needsUpdate=true;return p;
   }
   for(const group of[body,head,...legs.map(l=>l.foot),...arms.map(a=>a.hand)])mergeGkFixed(group);
-  animal.traverse(o=>{if(o instanceof T.Mesh){o.castShadow=o.receiveShadow=true;}});
+  animal.traverse(o=>{if(o instanceof T.Mesh){o.castShadow=o.receiveShadow=true;if(o.material===m.eye||o.material===m.pupil)eyes.push(o);}});
   const initial=ambusherStudy(0);pose(initial);skin(neck.geometry);skin(tail.geometry);splash.computeBoundingSphere();
   return{root,animal,pose,prime(active:boolean){if(active)lines.visible=ring.visible=splash.visible=true;else pose(initial);}};
 }

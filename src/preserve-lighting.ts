@@ -4,7 +4,7 @@ import * as T from 'three';
 // the world supplies the stronger overhead source and its broad shadow.
 export const preserveLighting = {
   key: 0xe8f7ff, sky: 0xdce9ee, ground: 0x34343d,
-  keyIntensity: .55, skyIntensity: 1.3, uv: 0xff219e, uvIntensity: 3.2,
+  keyIntensity: .55, skyIntensity: 1.3, uv: 0x792dff, uvIntensity: 3.2,
 };
 
 export function createPreserveUv() {

@@ -3,6 +3,16 @@ import { PRESERVE_SPEED, PRESERVE_WIDTH_SCALE, PRESERVE_DISTANCE, PRESERVE_PITCH
 export const AMBUSHER_HP = 6, AMBUSHER_POOL = 2, AMBUSHER_SPAWN_LEAD = 12;
 export const AMBUSHER_WINDUP = 1.1, AMBUSHER_LEAP = .62, AMBUSHER_BITE = .18, AMBUSHER_RETREAT = 1.05;
 export const AMBUSHER_DURATION = AMBUSHER_WINDUP + AMBUSHER_LEAP + AMBUSHER_BITE + AMBUSHER_RETREAT;
+export const AMBUSHER_SPECIES = 'Spinosaurus aegyptiacus';
+export const AMBUSHER_FALL = 1.15, AMBUSHER_CORPSE_TIME = 6;
+// [longitudinal Y, root Z, top Z], shared by the modeled membrane and contacts.
+const sailProfile = [[-.95,.3,.38],[-.73,.46,1.05],[-.48,.59,1.5],[-.16,.65,1.7],[.2,.64,1.58],[.55,.56,1.68],[.85,.44,1.35],[1.18,.23,.72],[1.4,.04,.1]];
+export function ambusherSailAt(y:number) {
+  let i=0;while(i<sailProfile.length-2&&y>sailProfile[i+1][0])i++;
+  const a=sailProfile[i],b=sailProfile[i+1];
+  const t=Math.max(0,Math.min(1,(y-a[0])/(b[0]-a[0]))),s=t*t*(3-2*t);
+  return{base:a[1]+(b[1]-a[1])*s,top:a[2]+(b[2]-a[2])*s};
+}
 export type AmbusherPoint = {x:number;y:number;z:number};
 type Point = {x:number;y:number};
 const clamp = (n:number,a=0,b=1)=>Math.max(a,Math.min(b,n));
@@ -17,7 +27,7 @@ export const ambusherSites = [
   const x=pool?pool.x+site.side*(pool.rx+.24):water.x+site.side*(water.width+.45);
   return {...site,x,z:preserveGround(x,site.y),waterZ:pool?.z??water.z,waterX:pool?.x??water.x};
 });
-export type AmbusherState = {site:number;heading:number;fromHeading:number;attackHeading:number;attackAt:number;readyAt:number;aim:Point};
+export type AmbusherState = {site:number;heading:number;fromHeading:number;attackHeading:number;attackAt:number;readyAt:number;aim:Point;defeatedAt?:number};
 export function ambusherHome(site:number,time:number) {
   const s=ambusherSites[site];return{x:s.x*PRESERVE_WIDTH_SCALE,y:s.y-preserveScroll(time),z:s.z};
 }
@@ -26,6 +36,7 @@ export function createAmbusherState(site:number):AmbusherState {
   return{site,heading,fromHeading:heading,attackHeading:heading,attackAt:-100,readyAt:0,aim:{x:0,y:-5.3}};
 }
 export function stepAmbusher(state:AmbusherState,time:number,player:Point,dt:number) {
+  if(state.defeatedAt!==undefined)return;
   const home=ambusherHome(state.site,time),age=time-state.attackAt;
   if(age<AMBUSHER_DURATION)return;
   const desired=Math.atan2(player.x-home.x,home.y-player.y);
@@ -36,7 +47,7 @@ export function stepAmbusher(state:AmbusherState,time:number,player:Point,dt:num
   state.heading=desired;
   state.readyAt=time+AMBUSHER_DURATION+1.8;
 }
-export function ambusherPose(state:AmbusherState,time:number) {
+function livingPose(state:AmbusherState,time:number) {
   const home=ambusherHome(state.site,time),age=time-state.attackAt;
   let phase:'lurking'|'warning'|'leap'|'bite'|'retreat'='lurking',out=0,raised=0,jaw=.035;
   if(age>=0&&age<AMBUSHER_DURATION){
@@ -56,8 +67,32 @@ export function ambusherPose(state:AmbusherState,time:number) {
   const headPoint=(y:number,z=0)=>toWorld({x:0,y:localHead.y+y*Math.cos(pitch)-z*Math.sin(pitch),z:localHead.z+y*Math.sin(pitch)+z*Math.cos(pitch)});
   const hulls=[{...head,radius:.41},{...headPoint(-.55),radius:.29},{...headPoint(-1.05),radius:.23},{...mouth,radius:.20},
     {...toWorld({x:0,y:-.65,z:.55}),radius:.40},{...toWorld({x:0,y:-.9,z:mix(.55,localHead.z,.55)}),radius:.36}];
+  // The narrow sail becomes shootable only where it actually crosses z=0.
+  for(let i=0;i<18;i++){const y=-.85+i*.12,s=ambusherSailAt(y);hulls.push({...toWorld({x:0,y,z:clamp(-root.z,s.base,s.top)}),radius:.06});}
   return{phase,age,root,home,water:{x:ambusherSites[state.site].waterX*PRESERVE_WIDTH_SCALE,y:home.y,z:ambusherSites[state.site].waterZ},head,mouth,localHead,heading,pitch,jaw,out,raised,hulls,
-    footZ:mix(home.z-root.z,-.4,out),active:phase==='leap'||phase==='bite',warning:phase==='warning',aim:state.aim};
+    footZ:mix(home.z-root.z,-.4,out),active:phase==='leap'||phase==='bite',warning:phase==='warning',aim:state.aim,roll:0,dead:false,deathAge:0};
+}
+function landingSurface(x:number,y:number) {
+  const ground=preserveGround(x/PRESERVE_WIDTH_SCALE,y),water=preserveWater(y);
+  let surface=ground;
+  if(Math.abs(x/PRESERVE_WIDTH_SCALE-water.x)<water.width)surface=Math.max(surface,water.z);
+  for(const pool of preservePools)if(((x/PRESERVE_WIDTH_SCALE-pool.x)/pool.rx)**2+((y-pool.y)/pool.ry)**2<1)surface=Math.max(surface,pool.z);
+  return surface;
+}
+export function ambusherPose(state:AmbusherState,time:number) {
+  if(state.defeatedAt===undefined)return livingPose(state,time);
+  // Freeze the actual struck pose, then topple from it. The corpse remains
+  // attached to the scrolling scenery and is never a combat target.
+  const p=livingPose(state,state.defeatedAt),age=Math.max(0,time-state.defeatedAt),fall=smooth(age/AMBUSHER_FALL),side=ambusherSites[state.site].side;
+  const roll=-side*Math.PI/2*fall,root={x:p.root.x-side*.22*fall,y:p.root.y-(preserveScroll(time)-preserveScroll(state.defeatedAt)),
+    z:mix(p.root.z,landingSurface(p.root.x-side*.22,p.root.y+preserveScroll(state.defeatedAt))+.72,fall)+.18*Math.sin(fall*Math.PI)};
+  const localHead={x:0,y:mix(p.localHead.y,-1.17,fall),z:mix(p.localHead.z,.68,fall)},pitch=mix(p.pitch,.03,fall);
+  const world=(q:AmbusherPoint)=>{const x=q.x*Math.cos(roll)+q.z*Math.sin(roll),z=-q.x*Math.sin(roll)+q.z*Math.cos(roll);return{x:root.x+x*Math.cos(p.heading)-q.y*Math.sin(p.heading),y:root.y+x*Math.sin(p.heading)+q.y*Math.cos(p.heading),z:root.z+z};};
+  return{...p,phase:'defeated' as const,root,roll,localHead,pitch,head:world(localHead),mouth:world({x:0,y:localHead.y-1.42*Math.cos(pitch),z:localHead.z-1.42*Math.sin(pitch)}),
+    jaw:mix(p.jaw,.18,fall),out:mix(p.out,.45,fall),footZ:mix(p.footZ,-.48,fall),hulls:[],active:false,warning:false,dead:true,deathAge:age};
+}
+export function defeatAmbusher(state:AmbusherState,time:number) {
+  state.defeatedAt??=time;
 }
 export type AmbusherPose=ReturnType<typeof ambusherPose>;
 // Only anatomical volumes reaching the flight surface can be shot or rammed.
@@ -86,10 +121,16 @@ export function ambusherClearing(x:number,y:number,radius=1.35) {
   return ambusherSites.some(site=>Math.hypot((x-site.x)*1.1,y-site.y)<radius);
 }
 // Hold the workshop bank still while scrubbing the same attack and bank height.
-export function ambusherStudy(time:number) {
+export function ambusherStudy(time:number,defeated=false) {
   const state=createAmbusherState(0),worldTime=ambusherSites[0].y/PRESERVE_SPEED;
   state.attackAt=worldTime+1-time;state.aim={x:-1.2,y:-4.2};state.attackHeading=Math.atan2(state.aim.x-ambusherHome(0,worldTime).x,-state.aim.y);
   state.heading=state.fromHeading=state.attackHeading;
+  if(defeated&&time>=2.5){
+    state.attackAt=worldTime-1.5;state.defeatedAt=worldTime;
+    const now=worldTime+time-2.5,p=ambusherPose(state,now),scroll=preserveScroll(now)-preserveScroll(worldTime);
+    const lift=(q:AmbusherPoint)=>({...q,y:q.y+scroll});
+    return{...p,home:ambusherHome(0,worldTime),root:lift(p.root),head:lift(p.head),mouth:lift(p.mouth)};
+  }
   return ambusherPose(state,worldTime);
 }
 // Keep hit feedback on the rendered face in the tilted stage camera.

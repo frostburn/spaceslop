@@ -57,7 +57,7 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
       const hunters=flight.enemies.filter(enemy=>enemy.ambusher);
       for(const[i,rig]of ambushers.entries()){
         const enemy=hunters[i];rig.root.visible=Boolean(enemy);
-        if(enemy?.ambusher){rig.pose(ambusherPose(enemy.ambusher,flight.time));models[flight.enemies.indexOf(enemy)]=rig.animal;}
+        if(enemy?.ambusher){rig.pose(ambusherPose(enemy.ambusher,time));if(enemy.hp>0)models[flight.enemies.indexOf(enemy)]=rig.animal;}
       }
       const patrol = flight.enemies.filter(enemy => enemy.raptor);
       for (const [i,raptor] of raptors.entries()) {
