@@ -185,3 +185,31 @@ test('defeated ambushers persist harmlessly for the fall, award once, and leave 
     assert.equal(new Flight('sentry',[],'vex','preserve').enemies.length,0);assert.equal(a.createAmbusherState(0).defeatedAt,undefined);
   }
 });
+
+test('one tongue stays in the lower mouth and every tooth root is buried in its actual jaw mesh',async()=>{
+ const {ambusherToothRoot}=await server.ssrLoadModule('/src/preserve-ambusher-mouth.ts');
+ const materials=createAmbusherMaterials(),rig=createPoolAmbusher(materials),head=rig.root.getObjectByName('ambusher-head'),jaw=rig.root.getObjectByName('ambusher-jaw');
+ const tongues=[];rig.root.traverse(o=>{if(o.isMesh&&o.material===materials.tongue)tongues.push(o);});assert.equal(tongues.length,1);assert.equal(tongues[0].parent,jaw);
+ assert.equal(head.getObjectByName('ambusher-palate').material,materials.palate);assert(materials.palate.color.getHSL({}).l<materials.tongue.color.getHSL({}).l*.5);
+ const ray=new T.Raycaster(),probeMaterial=new T.MeshBasicMaterial({side:T.DoubleSide}),q=new T.Vector3();
+ for(const upper of[true,false]){
+  const bone=upper?head.children.find(o=>o.isMesh&&o.material===materials.skin):rig.root.getObjectByName('ambusher-mandible'),probe=new T.Mesh(bone.geometry,probeMaterial);probe.updateMatrixWorld(true);
+  for(const side of[-1,1])for(let i=0;i<11;i++){
+   const root=ambusherToothRoot(upper,side,i),radius=upper?.022:.020;
+   for(let sample=0;sample<8;sample++){
+    const a=sample/8*Math.PI*2,x=root.x+Math.cos(a)*radius,y=root.y+Math.sin(a)*radius;
+    ray.set(q.set(x,y,-1),new T.Vector3(0,0,1));const bottom=ray.intersectObject(probe)[0];ray.set(q.set(x,y,1),new T.Vector3(0,0,-1));const top=ray.intersectObject(probe)[0];
+    assert(bottom&&top&&root.z>bottom.point.z+.0001&&root.z<top.point.z-.0001,`floating ${upper?'upper':'lower'} tooth: ${side}, ${i}`);
+   }
+  }
+ }
+ probeMaterial.dispose();
+ for(const time of[0,1.7,2.7,3.8]){
+  rig.pose(a.ambusherStudy(time));rig.root.updateMatrixWorld(true);
+  for(const upper of[true,false])for(const side of[-1,1]){
+   const marker=rig.root.getObjectByName(`ambusher-tooth-root-${upper?'upper':'lower'}-${side}-5`),point=marker.getWorldPosition(new T.Vector3()),bone=upper?head:jaw;
+   bone.worldToLocal(point);assert(point.distanceTo(v(ambusherToothRoot(upper,side,5)))<1e-7);
+  }
+  rig.root.traverse(o=>{if(o.isMesh&&/limb-skin|gape-skin/.test(o.name))assert(o.geometry.attributes.position.array.every(Number.isFinite));});
+ }
+});

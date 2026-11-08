@@ -282,3 +282,17 @@ test('submerged bed stones sit on the same terrain below the water surface and r
  }
  scenery.irrigation.update(20);assert.deepEqual(stones.instanceMatrix.array,initial);
 });
+
+test('two tube sockets are empty and only faulty tubes blink deterministically on the scene clock',async()=>{
+ const {preserveTubeBrightness,preserveTubeState}=await server.ssrLoadModule('/src/preserve-fixtures.ts');
+ const count=(layout.PRESERVE_END-layout.PRESERVE_START)/layout.PRESERVE_BAY*8,missing=[],faulty=[];
+ for(let id=0;id<count;id++){
+  if(preserveTubeState(id)==='missing')missing.push(id);if(preserveTubeState(id)==='flicker')faulty.push(id);
+  if(preserveTubeState(id)==='steady')for(const t of[0,1,10])assert.equal(preserveTubeBrightness(id,t),1);
+ }
+ assert.equal(missing.length,2);assert(faulty.length>1&&faulty.length<8);
+ for(const id of faulty){const levels=[];for(let t=0;t<10;t+=.025)levels.push(preserveTubeBrightness(id,t));assert(Math.min(...levels)<.1&&Math.max(...levels)===1);}
+ const tubes=[];scenery.station.root.traverse(o=>{if(o.name==='grow-light-tubes')tubes.push(o);});assert.equal(tubes.reduce((n,m)=>n+m.count,0),count/2*3-2);
+ const snapshot=()=>tubes.map(m=>Array.from(m.instanceColor.array));scenery.station.update(2.7);const first=snapshot();scenery.station.update(8.3);scenery.station.update(2.7);assert.deepEqual(snapshot(),first);
+ scenery.station.update(2.7);assert.deepEqual(snapshot(),first,'paused light changes brightness');
+});

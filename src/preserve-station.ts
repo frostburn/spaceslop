@@ -2,13 +2,15 @@ import * as T from 'three';
 import { preserveBatch, preserveBeam, preservePart, type PreservePart } from './preserve-geometry';
 import { PRESERVE_BAY, PRESERVE_DECK, PRESERVE_END, PRESERVE_START, preserveGround, preserveRandom, preserveHabitat } from './preserve-layout';
 import type { PreserveMaterials } from './preserve-materials';
-import { preserveLighting } from './preserve-lighting';
+import { preserveTubeState, preserveTubeBrightness } from './preserve-fixtures';
 
 export function createPreserveStation(materials: PreserveMaterials) {
   const root = new T.Group(); root.name = 'orbital-preserve-structure';
   const box = new T.BoxGeometry(), glass = new T.BoxGeometry();
+  const flicker:{mesh:T.InstancedMesh;index:number;id:number}[]=[],color=new T.Color(),white=new T.Color(0xeaffff);
   for (let y = PRESERVE_START; y < PRESERVE_END; y += PRESERVE_BAY) {
     const parts: PreservePart[] = [], lights: PreservePart[] = [], windows: PreservePart[] = [], tubes: PreservePart[] = [], halos: PreservePart[] = [];
+    const blinking:{index:number;id:number}[]=[];
     const random = preserveRandom(4000 + y), bay = (y - PRESERVE_START) / PRESERVE_BAY;
     const block = (x: number, dy: number, z: number, sx: number, sy: number, sz: number, color: number, angle = 0) =>
       parts.push(preservePart(x, y + dy, z, sx, sy, sz, color, angle));
@@ -19,9 +21,17 @@ export function createPreserveStation(materials: PreserveMaterials) {
       // Pink phosphor glow edges the tubes; the scene's UV rim stays violet.
       for (const dy of [2, 6]) {
         block(side * 3.88, dy, .18, .27, 2.85, .12, 0x59656c);
-        for (const x of [3.84, 3.94]) tubes.push(preservePart(side * x, y + dy, .26, .045, 2.55, .045, 0xeaffff));
-        tubes.push(preservePart(side * 3.73, y + dy, .25, .045, 2.65, .035, preserveLighting.fixtureGlow));
-        halos.push(preservePart(side * 3.73, y + dy, .245, .22, 2.75, .012, 0xffffff));
+        for (const [socket,x] of [3.84, 3.94].entries()){
+          const id=bay*8+(side>0?4:0)+(dy===6?2:0)+socket,state=preserveTubeState(id);
+          block(side*x,dy,.245,.055,2.55,.025,0x1d252c);
+          if(state!=='missing'){
+            if(state==='flicker')blinking.push({index:tubes.length,id});
+            tubes.push(preservePart(side*x,y+dy,.29,.045,2.55,.045,0xeaffff));
+          }
+          for(const end of[-1.28,1.28])block(side*x,dy+end,.29,.042,.025,.06,state==='missing'?0xbaa37c:0x869193);
+        }
+        tubes.push(preservePart(side * 3.73, y + dy, .25, .045, 2.65, .035, 0xffd9ee));
+        halos.push(preservePart(side * 3.73, y + dy, .245, .34, 2.75, .012, 0xffffff));
         for (const end of [-1.35, 1.35]) block(side * 3.88, dy + end, .27, .28, .10, .12, 0x73838c);
       }
       // Separate soil-retaining wall, grated service walk and external hull.
@@ -110,7 +120,10 @@ export function createPreserveStation(materials: PreserveMaterials) {
     structure.castShadow = false; // Avoid projecting the service grating's fine grid.
     chunk.add(structure);
     chunk.add(preserveBatch('station-lamps', box, materials.lamp, lights));
-    for (const mesh of [preserveBatch('grow-light-tubes', box, materials.fluorescent, tubes), preserveBatch('uv-strip-halos', box, materials.uvGlow, halos)]) {
+    const tubeBatch=preserveBatch('grow-light-tubes',box,materials.fluorescent,tubes);
+    if(blinking.length)tubeBatch.instanceColor!.setUsage(T.DynamicDrawUsage);
+    flicker.push(...blinking.map(b=>({...b,mesh:tubeBatch})));
+    for (const mesh of [tubeBatch, preserveBatch('uv-strip-halos', new T.PlaneGeometry(), materials.uvGlow, halos)]) {
       mesh.castShadow = mesh.receiveShadow = false; chunk.add(mesh);
     }
     if (windows.length) {
@@ -119,5 +132,7 @@ export function createPreserveStation(materials: PreserveMaterials) {
     }
     root.add(chunk);
   }
-  return root;
+  return{root,update(time:number){
+    for(const item of flicker){color.copy(white).multiplyScalar(preserveTubeBrightness(item.id,time));item.mesh.setColorAt(item.index,color);item.mesh.instanceColor!.needsUpdate=true;}
+  }};
 }

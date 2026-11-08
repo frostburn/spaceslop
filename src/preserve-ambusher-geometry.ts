@@ -5,6 +5,18 @@ import { preserveNoise } from './preserve-layout';
 
 // S. aegyptiacus: a narrow rostrum with an expanded terminal tooth rosette.
 export const ambusherSnout = [[.48,.27,-.16,.36],[.14,.32,-.18,.35],[-.2,.27,-.12,.27],[-.64,.17,-.085,.17],[-.98,.135,-.07,.14],[-1.26,.205,-.07,.14],[-1.5,.14,-.045,.10],[-1.62,.025,-.02,.04]] as const;
+export const ambusherMandible = [[.1,.25,-.17,.04],[-.45,.23,-.16,.035],[-.95,.13,-.13,.025],[-1.33,.13,-.10,.025],[-1.56,.195,-.08,.025],[-1.77,.12,-.045,.02],[-1.91,.025,-.02,.01]] as const;
+type Profile=readonly (readonly [number,number,number,number])[];
+export function ambusherProfileAt(profile:Profile,y:number) {
+  let j=0;while(j<profile.length-2&&y<profile[j+1][0])j++;
+  const a=profile[j],b=profile[j+1],previous=profile[Math.max(0,j-1)],next=profile[Math.min(profile.length-1,j+2)];
+  const dy=b[0]-a[0],t=T.MathUtils.clamp((y-a[0])/dy,0,1),t2=t*t,t3=t2*t;
+  const value=(k:number)=>{
+    const m0=(b[k]-previous[k])/(b[0]-previous[0]),m1=(next[k]-a[k])/(next[0]-a[0]);
+    return(2*t3-3*t2+1)*a[k]+(t3-2*t2+t)*dy*m0+(-2*t3+3*t2)*b[k]+(t3-t2)*dy*m1;
+  };
+  return{width:Math.max(.005,value(1)),floor:value(2),crown:value(3)};
+}
 export function ambusherSnoutWidth(y:number) {
   let i=0;while(i<ambusherSnout.length-2&&y<ambusherSnout[i+1][0])i++;
   const a=ambusherSnout[i],b=ambusherSnout[i+1],t=T.MathUtils.clamp((y-a[0])/(b[0]-a[0]),0,1);
@@ -17,24 +29,24 @@ export function ambusherLoft(profile:readonly (readonly [number,number,number,nu
   const sections:[number,number,number,number][]=[],rows=profile.length*4;
   for(let row=0;row<=rows;row++){
     const y=T.MathUtils.lerp(profile[0][0],profile.at(-1)![0],row/rows);
-    let j=0;while(j<profile.length-2&&y<profile[j+1][0])j++;
-    const a=profile[j],b=profile[j+1],previous=profile[Math.max(0,j-1)],next=profile[Math.min(profile.length-1,j+2)];
-    const dy=b[0]-a[0],t=(y-a[0])/dy,t2=t*t,t3=t2*t;
-    const value=(k:number)=>{
-      const m0=(b[k]-previous[k])/(b[0]-previous[0]),m1=(next[k]-a[k])/(next[0]-a[0]);
-      return(2*t3-3*t2+1)*a[k]+(t3-2*t2+t)*dy*m0+(-2*t3+3*t2)*b[k]+(t3-t2)*dy*m1;
-    };
-    sections.push([y,Math.max(.005,value(1)),value(2),value(3)]);
+    const p=ambusherProfileAt(profile,y);sections.push([y,p.width,p.floor,p.crown]);
   }
   return gkSnout(sections);
 }
 
-// A rounded muscle belly and tapered tendon ends; unit-Y length is posed by
-// the rig. Overlapping joint volumes hide the articulation seams.
-export function ambusherLimbGeometry() {
-  const points=[[-.09,.24],[0,.65],[.18,.98],[.42,.94],[.72,.67],[1,.45],[1.07,.14]].map(([y,r])=>new T.Vector2(r,y));
-  const curve=new T.SplineCurve(points),g=new T.LatheGeometry(curve.getPoints(24),20);
-  g.scale(1,1,.82);return g;
+// One deforming skin sleeve follows each limb through its joints. Radius
+// profiles describe fat, muscle bellies and tendons beneath that skin.
+export function ambusherLimbSkin(profile:readonly (readonly [number,number])[]) {
+  const tube=gkTube(30,16),p=tube.geometry.attributes.position;
+  return{geometry:tube.geometry,pose(points:T.Vector3[]){
+    const curve=new T.CatmullRomCurve3(points);tube.pose(curve,1,1);
+    for(let row=0;row<=30;row++){
+      const t=row/30,c=curve.getPoint(t);let j=0;while(j<profile.length-2&&t>profile[j+1][0])j++;
+      const a=profile[j],b=profile[j+1],u=T.MathUtils.smoothstep(t,a[0],b[0]),r=T.MathUtils.lerp(a[1],b[1],u);
+      for(let i=0;i<=16;i++){const n=row*17+i;p.setXYZ(n,c.x+(p.getX(n)-c.x)*r,c.y+(p.getY(n)-c.y)*r,c.z+(p.getZ(n)-c.z)*r*.86);}
+    }
+    p.needsUpdate=true;tube.geometry.computeVertexNormals();tube.geometry.computeBoundingBox();tube.geometry.computeBoundingSphere();
+  }};
 }
 
 export function ambusherHandClaw(x:number,length:number,width:number) {

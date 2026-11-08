@@ -18,8 +18,8 @@ export function createPreserveScenery() {
   const world = new T.Group(); world.name = 'preserve-world'; root.add(world);
   world.scale.x = PRESERVE_WIDTH_SCALE;
   const materials = createPreserveMaterials(), foliage = createPreserveFoliage(materials);
-  const dock = createPreserveDock(materials), irrigation = createPreserveWater(materials);
-  world.add(createPreserveTerrain(materials), createPreserveStation(materials), foliage.root, dock.root, irrigation.root, createPreserveTraces(materials));
+  const dock = createPreserveDock(materials), irrigation = createPreserveWater(materials),station=createPreserveStation(materials);
+  world.add(createPreserveTerrain(materials), station.root, foliage.root, dock.root, irrigation.root, createPreserveTraces(materials));
   const arena = createPreserveArena(materials), boss = createGroundskeeper();
   boss.root.position.set(0, PRESERVE_ARENA_Y, GROUNDSKEEPER_FLOOR);
   world.add(arena.root, boss.root);
@@ -54,7 +54,7 @@ export function createPreserveScenery() {
   const stars = new T.Points(sky, new T.PointsMaterial({ vertexColors: true, size: .16 }));
   stars.name = 'preserve-distant-stars'; stars.frustumCulled = false; root.add(stars);
   return {
-    root, world, foliage, boss, arena, irrigation, dock,
+    root, world, foliage, boss, arena, irrigation, dock, station,
     prime(active: boolean) {
       // Upload every bay before launch, even ones outside the warm-up camera.
       world.traverse(o => { if (o instanceof T.Mesh) o.frustumCulled = !active; });
@@ -64,7 +64,7 @@ export function createPreserveScenery() {
       world.rotation.x = -pitch;
       world.position.set(0, -scroll * Math.cos(pitch) - height * Math.sin(pitch), scroll * Math.sin(pitch) - height * Math.cos(pitch));
       bounce.intensity = exit * .85;
-      shadowAnchor(scroll); dock.update(animationTime); irrigation.update(animationTime);
+      shadowAnchor(scroll); dock.update(animationTime); irrigation.update(animationTime);station.update(animationTime);
       // The station leaves the view physically. Keep its sun registered so the
       // boss does not trigger a new lighting/shadow shader variant at contact.
       stars.position.y = -Math.min(scroll, time * PRESERVE_SPEED) * .024;

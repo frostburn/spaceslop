@@ -3,6 +3,7 @@ import { shipAlloy } from './encounter-surfaces';
 import { applyTriplanar } from './rendering/triplanar';
 import { preserveNoise, preserveRandom } from './preserve-layout';
 import { preserveLighting } from './preserve-lighting';
+import { shadePreserveUvGlow } from './preserve-fixtures';
 
 // Runtime surface relief keeps this section independent of new raster assets.
 // Each scene owns these small mip-filtered maps, including workshop instances.
@@ -60,7 +61,8 @@ export function createPreserveMaterials() {
     metalness: .03, transparent: true, depthWrite: false });
   const lamp = new T.MeshBasicMaterial({ color: 0xffd39a });
   const fluorescent = new T.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
-  const uvGlow = new T.MeshBasicMaterial({ color: preserveLighting.fixtureGlow, transparent: true, opacity: .18, depthWrite: false, toneMapped: false });
+  const uvGlow = new T.MeshBasicMaterial({ color: preserveLighting.fixtureGlow, transparent: true, opacity: .75, depthWrite: false, toneMapped: false });
+  shadePreserveUvGlow(uvGlow);
   return { soil, bark, rock, foliage, metal, dark, glass, water, lamp, fluorescent, uvGlow };
 }
 export type PreserveMaterials = ReturnType<typeof createPreserveMaterials>;
