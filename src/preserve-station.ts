@@ -16,11 +16,11 @@ export function createPreserveStation(materials: PreserveMaterials) {
       parts.push(preserveBeam(new T.Vector3(ax, y + ay, az), new T.Vector3(bx, y + by, bz), w, d, color));
     for (const side of [-1, 1]) {
       // Ceiling-edge luminaires hang outside the clear flight aperture. Inner
-      // Violet UV strips edge the white paired grow-light tubes.
+      // Pink phosphor glow edges the tubes; the scene's UV rim stays violet.
       for (const dy of [2, 6]) {
         block(side * 3.88, dy, .18, .27, 2.85, .12, 0x59656c);
         for (const x of [3.84, 3.94]) tubes.push(preservePart(side * x, y + dy, .26, .045, 2.55, .045, 0xeaffff));
-        tubes.push(preservePart(side * 3.73, y + dy, .25, .045, 2.65, .035, preserveLighting.uv));
+        tubes.push(preservePart(side * 3.73, y + dy, .25, .045, 2.65, .035, preserveLighting.fixtureGlow));
         halos.push(preservePart(side * 3.73, y + dy, .245, .22, 2.75, .012, 0xffffff));
         for (const end of [-1.35, 1.35]) block(side * 3.88, dy + end, .27, .28, .10, .12, 0x73838c);
       }

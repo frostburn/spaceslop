@@ -56,11 +56,11 @@ export function createPreserveMaterials() {
   const dark = new T.MeshStandardMaterial({ color: 0x182322, roughness: .94 });
   const glass = new T.MeshStandardMaterial({ color: 0xa4b8a7, transparent: true,
     opacity: .15, metalness: .25, roughness: .24, side: T.DoubleSide, depthWrite: false });
-  const water = new T.MeshStandardMaterial({ color: 0x33534e, roughness: .26,
-    metalness: .15, bumpMap: earth, bumpScale: .025 });
+  const water = new T.MeshStandardMaterial({ color: 0xffffff, roughness: .19,
+    metalness: .03, transparent: true, depthWrite: false });
   const lamp = new T.MeshBasicMaterial({ color: 0xffd39a });
   const fluorescent = new T.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
-  const uvGlow = new T.MeshBasicMaterial({ color: preserveLighting.uv, transparent: true, opacity: .12, depthWrite: false, toneMapped: false });
+  const uvGlow = new T.MeshBasicMaterial({ color: preserveLighting.fixtureGlow, transparent: true, opacity: .18, depthWrite: false, toneMapped: false });
   return { soil, bark, rock, foliage, metal, dark, glass, water, lamp, fluorescent, uvGlow };
 }
 export type PreserveMaterials = ReturnType<typeof createPreserveMaterials>;

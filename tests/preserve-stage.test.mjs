@@ -254,3 +254,31 @@ test('shadow raster phase stays fixed to the narrowed habitat through scrolling 
  }
  plane.remove(scenery.root);
 });
+
+test('water carries terrain depth and flow through both the stream and tessellated pool centers',()=>{
+ const surfaces=[];scenery.irrigation.root.traverse(o=>{if(o.name==='ravine-stream'||o.name==='irrigation-pool')surfaces.push(o);});assert.equal(surfaces.length,3);
+ for(const mesh of surfaces){
+  assert(mesh.material.transparent&&!mesh.material.depthWrite,'water must reveal its modeled basin');
+  const p=mesh.geometry.attributes.position,d=mesh.geometry.attributes.waterDepth,flow=mesh.geometry.attributes.waterFlow,n=mesh.geometry.attributes.normal;
+  assert.equal(d.count,p.count);assert.equal(flow.count,p.count);let shallow=0,deep=0;
+  for(let i=0;i<p.count;i++){
+   assert(Math.abs(d.getX(i)-(p.getZ(i)-layout.preserveGround(p.getX(i),p.getY(i))))<1e-6,'depth disagrees with the shore');
+   if(d.getX(i)<.08)shallow++;if(d.getX(i)>.3)deep++;
+   assert(Number.isFinite(flow.getX(i)+flow.getY(i)));if(n.getZ(i)!==0)assert(n.getZ(i)>.8,'water faces into its basin');
+  }
+  assert(shallow>0&&deep>0,'surface needs both a feathered shore and a submerged interior');
+  const buffer=p.array;scenery.irrigation.update(2);assert.equal(scenery.irrigation.clock.value,2);scenery.irrigation.update(2);assert.equal(p.array,buffer);
+ }
+});
+
+test('submerged bed stones sit on the same terrain below the water surface and reuse their batch',()=>{
+ const stones=scenery.irrigation.root.getObjectByName('irrigation-submerged-stones'),matrix=new T.Matrix4(),position=new T.Vector3(),scale=new T.Vector3(),q=new T.Quaternion();
+ assert(stones.count>50&&stones.count<=116);const initial=stones.instanceMatrix.array.slice();
+ for(let i=0;i<stones.count;i++){
+  stones.getMatrixAt(i,matrix);matrix.decompose(position,q,scale);
+  const ground=layout.preserveGround(position.x,position.y);assert(position.z>=ground&&position.z-ground<.03);
+  const pool=layout.preservePools.find(p=>Math.abs(position.y-p.y)<p.ry),water=pool?.z??layout.preserveWater(position.y).z;
+  assert(position.z+scale.z<water-.05,'stone breaches the water or floats above its floor');
+ }
+ scenery.irrigation.update(20);assert.deepEqual(stones.instanceMatrix.array,initial);
+});

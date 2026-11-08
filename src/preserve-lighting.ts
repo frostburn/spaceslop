@@ -5,6 +5,7 @@ import * as T from 'three';
 export const preserveLighting = {
   key: 0xe8f7ff, sky: 0xdce9ee, ground: 0x34343d,
   keyIntensity: .55, skyIntensity: 1.3, uv: 0x792dff, uvIntensity: 3.2,
+  fixtureGlow: 0xff329f,
 };
 
 export function createPreserveUv() {

@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { preserveBatch, preservePart, type PreservePart } from './preserve-geometry';
-import { PRESERVE_START, PRESERVE_END, PRESERVE_BAY, preserveChannel, preserveGround, preserveNoise, preservePools, preserveRandom, preserveHabitat } from './preserve-layout';
+import { PRESERVE_START, PRESERVE_END, PRESERVE_BAY, preserveChannel, preserveGround, preserveNoise, preservePools, preserveWater, preserveRandom, preserveHabitat } from './preserve-layout';
 import { preserveRockGeometry, preserveStratifiedRock } from './preserve-rocks';
 import { ambusherClearing } from './preserve-ambusher';
 import type { PreserveMaterials } from './preserve-materials';
@@ -42,7 +42,11 @@ export function createPreserveTerrain(materials: PreserveMaterials) {
       c.copy(clay).lerp(moss, bank * (.3 + preserveNoise(x * .8, y * .7) * .7));
       const habitat = preserveHabitat(y);
       c.lerp(dark, preserveNoise(x * 3, y * 2) * .34).lerp(wetStone, habitat.wet * .68);
-      c.lerp(ochre, habitat.dry * (.48 + .35 * T.MathUtils.smoothstep(-x, .5, 3))); colors.push(c.r, c.g, c.b);
+      c.lerp(ochre, habitat.dry * (.48 + .35 * T.MathUtils.smoothstep(-x, .5, 3)));
+      const water=preserveWater(y);
+      let wet=habitat.wet*(1-T.MathUtils.smoothstep(Math.abs(z-water.z),.03,.28))*(1-T.MathUtils.smoothstep(Math.abs(x-water.x),water.width,water.width+.3));
+      for(const pool of preservePools){const r=Math.hypot((x-pool.x)/pool.rx,(y-pool.y)/pool.ry);wet=Math.max(wet,(1-T.MathUtils.smoothstep(r,1,1.45))*(1-T.MathUtils.smoothstep(Math.abs(z-pool.z),.03,.28)));}
+      c.multiplyScalar(1-wet*.26);colors.push(c.r,c.g,c.b);
     }
     for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
       const a = row * (cols + 1) + col, b = a + cols + 1;
@@ -83,17 +87,6 @@ export function createPreserveTerrain(materials: PreserveMaterials) {
     const rocks = preserveBatch('bank-rocks', rock, materials.rock, parts);
     root.add(rocks);
     if(ledges.length)root.add(preserveBatch('layered-terrace-outcrops',stratified,materials.rock,ledges));
-  }
-  for (const pool of preservePools) {
-    const points = Array.from({ length: 48 }, (_, i) => {
-      const a = i / 48 * Math.PI * 2, r = 1 + Math.sin(a * 5) * .045;
-      return new T.Vector2(pool.x + Math.cos(a) * pool.rx * r, pool.y + Math.sin(a) * pool.ry * r);
-    });
-    const g = new T.ShapeGeometry(new T.Shape(points)), p = g.attributes.position;
-    // The water has a level surface inside a genuinely lowered soil basin.
-    const z = pool.z;
-    for (let i = 0; i < p.count; i++) p.setZ(i, z);
-    const water = new T.Mesh(g, materials.water); water.name = 'irrigation-pool'; root.add(water);
   }
   return root;
 }

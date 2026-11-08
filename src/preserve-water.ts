@@ -1,28 +1,14 @@
 import * as T from 'three';
 import { preserveBatch, preservePart, type PreservePart } from './preserve-geometry';
-import { PRESERVE_WATER_START, PRESERVE_WATER_END, preserveWater } from './preserve-layout';
+import { PRESERVE_WATER_START, PRESERVE_WATER_END, preserveWater, preservePools, preserveGround, preserveRandom } from './preserve-layout';
 import type { PreserveMaterials } from './preserve-materials';
+import { preserveWaterSurface, preservePoolSurface, shadePreserveWater } from './preserve-water-surface';
 
 export function createPreserveWater(m: PreserveMaterials) {
   const root = new T.Group(); root.name = 'preserve-irrigation';
   const clock = { value: 0 }, water = m.water;
-  water.onBeforeCompile = shader => {
-    shader.uniforms.preserveFlowTime = clock;
-    shader.vertexShader = 'varying vec3 vPreserveWater;\n' + shader.vertexShader;
-    shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvPreserveWater=position;');
-    shader.fragmentShader = 'uniform float preserveFlowTime; varying vec3 vPreserveWater;\n' + shader.fragmentShader;
-    shader.fragmentShader = shader.fragmentShader.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-      float wave=.012*sin(vPreserveWater.x*17.+vPreserveWater.y*9.+preserveFlowTime*2.3)
-        +.008*sin(vPreserveWater.x*9.-vPreserveWater.y*15.+preserveFlowTime*3.1);
-      normal=perturbNormalArb(-vViewPosition,normal,vec2(dFdx(wave),dFdy(wave)),faceDirection);
-    `);
-    shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-      float flow=sin(vPreserveWater.y*35.+preserveFlowTime*6.+sin(vPreserveWater.x*19.));
-      diffuseColor.rgb*=.95+.05*flow;
-    `);
-  };
-  water.customProgramCacheKey = () => 'preserve-irrigation-flow-v1';
-  const positions = [], uv = [], indices = [], rows = 210, cols = 12;
+  shadePreserveWater(water,clock);
+  const positions = [], uv = [], indices = [], rows = 240, cols = 20;
   for (let j = 0; j <= rows; j++) {
     const y = T.MathUtils.lerp(PRESERVE_WATER_START, PRESERVE_WATER_END, j / rows), w = preserveWater(y);
     for (let i = 0; i <= cols; i++) {
@@ -33,7 +19,16 @@ export function createPreserveWater(m: PreserveMaterials) {
   }
   const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
   g.setAttribute('uv', new T.Float32BufferAttribute(uv, 2)); g.setIndex(indices); g.computeVertexNormals();
-  const stream = new T.Mesh(g, water); stream.name = 'ravine-stream'; stream.receiveShadow = true; root.add(stream);
+  const stream = new T.Mesh(preserveWaterSurface(g), water); stream.name = 'ravine-stream'; stream.receiveShadow = true; root.add(stream);
+  for(const pool of preservePools){const surface=new T.Mesh(preservePoolSurface(pool),water);surface.name='irrigation-pool';surface.receiveShadow=true;root.add(surface);}
+  const stones:PreservePart[]=[],random=preserveRandom(7193);
+  function pebble(x:number,y:number,surface:number) {
+    const z=preserveGround(x,y),size=.055+random()*.12;if(z+size*.5>surface-.12)return;
+    stones.push(preservePart(x,y,z+size*.08,size*(1+random()),size*(.7+random()),size*.45,random()>.4?0x889080:0x666654,random()*Math.PI));
+  }
+  for(let i=0;i<84;i++){const y=PRESERVE_WATER_START+random()*(PRESERVE_WATER_END-PRESERVE_WATER_START),w=preserveWater(y);pebble(w.x+(random()-.5)*w.width*1.5,y,w.z);}
+  for(const pool of preservePools)for(let i=0;i<16;i++){const a=random()*Math.PI*2,r=Math.sqrt(random())*.8;pebble(pool.x+Math.cos(a)*r*pool.rx,pool.y+Math.sin(a)*r*pool.ry,pool.z);}
+  const bed=preserveBatch('irrigation-submerged-stones',new T.IcosahedronGeometry(1,1),m.rock,stones);bed.castShadow=false;root.add(bed);
   const parts: PreservePart[] = [], block = (x: number,y: number,z: number,sx: number,sy: number,sz: number,c: number) => parts.push(preservePart(x,y,z,sx,sy,sz,c));
   const source = preserveWater(PRESERVE_WATER_END), sink = preserveWater(PRESERVE_WATER_START);
   for (const [p,y,z] of [[source,PRESERVE_WATER_END,source.z],[sink,PRESERVE_WATER_START,sink.z]] as const) {
