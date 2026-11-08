@@ -8,29 +8,29 @@ import { createRaptorRig, setFeatherTexture } from '../../encounter-rigs';
 import { setFaceTexture } from '../../creature-faces';
 import { createPreserveScenery } from '../../preserve-scenery';
 import { PRESERVE_DISTANCE, preserveFrame } from '../../preserve-layout';
-import { poseBurners, shipBurners } from '../../burners';
 import { raptorFlight } from '../../encounters';
-import { createScoutRig } from '../../ship-rigs';
+import { createFlyerAssets, createPreserveFlyer } from '../../preserve-flyer-rig';
+import { FLYER_POOL, flyerMotion } from '../../preserve-flyer';
 import { createGroundskeeperEffects } from '../../groundskeeper-effects';
 import { preserveLighting } from '../../preserve-lighting';
 export const createLevel: LevelFactory = ({ plane, signal }) => {
   const root = new T.Group();
-  const scout = createScoutRig();
-  const scouts = Array.from({ length: 12 }, () => { const root = scout.clone(); return { root, burners: shipBurners(root) }; });
+  const flyerAssets = createFlyerAssets(), flyers = Array.from({ length: FLYER_POOL }, () => createPreserveFlyer(flyerAssets));
   const raptors = Array.from({length:3},createRaptorRig);
   const ambusherMaterials=createAmbusherMaterials(),ambushers=Array.from({length:AMBUSHER_POOL},()=>createPoolAmbusher(ambusherMaterials));
   const preserve = createPreserveScenery();
   const boss = preserve.boss;
   const effects = createGroundskeeperEffects();
   const models: (T.Object3D | undefined)[] = [];
-  addRoots(root, ...ambushers, ...raptors, preserve, effects, ...scouts);
+  addRoots(root, ...ambushers, ...raptors, preserve, effects, ...flyers);
   const contact = createBossLaserContact(plane, boss.root);
-  const ready = Promise.all([loadEncounterTexture('feathers', texture => { setFeatherTexture(texture); boss.setFeatherTexture(texture); }, undefined, signal), loadEncounterTexture('scales', texture => {
+  const ready = Promise.all([loadEncounterTexture('feathers', texture => { setFeatherTexture(texture); boss.setFeatherTexture(texture); flyerAssets.setFeathers(texture); }, undefined, signal), loadEncounterTexture('scales', texture => {
     texture.repeat.set(.62, .68);
     texture.offset.set(.19, .16);
     setFaceTexture(texture);
     boss.setScaleTexture(texture);
     ambusherMaterials.setScales(texture);
+    flyerAssets.setScales(texture);
     raptors.forEach(raptor => raptor.setScaleTexture(texture));
   }, undefined, signal)]).then(t => t.flat());
   return {
@@ -42,11 +42,11 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
     background: 0x020407,
     ...preserveLighting,
     orientation: (_time, reveal) => preserveFrame(reveal),
-    surfaces: [preserve.root, ...scouts.map(r => r.root)],
-    warmup: [[scouts[0].root, ...raptors.map(r => r.root), ...ambushers.map(r=>r.root), preserve.root], [boss.root, effects.root]],
-    prepare() { preserve.prime(true); effects.prime(); ambushers.forEach(r=>r.prime(true)); },
-    afterWarmup() {preserve.prime(false);ambushers.forEach(r=>r.prime(false));},
-    contacts: [boss.root, ...ambushers.map(r=>r.root), ...raptors.map(r => r.root), ...scouts.map(r => r.root)],
+    surfaces: [preserve.root],
+    warmup: [[...flyers.map(r => r.root), ...raptors.map(r => r.root), ...ambushers.map(r=>r.root), preserve.root], [boss.root, effects.root]],
+    prepare() { preserve.prime(true); effects.prime(); ambushers.forEach(r=>r.prime(true)); flyers.forEach(r=>r.prime(true)); },
+    afterWarmup() {preserve.prime(false);ambushers.forEach(r=>r.prime(false));flyers.forEach(r=>r.prime(false));},
+    contacts: [boss.root, ...ambushers.map(r=>r.root), ...raptors.map(r => r.root), ...flyers.map(r => r.root)],
     contact,
     update(frame) {
       const { flight, reveal: eased, time, animationTime, elapsed, newFlight, fighterSpeed, droneSpeed } = frame;
@@ -66,12 +66,13 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
         raptor.root.position.set(enemy.x,enemy.y,0);raptor.root.rotation.z=Math.PI;
         raptor.pose(enemy.age);models[flight.enemies.indexOf(enemy)]=raptor.root;
       }
-      const ships=flight.enemies.filter(enemy=>!enemy.raptor&&!enemy.ambusher);
-      for (const [index, { root, burners }] of scouts.entries()) {
-        const enemy = ships[index]; root.visible = Boolean(enemy);
-        if (!root.visible || !enemy) continue;
-        root.position.set(enemy.x, enemy.y, 0); root.rotation.z = Math.PI + .3 * Math.cos(enemy.age * 1.55); root.scale.setScalar(enemy.ventScale ?? 1);
-        poseBurners(burners, enemy.age + index * .27, .55 + .16 * Math.sin(enemy.age * 4 + index)); models[flight.enemies.indexOf(enemy)] = root;
+      const flock=flight.enemies.filter(enemy=>enemy.flyer);
+      for (const [index, rig] of flyers.entries()) {
+        const enemy = flock[index]; rig.root.visible = Boolean(enemy);
+        if (!enemy?.flyer) continue;
+        const p=flyerMotion(enemy.age,enemy.lane,enemy.flyer);
+        rig.root.position.set(enemy.x, enemy.y, 0);
+        rig.pose(enemy.age,enemy.flyer,p.bank,enemy.heading); models[flight.enemies.indexOf(enemy)] = rig.root;
       }
       const reveal = eased;
       const wakes = flight.hull > 0 && reveal < 0.7 ? [
@@ -80,7 +81,7 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
         ...flight.enemies.filter(enemy=>!enemy.ambusher).map((enemy) => ({
           x: enemy.x,
           y: enemy.y,
-          strength: enemy.raptor ? 0.63 + raptorFlight(enemy.age).speed * 0.11 : 0.86,
+          strength: enemy.raptor ? 0.63 + raptorFlight(enemy.age).speed * 0.11 : .65,
         })),
       ] : [];
       preserve.update(time, reveal, animationTime, elapsed, wakes, newFlight);

@@ -11,6 +11,7 @@ const layout = await server.ssrLoadModule('/src/preserve-layout.ts');
 const {createPreserveScenery} = await server.ssrLoadModule('/src/preserve-scenery.ts');
 const {Flight,STEP}=await server.ssrLoadModule('/src/game.ts');
 const {preserveWaves}=await server.ssrLoadModule('/src/preserve-waves.ts');
+const {FLYER_POOL}=await server.ssrLoadModule('/src/preserve-flyer.ts');
 const {levelTextures} = await server.ssrLoadModule('/src/assets/catalog.ts');
 const scenery = createPreserveScenery();
 
@@ -157,11 +158,11 @@ test('ten-screen route starts in space, enters a genuinely open dock, and has po
  for(const weapon of['homing','cannon','laser','omega'])assert(drops.get(weapon)>=3);
  assert(preserveWaves[0].time>=2&&preserveWaves.at(-1).time<=f.stageDuration-6);
  assert(preserveWaves.filter(w=>w.raptor!==undefined).length>=10);
- let maxRaptors=0,maxScouts=0;
+ let maxRaptors=0,maxFlyers=0;
  while(f.phase==='stage'){
-  f.invulnerable=100;f.step(STEP);maxRaptors=Math.max(maxRaptors,f.enemies.filter(e=>e.raptor).length);maxScouts=Math.max(maxScouts,f.enemies.filter(e=>!e.raptor).length);
+  f.invulnerable=100;f.step(STEP);maxRaptors=Math.max(maxRaptors,f.enemies.filter(e=>e.raptor).length);maxFlyers=Math.max(maxFlyers,f.enemies.filter(e=>e.flyer).length);
  }
- assert.equal(f.phase,'approach');assert.equal(f.enemies.length,0);assert(maxRaptors>0&&maxRaptors<=3&&maxScouts<=12);
+ assert.equal(f.phase,'approach');assert.equal(f.enemies.length,0);assert(maxRaptors>0&&maxRaptors<=3&&maxFlyers<=FLYER_POOL);
 });
 
 test('stream basins contain the water, terrain varies by habitat, and whitewater stays above its flowing surface',()=>{

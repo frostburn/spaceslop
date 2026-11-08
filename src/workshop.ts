@@ -1,6 +1,8 @@
 import { createAmbusherMaterials, createPoolAmbusher } from './preserve-ambusher-rig';
 import { ambusherStudy, AMBUSHER_DURATION, AMBUSHER_FALL } from './preserve-ambusher';
 import { createPreserveUv, preserveLighting } from './preserve-lighting';
+import { createFlyerAssets, createPreserveFlyer } from './preserve-flyer-rig';
+import { flyerMotion, type FlyerCourse } from './preserve-flyer';
 import {createVentBoss} from './vent-boss';
 import {crabSmooth} from './vent-crab';
 import {createFaunaAssets,createWormAssets,createVentShrimp,createVentWorm} from './vent-fauna-rig';
@@ -160,11 +162,18 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const ambusherMaterials=createAmbusherMaterials(),ambusher=createPoolAmbusher(ambusherMaterials),fallenAmbusher=createPoolAmbusher(ambusherMaterials);
   void loadEncounterTexture('scales',ambusherMaterials.setScales);
   const preserve = createPreserveScenery();
+  const flyerAssets = createFlyerAssets(), flyer = createPreserveFlyer(flyerAssets), flockRoot = new T.Group();
+  const flock = Array.from({length:4},()=>createPreserveFlyer(flyerAssets));flockRoot.add(...flock.map(r=>r.root));
+  const loopCourse:FlyerCourse={formation:'loop',mirror:1,slot:0,count:4};
+  void loadEncounterTexture('feathers',flyerAssets.setFeathers);
+  void loadEncounterTexture('scales',flyerAssets.setScales);
   const keeper = createGroundskeeper(), keeperPreview = new T.Group();
   keeperPreview.rotation.x = -Math.PI / 2; keeperPreview.position.y = -7; keeperPreview.add(keeper.root);
   void loadEncounterTexture('feathers', texture => { keeper.setFeatherTexture(texture); preserve.boss.setFeatherTexture(texture); });
   void loadEncounterTexture('scales', texture => { keeper.setScaleTexture(texture); preserve.boss.setScaleTexture(texture); });
   const assets = {
+    microraptor:{root:flyer.root,duration:5.6,pose(time:number){const p=flyerMotion(time,0,{...loopCourse,formation:'swoop'});const stroke=flyer.pose(time,{...loopCourse,formation:'swoop'},p.bank);return stroke.tuck>.1?'tucked swoop':stroke.burst>.1?'burst wingbeats':'four-wing glide';}},
+    microraptor_flock:{root:flockRoot,duration:12,bounds:new T.Box3(new T.Vector3(-3.5,-9,-1),new T.Vector3(3.5,10,1)),pose(time:number){flock.forEach((r,i)=>{const course={...loopCourse,slot:i},p=flyerMotion(time,0,course);r.root.position.set(p.x,p.y,0);r.pose(time,course,p.bank,p.heading);});return 'staggered train · tangent-continuous loop';}},
     pool_ambusher:{root:ambusher.root,duration:AMBUSHER_DURATION+2.5,bounds:new T.Box3(new T.Vector3(-3.5,-6.2,-4),new T.Vector3(3.5,3.7,1.5)),pose(time:number){const p=ambusherStudy(time);ambusher.pose(p);return p.phase;}},
     pool_ambusher_defeat:{root:fallenAmbusher.root,duration:2.5+AMBUSHER_FALL+2,bounds:new T.Box3(new T.Vector3(-3.5,-6.2,-4),new T.Vector3(3.5,3.7,1.5)),pose(time:number){const p=ambusherStudy(time,true);fallenAmbusher.pose(p);return p.dead?'defeated · sideways fall':p.phase;}},
     groundskeeper: { root: keeperPreview, duration: GROUNDSKEEPER_CYCLE * 4,

@@ -1,5 +1,6 @@
 import { AMBUSHER_HP, AMBUSHER_SPAWN_LEAD, AMBUSHER_CORPSE_TIME, ambusherSites, ambusherHome, createAmbusherState, stepAmbusher, ambusherPose, ambusherHulls, ambusherBodyHit, ambusherBeamEntry, ambusherHits, defeatAmbusher, type AmbusherState } from './preserve-ambusher';
 import { preserveWaves } from './preserve-waves';
+import { FLYER_HP, flyerMotion, flyerBodyHit, flyerBeamEntry, type FlyerCourse } from './preserve-flyer';
 import {CRAB_HP,CRAB_CLAW_HP,CRAB_CORE_HP,crabTarget,crabSmooth} from './vent-crab';
 import {wormPose,WORM_WINDUP,WORM_REACH} from './vent-worm';
 import {SHRIMP_HP,SHRIMP_FIRST_FIRE,SHRIMP_INTERVAL,WORM_HP,WORM_FIRST_ATTACK,WORM_INTERVAL,shrimpMotion,faunaMuzzle,faunaBodyHit,faunaBeamEntry,type ShrimpCourse} from './vent-fauna';
@@ -48,6 +49,7 @@ type Shot = Point & {
 };
 type Threat = Shot & { graze?: 'near' | 'counted' };
 type Enemy = Point & {
+  flyer?: FlyerCourse;
   ambusher?: AmbusherState;
   lane: number; age: number; fire: number; hp: number; drop?: WingWeapon; raptor?: boolean; ant?: 'worker' | 'soldier'; marine?: MarineKind; school?: MarineSchool;
   centipede?: CentipedeLink; cicada?: CicadaCourse; skipper?: boolean; crucible?: boolean; slag?: {vx:number;vy:number}; ventAnchor?:number; ventScale?:number; slot?: number; mortarAngle?:number; ventWorm?:boolean; shrimp?:ShrimpCourse; wormReach?:number; wormBend?:number; wormLocked?:boolean;
@@ -75,6 +77,7 @@ const wingShots = {
 };
 
 type Wave = { time: number; lanes: number[]; carrier?: number; drop?: WingWeapon;
+  flyer?: Omit<FlyerCourse, 'slot' | 'count'>;
   raptor?: number; ant?: 'worker' | 'soldier'; marine?: MarineKind; formation?: MarineFormation; mirror?: number;
   centipede?: number; cicada?: Omit<CicadaCourse, 'slot' | 'count'>; skipper?: boolean; crucible?: boolean; ventAnchor?:number; ventWorm?:boolean; shrimp?:Omit<ShrimpCourse,'slot'> };
 
@@ -424,7 +427,7 @@ export class Flight {
       }
       for (const enemy of this.enemies) {
         if (enemy.hp <= 0 || shot.pierced?.has(enemy)) continue;
-        const hit = enemy.ambusher ? ambusherBodyHit(enemy.ambusher,this.time,previous,shot) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,previous,shot) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, previous, shot) : shot.wing === 'homing'
+        const hit = enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},previous,shot) : enemy.ambusher ? ambusherBodyHit(enemy.ambusher,this.time,previous,shot) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,previous,shot) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, previous, shot) : shot.wing === 'homing'
           ? nearSegment(enemy, previous, shot, enemyRadius(enemy))
           : Math.abs(shot.x - enemy.x) < enemyRadius(enemy) &&
             shot.y >= enemy.y - enemyRadius(enemy,.46) && previous.y <= enemy.y + enemyRadius(enemy,.46);
@@ -556,14 +559,14 @@ export class Flight {
     } else {
       let firstContact=Infinity;
       for (const candidate of this.enemies) {
-        const entry=candidate.ambusher?ambusherBeamEntry(candidate.ambusher,this.time,origin):candidate.shrimp||candidate.ventWorm?faunaBeamEntry(candidate,origin):candidate.y;
-        if (candidate.hp > 0 && (candidate.ambusher ? ambusherBodyHit(candidate.ambusher,this.time,origin,{x:origin.x,y:9}) : candidate.shrimp||candidate.ventWorm ? faunaBodyHit(candidate,origin,{x:origin.x,y:9}) : candidate.marine ? marineBodyHit(candidate as Enemy & {marine: MarineKind}, origin, {x: origin.x, y: 9})
+        const entry=candidate.flyer?flyerBeamEntry({...candidate,flyer:candidate.flyer},origin):candidate.ambusher?ambusherBeamEntry(candidate.ambusher,this.time,origin):candidate.shrimp||candidate.ventWorm?faunaBeamEntry(candidate,origin):candidate.y;
+        if (candidate.hp > 0 && (candidate.flyer ? Number.isFinite(entry) : candidate.ambusher ? ambusherBodyHit(candidate.ambusher,this.time,origin,{x:origin.x,y:9}) : candidate.shrimp||candidate.ventWorm ? faunaBodyHit(candidate,origin,{x:origin.x,y:9}) : candidate.marine ? marineBodyHit(candidate as Enemy & {marine: MarineKind}, origin, {x: origin.x, y: 9})
           : Math.abs(candidate.x - origin.x) < enemyRadius(candidate,.43) && candidate.y >= origin.y) && entry<firstContact) {
           enemy = candidate;firstContact=entry;
         }
       }
       target = enemy;
-      if (enemy) endY = enemy.ambusher || enemy.ventWorm ? 9 : enemy.y + (enemy.shrimp ? 1.4 : enemy.marine ? marineSpecs[enemy.marine].halfLength : 0);
+      if (enemy) endY = enemy.ambusher || enemy.ventWorm || enemy.flyer ? 9 : enemy.y + (enemy.shrimp ? 1.4 : enemy.marine ? marineSpecs[enemy.marine].halfLength : 0);
     }
     wing.beamEnd = { x: origin.x, y: endY };
     wing.laserHold = target !== undefined && target === wing.laserTarget ? wing.laserHold + dt : 0;
@@ -634,7 +637,7 @@ export class Flight {
     }
     for (const enemy of this.enemies) {
       if (enemy.hp > 0 && !this.towlineEnemies.has(enemy) &&
-        (enemy.ambusher ? ambusherBodyHit(enemy.ambusher,this.time,this.player,this.drone) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,this.player,this.drone) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, this.player, this.drone) : nearSegment(enemy, this.player, this.drone, enemyRadius(enemy)))) {
+        (enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},this.player,this.drone) : enemy.ambusher ? ambusherBodyHit(enemy.ambusher,this.time,this.player,this.drone) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,this.player,this.drone) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, this.player, this.drone) : nearSegment(enemy, this.player, this.drone, enemyRadius(enemy)))) {
         this.towlineEnemies.add(enemy);
         this.damageEnemy(enemy, this.towlineDamage);
       }
@@ -660,14 +663,15 @@ export class Flight {
         bindCentipede(parts);
         this.enemies.push(...parts);
       } else this.enemies.push(...wave.lanes.map((lane, index) => {
+        const flyer = wave.flyer && index !== wave.raptor ? { ...wave.flyer, slot: index - (wave.raptor !== undefined && index > wave.raptor ? 1 : 0), count: wave.lanes.length - (wave.raptor !== undefined ? 1 : 0) } : undefined;
         const school = wave.formation ? {formation: wave.formation, slot: index, count: wave.lanes.length, mirror: wave.mirror ?? 1} : undefined;
         const shrimp=wave.shrimp?{...wave.shrimp,slot:index}:undefined;
         const course = wave.cicada ? { ...wave.cicada, slot: index, count: wave.lanes.length } : undefined;
-        const start = shrimp ? shrimpMotion(0,lane,shrimp) : wave.ventAnchor!==undefined ? ventAnchorPoint(wave.ventAnchor,this.time) : wave.crucible ? crucibleMotion(0,lane) : wave.skipper ? skipperMotion(0,lane,index) : course ? cicadaMotion(0, lane, course) : wave.marine ? marineMotion(wave.marine, 0, lane, school) : {x: lane, y: 8.6};
+        const start = flyer ? flyerMotion(0,lane,flyer) : shrimp ? shrimpMotion(0,lane,shrimp) : wave.ventAnchor!==undefined ? ventAnchorPoint(wave.ventAnchor,this.time) : wave.crucible ? crucibleMotion(0,lane) : wave.skipper ? skipperMotion(0,lane,index) : course ? cicadaMotion(0, lane, course) : wave.marine ? marineMotion(wave.marine, 0, lane, school) : {x: lane, y: 8.6};
         return {
-          x: start.x, y: start.y, lane, age: wave.ventAnchor!==undefined?-VENT_SPAWN_LEAD:0, school, cicada: course, skipper: wave.skipper, crucible: wave.crucible, ventAnchor:wave.ventAnchor, ventWorm:wave.ventWorm, shrimp, slot: index,
-          fire: shrimp ? SHRIMP_FIRST_FIRE+index*.25 : wave.ventWorm ? WORM_FIRST_ATTACK : wave.ventAnchor!==undefined ? MORTAR_FIRST_FIRE : wave.crucible ? CRUCIBLE_FIRST_POUR : schoolDelay(school) + (wave.marine === 'plesiosaur' ? 1.8 : wave.ant === 'soldier' ? 1.6 : 1.1) + index * 0.28,
-          hp: shrimp ? SHRIMP_HP : wave.ventWorm ? WORM_HP : wave.ventAnchor!==undefined ? MORTAR_HP : wave.crucible ? CRUCIBLE_HP : wave.marine ? marineSpecs[wave.marine].hp : wave.ant === 'soldier' ? 5 : 2, ant: wave.ant, marine: wave.marine,
+          x: start.x, y: start.y, lane, age: wave.ventAnchor!==undefined?-VENT_SPAWN_LEAD:0, flyer, school, cicada: course, skipper: wave.skipper, crucible: wave.crucible, ventAnchor:wave.ventAnchor, ventWorm:wave.ventWorm, shrimp, slot: index,
+          fire: flyer ? Infinity : shrimp ? SHRIMP_FIRST_FIRE+index*.25 : wave.ventWorm ? WORM_FIRST_ATTACK : wave.ventAnchor!==undefined ? MORTAR_FIRST_FIRE : wave.crucible ? CRUCIBLE_FIRST_POUR : schoolDelay(school) + (wave.marine === 'plesiosaur' ? 1.8 : wave.ant === 'soldier' ? 1.6 : 1.1) + index * 0.28,
+          hp: flyer ? FLYER_HP : shrimp ? SHRIMP_HP : wave.ventWorm ? WORM_HP : wave.ventAnchor!==undefined ? MORTAR_HP : wave.crucible ? CRUCIBLE_HP : wave.marine ? marineSpecs[wave.marine].hp : wave.ant === 'soldier' ? 5 : 2, ant: wave.ant, marine: wave.marine,
           drop: index === wave.carrier ? wave.drop : undefined,
           raptor: index === wave.raptor,
         };
@@ -682,6 +686,8 @@ export class Flight {
       if (enemy.ambusher) {
         stepAmbusher(enemy.ambusher,this.time,this.player,dt);
         const p=ambusherPose(enemy.ambusher,this.time);enemy.x=p.head.x;enemy.y=p.head.y;
+      } else if (enemy.flyer) {
+        const p=flyerMotion(enemy.age,enemy.lane,enemy.flyer);enemy.x=p.x;enemy.y=p.y;enemy.heading=p.heading;
       } else if (enemy.ventAnchor!==undefined) {
         const p=ventAnchorPoint(enemy.ventAnchor,this.time);enemy.x=p.x;enemy.y=p.y;enemy.ventScale=p.scale;
         if(enemy.ventWorm){
@@ -739,7 +745,7 @@ export class Flight {
         const hull = enemy.marine ? [{x:0,y:0,radius:marineSpecs[enemy.marine].radius}] : enemy.raptor ? [{ x: 0, y: 0, radius: 1.05 }] : DRONE_HULL;
         this.obstacles.move(enemy, 0, 0, hull, { minX: -2.4, maxX: 2.4, minY: -10, maxY: 10 });
       }
-      if (!enemy.ambusher && !enemy.shrimp && enemy.ventAnchor===undefined && !enemy.crucible && !enemy.slag && !motion && (!enemy.centipede || (enemy.centipede.slot === 0 && !enemy.centipede.chain.escape)) && enemy.age >= enemy.fire && enemy.y < 8) {
+      if (!enemy.flyer && !enemy.ambusher && !enemy.shrimp && enemy.ventAnchor===undefined && !enemy.crucible && !enemy.slag && !motion && (!enemy.centipede || (enemy.centipede.slot === 0 && !enemy.centipede.chain.escape)) && enemy.age >= enemy.fire && enemy.y < 8) {
         enemy.fire += enemy.centipede ? 3.5 : enemy.cicada ? 3 : enemy.marine === 'plesiosaur' ? 3.2 : enemy.ant === 'soldier' ? 3.1 : 2.4;
         const dx = this.player.x - enemy.x;
         const dy = this.player.y - enemy.y;
@@ -754,7 +760,7 @@ export class Flight {
       }
       if(enemy.ambusher){
         if(ambusherHits(enemy.ambusher,this.time,this.time-dt,this.player))this.hit();
-      } else if (enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,this.player,this.player,.16) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind},this.player,this.player,.2-marineSpecs[enemy.marine].radius*.2) : near(enemy, this.player, enemyRadius(enemy)+.16)) {
+      } else if (enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},this.player,this.player,.16) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,this.player,this.player,.16) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind},this.player,this.player,.2-marineSpecs[enemy.marine].radius*.2) : near(enemy, this.player, enemyRadius(enemy)+.16)) {
         if(!enemy.ventWorm)enemy.hp = 0;
         if (enemy.centipede) severCentipede(enemy);
         this.hit();
