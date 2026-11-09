@@ -28,16 +28,17 @@ export function createBoulevardTraffic(m:BoulevardMaterials){
   for(const y of[-.27,.28])part(car,new T.CylinderGeometry(.077,.077,.045,8).rotateZ(Math.PI/2),rubber,side*.215,y,.025);
  }
  mergeBoulevard(car);
+ const bikePaint=new T.MeshStandardMaterial({color:0x243238,roughness:.72,metalness:.18}),bikeFront=new T.MeshBasicMaterial({color:0xb2bbb1,toneMapped:false}),bikeRear=new T.MeshBasicMaterial({color:0x8a241b,toneMapped:false});
  const bike=new T.Group();for(const y of[-.27,.27])part(bike,new T.CylinderGeometry(.12,.12,.065,10).rotateZ(Math.PI/2),rubber,0,y,.08);
- part(bike,plating([[-.13,.30],[.13,.30],[.17,-.25],[0,-.43],[-.17,-.25]],.12,.025),m.chrome,0,0,.18);
- part(bike,new T.BoxGeometry(.12,.035,.06),white,0,-.41,.23);part(bike,new T.BoxGeometry(.09,.035,.05),red,0,.34,.24);
+ part(bike,plating([[-.13,.30],[.13,.30],[.17,-.25],[0,-.43],[-.17,-.25]],.12,.025),bikePaint,0,0,.18);
+ part(bike,new T.BoxGeometry(.09,.028,.04),bikeFront,0,-.41,.23);part(bike,new T.BoxGeometry(.07,.025,.035),bikeRear,0,.34,.24);
  part(bike,new T.CapsuleGeometry(.075,.19,3,6),rubber,0,.02,.33).rotation.x=.65;
- part(bike,new T.SphereGeometry(.095,8,6),m.shell,0,-.08,.48);part(bike,new T.BoxGeometry(.36,.025,.025),m.chrome,0,-.18,.31);mergeBoulevard(bike);
+ part(bike,new T.SphereGeometry(.095,8,6),bikePaint,0,-.08,.48);part(bike,new T.BoxGeometry(.36,.025,.025),rubber,0,-.18,.31);mergeBoulevard(bike);
  const indicatorGeometry=new T.BoxGeometry(.035,.04,.04);
  const cars=Array.from({length:COUNT},(_,i)=>{const r=car.clone(true),indicators=[-1,1].map(side=>{const turn=new T.Group();for(const y of[-.43,.43])part(turn,indicatorGeometry,amber,side*.19,y,.14);r.add(turn);return turn;});root.add(r);return{root:r,index:i,indicators};});
  const bikes=Array.from({length:BIKES},(_,i)=>{const r=new T.Group(),lean=pivot(r,'traffic-bike-lean',0,0,0);lean.add(bike.clone(true));root.add(r);return{root:r,lean,index:i};});
  const warmObjects=[...cars.map(c=>c.root),...bikes.map(b=>b.root),...cars.flatMap(c=>c.indicators)];let warmSaved:boolean[]=[];
- const trailMaterial=new T.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.65,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false});
+ const trailMaterial=new T.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.45,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false});
  const trails=new T.InstancedMesh(new T.CylinderGeometry(1,1,1,6),trailMaterial,BIKES*TRAIL_SAMPLES);trails.name='boulevard-bike-light-trails';trails.instanceMatrix.setUsage(T.DynamicDrawUsage);trails.frustumCulled=false;root.add(trails);
  const dummy=new T.Object3D(),a=new T.Vector3(),b=new T.Vector3(),delta=new T.Vector3(),up=new T.Vector3(0,1,0),color=new T.Color();
  for(let i=0;i<trails.count;i++)trails.setColorAt(i,color.setRGB(0,0,0));
@@ -52,7 +53,7 @@ export function createBoulevardTraffic(m:BoulevardMaterials){
    for(let n=0;n<history.length;n++)boulevardBikePose(time-n/TRAIL_SAMPLES*TRAIL_TIME,scroll,bike.index,history[n]);
    for(let n=0;n<tails.length;n++){const q=history[n],r=history[n+1];delta.set(r.x-q.x,r.y-q.y,0).normalize();const lean=T.MathUtils.clamp((q.x-r.x)/(TRAIL_TIME/TRAIL_SAMPLES)*.1,-.35,.35),side=.24*Math.sin(lean);tails[n].set(q.x+delta.x*.34+delta.y*side,q.y+delta.y*.34-delta.x*side,BOULEVARD_DECK+.08+.24*Math.cos(lean));}
    for(let n=0;n<TRAIL_SAMPLES;n++){a.copy(tails[n]);b.copy(tails[n+1]);delta.subVectors(b,a);const distance=delta.length(),fade=(1-n/TRAIL_SAMPLES)**2*(1-smooth(70,100,history[n].y-scroll));
-    dummy.position.copy(a).add(b).multiplyScalar(.5);dummy.quaternion.setFromUnitVectors(up,delta.normalize());dummy.scale.set(.020*(1-n/TRAIL_SAMPLES*.6),distance<2&&bike.root.visible?distance:0,.020*(1-n/TRAIL_SAMPLES*.6));dummy.updateMatrix();trails.setMatrixAt(bike.index*TRAIL_SAMPLES+n,dummy.matrix);trails.setColorAt(bike.index*TRAIL_SAMPLES+n,color.setRGB(1.8*fade,.025*fade,.07*fade));
+    dummy.position.copy(a).add(b).multiplyScalar(.5);dummy.quaternion.setFromUnitVectors(up,delta.normalize());dummy.scale.set(.012*(1-n/TRAIL_SAMPLES*.6),distance<2&&bike.root.visible?distance:0,.012*(1-n/TRAIL_SAMPLES*.6));dummy.updateMatrix();trails.setMatrixAt(bike.index*TRAIL_SAMPLES+n,dummy.matrix);trails.setColorAt(bike.index*TRAIL_SAMPLES+n,color.setRGB(.035*fade,.68*fade,.24*fade));
    }
   }trails.instanceMatrix.needsUpdate=true;if(trails.instanceColor)trails.instanceColor.needsUpdate=true;
  },prime(active:boolean){if(active){warmSaved=warmObjects.map(o=>o.visible);warmObjects.forEach(o=>o.visible=true);}else if(warmSaved.length){warmObjects.forEach((o,i)=>o.visible=warmSaved[i]);warmSaved=[];}trails.frustumCulled=false;}};

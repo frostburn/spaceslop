@@ -30,7 +30,7 @@ export const createLevel:LevelFactory=({plane,signal})=>{
    boss.root.visible=flight.bossHealth>0;boss.pose(animationTime,flight.cannonWindup,flight.bossRecoil/BOSS_RECOIL_TIME);
    models.length=flight.enemies.length;models.fill(undefined);let lights=0,heavies=0,mineCount=0,interceptorCount=0;for(const r of[...cars,...haulers,...mines,...interceptors])r.root.visible=false;
    for(const[i,enemy]of flight.enemies.entries()){
-    if(enemy.mine){const rig=mines[mineCount++];if(rig){rig.root.visible=true;rig.pose(enemy.mine,time,enemy.hp>0);if(enemy.hp>0)models[i]=rig.root;}continue;}
+    if(enemy.mine){const rig=mines[mineCount++];if(rig){rig.root.visible=true;rig.pose(enemy.mine,time,enemy.hp>0);}continue;}
     if(enemy.boulevard?.formation==='intercept'){const rig=interceptors[interceptorCount++];if(rig){rig.root.visible=true;rig.root.position.set(enemy.x,enemy.y,0);rig.root.rotation.z=enemy.heading??0;const aim=enemy.interceptorAim??Math.PI;rig.pose(T.MathUtils.clamp(1-(enemy.fire-enemy.age)/.65,0,1),Math.atan2(Math.sin(aim),-Math.cos(aim))-(enemy.heading??0));models[i]=rig.root;}continue;}
     if(!enemy.boulevard)continue;const rig=enemy.boulevard.heavy?haulers[heavies++]:cars[lights++];if(!rig)continue;
     const motion=boulevardMotion(enemy.age,enemy.lane,enemy.boulevard);rig.root.visible=true;rig.root.position.set(enemy.x,enemy.y,0);rig.root.rotation.z=enemy.heading??0;rig.pose(enemy.age,motion.bank);models[i]=rig.root;

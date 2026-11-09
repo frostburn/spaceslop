@@ -1,4 +1,4 @@
-import {mineSites,minePose,triggerMine,mineBurst,MINE_HP,MINE_RADIUS,MINE_WINDUP,MINE_JUMP,MINE_BURST_TIME,type BoulevardMine} from './boulevard-mines';
+import {mineSites,minePose,triggerMine,mineBurst,MINE_WINDUP,MINE_JUMP,MINE_BURST_TIME,type BoulevardMine} from './boulevard-mines';
 import {BOULEVARD_HP,BOULEVARD_APPROACH,BOULEVARD_INTERVAL,BOULEVARD_WINDUP,BOULEVARD_FIRE,BOULEVARD_TRAVEL,BOULEVARD_SPAWN_LEAD,boulevardWaves,boulevardMotion,type BoulevardCourse} from './boulevard';
 import { AMBUSHER_HP, AMBUSHER_SPAWN_LEAD, AMBUSHER_CORPSE_TIME, ambusherSites, ambusherHome, createAmbusherState, stepAmbusher, ambusherPose, ambusherHulls, ambusherBodyHit, ambusherBeamEntry, ambusherHits, defeatAmbusher, type AmbusherState } from './preserve-ambusher';
 import { preserveWaves } from './preserve-waves';
@@ -125,7 +125,7 @@ export const iceWaves: Wave[] = [
 export const titanWaves: Wave[] = titanInsectWaves;
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
-const enemyRadius=(enemy:Enemy,ordinary=.52)=>enemy.mine?MINE_RADIUS:enemy.crucible?CRUCIBLE_RADIUS:enemy.slag?SLAG_RADIUS:(enemy.ventAnchor!==undefined?MORTAR_RADIUS:ordinary)*(enemy.ventScale??1)*(enemy.boulevard?.heavy?1.2:1);
+const enemyRadius=(enemy:Enemy,ordinary=.52)=>enemy.crucible?CRUCIBLE_RADIUS:enemy.slag?SLAG_RADIUS:(enemy.ventAnchor!==undefined?MORTAR_RADIUS:ordinary)*(enemy.ventScale??1)*(enemy.boulevard?.heavy?1.2:1);
 const near = (a: Point, b: Point, radius: number) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 < radius ** 2;
 
 function moveWithinField(point: Point, dx: number, dy: number) {
@@ -362,9 +362,9 @@ export class Flight {
     this.threats = [];
     if (this.phase === 'stage') {
       for (const enemy of this.enemies) {
-        if (enemy.hp > 0) this.damageEnemy(enemy, enemy.hp);
+        if (enemy.hp > 0 && !enemy.mine) this.damageEnemy(enemy, enemy.hp);
       }
-      this.enemies = this.enemies.filter(enemy=>enemy.ambusher?.defeatedAt!==undefined);
+      this.enemies = this.enemies.filter(enemy=>enemy.mine||enemy.ambusher?.defeatedAt!==undefined);
     } else {
       if (this.level === 'preserve') this.groundskeeperCancelledAt = this.time;
       this.damageBoss(6);
@@ -434,7 +434,7 @@ export class Flight {
         return false;
       }
       for (const enemy of this.enemies) {
-        if (enemy.hp <= 0 || shot.pierced?.has(enemy)) continue;
+        if (enemy.hp <= 0 || enemy.mine || shot.pierced?.has(enemy)) continue;
         const hit = enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},previous,shot) : enemy.ambusher ? ambusherBodyHit(enemy.ambusher,this.time,previous,shot) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,previous,shot) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, previous, shot) : shot.wing === 'homing'
           ? nearSegment(enemy, previous, shot, enemyRadius(enemy))
           : Math.abs(shot.x - enemy.x) < enemyRadius(enemy) &&
@@ -567,6 +567,7 @@ export class Flight {
     } else {
       let firstContact=Infinity;
       for (const candidate of this.enemies) {
+        if(candidate.mine)continue;
         const entry=candidate.flyer?flyerBeamEntry({...candidate,flyer:candidate.flyer},origin):candidate.ambusher?ambusherBeamEntry(candidate.ambusher,this.time,origin):candidate.shrimp||candidate.ventWorm?faunaBeamEntry(candidate,origin):candidate.y;
         if (candidate.hp > 0 && (candidate.flyer ? Number.isFinite(entry) : candidate.ambusher ? ambusherBodyHit(candidate.ambusher,this.time,origin,{x:origin.x,y:9}) : candidate.shrimp||candidate.ventWorm ? faunaBodyHit(candidate,origin,{x:origin.x,y:9}) : candidate.marine ? marineBodyHit(candidate as Enemy & {marine: MarineKind}, origin, {x: origin.x, y: 9})
           : Math.abs(candidate.x - origin.x) < enemyRadius(candidate,.43) && candidate.y >= origin.y) && entry<firstContact) {
@@ -595,7 +596,7 @@ export class Flight {
     let closest: Enemy | undefined;
     let distance = 36;
     for (const enemy of this.enemies) {
-      if (enemy.hp <= 0 || enemy.y <= shot.y || (enemy.ambusher && !ambusherHulls(enemy.ambusher,this.time).length)) continue;
+      if (enemy.hp <= 0 || enemy.mine || enemy.y <= shot.y || (enemy.ambusher && !ambusherHulls(enemy.ambusher,this.time).length)) continue;
       const squared = (enemy.x - shot.x) ** 2 + (enemy.y - shot.y) ** 2;
       if (squared < distance) {
         closest = enemy;
@@ -644,7 +645,7 @@ export class Flight {
       return;
     }
     for (const enemy of this.enemies) {
-      if (enemy.hp > 0 && !this.towlineEnemies.has(enemy) &&
+      if (enemy.hp > 0 && !enemy.mine && !this.towlineEnemies.has(enemy) &&
         (enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},this.player,this.drone) : enemy.ambusher ? ambusherBodyHit(enemy.ambusher,this.time,this.player,this.drone) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,this.player,this.drone) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, this.player, this.drone) : nearSegment(enemy, this.player, this.drone, enemyRadius(enemy)))) {
         this.towlineEnemies.add(enemy);
         this.damageEnemy(enemy, this.towlineDamage);
@@ -653,7 +654,8 @@ export class Flight {
   }
 
   private stepStage(dt: number) {
-    if(this.level==='boulevard')while(this.nextMine<mineSites.length){const mine={site:this.nextMine},p=minePose(mine,this.time);if(p.physicalY>28)break;this.nextMine++;this.enemies.push({x:p.x,y:p.y,lane:p.x,age:0,fire:Infinity,hp:MINE_HP,mine});}
+    // Mines are invulnerable scenery hazards; hp is only their active/spent flag.
+    if(this.level==='boulevard')while(this.nextMine<mineSites.length){const mine={site:this.nextMine},p=minePose(mine,this.time);if(p.physicalY>28)break;this.nextMine++;this.enemies.push({x:p.x,y:p.y,lane:p.x,age:0,fire:Infinity,hp:1,mine});}
     if(this.level==='preserve')while(this.nextAmbusher<ambusherSites.length){
       const site=this.nextAmbusher,home=ambusherHome(site,this.time);if(home.y>AMBUSHER_SPAWN_LEAD)break;this.nextAmbusher++;
       if(home.y<-12)continue;
@@ -911,7 +913,7 @@ export class Flight {
   }
 
   private damageEnemy(enemy: Enemy, damage: number, laser = false) {
-    if (enemy.hp <= 0) return;
+    if (enemy.hp <= 0 || enemy.mine) return;
     const before = enemy.hp;
     enemy.hp = Math.max(0, enemy.hp - damage);
     if (laser) enemy.laserDamage = (enemy.laserDamage ?? 0) + before - enemy.hp;
@@ -919,7 +921,7 @@ export class Flight {
       if(enemy.ambusher)defeatAmbusher(enemy.ambusher,this.time);
       if(enemy.ventWorm&&enemy.ventAnchor!==undefined)this.defeatedVentWorms.add(enemy.ventAnchor);
       if (enemy.centipede) severCentipede(enemy);
-      this.score += enemy.mine?50:enemy.ambusher?200:enemy.crucible?300:enemy.slag?10:enemy.ventWorm?250:enemy.ventAnchor!==undefined?150:enemy.shrimp?125:100;
+      this.score += enemy.ambusher?200:enemy.crucible?300:enemy.slag?10:enemy.ventWorm?250:enemy.ventAnchor!==undefined?150:enemy.shrimp?125:100;
       if (enemy.drop) this.drops.push({ x: enemy.x, y: enemy.y, weapon: enemy.drop });
     }
   }

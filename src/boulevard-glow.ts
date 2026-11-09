@@ -5,13 +5,18 @@ export function createBoulevardGlow(){
  const beauty=new T.WebGLRenderTarget(1,1,{type:T.HalfFloatType,depthBuffer:true,samples:2});beauty.texture.name='boulevard-sharp-scene';beauty.depthTexture=new T.DepthTexture(1,1,T.UnsignedIntType);beauty.depthTexture.name='boulevard-scene-depth';
  const horizontal=new T.WebGLRenderTarget(1,1,{type:T.HalfFloatType,depthBuffer:false}),vertical=horizontal.clone();horizontal.texture.name='boulevard-glow-horizontal';vertical.texture.name='boulevard-glow-vertical';
  const vertexShader='varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}';
+ // Reject invalid half-float samples before filtering. A single bad highlight
+ // must not spread into the rectangular footprint of the separable blur.
+ const finiteLight=`vec3 finiteLight(vec3 c){return vec3(c.r>=0.&&c.r<=65504.?min(c.r,64.):0.,c.g>=0.&&c.g<=65504.?min(c.g,64.):0.,c.b>=0.&&c.b<=65504.?min(c.b,64.):0.);}`;
  // A sigma-3 Gaussian combines adjacent taps into nine bilinear fetches.
  const filter=new T.ShaderMaterial({depthTest:false,depthWrite:false,uniforms:{source:{value:beauty.texture},step:{value:new T.Vector2()},extract:{value:1}},vertexShader,
   fragmentShader:`uniform sampler2D source;uniform vec2 step;uniform float extract;varying vec2 vUv;
-  vec3 sampleLight(vec2 uv){vec3 c=texture2D(source,uv).rgb;return c*mix(1.,smoothstep(.55,1.20,max(c.r,max(c.g,c.b))),extract);}
+  ${finiteLight}
+  vec3 sampleLight(vec2 uv){vec3 c=finiteLight(texture2D(source,uv).rgb);return c*mix(1.,smoothstep(.55,1.20,max(c.r,max(c.g,c.b))),extract);}
   void main(){vec3 c=sampleLight(vUv)*0.13357122;c+=(sampleLight(vUv+step*1.45842952)+sampleLight(vUv-step*1.45842952))*0.23330843;c+=(sampleLight(vUv+step*3.40398481)+sampleLight(vUv-step*3.40398481))*0.13592781;c+=(sampleLight(vUv+step*5.35180578)+sampleLight(vUv-step*5.35180578))*0.05138318;c+=(sampleLight(vUv+step*7.30294072)+sampleLight(vUv-step*7.30294072))*0.01259497;gl_FragColor=vec4(c,1.);}`});
  const composite=new T.ShaderMaterial({depthTest:false,depthWrite:false,uniforms:{sharp:{value:beauty.texture},glow:{value:vertical.texture},depth:{value:beauty.depthTexture},strength:{value:.30},sun:{value:new T.Vector4()},heatClock:{value:0},heatDepth:{value:1},heatStrength:{value:0},texel:{value:new T.Vector2()}},vertexShader,
   fragmentShader:`uniform sampler2D sharp,glow,depth;uniform float strength,heatClock,heatDepth,heatStrength;uniform vec4 sun;uniform vec2 texel;varying vec2 vUv;
+  ${finiteLight}
   void main(){vec2 uv=vUv;
    if(heatStrength>0.){
     vec2 p=(vUv-sun.xy)/max(sun.zw,vec2(.0001));float r=length(p);
@@ -26,7 +31,7 @@ export function createBoulevardGlow(){
     float farPixels=step(heatDepth,texture2D(depth,vUv).r)*step(heatDepth,texture2D(depth,bent).r);
     uv=mix(vUv,bent,farPixels*heatStrength);
    }
-   vec3 c=texture2D(sharp,uv).rgb+texture2D(glow,uv).rgb*strength;gl_FragColor=vec4(c,1.);
+   vec3 c=finiteLight(texture2D(sharp,uv).rgb)+finiteLight(texture2D(glow,uv).rgb)*strength;gl_FragColor=vec4(c,1.);
   #include <colorspace_fragment>
   }`});
  const screen=new T.Scene(),camera=new T.OrthographicCamera(-1,1,1,-1,0,1),quad=new T.Mesh(new T.PlaneGeometry(2,2),filter);quad.frustumCulled=false;screen.add(quad);

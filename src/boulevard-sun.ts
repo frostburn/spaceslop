@@ -15,7 +15,7 @@ export function createBoulevardSun(){
  const haloMaterial=new T.ShaderMaterial({name:'boulevard-sun-warmth',transparent:true,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false,uniforms:{clock},
   vertexShader:diskMaterial.vertexShader,
   fragmentShader:`uniform float clock;varying vec2 vUv;void main(){vec2 p=(vUv-.5)*2.;float r=length(p),a=atan(p.y,p.x);
-  float ring=exp(-pow((r-.56)/.17,2.)),wave=.65+.35*sin(r*28.-clock*.30+sin(a*3.+clock*.12));
+  float band=(r-.56)/.17,ring=exp(-band*band),wave=.65+.35*sin(r*28.-clock*.30+sin(a*3.+clock*.12));
   float haze=ring*wave*.065+exp(-r*r*7.)*.018;gl_FragColor=vec4(vec3(1.,.29,.065),haze);
   #include <colorspace_fragment>
   }`});

@@ -486,7 +486,7 @@ export class FlightView {
         this.enemyVitals.delete(enemy);
     }
     for (const enemy of flight.enemies)
-      if (!this.enemyVitals.has(enemy))
+      if (!enemy.mine && !this.enemyVitals.has(enemy))
         this.enemyVitals.set(enemy, {
           hp: enemy.hp,
           laserDamage: enemy.laserDamage ?? 0,

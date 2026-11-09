@@ -1,5 +1,5 @@
 import {BOULEVARD_DECK,BOULEVARD_SPEED,BOULEVARD_VIEW} from './boulevard';
-export const MINE_RADIUS=.38,MINE_TRIGGER=2.2,MINE_HP=2,MINE_WINDUP=.4,MINE_JUMP=.6,MINE_BURST_TIME=.35,MINE_POOL=4;
+export const MINE_TRIGGER=2.2,MINE_WINDUP=.4,MINE_JUMP=.6,MINE_BURST_TIME=.35,MINE_POOL=4;
 export const mineSites=[{at:16,x:-2.35},{at:25,x:2.35},{at:44,x:-1.8},{at:58,x:1.8},{at:74,x:-2.25},{at:86,x:2.3}];
 export type BoulevardMine={site:number;triggeredAt?:number;burstAt?:number};
 const smooth=(x:number)=>{const t=Math.max(0,Math.min(1,x));return t*t*(3-2*t);};
