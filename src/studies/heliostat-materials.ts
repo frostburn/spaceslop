@@ -42,7 +42,7 @@ export function createHeliostatMaterials() {
   return {
     ...materials,
     setArt(art: StudyArt, enabled: boolean) {
-      for (const texture of Object.values(art)) owned.add(texture);
+      for (const key of ['heliostatMetal','heliostatCeramic'] as const) if (art[key]) owned.add(art[key]);
       for (const [key, material] of Object.entries(materials)) {
         if (key === 'cyan' || key === 'amber') continue;
         material.map = enabled ? (key === 'ceramic' ? art.heliostatCeramic : art.heliostatMetal) ?? grain : grain;

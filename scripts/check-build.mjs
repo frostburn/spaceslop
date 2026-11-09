@@ -25,5 +25,5 @@ assert(pack.required.includes(pack.entry));
  assert(!serviceWorker.includes('encounters/'),'The service worker eagerly downloads level media.');
 }
 for(const file of ['workshop.html','vent-study.html','io-study.html','heliostat-study.html'])await assert.rejects(stat(join(root,file)));
-for(const file of files.filter(f=>f.endsWith('.js'))){const text=await readFile(join(root,'assets',file),'utf8');assert(!text.includes('__qa'),'QA hooks leaked into production.');assert(!/(workshop|vent-study|io-study|heliostat-study)\.html/.test(text),'Development links leaked into production.');assert(!/modeled-corridor-bay|uranus-and-equatorial-rings|complete-stellar-collector/.test(text),'Study renderer leaked into production code.');}
+for(const file of files.filter(f=>f.endsWith('.js'))){const text=await readFile(join(root,'assets',file),'utf8');assert(!text.includes('__qa'),'QA hooks leaked into production.');assert(!/(workshop|vent-study|io-study|heliostat-study)\.html/.test(text),'Development links leaked into production.');assert(!/heliostat-station-route|scrolling-uranus-backdrop|complete-stellar-collector/.test(text),'Study renderer leaked into production code.');}
 console.log('Menu size, seven isolated level packages, selective precaching and production dev-page exclusions passed.');

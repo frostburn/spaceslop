@@ -33,6 +33,7 @@ export type EncounterTexture = keyof typeof textureFiles;
 export const studyTextureFiles = {
   heliostatMetal: 'encounters/interceptor-metal.png',
   heliostatCeramic: 'encounters/io-ceramic.png',
+  heliostatBackdrop: 'encounters/heliostat-uranus-backdrop.png',
 } as const;
 export type StudyTexture = keyof typeof studyTextureFiles;
 

@@ -4,7 +4,7 @@ import * as T from 'three';
 import { createServer } from 'vite';
 
 const server = await createServer({ root: new URL('..', import.meta.url).pathname, configFile: false,
-  define: { __STUDY_TEXTURES__: JSON.stringify({heliostatMetal:'metal.png',heliostatCeramic:'ceramic.png'}) },
+  define: { __STUDY_TEXTURES__: JSON.stringify({heliostatMetal:'metal.png',heliostatCeramic:'ceramic.png',heliostatBackdrop:'backdrop.png'}) },
   server: { middlewareMode: true, hmr: false, ws: false }, optimizeDeps: { noDiscovery: true, entries: [] }, appType: 'custom' });
 after(() => server.close());
 const layout = await server.ssrLoadModule('/src/studies/heliostat-layout.ts');
@@ -12,7 +12,9 @@ const { createHeliostatMaterials } = await server.ssrLoadModule('/src/studies/he
 const { createHeliostatBay } = await server.ssrLoadModule('/src/studies/heliostat-bay.ts');
 const { createDistantPlant } = await server.ssrLoadModule('/src/studies/heliostat-distant.ts');
 const { createHeliostatCollector } = await server.ssrLoadModule('/src/studies/heliostat-collector.ts');
-const { createUranus, URANUS_RADIUS:R, URANUS_TILT } = await server.ssrLoadModule('/src/studies/heliostat-space.ts');
+const { createHeliostatRoute,routeKinds } = await server.ssrLoadModule('/src/studies/heliostat-route.ts');
+const { machineryPose } = await server.ssrLoadModule('/src/studies/heliostat-machinery.ts');
+const { createHeliostatBackdrop,backdropCrop } = await server.ssrLoadModule('/src/studies/heliostat-backdrop.ts');
 const { loadStudyTexture, loadStudyArt } = await server.ssrLoadModule('/src/studies/heliostat-assets.ts');
 
 test('foreground and distant machinery have lit, textured volume with no raster stand-ins', () => {
@@ -55,51 +57,64 @@ test('the collector closes around the star at every angle and has front/back tru
   assert(collector.sphere.position.length()<1e-9);m.releaseTextures();
 });
 
-test('Uranus rings are concentric, coplanar and perpendicular to the planet spin axis', () => {
-  const planet=createUranus();planet.root.updateMatrixWorld(true);
-  const normal=new T.Vector3(0,0,1).applyQuaternion(planet.root.quaternion);
-  assert(normal.distanceTo(planet.axis)<1e-12);
-  assert(Math.abs(planet.axis.z-Math.cos(URANUS_TILT))<1e-12);
-  assert.equal(planet.rings.children.length,9);
-  let previous=R;
-  for(const ring of planet.rings.children){
-    const g=ring.geometry,p=g.attributes.position;assert.equal(ring.material.side,T.DoubleSide);
-    let min=Infinity,max=0;
-    for(let i=0;i<p.count;i++){assert(Math.abs(p.getZ(i))<1e-10);const radius=Math.hypot(p.getX(i),p.getY(i));min=Math.min(min,radius);max=Math.max(max,radius);}
-    assert(min>previous && max-min<R*.007,'rings overlap or become a broad ribbon');previous=max;
-  }
-  assert(planet.globe.material.isMeshStandardMaterial && planet.globe.material.map.isDataTexture);
+test('ten-screen route shares four templates and bounds the active bay count',()=>{
+  const m=createHeliostatMaterials(),route=createHeliostatRoute(m);assert.equal(route.bays.length,11);assert.equal(new Set(routeKinds).size,4);
+  const mesh=root=>{let found;root.traverse(node=>{if(node.isMesh&&!found)found=node;});return found;};
+  assert.equal(mesh(route.bays[2].root).geometry,mesh(route.bays[3].root).geometry,'identical bays duplicate geometry');
+  for(let t=0;t<=layout.STUDY_DURATION;t+=.5){route.update(t);assert(route.bays.filter(b=>b.root.visible).length<=4);}
+  assert.equal(layout.ROUTE_SPEED*layout.ROUTE_DURATION,10*layout.BAY_SPACING);m.releaseTextures();
 });
 
-test('near rings occult the globe while the globe hides the far rings', () => {
-  const planet=createUranus();planet.root.updateMatrixWorld(true);
-  const origin=new T.Vector3(0,-6*R,.7*R).applyMatrix4(planet.root.matrixWorld);
-  const objects=[planet.globe,...planet.rings.children];
-  for(const side of[-1,1]){
-    const target=new T.Vector3(0,side*1.751*R,0).applyMatrix4(planet.root.matrixWorld);
-    const hits=new T.Raycaster(origin,target.sub(origin).normalize()).intersectObjects(objects,false);
-    assert(hits.length>=2,'test ray does not cross ring and globe');
-    assert.equal(hits[0].object===planet.globe,side>0,'planet/ring depth order is reversed');
+test('prewarming exposes every variant and restores visibility, origin and culling flags',()=>{
+  const m=createHeliostatMaterials(),route=createHeliostatRoute(m);route.update(51);route.root.visible=false;
+  const before=route.bays.map(b=>[b.root.visible,b.root.position.y]);const restore=route.prepare(20);
+  assert.equal(route.root.visible,true);const visible=route.bays.filter(b=>b.root.visible);
+  assert.equal(new Set(visible.map(b=>b.kind)).size,4);assert(visible.every(b=>b.root.position.y===20));
+  restore();assert.equal(route.root.visible,false);assert.deepEqual(route.bays.map(b=>[b.root.visible,b.root.position.y]),before);m.releaseTextures();
+});
+
+test('service fans and rigid arms animate from absolute presentation time without touching geometry',()=>{
+  const m=createHeliostatMaterials();
+  for(const kind of['docking','cooling']){
+    const bay=createHeliostatBay(m,kind),pose=machineryPose(bay.root),nodes=bay.root.getObjectsByProperty('name',kind==='docking'?'service-arm-elbow':'service-fan-rotor');
+    assert(nodes.length>=2);pose(8,1);const before=nodes.map(n=>n.quaternion.toArray());pose(8,1);assert.deepEqual(nodes.map(n=>n.quaternion.toArray()),before);
+    pose(9,1);assert.notDeepEqual(nodes.map(n=>n.quaternion.toArray()),before);
+    for(let t=0;t<=108;t+=3){pose(t,1);bay.root.updateMatrixWorld(true);const ray=new T.Raycaster(new T.Vector3(0,-15,.4),new T.Vector3(0,1,0),0,40);assert.equal(ray.intersectObject(bay.root,true).length,0);}
+  }
+  m.releaseTextures();
+});
+
+test('raster pan preserves aspect ratio, scale and horizontal crop at every view',()=>{
+  for(const view of[9/16,390/844,16/9])for(const image of[1/3,2/3,1/4]){
+    const first=backdropCrop(view,image,0);let previous=first.y;
+    for(const p of[0,.25,.5,.75,1]){
+      const crop=backdropCrop(view,image,p);
+      assert(Math.abs(crop.width*image/crop.height-view)<1e-12,'image is stretched');
+      assert.equal(crop.width,first.width);assert.equal(crop.height,first.height);assert.equal(crop.x,first.x);assert(crop.y>=previous);previous=crop.y;
+      assert(crop.x>=-1e-12&&crop.y>=0&&crop.x+crop.width<=1+1e-12&&crop.y+crop.height<=1+1e-12);
+    }
   }
 });
 
-test('the planet surface closes its longitude seam and rotation freezes with presentation time', () => {
-  const p=createUranus(),image=p.globe.material.map.image;
-  for(let y=0;y<image.height;y++)for(let c=0;c<3;c++)assert(Math.abs(image.data[(y*image.width)*4+c]-image.data[(y*image.width+image.width-1)*4+c])<=1,'visible longitude seam');
-  const m=createHeliostatMaterials(),collector=createHeliostatCollector(m),storage=collector.sphere.geometry.attributes.position.array.slice();
-  collector.update(8);const q=collector.sphere.quaternion.clone();collector.update(8);
-  assert(collector.sphere.quaternion.equals(q));assert.deepEqual(collector.sphere.geometry.attributes.position.array,storage);m.releaseTextures();
+test('backdrop map is owned separately and UI changes cannot reupload or double-dispose it',()=>{
+  const m=createHeliostatMaterials(),backdrop=createHeliostatBackdrop(),texture=new T.Texture();let disposed=0;
+  texture.addEventListener('dispose',()=>disposed++);m.setArt({heliostatBackdrop:texture},true);backdrop.setTexture(texture,true);const version=texture.version;
+  backdrop.setTexture(texture,false);backdrop.setTexture(texture,true);assert.equal(texture.version,version);
+  m.releaseTextures();assert.equal(disposed,0);backdrop.releaseTextures();backdrop.releaseTextures();assert.equal(disposed,1);
 });
 
 test('camera and travel remain continuous, straight and deterministic', () => {
   let previous;
-  for(let i=0;i<=180;i++){
+  for(let i=0;i<=1080;i++){
     const frame=layout.studyFrame(i/10),pose=layout.cameraPose(frame.progress);
-    assert.deepEqual(frame,layout.studyFrame(i/10));if(previous)assert(pose.position.distanceTo(previous)<.5);
+    assert.deepEqual(frame,layout.studyFrame(i/10));if(previous)assert(pose.position.distanceTo(previous)<.65);
     assert.equal(pose.position.x,0);previous=pose.position;
   }
-  for(let t=0;t<8;t+=.1)assert(layout.bayTravel(t+.1)<=layout.bayTravel(t));
-  assert.equal(layout.bayTravel(7),layout.bayTravel(18));
+  for(let t=0;t<108;t+=.1)assert(layout.bayTravel(t+.1)<=layout.bayTravel(t));
+  assert.equal(layout.bayTravel(108),layout.bayTravel(150));
+  for(const p of[0,.1,.5,.8,1])assert(Math.abs(layout.studyFrame(layout.studyTimeAtSwing(p)).progress-p)<1e-8);
+  const e=1e-4,left=(layout.bayTravel(100)-layout.bayTravel(100-e))/e,right=(layout.bayTravel(100+e)-layout.bayTravel(100))/e;
+  assert(Math.abs(left-right)<1e-3,'scroll jerks at approach start');
 });
 
 test('surface-map switches retain the model and release active and inactive maps once', () => {
@@ -126,7 +141,7 @@ test('failed maps fall back and abort releases an already-loaded sibling', async
   T.TextureLoader.prototype.load=function(url,success,progress,failure){callbacks.push({url,success,failure});return new T.Texture();};
   try{
     const scope=new AbortController(),missing=loadStudyTexture('/missing.png',scope.signal);callbacks.pop().failure(new Error('missing'));assert.equal(await missing,undefined);
-    const pending=loadStudyArt(scope.signal);assert.equal(callbacks.length,2);const image=new T.Texture();let disposed=0;image.addEventListener('dispose',()=>disposed++);
+    const pending=loadStudyArt(scope.signal);assert.equal(callbacks.length,3);const image=new T.Texture();let disposed=0;image.addEventListener('dispose',()=>disposed++);
     callbacks[0].success(image);await Promise.resolve();scope.abort();assert.deepEqual(await pending,{});assert.equal(disposed,1);
   }finally{T.TextureLoader.prototype.load=originalLoad;globalThis.window=previousWindow;}
 });

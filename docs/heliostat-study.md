@@ -1,30 +1,31 @@
-# Heliostat 3D power-plant study
+# Heliostat station route study
 
-Run `npm run dev` and choose **Uranus corridor study** from the main menu. The same scene appears in flight, midway through the camera swing and head-on. **Uranus** frames the complete globe and ring system. **Orbit view** allows drag/zoom inspection of either the bay or the planet; selecting a flight preset or playing the timeline returns to the planned camera.
+Run `npm run dev`, then choose **Uranus corridor study** from the main menu. The timeline covers a ten-screen, 100-second station route followed by an eight-second camera swing. Section jumps expose the docking spine, generator galleries, heat-exchange yards, containment approach and final stellar collector. **Flight**, **Midpoint** and **Head-on** inspect camera poses; **Backdrop** displays the full tall image. **Orbit view** inspects nearby 3D machinery.
 
-## Construction
+## Route and machinery
 
-The foreground uses separate beveled generator housings, exposed copper windings and cores, coolant pumps, wheel valves, curved return pipes, flanged service lines, thick radiator fins, railings, beacons and an overhead bus. Open housings expose actual machinery. Every component uses ordinary lit mesh materials and surface UVs. The clear flight lane passes under the bridge and over the low crossmembers. Broad casing shadows are shared by all angles; tiny winding/rail details do not cast patterned shadows.
+Four geometry templates create eleven bays: ten route bays and a collector apron. Docking bays contain service cabinets and articulated two-link arms. Generator galleries expose windings, pumps and return pipes. Heat-exchange bays replace the windings with capped pressure tanks, cooling stacks and rotating fans. Containment bays carry overhead curved conductor ribs. Deck couplers and flexible pipe sections bridge the gaps between bays. The distant towers and complete cross-braced stellar collector share the approach's coordinate frame.
 
-The distant towers and radiator banks are geometry connected by truss spines. A complete collector encloses the artificial star: paired concentric hoops have front/back separation, radial mounts, diagonal braces and twenty winding banks. Its support struts join both sides of the collector to the plant spine. The star and planet maps are small deterministic code-built surface textures. Star rotation, planet rotation, electric bus and travel use presentation time.
+The route travels straight at a constant speed before smoothly decelerating into the camera swing. The ship and sample shots share a physical heading toward the collector. Scenery still uses ordinary lit meshes and surface UVs, with broad casing shadows rather than fine winding/grid shadows.
 
-Uranus is an oblate, textured sphere. Its globe and nine narrow annular rings share one tilted equatorial frame. The ring segments form complete circles, with depth testing hiding the far side behind the globe and drawing the near side in front. Ring widths are slightly enlarged for screen readability. The latitude map is constructed for sphere UVs and closes its longitude seam. The geometry follows the [NASA description of Uranus's tilt and narrow dark rings](https://science.nasa.gov/uranus/facts/).
+Bay copies share template geometry and materials. At most four are active; absolute clock poses keep fans, service arms and electric buses repeatable after culling or timeline scrubbing. Preflight temporarily exposes one bay of each type and the distant/collector meshes with culling disabled, uploads their buffers, then restores the visible route before enabling playback. Later sections allocate no new geometry.
 
-The starfield consists of distant 3D points. A separate distant scene provides the planet's sunlight and dim ambient fill; the same perspective camera renders this scene, clears depth and then renders the local plant. The planet and its rings therefore remain behind all local machinery while keeping their own mutual occlusion. No photographed backdrop, scenery card, painted machinery atlas or screen-space crop is used.
+## Backdrop handoff
 
-## Surface maps
+The generated image is delivered in chat for owner review and separate upload. Use the finished ring-free version:
 
-The study reuses these existing owner-uploaded textures:
-
-| Catalog key | Repo path | Import |
+| Repo path | Format | Import |
 | --- | --- | --- |
-| `heliostatMetal` | `public/encounters/interceptor-metal.png` | sRGB, repeat; brushed grain on titanium, copper, graphite and painted metal |
-| `heliostatCeramic` | `public/encounters/io-ceramic.png` | sRGB, repeat; ceramic armor |
+| `public/encounters/heliostat-uranus-backdrop.png` | Opaque RGB PNG, **724×2172**, 1:3 portrait | sRGB; clamp; preserve the whole image and its aspect ratio |
 
-Both are optional. A code-built grain and small bump map keep the complete geometry textured when files are absent or fail. **Uploaded surface maps** compares the owner maps with these procedural surfaces. The retired panorama, distant cutout atlas and panel atlas are no longer requested. This pass adds no binary assets.
+The image stays fixed during the scrolling route, then its crop moves from the lower part to the upper part during the camera swing. Sampling is affine in screen space: uniform scale, fixed horizontal crop and vertical offset only. The backdrop is drawn behind the 3D station with depth writes disabled. The full-image inspection uses an aspect-preserving fit with side margins. It is never wrapped onto a sphere or skewed by the perspective camera.
+
+Restart Vite after adding or replacing media so its optional asset manifest can discover and version the file. Whole-image downsampling is safe. Keep generated images out of the code PR; the owner uploads reviewed media. A code-drawn planet/starfield remains available when the backdrop is missing or fails.
+
+The station also reuses `public/encounters/interceptor-metal.png` and `public/encounters/io-ceramic.png` as repeating sRGB surface maps. **Reviewed artwork** compares uploaded artwork with procedural fallbacks. Both map sets preserve the same 3D station geometry and lane clearance.
 
 ## Ownership and checks
 
-Static geometry batches by material, with face UVs measured in local surface units. Textures can change without changing geometry, bounds, lane clearance or progression. The surface palette owns both active and inactive map variants and releases each once. Leaving the study cancels listeners, orbit input, observation, texture loading and frame scheduling; disposal waits for preparation, then releases both scenes, shadow resources, environment texture and renderer/context.
+The palette owns active and inactive metal/ceramic maps; the backdrop owns its image independently. Repeated control changes do not reupload the backdrop or dispose it twice. Geometry batches by material, and template clones share buffers. Pausing freezes every clock-driven pose, light bus, star rotation, world movement and backdrop crop.
 
-The study stays outside production navigation and the seven offline flight packages. The lightweight menu imports no renderer or media. This PR remains a bay/camera study; the full production route and enemy/boss combat follow scene review.
+Leaving the study cancels UI/orbit listeners, observation, texture loading and frame scheduling. Disposal waits for preparation and releases both scenes, owned maps, environment/shadow resources and renderer/context. The study stays outside production navigation and the seven offline flight packages. This PR covers the route scenery and camera behavior; combat follows visual review.

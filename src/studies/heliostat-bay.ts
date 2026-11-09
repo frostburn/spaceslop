@@ -1,14 +1,16 @@
 import * as T from 'three';
 import { heliostatBatch, type Point3 } from './heliostat-geometry';
 import type { HeliostatMaterials } from './heliostat-materials';
+import { addServiceMachinery, coolingCell, dockingCell, type HeliostatBayKind } from './heliostat-machinery';
 
-export function createHeliostatBay(m: HeliostatMaterials) {
+export function createHeliostatBay(m: HeliostatMaterials,kind:HeliostatBayKind='generation') {
   const root = new T.Group(); root.name = 'modeled-corridor-bay';
   const b = heliostatBatch(root), casings = new T.Group(); root.add(casings);
   const shell = heliostatBatch(casings);
   for (const side of [-1, 1]) {
     const x = side * 6.2;
     b.box([4.6, 27, .5], [side * 6.7, 4, -3.65], m.dark, .06);
+    b.box([4.4,1.2,.3],[side*6.7,18,-3.65],m.dark,.035);
     b.box([.24, 27, .24], [side * 4.3, 4, -3.3], m.titanium);
     for (let i = 0; i < 14; i++) {
       const y = -8 + i * 1.9;
@@ -18,6 +20,8 @@ export function createHeliostatBay(m: HeliostatMaterials) {
     }
     b.rod([side * 4.08, -8, -2.28], [side * 4.08, 16.7, -2.28], .035, m.titanium);
     for (const y of [-2, 8]) {
+      if(kind==='cooling'){coolingCell(b,shell,m,x,y);continue;}
+      if(kind==='docking'&&y<0){dockingCell(b,shell,m,x,y);continue;}
       shell.box([3.2, 4.8, .3], [x, y, -2.85], m.titanium, .08);
       shell.box([.3, 4.8, 3.65], [x + side * 1.45, y, -.95], m.ceramic, .08);
       shell.box([2.7, .32, 3.65], [x, y - 2.2, -.95], m.ceramic, .07);
@@ -57,13 +61,15 @@ export function createHeliostatBay(m: HeliostatMaterials) {
         const a = k * Math.PI / 2;
         b.rod([cx, 1.6, -2.1], [cx + Math.cos(a) * .27, 1.6, -2.1 + Math.sin(a) * .27], .025, m.titanium, 6);
       }
-      b.pipe([[cx, 3.2, -1.45], [cx, 3.2, -.8], [cx, 4.1, -.6], [cx, 5.7, -.9]], .12, m.copper);
-      b.rod([cx,5.55,-.9],[cx,5.95,-.9],.2,m.titanium,12);
+      const inletY=kind==='cooling'?6.3:5.7,inletZ=kind==='cooling'?-1.65:-.9;
+      b.pipe([[cx, 3.2, -1.45], [cx, 3.2, -.8], [cx, 4.1, -.6], [cx,inletY,inletZ]], .12, m.copper);
+      b.rod([cx,inletY-.15,inletZ],[cx,inletY+.25,inletZ],.2,m.titanium,12);
       b.box([.6, .13, .28], [cx, 1.6, -1.7], m.cyan, .02);
     }
     for (let p = 0; p < 3; p++) {
       const cx = x + side * (1.75 + p * .25);
       b.rod([cx, -8.5, -2.8], [cx, 16.5, -2.8], .085, m.copper);
+      b.pipe([[cx,16.5,-2.8],[cx,17.5,-2.6],[cx,18.5,-2.6],[cx,19.5,-2.8]],.085,m.copper);
       for (let j = 0; j < 9; j++) b.rod([cx, -8 + j * 3, -2.8], [cx, -7.88 + j * 3, -2.8], .13, m.titanium);
     }
     for (const y of [-1, 10]) {
@@ -88,11 +94,13 @@ export function createHeliostatBay(m: HeliostatMaterials) {
   for (let i = -5; i <= 5; i++) b.box([.42, .12, .12], [i, 16.1, 4.7], m.amber);
   b.finish(); shell.finish();
   casings.traverse(node => { if (node instanceof T.Mesh) node.castShadow = true; });
+  addServiceMachinery(root,m,kind);
   return { root, casings };
 }
 
 export function createHeliostatBus(m: HeliostatMaterials) {
   const root = new T.Group(), b = heliostatBatch(root);
+  root.name='electric-service-bus';
   for (const side of [-1, 1]) {
     const points: Point3[] = Array.from({ length: 23 }, (_, i) => [side * 4.38 + Math.sin(i * 3.7) * .06, -6 + i * .9, -1.6 + Math.sin(i * 7) * .08]);
     for (let i = 1; i < points.length; i++) b.rod(points[i - 1], points[i], .015, m.cyan, 5);

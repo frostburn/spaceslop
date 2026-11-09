@@ -8,31 +8,35 @@
   <style>
     *{box-sizing:border-box}body{margin:0;background:#080e13;color:#dbe4e5;font:14px system-ui,sans-serif}
     main{display:flex;gap:32px;justify-content:center;align-items:flex-start;padding:24px}
-    .stage{position:relative;width:min(48vw,470px);flex-shrink:0}canvas{display:block;width:100%;aspect-ratio:9/16;background:#010609;border:1px solid #344a51}
+    .stage{position:sticky;top:24px;width:min(48vw,470px);flex-shrink:0}canvas{display:block;width:100%;aspect-ratio:9/16;background:#010609;border:1px solid #344a51}
     .tag{position:absolute;top:14px;left:14px;pointer-events:none;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#9ccecd;background:#061118b8;padding:7px 9px}
-    aside{max-width:340px;padding:18px 0}a{color:#9cdcd5;display:block;width:fit-content;line-height:1.6}h1{font-size:30px;margin:25px 0 12px;font-weight:550;letter-spacing:-.03em}h1 small{font-size:12px;display:block;letter-spacing:.16em;text-transform:uppercase;color:#b9a47b;margin-bottom:10px}
+    aside{max-width:350px;max-height:calc(100svh - 48px);overflow-y:auto;scrollbar-width:thin;padding:18px 8px 0 0}a{color:#9cdcd5;display:block;width:fit-content;line-height:1.6}h1{font-size:30px;margin:25px 0 12px;font-weight:550;letter-spacing:-.03em}h1 small{font-size:12px;display:block;letter-spacing:.16em;text-transform:uppercase;color:#b9a47b;margin-bottom:10px}
     p{line-height:1.65;color:#a6b9bd}fieldset{border:0;border-top:1px solid #2c3d43;padding:16px 0;margin:20px 0 0}legend{padding-right:12px;color:#c9d4d6;font-size:12px;text-transform:uppercase;letter-spacing:.08em}
     label{display:block;margin:12px 0;color:#c7d4d5}input[type=range]{width:100%;accent-color:#9ed9d3;margin:14px 0 18px}input[type=checkbox]{accent-color:#8bc8c0;margin-right:8px}
     button{cursor:pointer;background:#17292e;color:#dcebea;border:1px solid #466067;border-radius:4px;padding:9px 13px;font:inherit}button:hover,button[aria-pressed=true]{background:#29494e;border-color:#9acbc6}button:focus-visible,a:focus-visible{outline:2px solid #f1c27d;outline-offset:4px}
     .presets{display:flex;gap:6px}.presets button{flex:1;font-size:12px}#play{margin:14px 0 0;min-width:120px}output{font-variant-numeric:tabular-nums;color:#c7dedc}#assets{font-size:12px;color:#b9a47b}footer{margin-top:22px;border-top:1px solid #2c3d43;padding-top:16px;font-size:12px}#error{color:#ffbd9e}
-    @media(max-width:720px){main{display:block;padding:12px}.stage{width:min(100%,350px,36.56svh);margin:auto}aside{max-width:430px;margin:auto;padding:8px 3px}h1{font-size:25px;margin-top:16px}fieldset{margin-top:16px}p{font-size:13px}}
+    @media(max-width:720px){main{display:block;padding:12px}.stage{position:relative;top:auto;width:min(100%,350px,36.56svh);margin:auto}aside{max-width:430px;max-height:none;overflow:visible;margin:auto;padding:8px 3px}h1{font-size:25px;margin-top:16px}fieldset{margin-top:16px}p{font-size:13px}}
   </style>
 </head>
 <body>
   <main>
-    <div class="stage"><canvas id="preview" aria-label="Three-dimensional Uranus power-plant corridor"></canvas><span class="tag">Heliostat / Bay 01</span></div>
+    <div class="stage"><canvas id="preview" aria-label="Three-dimensional Uranus power-plant corridor"></canvas><span class="tag" id="stage-label">Heliostat / Docking spine</span></div>
     <aside>
       <a href="./">← Main menu</a>
-      <h1><small>Uranus orbital power plant</small>3D corridor study.</h1>
-      <p>Modeled generators, coolant pumps, radiators and a complete stellar collector. Uranus is a lit 3D globe with narrow rings in its equatorial plane.</p>
+      <h1><small>Uranus orbital power plant</small>Station route study.</h1>
+      <p>Ten screens of docking bays, generator galleries, cooling yards and containment machinery lead to the stellar collector.</p>
+      <fieldset><legend>Station route</legend>
+        <label for="section">Jump to section <select id="section"><option value="0">Docking spine</option><option value="20">Generator galleries</option><option value="45">Heat exchange</option><option value="70">Containment approach</option><option value="100">Camera swing</option><option value="108">Stellar collector</option></select></label>
+        <input id="time" type="range" min="0" max="108" step="0.1" value="0" aria-label="Station timeline">
+        <output id="clock">Preparing station…</output><br><button id="play" aria-pressed="false" disabled>Play study</button>
+      </fieldset>
       <fieldset><legend>Camera swing</legend>
-        <div class="presets"><button data-pose="0" aria-pressed="true">Flight</button><button data-pose="0.5" aria-pressed="false">Midpoint</button><button data-pose="1" aria-pressed="false">Head-on</button><button id="inspect-planet" aria-pressed="false">Uranus</button></div>
+        <div class="presets"><button data-pose="0" aria-pressed="true">Flight</button><button data-pose="0.5" aria-pressed="false">Midpoint</button><button data-pose="1" aria-pressed="false">Head-on</button><button id="inspect-backdrop" aria-pressed="false">Backdrop</button></div>
         <label for="swing">View angle <output id="angle">0%</output></label>
         <input id="swing" type="range" min="0" max="1" step="0.005" value="0" aria-label="Camera swing">
-        <output id="clock">0.0 s · Flight</output><br><button id="play" aria-pressed="false">Play study</button>
       </fieldset>
       <fieldset><legend>Inspect layers</legend>
-        <label><input id="artwork" type="checkbox" checked> Uploaded surface maps</label>
+        <label><input id="artwork" type="checkbox" checked> Reviewed artwork</label>
         <label><input id="sky" type="checkbox" checked> Uranus and stars</label>
         <label><input id="distant" type="checkbox" checked> Distant power plant</label>
         <label><input id="corridor" type="checkbox" checked> Foreground corridor</label>
@@ -40,9 +44,9 @@
         <label><input id="orbit" type="checkbox"> Orbit view · drag to inspect</label>
         <p id="assets" role="status">Preparing procedural scene…</p>
       </fieldset>
-      <p>Every structure keeps its depth through the camera swing. The ship and sample shots share a physical heading. Pause freezes machinery, star rotation and travel.</p>
+      <p>Service arms and cooling fans use the paused scene clock. The tall Uranus image pans vertically during the final camera swing; its scale and proportions stay fixed.</p>
       <p id="error" role="alert" hidden></p>
-      <footer><a href="./workshop.html">Asset workshop</a><a href="./io-study.html">Io camera study</a><p>Vite development only. This is an art/camera experiment; the full stage, enemy roster and boss follow after review.</p></footer>
+      <footer><a href="./workshop.html">Asset workshop</a><a href="./io-study.html">Io camera study</a><p>Vite development only. This route study covers scenery and camera behavior; combat follows visual review.</p></footer>
     </aside>
   </main>
   <script type="module" src="/src/heliostat-study.ts"></script>
