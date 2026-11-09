@@ -1,0 +1,24 @@
+import * as T from 'three';
+import {loadEncounterTexture} from '../encounter-texture';
+import {createMammothAssets,createMammoth} from './mammoths';
+import {createHydraAssets,createRiverHydra} from './hydra';
+import {createSummerIce} from './ice';
+import {createSummerTerrain} from './terrain';
+import {createLotusPalace} from './palace';
+import {SUMMER_FLOOR,summerSection} from './layout';
+
+export function createSummerStudies(){
+  const mammals=createMammothAssets(),mammoth=createMammoth(mammals),hydras=createHydraAssets(),hydra=createRiverHydra(hydras,true);
+  const terrain=createSummerTerrain(),ice=createSummerIce(),meadow=new T.Group(),palace=createLotusPalace();palace.root.position.y=0;meadow.add(terrain.root,ice.root);
+  const herd=[createMammoth(mammals),createMammoth(mammals)];
+  herd.forEach((r,i)=>{r.root.position.set(i?5:-5,i?5:-3,SUMMER_FLOOR+.9);if(i)r.root.scale.setScalar(.6);meadow.add(r.root);});
+  void loadEncounterTexture('summerMammoth',mammals.setAtlas);
+  void loadEncounterTexture('summerHydra',hydras.setAtlas);
+  void loadEncounterTexture('summerIce',ice.setAtlas);
+  return{
+    summer_mammoth:{root:mammoth.root,duration:24,pose(time:number){mammoth.pose(time);return 'grazing / trunk / head / breathing / occasional step';}},
+    summer_hydra:{root:hydra.root,bounds:new T.Box3(new T.Vector3(-4,-2,-4),new T.Vector3(4,11,1)),duration:8,pose(time:number){hydra.pose(time,Math.max(0,Math.sin(time*2)));return 'three articulated necks / central crown';}},
+    summer_meadow:{root:meadow,bounds:new T.Box3(new T.Vector3(-12,-15,-18),new T.Vector3(12,15,-14)),duration:100,pose(time:number){const scroll=Math.min(210,time*2.8);terrain.root.position.y=ice.root.position.y=-scroll;terrain.update(scroll,time);ice.update(scroll,time);herd.forEach((r,i)=>r.pose(time,i*3));return summerSection(time);}},
+    summer_palace:{root:palace.root,bounds:new T.Box3(new T.Vector3(-16,-17,-18),new T.Vector3(16,17,5)),duration:20,pose(time:number){palace.update(time);return 'lotus canopies / botanical courts / lightly tinted glass dome';}},
+  };
+}

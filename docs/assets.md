@@ -51,3 +51,16 @@ Generated revisions are delivered through chat for review and manual owner uploa
 | `public/encounters/heliostat-manowar.png` | RGBA PNG, currently 627×627, equal 2×2 cells; preserve alpha | Top row: float / sail. Bottom row: harness / tendril. UV crops are resolution independent; resize the whole sheet with its layout and alpha intact. |
 
 The guard’s optional raster modules share one alpha-tested material, pose without new geometry and warm before launch. The modeled body remains the fallback when the image is absent or fails. Alpha never changes hitboxes or firing time. Existing alloy and ceramic maps supply the station surfaces. Both the playable sector and Heliostat workshop use the same atlas. No new generated image binaries belong in the code PR.
+
+
+## Summer Thaw media
+
+The three smooth painted RGBA sheets are delivered through chat for owner review and upload. They are optional; this PR contains only source-built scenery and shape fallbacks. Preserve the entire transparent canvas and relative part positions. Resize the whole image with its aspect ratio locked; do not trim, rearrange cells, flatten alpha or pad the sheet to square. Normalized UV bounds allow smaller versions without source changes. About 768 pixels wide is a reasonable first upload size; retaining native size is also supported.
+
+| Intended repository path | Sheet and native size | Import settings |
+| --- | --- | --- |
+| `public/encounters/summer-mammoth.png` | 1536×1024, 3 columns × 2 rows. Torso, head, upper trunk; lower trunk, foreleg, hind leg. | RGBA PNG, sRGB, clamp to edge, normal mipmaps. |
+| `public/encounters/summer-ice.png` | 1246×1262, four formations: low snowbank, glacier cliff, hollow ice arch, crevassed slab. | RGBA PNG, sRGB, clamp to edge, normal mipmaps. Keep the hole transparent. |
+| `public/encounters/summer-hydra.png` | 1246×1263, four parts: body, head, curved neck, spare tail. The body already includes a tail; the spare is reserved. | RGBA PNG, sRGB, clamp to edge, normal mipmaps. Preserve the unequal painted margins. |
+
+Ice and hydra bounds are measured from the full sheets rather than assuming perfectly centered square cells. Hydra neck strips are cut in UVs in-engine, so no additional exported images are needed. The meadow, river, botanical palace, glass dome, palette cycling and foliage are procedural and need no large backdrop. Summer also reuses the optional shared ship alloy. Rebuild Vite after adding/replacing assets so hashed URLs and the selected sector's offline package reflect them. Missing media retain the same encounters, movement, controls, collisions and final fight.

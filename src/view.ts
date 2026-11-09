@@ -301,7 +301,7 @@ export class FlightView {
     this.pitch = orientation?.pitch ?? 0;
     this.bank = orientation?.bank ?? 0;
     this.viewPitch = orientation?.viewPitch ?? 0;
-    this.rotation.setFromAxisAngle(this.axis, (eased - 1) * Math.PI / 2);
+    this.rotation.setFromAxisAngle(this.axis, this.level.fixedCamera ? 0 : (eased - 1) * Math.PI / 2);
     this.plane.quaternion.copy(this.rotation);
     this.keyLight?.position.set(flight.level === 'vents' || orientation ? -5 : 3, flight.level === 'vents' || orientation ? -4 : 5, flight.level === 'vents' || orientation ? 12 : 6);
     if (orientation)
