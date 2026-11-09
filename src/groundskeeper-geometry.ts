@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { preserveRandom } from './preserve-layout';
+import { gkCamouflage } from './groundskeeper-plumage';
 
 // Merge only fixed children of an articulation group. Animated pivots and
 // instanced coats retain their identity; teeth and toes need no individual draws.
@@ -36,7 +37,7 @@ export function gkPlumage(geometry: T.BufferGeometry, material: T.Material, cent
   surface?: (p: T.Vector3, n: T.Vector3) => void) {
   const mesh = new T.InstancedMesh(geometry, material, count), random = preserveRandom(seed);
   const n = new T.Vector3(), p = new T.Vector3(), shaft = new T.Vector3(), across = new T.Vector3();
-  const m = new T.Matrix4(), rotation = new T.Quaternion(), scale = new T.Vector3(), color = new T.Color(), buff = new T.Color(0xb5a68a);
+  const m = new T.Matrix4(), rotation = new T.Quaternion(), scale = new T.Vector3(), color = new T.Color();
   for (let i = 0; i < count; i++) {
     const z = 1 - 2 * (i + .5) / count, a = i * 2.399963229728653 + (random() - .5) * .4, ring = Math.sqrt(1 - z * z);
     p.set(Math.cos(a) * ring, Math.sin(a) * ring, z);
@@ -50,7 +51,7 @@ export function gkPlumage(geometry: T.BufferGeometry, material: T.Material, cent
     scale.set(l * (.8 + random() * .3), l, l);
     m.compose(p, rotation, scale); mesh.setMatrixAt(i, m);
     const front = dark ? .1 : T.MathUtils.smoothstep(-n.y, -.2, .65);
-    color.setHex(0x5c493c).lerp(buff, front).multiplyScalar(.9 + random() * .19);
+    gkCamouflage(color,p.x,p.y,p.z,front).multiplyScalar(.92 + random() * .16);
     mesh.setColorAt(i, color);
   }
   mesh.name = 'coarse-feather-plumage'; mesh.castShadow = mesh.receiveShadow = true;

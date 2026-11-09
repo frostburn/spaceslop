@@ -5,6 +5,7 @@ import { gkFeatherGeometry, gkPlumage, gkTorsoSurface, gkTube, mergeGkFixed } fr
 import { createGroundskeeperMaterials } from './groundskeeper-materials';
 import { createGroundskeeperFace } from './groundskeeper-face';
 import { preserveRandom } from './preserve-layout';
+import { gkCamouflage } from './groundskeeper-plumage';
 
 const vec = (p: GkPoint) => new T.Vector3(p.x, p.y, p.z);
 
@@ -102,7 +103,7 @@ export function createGroundskeeper() {
   const direction = new T.Vector3(), start = new T.Vector3(), finish = new T.Vector3(), basis = new T.Matrix4();
   const n = new T.Vector3(), across = new T.Vector3(), shaft = new T.Vector3(), transform = new T.Object3D();
   const center = new T.Vector3(), before = new T.Vector3(), after = new T.Vector3(), outward = new T.Vector3();
-  const axis = new T.Vector3(0, 1, 0), tint = new T.Color(), neckLight = new T.Color(0xb9aa8e);
+  const axis = new T.Vector3(0, 1, 0), tint = new T.Color();
   function span(group: T.Group, a: GkPoint, b: GkPoint, nominal: number) {
     group.position.copy(vec(a)); direction.copy(vec(b)).sub(group.position);
     group.quaternion.setFromUnitVectors(axis, direction.clone().normalize()); group.scale.y = direction.length() / nominal;
@@ -150,7 +151,7 @@ export function createGroundskeeper() {
       transform.position.copy(center).addScaledVector(outward, r + scatter.lift);
       transform.quaternion.setFromRotationMatrix(basis.makeBasis(across, shaft, outward));
       transform.scale.set(scatter.width, scatter.length, .65); transform.updateMatrix(); neckFeathers.setMatrixAt(i, transform.matrix);
-      if (time === 0) { tint.setHex(0x66503e).lerp(neckLight, T.MathUtils.smoothstep(-outward.y,-.1,.7)).multiplyScalar(scatter.shade); neckFeathers.setColorAt(i, tint); }
+      if (time === 0) { gkCamouflage(tint,Math.cos(a)*r,Math.sin(a)*r,t*4,T.MathUtils.smoothstep(-outward.y,-.1,.7)).multiplyScalar(scatter.shade); neckFeathers.setColorAt(i, tint); }
     }
     neckFeathers.instanceMatrix.needsUpdate = true;
     head.updateMatrix();

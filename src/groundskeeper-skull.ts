@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { preserveRandom } from './preserve-layout';
+import { gkCamouflage } from './groundskeeper-plumage';
 
 const rows = 64, sides = 64, length = 3.15, back = .75;
 const profile = [[.75, .38, -.22, .51], [.5, .63, -.22, .76], [.25, .72, -.22, .78],
@@ -42,6 +43,9 @@ export function gkSkullGeometry() {
     positions.push(p.x, p.y, p.z); uv.push(angle / (Math.PI * 2), (back - p.y) / length);
     const eye = Math.exp(-((Math.abs(p.x) - GROUNDSKEEPER_EYE.x) ** 2 / .07 + (p.y - GROUNDSKEEPER_EYE.y) ** 2 / .30 + (p.z - GROUNDSKEEPER_EYE.z) ** 2 / .10));
     color.copy(base).lerp(patch, eye * .75).multiplyScalar(.87 + T.MathUtils.smoothstep(p.z, -.1, .7) * .13);
+    const side=T.MathUtils.smoothstep(Math.abs(p.x),.25,.55),along=Math.exp(-((p.y+.30)**2)/.7);
+    const mask=Math.exp(-((p.z-.49)**2)/.007)*side*along,brow=Math.exp(-((p.z-.66)**2)/.004)*side*along;
+    color.lerp(new T.Color(0x382e26),mask*.82).lerp(new T.Color(0xd2c09b),brow*.8);
     color.lerp(inner, T.MathUtils.smoothstep(depth, .025, .23)); colors.push(color.r, color.g, color.b);
     return index;
   }
@@ -117,7 +121,7 @@ export function gkSkullGeometry() {
 export function gkScalpPlumage(feather: T.BufferGeometry, material: T.Material) {
   const count = 850, mesh = new T.InstancedMesh(feather, material, count), random = preserveRandom(201);
   const transform = new T.Object3D(), normal = new T.Vector3(), shaft = new T.Vector3(), across = new T.Vector3(), basis = new T.Matrix4(), tint = new T.Color();
-  const flow = new T.Vector3(0, 1, -.15), light = new T.Color(0x8b785e);
+  const flow = new T.Vector3(0, 1, -.15);
   for (let i = 0; i < count; i++) {
     let y = .75 - 1.6 * (i + .5) / count + .035 * Math.sin(i * 1.7);
     const a = ((i * 2.399963) % (Math.PI * 2)) / (Math.PI * 2) * 3.5 - 1.75;
@@ -128,7 +132,7 @@ export function gkScalpPlumage(feather: T.BufferGeometry, material: T.Material) 
     transform.quaternion.setFromRotationMatrix(basis.makeBasis(across, shaft, normal));
     const length = (.18 + .38 * T.MathUtils.smoothstep(y, -.85, -.25) + Math.max(0, y) * .25) * (.82 + random() * .28);
     transform.scale.set(length * 1.4, length, length); transform.updateMatrix(); mesh.setMatrixAt(i, transform.matrix);
-    tint.setHex(0x65503f).lerp(light, 1 - T.MathUtils.smoothstep(y, -.6, .3)).multiplyScalar(.91 + random() * .17); mesh.setColorAt(i, tint);
+    gkCamouflage(tint,transform.position.x,transform.position.y,transform.position.z,.15,true).multiplyScalar(.92 + random() * .16); mesh.setColorAt(i, tint);
   }
   mesh.name = 'layered-scalp-and-cheek-feathers'; mesh.computeBoundingSphere(); mesh.boundingSphere!.radius += .5;
   return mesh;

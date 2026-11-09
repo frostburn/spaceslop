@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { preserveRandom } from './preserve-layout';
+import { gkFeatherPattern } from './groundskeeper-plumage';
 
 function detailTexture(data: Uint8Array, size: number, color = true) {
   const texture = new T.DataTexture(data, size, size);
@@ -52,14 +53,9 @@ export function createGroundskeeperMaterials() {
     shader.uniforms.gkPuff = puff;
     shader.vertexShader = 'uniform float gkPuff;\n' + shader.vertexShader;
     shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed.z += uv.y*uv.y*gkPuff*.42;');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `
-      #ifdef USE_MAP
-        float vane = dot(texture2D(map,vMapUv).rgb,vec3(.2126,.7152,.0722));
-        diffuseColor.rgb *= clamp(.85+(vane-.4)*.9,.56,1.13);
-      #endif
-    `);
+    gkFeatherPattern(shader);
   };
-  feathers.customProgramCacheKey = () => 'groundskeeper-layered-feathers-v2';
+  feathers.customProgramCacheKey = () => 'groundskeeper-sparrow-feathers-v3';
   const skin = neutralGrain(new T.MeshStandardMaterial({ color: 0x8b806c, map: skinMap, bumpMap: scaleMap, bumpScale: .035, roughness: .82 }), .65);
   const face = neutralGrain(skin.clone(), .65); face.color.setHex(0xffffff); face.vertexColors = true;
   const ochre = neutralGrain(skin.clone(), .65); ochre.color.setHex(0x927354);

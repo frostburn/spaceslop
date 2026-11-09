@@ -7,6 +7,7 @@ const server=await createServer({root:new URL('..',import.meta.url).pathname,con
 after(()=>server.close());
 const m=await server.ssrLoadModule('/src/preserve-flyer.ts');
 const {createFlyerAssets,createPreserveFlyer}=await server.ssrLoadModule('/src/preserve-flyer-rig.ts');
+const geometry=await server.ssrLoadModule('/src/preserve-flyer-geometry.ts');
 const {Flight,STEP}=await server.ssrLoadModule('/src/game.ts');
 const course={formation:'loop',mirror:1,slot:0,count:4};
 const angle=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
@@ -84,4 +85,22 @@ test('four articulated fans, toothed snout and narrow long tail share resources 
  rig.root.traverse(o=>{if(o.isMesh)assert(geometries.has(o.geometry));});
  const texture=new T.Texture();a.setFeathers(texture);assert.equal(a.plumage.map,texture);assert.equal(a.plumage.bumpMap,texture);
  const box=new T.Box3().setFromObject(rig.root);assert(!box.isEmpty());
+});
+
+test('sculpted muzzle has inset nasal passages, watertight boundaries and protected eye sockets',()=>{
+ const a=createFlyerAssets(),skull=a.skull,mesh=new T.Mesh(skull,new T.MeshBasicMaterial({side:T.DoubleSide}));mesh.updateMatrixWorld(true);
+ for(const side of[-1,1]){
+  const y=T.MathUtils.lerp(geometry.flyerSkullProfile[0][0],geometry.flyerSkullProfile.at(-1)[0],42/56);
+  const skin=geometry.flyerSkinPoint(geometry.flyerSkullProfile,y,side*Math.PI/2,true),ray=new T.Raycaster(skin.clone().add(new T.Vector3(side*.1,0,0)),new T.Vector3(-side,0,0));
+  assert(ray.intersectObject(mesh)[0].distance>.117,'nostril is a black dot on the surface instead of an inset passage');
+  const outside=geometry.flyerSkinPoint(geometry.flyerSkullProfile,y+.07,side*Math.PI/2,true);
+  ray.set(outside.clone().add(new T.Vector3(side*.1,0,0)),new T.Vector3(-side,0,0));assert(Math.abs(ray.intersectObject(mesh)[0].distance-.1)<.004,'skin beside the naris must remain continuous');
+  const eye=geometry.FLYER_EYE,p=geometry.flyerSkinPoint(geometry.flyerSkullProfile,eye.y,side*1.08,true),bare=geometry.flyerSkinPoint(geometry.flyerSkullProfile,eye.y,side*1.08,false);
+  assert(Math.abs(p.x)<Math.abs(bare.x)-.006,'eye sits on a bulging sphere rather than in a recess');
+ }
+ const p=skull.attributes.position,ids=[],vertices=new Map(),edges=new Map();
+ for(let i=0;i<p.count;i++){const key=[p.getX(i),p.getY(i),p.getZ(i)].map(v=>Math.round(v*1e6)).join(',');if(!vertices.has(key))vertices.set(key,vertices.size);ids.push(vertices.get(key));}
+ for(let i=0;i<skull.index.count;i+=3){const t=[0,1,2].map(j=>ids[skull.index.getX(i+j)]);for(let j=0;j<3;j++){const a=t[j],b=t[(j+1)%3],key=a<b?`${a}:${b}`:`${b}:${a}`;edges.set(key,(edges.get(key)??0)+1);}}
+ assert([...edges.values()].every(n=>n===2),'nasal rims and caps leave an open edge');
+ mesh.material.dispose();
 });
