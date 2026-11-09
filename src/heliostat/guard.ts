@@ -26,11 +26,11 @@ export function createHeliostatGuard(assets:ReturnType<typeof createGuardAssets>
     const mesh=new T.Mesh(assets.geometries[cell],assets.material);mesh.position.set(x,y,z);mesh.scale.set(w,h,1);parent.add(mesh);return mesh;
   }
   const body=part(raster,0,1.45,2.4,0,0,.21);body.name='guard-raster-body';
-  part(raster,2,1.55,1.45,0,-.32,.29);
+  part(raster,2,1.55,1.45,0,-.32,.29).name='guard-harness';
   const sail=part(raster,1,.63,2.1,0,.08,.32);sail.name='guard-sail';
   for(let i=0;i<5;i++){
     const pivot=new T.Group();pivot.name='guard-filament';pivot.position.set((i-2)*.2,-.6,.12+i*.003);raster.add(pivot);
-    part(pivot,3,.3+(i%2)*.07,1.5+(i%3)*.2,0,-.78,.01);
+    part(pivot,3,.3+(i%2)*.07,1.5+(i%3)*.2,0,-.78,.01).name='guard-tendril-skin';
     pivot.rotation.z=(i-2)*.13;
   }
   const glow=new T.Mesh(assets.lightGeometry,new T.MeshBasicMaterial({color:0xff9d2d}));glow.name='guard-charge';glow.position.set(-.29,-.9,.35);root.add(glow);

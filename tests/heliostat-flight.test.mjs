@@ -154,6 +154,11 @@ test('raster guards share atlas geometry, keep their 3D fallback and freeze rig 
   const texture=new T.Texture();a.setAtlas(texture);pose(2,0,.8);assert(one.getObjectByName('guard-raster').visible);assert(!one.getObjectByName('guard-fallback').visible);
   assert.equal(one.getObjectByName('guard-raster-body').geometry,two.getObjectByName('guard-raster-body').geometry);
   const before=one.getObjectsByProperty('name','guard-filament').map(n=>n.quaternion.toArray());pose(2,0,.8);assert.deepEqual(one.getObjectsByProperty('name','guard-filament').map(n=>n.quaternion.toArray()),before);
+  const harness=one.getObjectByName('guard-harness'),body=one.getObjectByName('guard-raster-body'),tendril=one.getObjectsByProperty('name','guard-tendril-skin')[0];
+  const rigid=harness.scale.toArray(),bodyScale=body.scale.toArray(),skinScale=tendril.scale.toArray(),fallbackScale=one.getObjectByName('guard-organic-float').scale.toArray();
+  pose(3,0,.8);assert.notDeepEqual(body.scale.toArray(),bodyScale);assert.notDeepEqual(tendril.scale.toArray(),skinScale);
+  assert.notDeepEqual(one.getObjectByName('guard-organic-float').scale.toArray(),fallbackScale);assert.deepEqual(harness.scale.toArray(),rigid);
+  pose(2,0,.8);assert.deepEqual(body.scale.toArray(),bodyScale);assert.deepEqual(tendril.scale.toArray(),skinScale);
   texture.dispose();m.releaseTextures();
 });
 

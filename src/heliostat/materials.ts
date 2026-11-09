@@ -1,6 +1,7 @@
 import * as T from 'three';
 import type { HeliostatArt } from './art';
 import { createThermalMaterials } from './thermal';
+import { weatherHeliostatMaterial } from './weathering';
 
 function grainMap(bump: boolean) {
   const n = 128, bytes = new Uint8Array(n * n * 4);
@@ -42,6 +43,8 @@ export function createHeliostatMaterials() {
     amber: new T.MeshStandardMaterial({ color: 0xf6b35b, emissive: 0xffac38, emissiveIntensity: 2, roughness: .4 }),
     hotCoil: thermal.hotCoil, starstuff: thermal.starstuff, plasmaHalo: thermal.plasmaHalo, containmentGlass: thermal.containmentGlass,
   };
+  for(const key of ['titanium','copper','dark','ceramic','graphite','blue'] as const)
+    weatherHeliostatMaterial(materials[key],key==='ceramic'||key==='graphite'?0:key==='copper'?.45:.7,key==='copper');
   return {
     ...materials,
     updateThermal: thermal.updateThermal,

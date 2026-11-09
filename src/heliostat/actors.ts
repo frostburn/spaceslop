@@ -21,8 +21,10 @@ export function createHeliostatDrone(m: HeliostatMaterials) {
 export function createGuardFallback(m: HeliostatMaterials) {
   const root = new T.Group(); root.name = 'cyborg-man-o-war'; const b = heliostatBatch(root);
   const bladder = new T.MeshPhysicalMaterial({color:0x6577ab,roughness:.28,metalness:.12,transparent:true,opacity:.7,depthWrite:false,clearcoat:.7});
-  const float = new T.SphereGeometry(1,24,16); float.scale(.69,1,.33); b.add(float,bladder,[0,0,.18]);
-  const sail = new T.SphereGeometry(1,20,12); sail.scale(.095,.79,.55); b.add(sail,bladder,[0,.08,.48]);
+  const float = new T.Mesh(new T.SphereGeometry(1,24,16).scale(.69,1,.33),bladder);
+  float.name='guard-organic-float';float.position.z=.18;root.add(float);
+  const sail = new T.Mesh(new T.SphereGeometry(1,20,12).scale(.095,.79,.55),bladder);
+  sail.name='guard-organic-sail';sail.position.set(0,.08,.48);root.add(sail);
   const core = new T.SphereGeometry(1,16,10); core.scale(.46,.62,.2); b.add(core,m.blue,[0,0,.12]);
   for(const side of[-1,1]) {
     b.rod([side*.55,-.45,.15],[side*.55,.5,.15],.09,m.titanium,10);
@@ -37,6 +39,7 @@ export function createGuardFallback(m: HeliostatMaterials) {
     f.pipe([[0,0,0],[x,-.35,-.1],[-x,-.72,-.08],[x*.8,-length,.06]],.025,m.blue);
     for(let k=1;k<=4;k++) f.ring(.041,.013,[x*.3,-length*k/5,-.04],m.copper,[Math.PI/2,0,0]);
     f.finish();
+    filament.traverse(node=>{if(node instanceof T.Mesh&&node.material===m.blue)node.name='guard-tendril-skin';});
   }
   return root;
 }
@@ -46,10 +49,21 @@ export function actorPose(root: T.Group) {
   const raster=root.getObjectByName('guard-raster'),fallback=root.getObjectByName('guard-fallback');
   const body=root.getObjectByName('guard-raster-body') as T.Mesh<T.BufferGeometry,T.MeshBasicMaterial>|undefined;
   const sail=root.getObjectByName('guard-sail'),glow=root.getObjectByName('guard-charge') as T.Mesh<T.BufferGeometry,T.MeshBasicMaterial>|undefined;
+  // Rest transforms belong to the rig, while buffers stay shared across actors.
+  // Lower anchors keep soft tissue attached to the rigid harness as it breathes.
+  const soft=[
+    ...[body,root.getObjectByName('guard-organic-float')].filter((o):o is T.Mesh=>!!o).map(node=>({node,anchor:-.6,length:.055,width:.045,phase:0})),
+    ...[sail,root.getObjectByName('guard-organic-sail')].filter((o):o is T.Object3D=>!!o).map(node=>({node,anchor:-.65,length:.075,width:.055,phase:.55})),
+    ...root.getObjectsByProperty('name','guard-tendril-skin').map((node,i)=>({node,anchor:0,length:.075,width:.025,phase:1+i*.63})),
+  ].map(part=>({...part,position:part.node.position.clone(),scale:part.node.scale.clone()}));
   return (time:number,bank:number,charge=0) => {
     root.rotation.y=bank;
     if(raster&&fallback){raster.visible=!!body?.material.map;fallback.visible=!raster.visible;}
-    if(body)body.scale.x=1.45*(1+.018*Math.sin(time*1.4));
+    for(const p of soft){
+      const wave=Math.sin(time*1.45-p.phase),stretch=1+p.length*wave;
+      p.node.scale.set(p.scale.x*(1-p.width*wave),p.scale.y*stretch,p.scale.z);
+      p.node.position.y=p.anchor+(p.position.y-p.anchor)*stretch;
+    }
     if(sail)sail.rotation.y=.06*Math.sin(time*.9);
     if(glow)glow.material.color.setRGB(.55+charge*2.3,.16+charge*.9,.025+charge*.1);
     filaments.forEach((f,i)=>{f.rotation.z=.18*Math.sin(time*1.4-i*.7);f.rotation.x=.12*Math.sin(time*1.1+i*.8);});
