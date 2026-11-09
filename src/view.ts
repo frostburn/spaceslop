@@ -9,11 +9,13 @@ import { createCombatEffects } from './combat-effects';
 import { createLaserContactTrace } from './laser-contact';
 import { createPowerupGraphic } from './powerup-graphics';
 import { createContinuousLaser, createMuzzleFlash, createProjectileBatch, projectileKinds, type ProjectileKind } from './projectile-graphics';
+import { ambusherFeedback } from './preserve-ambusher';
 import { faunaMuzzle } from './vent-fauna';
 import { type LevelId } from './levels';
 import { levelLoaders } from './rendering/loaders';
 import { type LevelFactory, type LevelScene, type LevelFrame } from './rendering/level';
 import { loadCommonTextures } from './rendering/common-textures';
+import { tiltFlightCamera } from './rendering/flight-camera';
 import { disposeScene } from './rendering/dispose';
 export async function createFlightView(canvas: HTMLCanvasElement, level: LevelId, signal = new AbortController().signal) {
   const { createLevel } = await levelLoaders[level]();
@@ -59,6 +61,7 @@ export class FlightView {
   private levelTime = 0;
   private pitch = 0;
   private bank = 0;
+  private viewPitch = 0;
   private player = createFighterRig();
   private playerBurners = shipBurners(this.player.root);
   private bubbleSources: T.Mesh[] = [];
@@ -81,7 +84,7 @@ export class FlightView {
     transparent: true,
     depthWrite: false
   }));
-  private cannonMarker = new T.Mesh(new T.RingGeometry(BOSS_CANNON_RADIUS * BOSS_PROJECTION - 0.06, BOSS_CANNON_RADIUS * BOSS_PROJECTION, 24), new T.MeshBasicMaterial({ color: mint, depthTest: false }));
+  private cannonMarker = new T.Mesh(new T.RingGeometry(BOSS_CANNON_RADIUS * BOSS_PROJECTION - 0.06, BOSS_CANNON_RADIUS * BOSS_PROJECTION, 24), new T.MeshBasicMaterial({ color: mint, depthTest: false, depthWrite: false }));
   private projectiles = Object.fromEntries(projectileKinds.map((kind) => [kind, createProjectileBatch(kind)])) as Record<ProjectileKind, ReturnType<typeof createProjectileBatch>>;
   private playerMuzzle = createMuzzleFlash(teal);
   private droneMuzzle = createMuzzleFlash(mint);
@@ -132,6 +135,7 @@ export class FlightView {
     this.renderer.shadowMap.type = T.PCFShadowMap;
     this.scene.add(this.plane);
     this.level = createLevel({ plane: this.plane, scene: this.scene, signal });
+    this.cannonMarker.renderOrder = 12;
     const p = this.level;
     this.scene.background = new T.Color(p.background ?? sceneColor);
     this.keyLight = new T.DirectionalLight(p.key ?? 0xb9e8ff, p.keyIntensity ?? 2.7);
@@ -288,13 +292,14 @@ export class FlightView {
     const orientation = this.level.orientation?.(this.levelTime, eased);
     this.pitch = orientation?.pitch ?? 0;
     this.bank = orientation?.bank ?? 0;
+    this.viewPitch = orientation?.viewPitch ?? 0;
     this.rotation.setFromAxisAngle(this.axis, (eased - 1) * Math.PI / 2);
     this.plane.quaternion.copy(this.rotation);
     this.keyLight?.position.set(flight.level === 'vents' || orientation ? -5 : 3, flight.level === 'vents' || orientation ? -4 : 5, flight.level === 'vents' || orientation ? 12 : 6);
     if (orientation)
       this.keyLight?.position.set(-5, -5, 12).applyEuler(new T.Euler(-this.pitch, this.bank, 0));
     const stageDistance = this.level.stageDistance;
-    const camera = this.swing === 0 && flight.level === 'preserve' ? this.ortho : this.perspective;
+    const camera = this.perspective;
     const distance = T.MathUtils.lerp(stageDistance, BOSS_CAMERA_DISTANCE, eased);
     this.perspective.fov = T.MathUtils.radToDeg(2 * Math.atan(HEIGHT / 2 / distance));
     this.perspective.updateProjectionMatrix();
@@ -308,9 +313,12 @@ export class FlightView {
         p[i] = o[i] * (1 - eased) + p[i] * eased;
       this.perspective.projectionMatrixInverse.copy(this.perspective.projectionMatrix).invert();
     }
-    camera.position.set(0, 0, distance).applyQuaternion(this.rotation);
-    camera.up.set(0, 1, 0).applyQuaternion(this.rotation);
-    camera.lookAt(0, 0, 0);
+    if (this.viewPitch) tiltFlightCamera(camera, distance, this.viewPitch, this.rotation);
+    else {
+      camera.position.set(0, 0, distance).applyQuaternion(this.rotation);
+      camera.up.set(0, 1, 0).applyQuaternion(this.rotation);
+      camera.lookAt(0, 0, 0);
+    }
     this.player.root.position.set(flight.player.x, flight.player.y, 0);
     this.player.root.rotation.x = orientation ? -this.pitch : -(this.level.shipPitch ?? 1.18) * eased;
     this.player.root.rotation.y = this.bank;
@@ -364,8 +372,9 @@ export class FlightView {
     if (this.cannonMarker.visible) {
       const p = this.level.contact(flight.exposedCannonX, distance, flight);
       this.cannonMarker.position.set(p.x, p.y, 0);
+      this.cannonMarker.scale.setScalar(Math.min(1.25, flight.bossTargetRadius / BOSS_CANNON_RADIUS));
     }
-    this.drawWings(flight, eased, fighterVelocity, flight.level === 'io' ? distance : flight.level === 'titan' ? (eased > 0 ? distance / eased : undefined) : camera === this.ortho ? undefined : distance);
+    this.drawWings(flight, eased, fighterVelocity, flight.level === 'titan' ? (eased > 0 ? distance / eased : undefined) : distance);
     for (const [index, model] of this.drops.entries()) {
       const drop = flight.drops[index];
       model.root.visible = Boolean(drop);
@@ -429,7 +438,7 @@ export class FlightView {
             model = this.level.models[index];
         }
         const end = typeof target === 'number' ? this.level.contact(target, distance ?? BOSS_CAMERA_DISTANCE, flight)
-          : model ? this.laserContact(origin, wing.beamEnd, model, distance) : wing.beamEnd;
+          : model ? this.laserContact(origin, wing.beamEnd, model, distance, this.viewPitch) : wing.beamEnd;
         laser.draw(origin, end, wing.laserHold, this.animationTime, typeof target === 'number' || Boolean(model), flight.phase === 'boss' && target === undefined);
       }
     }
@@ -455,7 +464,7 @@ export class FlightView {
     for (const [enemy, previous] of this.enemyVitals) {
       const laserDamage = (enemy.laserDamage ?? 0) - previous.laserDamage;
       if (previous.hp - enemy.hp - laserDamage > 1e-6 && (enemy.hp === 0 || this.animationTime - previous.at > 0.07)) {
-        this.combat.emit(enemy.hp === 0 ? 'kill' : 'hit', enemy.ventWorm ? faunaMuzzle(enemy) : enemy, enemy.hp === 0 ? orange : teal);
+        this.combat.emit(enemy.hp === 0 ? 'kill' : 'hit', enemy.ambusher ? ambusherFeedback(enemy.ambusher,flight.time) : enemy.ventWorm ? faunaMuzzle(enemy) : enemy, enemy.hp === 0 ? orange : teal);
         previous.at = this.animationTime;
         emitted = true;
       }

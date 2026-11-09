@@ -1,6 +1,6 @@
 # Spaceslop
 
-A portrait browser shoot ’em up and installable PWA. Fly through Hadal, Io, Titan, Frostwake, Broodlock or the overgrown preserve, with selectable pilots, an autofiring drone and collectible wing weapons.
+A portrait browser shoot ’em up and installable PWA. Fly through Hadal, Io, Titan, Frostwake, Broodlock or an overgrown orbital preserve, with selectable pilots, an autofiring drone and collectible wing weapons.
 
 ## Develop
 

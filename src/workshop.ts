@@ -1,3 +1,8 @@
+import { createAmbusherMaterials, createPoolAmbusher } from './preserve-ambusher-rig';
+import { ambusherStudy, AMBUSHER_DURATION, AMBUSHER_FALL } from './preserve-ambusher';
+import { createPreserveUv, preserveLighting } from './preserve-lighting';
+import { createFlyerAssets, createPreserveFlyer } from './preserve-flyer-rig';
+import { flyerMotion, type FlyerCourse } from './preserve-flyer';
 import {createVentBoss} from './vent-boss';
 import {crabSmooth} from './vent-crab';
 import {createFaunaAssets,createWormAssets,createVentShrimp,createVentWorm} from './vent-fauna-rig';
@@ -27,6 +32,11 @@ import {
 import { BOSS_CANNON_X, TRANSITION_TIME } from './game';
 import { createMushroomCluster } from './hive-fungi';
 import { createIceScenery } from './ice-scenery';
+import { createPreserveScenery } from './preserve-scenery';
+import { createGroundskeeper } from './groundskeeper-rig';
+import { groundskeeperAttack, GROUNDSKEEPER_CYCLE } from './groundskeeper';
+import { PRESERVE_APPROACH, PRESERVE_SPEED, preserveSections } from './preserve-layout';
+import { levels } from './levels';
 import { ICE_DURATION, iceSection } from './ice-layout';
 import { createDroneRig, createFighterRig, createScoutRig } from './ship-rigs';
 import { createWingPod } from './wing-pod';
@@ -50,7 +60,8 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   scene.background = new T.Color(0x0b1020);
   const light = new T.DirectionalLight(0xb9e8ff, 2.7);
   light.position.set(3, 5, 6);
-  scene.add(light, new T.HemisphereLight(0xd6e3ff, 0x514873, 1.75));
+  const fill = new T.HemisphereLight(0xd6e3ff, 0x514873, 1.75);
+  const uv = createPreserveUv(); scene.add(light, fill, uv, uv.target);
 
   const raptor = createRaptorRig();
   const interceptor = createInterceptorRig(BOSS_CANNON_X);
@@ -148,7 +159,29 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   void loadEncounterTexture('ventFauna',faunaAssets.setAtlas);
   void loadEncounterTexture('ventWorm',wormAssets.setAtlas);
   const crab=createVentBoss();void loadEncounterTexture('ventCrab',crab.setAtlas);
+  const ambusherMaterials=createAmbusherMaterials(),ambusher=createPoolAmbusher(ambusherMaterials),fallenAmbusher=createPoolAmbusher(ambusherMaterials);
+  void loadEncounterTexture('scales',ambusherMaterials.setScales);
+  const preserve = createPreserveScenery();
+  const flyerAssets = createFlyerAssets(), flyer = createPreserveFlyer(flyerAssets), flockRoot = new T.Group();
+  const flock = Array.from({length:4},()=>createPreserveFlyer(flyerAssets));flockRoot.add(...flock.map(r=>r.root));
+  const loopCourse:FlyerCourse={formation:'loop',mirror:1,slot:0,count:4};
+  void loadEncounterTexture('feathers',flyerAssets.setFeathers);
+  void loadEncounterTexture('scales',flyerAssets.setScales);
+  const keeper = createGroundskeeper(), keeperPreview = new T.Group();
+  keeperPreview.rotation.x = -Math.PI / 2; keeperPreview.position.y = -7; keeperPreview.add(keeper.root);
+  void loadEncounterTexture('feathers', texture => { keeper.setFeatherTexture(texture); preserve.boss.setFeatherTexture(texture); });
+  void loadEncounterTexture('scales', texture => { keeper.setScaleTexture(texture); preserve.boss.setScaleTexture(texture); });
   const assets = {
+    microraptor:{root:flyer.root,duration:5.6,pose(time:number){const p=flyerMotion(time,0,{...loopCourse,formation:'swoop'});const stroke=flyer.pose(time,{...loopCourse,formation:'swoop'},p.bank);return stroke.tuck>.1?'tucked swoop':stroke.burst>.1?'burst wingbeats':'four-wing glide';}},
+    microraptor_flock:{root:flockRoot,duration:12,bounds:new T.Box3(new T.Vector3(-3.5,-9,-1),new T.Vector3(3.5,10,1)),pose(time:number){flock.forEach((r,i)=>{const course={...loopCourse,slot:i},p=flyerMotion(time,0,course);r.root.position.set(p.x,p.y,0);r.pose(time,course,p.bank,p.heading);});return 'staggered train · tangent-continuous loop';}},
+    pool_ambusher:{root:ambusher.root,duration:AMBUSHER_DURATION+2.5,bounds:new T.Box3(new T.Vector3(-3.5,-6.2,-4),new T.Vector3(3.5,3.7,1.5)),pose(time:number){const p=ambusherStudy(time);ambusher.pose(p);return p.phase;}},
+    pool_ambusher_defeat:{root:fallenAmbusher.root,duration:2.5+AMBUSHER_FALL+2,bounds:new T.Box3(new T.Vector3(-3.5,-6.2,-4),new T.Vector3(3.5,3.7,1.5)),pose(time:number){const p=ambusherStudy(time,true);fallenAmbusher.pose(p);return p.dead?'defeated · sideways fall':p.phase;}},
+    groundskeeper: { root: keeperPreview, duration: GROUNDSKEEPER_CYCLE * 4,
+      bounds: new T.Box3(new T.Vector3(-8, -8, -5), new T.Vector3(8, 9, 6)),
+      pose(time: number) { return keeper.pose(time).kind; } },
+    preserve_section: { root: preserve.root, duration: levels.preserve.duration + PRESERVE_APPROACH + GROUNDSKEEPER_CYCLE * 4,
+      bounds: new T.Box3(new T.Vector3(-5, -8, -6), new T.Vector3(5, 8, 1)),
+      pose(time: number) { const rise=T.MathUtils.smoothstep(time, levels.preserve.duration, levels.preserve.duration+PRESERVE_APPROACH); preserve.update(time, rise); const fight=time-levels.preserve.duration-PRESERVE_APPROACH; preserve.boss.pose(fight); return time<levels.preserve.duration?[...preserveSections].reverse().find(section=>section.y<=time*PRESERVE_SPEED)!.name:rise<1?'observation rotunda approach':groundskeeperAttack(fight).kind; } },
     vent_crab:{root:crab.root,duration:12,bounds:new T.Box3(new T.Vector3(-6,-5,-5),new T.Vector3(6,3.5,1.5)),pose(time:number){const left=crabSmooth((time-3)/.8),right=crabSmooth((time-6)/.8),opening=crabSmooth((time-6)/.8),target=time<3?-2.4:time<6?2.4:0;crab.pose(1,Math.max(0,Math.sin(time*3)),target,target,Math.max(0,Math.sin(time*3+1))*.2,108+time,[left,right],opening);return time<3?'crusher charge / barnacle colonies':time<6?'crusher disabled / cutter charge':'both claws disabled / gill chamber';}},
     vent_shrimp:{root:shrimp.root,duration:6,pose(time:number){const next=SHRIMP_FIRST_FIRE+Math.max(0,Math.floor((time-SHRIMP_FIRST_FIRE)/SHRIMP_INTERVAL)+1)*SHRIMP_INTERVAL;shrimp.pose(time,next);return 'swimmerets / abdomen / paired pincers';}},
     vent_worm:{root:worm.root,duration:WORM_INTERVAL+WORM_FIRST_ATTACK,bounds:new T.Box3(new T.Vector3(-2,-10,-.1),new T.Vector3(2,1.5,.6)),pose(time:number){const next=WORM_FIRST_ATTACK+Math.max(0,Math.floor((time-WORM_FIRST_ATTACK)/WORM_INTERVAL)+1)*WORM_INTERVAL;const p=worm.pose(time,next,.12,8.5,.8);return p.phase==='hidden'?'concealed in hole':p.phase==='windup'?'locked aim / warning':p.phase==='retreat'?'withdrawing into hole':'body lunge / bite';}},
@@ -235,6 +268,9 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   void loadEncounterTextures(interceptor, raptor, Object.values(assets).map(({ root }) => root));
   for (const asset of Object.values(assets)) scene.add(asset.root);
   const assetSelect = element<HTMLSelectElement>('asset');
+  const sector = element<HTMLSelectElement>('sector');
+  const groups = Array.from(assetSelect.querySelectorAll('optgroup'));
+  const lastAssets = new Map<string, string>();
   const timeline = element<HTMLInputElement>('timeline');
   const play = element<HTMLButtonElement>('play');
   const motion = element('motion-controls');
@@ -275,6 +311,14 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   function selectAsset() {
     const key = assetSelect.value;
     selected = Object.hasOwn(assets, key) ? assets[key as keyof typeof assets] : assets.raptor;
+    lastAssets.set(sector.value, key);
+    const habitat = sector.value === 'preserve', scenery = key === 'preserve_section';
+    light.color.setHex(habitat ? preserveLighting.key : 0xb9e8ff);
+    light.intensity = habitat ? (scenery ? preserveLighting.keyIntensity : 2.4) : 2.7;
+    fill.color.setHex(habitat ? preserveLighting.sky : 0xd6e3ff);
+    fill.groundColor.setHex(habitat ? preserveLighting.ground : 0x514873);
+    fill.intensity = habitat ? preserveLighting.skyIntensity : 1.75;
+    uv.visible = habitat && !scenery;
     for (const asset of Object.values(assets)) asset.root.visible = asset === selected;
     time = 0;
     motion.hidden = selected.duration === 0;
@@ -286,6 +330,12 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   }
 
   assetSelect.addEventListener('change', selectAsset);
+  function selectSector() {
+    assetSelect.replaceChildren(...groups.filter(group => group.dataset.sector === sector.value));
+    assetSelect.value = lastAssets.get(sector.value) ?? assetSelect.options[0].value;
+    selectAsset();
+  }
+  sector.addEventListener('change', selectSector);
   element('game-view').addEventListener('click', () => fitCamera(gameView));
   element('angle-view').addEventListener('click', () => fitCamera(angleView));
   element('side-view').addEventListener('click', () => fitCamera(sideView));
@@ -313,7 +363,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     fitCamera(cameraView);
   }
 
-  selectAsset();
+  selectSector();
   resize();
   new ResizeObserver(resize).observe(canvas);
 
@@ -336,6 +386,8 @@ if (import.meta.env.DEV) {
   let renderer: T.WebGLRenderer | undefined;
   try {
     renderer = new T.WebGLRenderer({ canvas, antialias: true });
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = T.PCFShadowMap;
   } catch {
     element('viewer-error').hidden = false;
   }

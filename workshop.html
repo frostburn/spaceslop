@@ -16,49 +16,84 @@
         <p id="viewer-error" hidden>WebGL 2 is required for the 3D preview.</p>
       </section>
       <aside class="tools" aria-label="Asset inspection controls">
+        <label for="sector">Sector</label>
+        <select id="sector">
+          <option value="preserve">Orbital preserve</option>
+          <option value="broodlock">Broodlock · Ant hive</option>
+          <option value="ice">Frostwake · Ice field</option>
+          <option value="titan">Titan · Research station</option>
+          <option value="io">Io · Caldera</option>
+          <option value="vents">Hadal · Hydrothermal vents</option>
+          <option value="draconian">Draconian · Prototype</option>
+          <option value="shared">Shared craft &amp; arsenal</option>
+        </select>
         <label for="asset">Asset</label>
         <select id="asset">
-          <option value="ichthyosaur">Ichthyosaur hunter</option>
-          <option value="plesiosaur">Plesiosaur sweeper</option>
-          <option value="caldera">Caldera Engine · support failure</option>
-          <option value="vent_crab">Hadal · Barnacle Sovereign</option>
-          <option value="vent_shrimp">Hadal · Trench shrimp</option>
-          <option value="vent_worm">Hadal · Burrow worm</option>
-          <option value="vent_mortar">Hadal · Barnacle mortar</option>
-          <option value="skipper">Io · Skipper</option>
-          <option value="crucible">Io · Crucible</option>
-          <option value="slag">Io · Crucible slag</option>
-          <option value="burner">Io · Burner flame study</option>
-          <option value="cicada">Titan cicada</option>
-          <option value="cicada_scout">Cicada patrol</option>
-          <option value="centipede">Segmented centipede · split</option>
-          <option value="leviathan">Mosasaur · Leviathan</option>
-          <option value="raptor">Feathered raptor</option>
-          <option value="interceptor">Draconian interceptor</option>
-          <option value="ant">Infected worker ant</option>
-          <option value="soldier">Infected soldier ant</option>
-          <option value="guardian">Brood guardian</option>
-          <option value="mushroom">Hive mushroom cluster</option>
-          <option value="ice_field">Frostwake scenery</option>
-          <option value="fighter">Player fighter</option>
-          <option value="scout">Enemy scout</option>
-          <option value="drone">Support drone</option>
-          <option value="homing">Homing cannon pod</option>
-          <option value="cannon">Standard cannon pod</option>
-          <option value="laser">Continuous laser pod</option>
-          <option value="omega">Omega cannon pod</option>
-          <optgroup label="Ammunition">
+          <optgroup label="Orbital preserve" data-sector="preserve">
+            <option value="preserve_section">Patrol &amp; boss arena</option>
+            <option value="raptor">Feathered raptor</option>
+            <option value="microraptor">Microraptor · Four-wing flight</option>
+            <option value="microraptor_flock">Microraptor · Looping flock</option>
+            <option value="pool_ambusher">Spinosaurus · Ambush</option>
+            <option value="pool_ambusher_defeat">Spinosaurus · Defeat</option>
+            <option value="groundskeeper">The Groundskeeper · Attacks</option>
+          </optgroup>
+          <optgroup label="Broodlock · Ant hive" data-sector="broodlock">
+            <option value="ant">Infected worker ant</option>
+            <option value="soldier">Infected soldier ant</option>
+            <option value="guardian">Brood guardian</option>
+            <option value="mushroom">Hive mushroom cluster</option>
+            <option value="ammo_spore">Hive spore</option>
+          </optgroup>
+          <optgroup label="Frostwake · Ice field" data-sector="ice">
+            <option value="ice_field">Frostwake scenery</option>
+            <option value="ichthyosaur">Ichthyosaur hunter</option>
+            <option value="plesiosaur">Plesiosaur sweeper</option>
+            <option value="leviathan">Mosasaur · Leviathan</option>
+            <option value="ammo_brine">Marine ice volley</option>
+          </optgroup>
+          <optgroup label="Titan · Research station" data-sector="titan">
+            <option value="cicada_scout">Cicada patrol</option>
+            <option value="centipede">Segmented centipede · split</option>
+            <option value="cicada">Titan cicada</option>
+          </optgroup>
+          <optgroup label="Io · Caldera" data-sector="io">
+            <option value="skipper">Skipper</option>
+            <option value="crucible">Crucible</option>
+            <option value="slag">Crucible slag</option>
+            <option value="caldera">Caldera Engine · support failure</option>
+            <option value="burner">Burner flame study</option>
+          </optgroup>
+          <optgroup label="Hadal · Hydrothermal vents" data-sector="vents">
+            <option value="vent_shrimp">Trench shrimp</option>
+            <option value="vent_worm">Burrow worm</option>
+            <option value="vent_mortar">Barnacle mortar</option>
+            <option value="vent_crab">Barnacle Sovereign</option>
+          </optgroup>
+          <optgroup label="Draconian · Prototype" data-sector="draconian">
+            <option value="interceptor">Draconian interceptor</option>
+          </optgroup>
+          <optgroup label="Shared · Craft" data-sector="shared">
+            <option value="fighter">Player fighter</option>
+            <option value="drone">Support drone</option>
+            <option value="scout">Security scout</option>
+          </optgroup>
+          <optgroup label="Shared · Sidearms" data-sector="shared">
+            <option value="homing">Homing cannon pod</option>
+            <option value="cannon">Standard cannon pod</option>
+            <option value="laser">Continuous laser pod</option>
+            <option value="omega">Omega cannon pod</option>
+          </optgroup>
+          <optgroup label="Shared · Ammunition" data-sector="shared">
             <option value="ammo_ship">Ship pulse</option>
             <option value="ammo_drone">Drone pulse</option>
             <option value="ammo_homing">Homing missile</option>
             <option value="ammo_cannon">Cannon tracer</option>
             <option value="ammo_omega">Omega lance</option>
             <option value="ammo_hostile">Hostile plasma</option>
-            <option value="ammo_spore">Hive spore</option>
-            <option value="ammo_brine">Marine ice volley</option>
             <option value="beam_laser">Continuous laser beam</option>
           </optgroup>
-          <optgroup label="Powerups">
+          <optgroup label="Shared · Powerups" data-sector="shared">
             <option value="pickup_homing">Homing pickup</option>
             <option value="pickup_cannon">Cannon pickup</option>
             <option value="pickup_laser">Laser pickup</option>

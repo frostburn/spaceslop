@@ -1,3 +1,6 @@
+import { AMBUSHER_HP, AMBUSHER_SPAWN_LEAD, AMBUSHER_CORPSE_TIME, ambusherSites, ambusherHome, createAmbusherState, stepAmbusher, ambusherPose, ambusherHulls, ambusherBodyHit, ambusherBeamEntry, ambusherHits, defeatAmbusher, type AmbusherState } from './preserve-ambusher';
+import { preserveWaves } from './preserve-waves';
+import { FLYER_HP, flyerMotion, flyerBodyHit, flyerBeamEntry, type FlyerCourse } from './preserve-flyer';
 import {CRAB_HP,CRAB_CLAW_HP,CRAB_CORE_HP,crabTarget,crabSmooth} from './vent-crab';
 import {wormPose,WORM_WINDUP,WORM_REACH} from './vent-worm';
 import {SHRIMP_HP,SHRIMP_FIRST_FIRE,SHRIMP_INTERVAL,WORM_HP,WORM_FIRST_ATTACK,WORM_INTERVAL,shrimpMotion,faunaMuzzle,faunaBodyHit,faunaBeamEntry,type ShrimpCourse} from './vent-fauna';
@@ -20,6 +23,8 @@ import { DRONE_HULL, FIGHTER_HULL, HiveCollision, POD_BOUNDS, POD_HULL } from '.
 import { HIVE_CAMERA_DISTANCE } from './hive-layout';
 import { steerHiveAnt } from './ant-navigation';
 import { HEIGHT, WIDTH } from './playfield';
+import { GROUNDSKEEPER_HP, GROUNDSKEEPER_RADIUS, groundskeeperContact, groundskeeperAttack, groundskeeperHits } from './groundskeeper';
+import { PRESERVE_APPROACH } from './preserve-layout';
 import { CLOSE_CALLS_REQUIRED, HOT_DOCK_COOLDOWN, HOT_DOCK_DISTANCE, type PilotId } from './pilot-data';
 import { WING_FLASH_TIME, WING_FORMATION, wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
 
@@ -44,6 +49,8 @@ type Shot = Point & {
 };
 type Threat = Shot & { graze?: 'near' | 'counted' };
 type Enemy = Point & {
+  flyer?: FlyerCourse;
+  ambusher?: AmbusherState;
   lane: number; age: number; fire: number; hp: number; drop?: WingWeapon; raptor?: boolean; ant?: 'worker' | 'soldier'; marine?: MarineKind; school?: MarineSchool;
   centipede?: CentipedeLink; cicada?: CicadaCourse; skipper?: boolean; crucible?: boolean; slag?: {vx:number;vy:number}; ventAnchor?:number; ventScale?:number; slot?: number; mortarAngle?:number; ventWorm?:boolean; shrimp?:ShrimpCourse; wormReach?:number; wormBend?:number; wormLocked?:boolean;
   course?: number; courseAt?: number; heading?: number; laserDamage?: number;
@@ -70,15 +77,11 @@ const wingShots = {
 };
 
 type Wave = { time: number; lanes: number[]; carrier?: number; drop?: WingWeapon;
+  flyer?: Omit<FlyerCourse, 'slot' | 'count'>;
   raptor?: number; ant?: 'worker' | 'soldier'; marine?: MarineKind; formation?: MarineFormation; mirror?: number;
   centipede?: number; cicada?: Omit<CicadaCourse, 'slot' | 'count'>; skipper?: boolean; crucible?: boolean; ventAnchor?:number; ventWorm?:boolean; shrimp?:Omit<ShrimpCourse,'slot'> };
 
-const stageWaves: Wave[] = [
-  { time: 0.6, lanes: [-2.6, 0, 2.6], carrier: 1, drop: 'homing' },
-  { time: 3.6, lanes: [-2, 2], raptor: 0, carrier: 1, drop: 'cannon' },
-  { time: 6.6, lanes: [-3, 0, 3], carrier: 0, drop: 'laser' },
-  { time: 9.6, lanes: [-1.3, 1.3], carrier: 1, drop: 'omega' },
-];
+const stageWaves: Wave[] = preserveWaves.map(wave => ({ ...wave, lanes: [...wave.lanes] }));
 
 const hiveWaves: Wave[] = [
   { time: 0.8, lanes: [-2.6, 0, 2.6], ant: 'worker', carrier: 1, drop: 'homing' },
@@ -158,6 +161,10 @@ export class Flight {
   charges = 2;
   score = 0;
   bossHealth = BOSS_HP;
+  groundskeeperAim = { x: 0, y: -5.3 };
+  groundskeeperCancelledAt = -100;
+  private groundskeeperAimCycle = -1;
+  private groundskeeperFinalTime = 0;
   crabClawHealth=[CRAB_CLAW_HP,CRAB_CLAW_HP];
   private crabBreakTimes=[-1,-1];
   bossLaserDamage = 0;
@@ -190,6 +197,7 @@ export class Flight {
   private towlineDamage = TOWLINE_DAMAGE;
   private aim?: Point;
   private nextWave = 0;
+  private nextAmbusher = 0;
   private cooldown = 0;
   private droneCooldown = 0;
   private volley = 0;
@@ -208,6 +216,7 @@ export class Flight {
   ) {
     this.droneWeapon = droneWeapon;
     this.pilot = pilot;
+    if (level === 'preserve') this.bossHealth = GROUNDSKEEPER_HP;
     if (level === 'vents')this.bossHealth=CRAB_HP;
     if (level === 'io') this.bossHealth=IO_HP;
     if (level === 'titan') this.bossHealth=CICADA_HP;
@@ -220,9 +229,16 @@ export class Flight {
     }
   }
 
-  get transitionDuration() { return this.level === 'vents' ? VENT_APPROACH : this.level === 'io' ? IO_APPROACH : this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
+  get transitionDuration() { return this.level === 'preserve' ? PRESERVE_APPROACH : this.level === 'vents' ? VENT_APPROACH : this.level === 'io' ? IO_APPROACH : this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
 
-  get bossMaxHealth() { return this.level === 'vents' ? CRAB_HP : this.level === 'io' ? IO_HP : this.level === 'titan' ? CICADA_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
+  get bossMaxHealth() { return this.level === 'preserve' ? GROUNDSKEEPER_HP : this.level === 'vents' ? CRAB_HP : this.level === 'io' ? IO_HP : this.level === 'titan' ? CICADA_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
+  get bossTargetRadius() { return this.level === 'preserve' ? GROUNDSKEEPER_RADIUS : BOSS_CANNON_RADIUS; }
+  get groundskeeperTime() {
+    // Negative time is a quiet idle, continuous through the camera approach.
+    if (this.phase === 'stage') return this.time - this.stageDuration - this.transitionDuration;
+    if (this.phase === 'approach') return this.time - this.transitionDuration;
+    return this.phase === 'boss' ? this.time : this.groundskeeperFinalTime;
+  }
 
   get crabTargetX(){return crabTarget(this.crabClawHealth,this.volley);}
   get crabOffsetX(){return this.phase==='boss'?ventOrbit(this.time).offsetX:0;}
@@ -232,7 +248,10 @@ export class Flight {
 
   get ioLegBroken() { return this.ioCollapseAge >= 0; }
   get ioCollapse() { return this.ioLegBroken ? smooth01(this.ioCollapseAge / 1.2) : 0; }
-  get bossAimY() { return this.level === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).y : BOSS_Y; }
+  get bossAimY() {
+    if (this.level === 'preserve') { const p = groundskeeperContact(this.groundskeeperTime, this.groundskeeperAim, this.groundskeeperCancelledAt); return p.y * 34 / (22 - p.z); }
+    return this.level === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).y : BOSS_Y;
+  }
 
   get stageDuration() { return levels[this.level].duration; }
 
@@ -269,6 +288,7 @@ export class Flight {
   }
 
   get exposedCannonX() {
+    if (this.level === 'preserve') return 0;
     return this.level==='vents'?this.crabTargetX+this.crabOffsetX:this.level === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).x : this.level === 'ice' ? 0 : this.volley % 2 === 0 ? -BOSS_CANNON_X : BOSS_CANNON_X;
   }
 
@@ -336,8 +356,9 @@ export class Flight {
       for (const enemy of this.enemies) {
         if (enemy.hp > 0) this.damageEnemy(enemy, enemy.hp);
       }
-      this.enemies = [];
+      this.enemies = this.enemies.filter(enemy=>enemy.ambusher?.defeatedAt!==undefined);
     } else {
+      if (this.level === 'preserve') this.groundskeeperCancelledAt = this.time;
       this.damageBoss(6);
     }
   }
@@ -384,7 +405,7 @@ export class Flight {
       this.fire(this.player);
     }
     const boss = this.phase === 'boss';
-    if (boss) this.stepBoss();
+    if (boss) this.stepBoss(dt);
     else this.stepStage(dt);
     this.stepDroneWeapon(dt);
     for (const wing of this.wings) this.stepWing(wing, boss, dt);
@@ -399,14 +420,14 @@ export class Flight {
         const impact = { x: shot.x + shot.vx * untilImpact, y: shot.y + shot.vy * untilImpact };
         const lockedTarget = shot.targetsBoss && (this.level !== 'io' || shot.bossSupport === !this.ioLegBroken) && (this.level!=='vents'||shot.crabTarget===this.crabTargetX);
         if (lockedTarget ||
-          ((shot.drone || shot.wing) && near(impact, { x: this.exposedCannonX, y: this.bossAimY }, BOSS_CANNON_RADIUS))) {
+          ((shot.drone || shot.wing) && near(impact, { x: this.exposedCannonX, y: this.bossAimY }, this.bossTargetRadius))) {
           this.damageBoss(shot.damage ?? 1);
         }
         return false;
       }
       for (const enemy of this.enemies) {
         if (enemy.hp <= 0 || shot.pierced?.has(enemy)) continue;
-        const hit = enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,previous,shot) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, previous, shot) : shot.wing === 'homing'
+        const hit = enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},previous,shot) : enemy.ambusher ? ambusherBodyHit(enemy.ambusher,this.time,previous,shot) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,previous,shot) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, previous, shot) : shot.wing === 'homing'
           ? nearSegment(enemy, previous, shot, enemyRadius(enemy))
           : Math.abs(shot.x - enemy.x) < enemyRadius(enemy) &&
             shot.y >= enemy.y - enemyRadius(enemy,.46) && previous.y <= enemy.y + enemyRadius(enemy,.46);
@@ -417,7 +438,7 @@ export class Flight {
       }
       return shot.y < 9 && Math.abs(shot.x) < 5;
     });
-    this.enemies = this.enemies.filter((enemy) => enemy.hp > 0 && enemy.y > -9 && (!enemy.centipede || Math.abs(enemy.x) < 5.8) && (!(enemy.crucible || enemy.slag) || Math.abs(enemy.x)<6.8) && (!enemy.slag || (enemy.y<10 && enemy.age<10)));
+    this.enemies = this.enemies.filter((enemy) => (enemy.hp > 0 || enemy.ambusher?.defeatedAt!==undefined && this.time-enemy.ambusher.defeatedAt<AMBUSHER_CORPSE_TIME) && (enemy.ambusher ? ambusherHome(enemy.ambusher.site,this.time).y > -12 : enemy.y > -9) && (!enemy.centipede || Math.abs(enemy.x) < 5.8) && (!(enemy.crucible || enemy.slag) || Math.abs(enemy.x)<6.8) && (!enemy.slag || (enemy.y<10 && enemy.age<10)));
 
     this.threats = this.threats.filter((shot) => {
       this.advance(shot, dt);
@@ -532,20 +553,20 @@ export class Flight {
     let endY = 8;
     if (boss) {
       endY = this.bossAimY * BOSS_PROJECTION;
-      if (Math.abs(origin.x - this.exposedCannonX * BOSS_PROJECTION) < BOSS_CANNON_RADIUS * BOSS_PROJECTION) {
+      if (Math.abs(origin.x - this.exposedCannonX * BOSS_PROJECTION) < this.bossTargetRadius * BOSS_PROJECTION) {
         target = this.exposedCannonX;
       }
     } else {
       let firstContact=Infinity;
       for (const candidate of this.enemies) {
-        const entry=candidate.shrimp||candidate.ventWorm?faunaBeamEntry(candidate,origin):candidate.y;
-        if (candidate.hp > 0 && (candidate.shrimp||candidate.ventWorm ? faunaBodyHit(candidate,origin,{x:origin.x,y:9}) : candidate.marine ? marineBodyHit(candidate as Enemy & {marine: MarineKind}, origin, {x: origin.x, y: 9})
+        const entry=candidate.flyer?flyerBeamEntry({...candidate,flyer:candidate.flyer},origin):candidate.ambusher?ambusherBeamEntry(candidate.ambusher,this.time,origin):candidate.shrimp||candidate.ventWorm?faunaBeamEntry(candidate,origin):candidate.y;
+        if (candidate.hp > 0 && (candidate.flyer ? Number.isFinite(entry) : candidate.ambusher ? ambusherBodyHit(candidate.ambusher,this.time,origin,{x:origin.x,y:9}) : candidate.shrimp||candidate.ventWorm ? faunaBodyHit(candidate,origin,{x:origin.x,y:9}) : candidate.marine ? marineBodyHit(candidate as Enemy & {marine: MarineKind}, origin, {x: origin.x, y: 9})
           : Math.abs(candidate.x - origin.x) < enemyRadius(candidate,.43) && candidate.y >= origin.y) && entry<firstContact) {
           enemy = candidate;firstContact=entry;
         }
       }
       target = enemy;
-      if (enemy) endY = enemy.ventWorm ? 9 : enemy.y + (enemy.shrimp ? 1.4 : enemy.marine ? marineSpecs[enemy.marine].halfLength : 0);
+      if (enemy) endY = enemy.ambusher || enemy.ventWorm || enemy.flyer ? 9 : enemy.y + (enemy.shrimp ? 1.4 : enemy.marine ? marineSpecs[enemy.marine].halfLength : 0);
     }
     wing.beamEnd = { x: origin.x, y: endY };
     wing.laserHold = target !== undefined && target === wing.laserTarget ? wing.laserHold + dt : 0;
@@ -566,7 +587,7 @@ export class Flight {
     let closest: Enemy | undefined;
     let distance = 36;
     for (const enemy of this.enemies) {
-      if (enemy.hp <= 0 || enemy.y <= shot.y) continue;
+      if (enemy.hp <= 0 || enemy.y <= shot.y || (enemy.ambusher && !ambusherHulls(enemy.ambusher,this.time).length)) continue;
       const squared = (enemy.x - shot.x) ** 2 + (enemy.y - shot.y) ** 2;
       if (squared < distance) {
         closest = enemy;
@@ -608,7 +629,7 @@ export class Flight {
     if (this.phase === 'boss') {
       const cannon = { x: this.exposedCannonX * BOSS_PROJECTION, y: this.bossAimY * BOSS_PROJECTION };
       if (!this.towlineHitCannon &&
-        nearSegment(cannon, this.player, this.drone, BOSS_CANNON_RADIUS * BOSS_PROJECTION)) {
+        nearSegment(cannon, this.player, this.drone, this.bossTargetRadius * BOSS_PROJECTION)) {
         this.towlineHitCannon = true;
         this.damageBoss(this.towlineDamage);
       }
@@ -616,7 +637,7 @@ export class Flight {
     }
     for (const enemy of this.enemies) {
       if (enemy.hp > 0 && !this.towlineEnemies.has(enemy) &&
-        (enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,this.player,this.drone) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, this.player, this.drone) : nearSegment(enemy, this.player, this.drone, enemyRadius(enemy)))) {
+        (enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},this.player,this.drone) : enemy.ambusher ? ambusherBodyHit(enemy.ambusher,this.time,this.player,this.drone) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,this.player,this.drone) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, this.player, this.drone) : nearSegment(enemy, this.player, this.drone, enemyRadius(enemy)))) {
         this.towlineEnemies.add(enemy);
         this.damageEnemy(enemy, this.towlineDamage);
       }
@@ -624,6 +645,12 @@ export class Flight {
   }
 
   private stepStage(dt: number) {
+    if(this.level==='preserve')while(this.nextAmbusher<ambusherSites.length){
+      const site=this.nextAmbusher,home=ambusherHome(site,this.time);if(home.y>AMBUSHER_SPAWN_LEAD)break;this.nextAmbusher++;
+      if(home.y<-12)continue;
+      const ambusher=createAmbusherState(site),pose=ambusherPose(ambusher,this.time);
+      this.enemies.push({x:pose.head.x,y:pose.head.y,lane:home.x,age:0,fire:Infinity,hp:AMBUSHER_HP,ambusher,drop:ambusherSites[site].drop as WingWeapon});
+    }
     const wave: Wave | undefined = (this.level === 'broodlock' ? hiveWaves : this.level === 'ice' ? iceWaves : this.level === 'vents' ? ventWaves : this.level === 'io' ? ioWaves : this.level === 'titan' ? titanWaves : stageWaves)[this.nextWave];
     if (wave && this.time >= wave.time) {
       this.nextWave++;
@@ -636,14 +663,15 @@ export class Flight {
         bindCentipede(parts);
         this.enemies.push(...parts);
       } else this.enemies.push(...wave.lanes.map((lane, index) => {
+        const flyer = wave.flyer && index !== wave.raptor ? { ...wave.flyer, slot: index - (wave.raptor !== undefined && index > wave.raptor ? 1 : 0), count: wave.lanes.length - (wave.raptor !== undefined ? 1 : 0) } : undefined;
         const school = wave.formation ? {formation: wave.formation, slot: index, count: wave.lanes.length, mirror: wave.mirror ?? 1} : undefined;
         const shrimp=wave.shrimp?{...wave.shrimp,slot:index}:undefined;
         const course = wave.cicada ? { ...wave.cicada, slot: index, count: wave.lanes.length } : undefined;
-        const start = shrimp ? shrimpMotion(0,lane,shrimp) : wave.ventAnchor!==undefined ? ventAnchorPoint(wave.ventAnchor,this.time) : wave.crucible ? crucibleMotion(0,lane) : wave.skipper ? skipperMotion(0,lane,index) : course ? cicadaMotion(0, lane, course) : wave.marine ? marineMotion(wave.marine, 0, lane, school) : {x: lane, y: 8.6};
+        const start = flyer ? flyerMotion(0,lane,flyer) : shrimp ? shrimpMotion(0,lane,shrimp) : wave.ventAnchor!==undefined ? ventAnchorPoint(wave.ventAnchor,this.time) : wave.crucible ? crucibleMotion(0,lane) : wave.skipper ? skipperMotion(0,lane,index) : course ? cicadaMotion(0, lane, course) : wave.marine ? marineMotion(wave.marine, 0, lane, school) : {x: lane, y: 8.6};
         return {
-          x: start.x, y: start.y, lane, age: wave.ventAnchor!==undefined?-VENT_SPAWN_LEAD:0, school, cicada: course, skipper: wave.skipper, crucible: wave.crucible, ventAnchor:wave.ventAnchor, ventWorm:wave.ventWorm, shrimp, slot: index,
-          fire: shrimp ? SHRIMP_FIRST_FIRE+index*.25 : wave.ventWorm ? WORM_FIRST_ATTACK : wave.ventAnchor!==undefined ? MORTAR_FIRST_FIRE : wave.crucible ? CRUCIBLE_FIRST_POUR : schoolDelay(school) + (wave.marine === 'plesiosaur' ? 1.8 : wave.ant === 'soldier' ? 1.6 : 1.1) + index * 0.28,
-          hp: shrimp ? SHRIMP_HP : wave.ventWorm ? WORM_HP : wave.ventAnchor!==undefined ? MORTAR_HP : wave.crucible ? CRUCIBLE_HP : wave.marine ? marineSpecs[wave.marine].hp : wave.ant === 'soldier' ? 5 : 2, ant: wave.ant, marine: wave.marine,
+          x: start.x, y: start.y, lane, age: wave.ventAnchor!==undefined?-VENT_SPAWN_LEAD:0, flyer, school, cicada: course, skipper: wave.skipper, crucible: wave.crucible, ventAnchor:wave.ventAnchor, ventWorm:wave.ventWorm, shrimp, slot: index,
+          fire: flyer ? Infinity : shrimp ? SHRIMP_FIRST_FIRE+index*.25 : wave.ventWorm ? WORM_FIRST_ATTACK : wave.ventAnchor!==undefined ? MORTAR_FIRST_FIRE : wave.crucible ? CRUCIBLE_FIRST_POUR : schoolDelay(school) + (wave.marine === 'plesiosaur' ? 1.8 : wave.ant === 'soldier' ? 1.6 : 1.1) + index * 0.28,
+          hp: flyer ? FLYER_HP : shrimp ? SHRIMP_HP : wave.ventWorm ? WORM_HP : wave.ventAnchor!==undefined ? MORTAR_HP : wave.crucible ? CRUCIBLE_HP : wave.marine ? marineSpecs[wave.marine].hp : wave.ant === 'soldier' ? 5 : 2, ant: wave.ant, marine: wave.marine,
           drop: index === wave.carrier ? wave.drop : undefined,
           raptor: index === wave.raptor,
         };
@@ -655,7 +683,12 @@ export class Flight {
       if (enemy.hp <= 0) continue;
       enemy.age += dt;
       const motion = enemy.raptor ? raptorFlight(enemy.age) : undefined;
-      if (enemy.ventAnchor!==undefined) {
+      if (enemy.ambusher) {
+        stepAmbusher(enemy.ambusher,this.time,this.player,dt);
+        const p=ambusherPose(enemy.ambusher,this.time);enemy.x=p.head.x;enemy.y=p.head.y;
+      } else if (enemy.flyer) {
+        const p=flyerMotion(enemy.age,enemy.lane,enemy.flyer);enemy.x=p.x;enemy.y=p.y;enemy.heading=p.heading;
+      } else if (enemy.ventAnchor!==undefined) {
         const p=ventAnchorPoint(enemy.ventAnchor,this.time);enemy.x=p.x;enemy.y=p.y;enemy.ventScale=p.scale;
         if(enemy.ventWorm){
           const pose=wormPose(enemy.age,enemy.fire,enemy.wormReach,enemy.wormBend);
@@ -712,7 +745,7 @@ export class Flight {
         const hull = enemy.marine ? [{x:0,y:0,radius:marineSpecs[enemy.marine].radius}] : enemy.raptor ? [{ x: 0, y: 0, radius: 1.05 }] : DRONE_HULL;
         this.obstacles.move(enemy, 0, 0, hull, { minX: -2.4, maxX: 2.4, minY: -10, maxY: 10 });
       }
-      if (!enemy.shrimp && enemy.ventAnchor===undefined && !enemy.crucible && !enemy.slag && !motion && (!enemy.centipede || (enemy.centipede.slot === 0 && !enemy.centipede.chain.escape)) && enemy.age >= enemy.fire && enemy.y < 8) {
+      if (!enemy.flyer && !enemy.ambusher && !enemy.shrimp && enemy.ventAnchor===undefined && !enemy.crucible && !enemy.slag && !motion && (!enemy.centipede || (enemy.centipede.slot === 0 && !enemy.centipede.chain.escape)) && enemy.age >= enemy.fire && enemy.y < 8) {
         enemy.fire += enemy.centipede ? 3.5 : enemy.cicada ? 3 : enemy.marine === 'plesiosaur' ? 3.2 : enemy.ant === 'soldier' ? 3.1 : 2.4;
         const dx = this.player.x - enemy.x;
         const dy = this.player.y - enemy.y;
@@ -725,7 +758,9 @@ export class Flight {
             vx: Math.sin(angle + offset) * speed, vy: Math.cos(angle + offset) * speed, vz: 0 });
         }
       }
-      if (enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,this.player,this.player,.16) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind},this.player,this.player,.2-marineSpecs[enemy.marine].radius*.2) : near(enemy, this.player, enemyRadius(enemy)+.16)) {
+      if(enemy.ambusher){
+        if(ambusherHits(enemy.ambusher,this.time,this.time-dt,this.player))this.hit();
+      } else if (enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},this.player,this.player,.16) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,this.player,this.player,.16) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind},this.player,this.player,.2-marineSpecs[enemy.marine].radius*.2) : near(enemy, this.player, enemyRadius(enemy)+.16)) {
         if(!enemy.ventWorm)enemy.hp = 0;
         if (enemy.centipede) severCentipede(enemy);
         this.hit();
@@ -733,7 +768,16 @@ export class Flight {
     }
   }
 
-  private stepBoss() {
+  private stepBoss(dt: number) {
+    if (this.level === 'preserve') {
+      const attack = groundskeeperAttack(this.time);
+      if (attack.warning && this.groundskeeperAimCycle !== attack.cycle) {
+        this.groundskeeperAim = { x: clamp(this.player.x, -3.5, 3.5), y: clamp(this.player.y, -6.8, 5.5) };
+        this.groundskeeperAimCycle = attack.cycle;
+      }
+      if (groundskeeperHits(this.time, this.time - dt, this.groundskeeperAim, this.player, this.groundskeeperCancelledAt)) this.hit();
+      return;
+    }
     if(this.level === 'io') { this.stepCaldera(); return; }
     if(this.level === 'titan') { this.stepCicada(); return; }
     if(this.level === 'ice') { this.stepLeviathan(); return; }
@@ -835,9 +879,10 @@ export class Flight {
     enemy.hp = Math.max(0, enemy.hp - damage);
     if (laser) enemy.laserDamage = (enemy.laserDamage ?? 0) + before - enemy.hp;
     if (enemy.hp === 0) {
+      if(enemy.ambusher)defeatAmbusher(enemy.ambusher,this.time);
       if(enemy.ventWorm&&enemy.ventAnchor!==undefined)this.defeatedVentWorms.add(enemy.ventAnchor);
       if (enemy.centipede) severCentipede(enemy);
-      this.score += enemy.crucible?300:enemy.slag?10:enemy.ventWorm?250:enemy.ventAnchor!==undefined?150:enemy.shrimp?125:100;
+      this.score += enemy.ambusher?200:enemy.crucible?300:enemy.slag?10:enemy.ventWorm?250:enemy.ventAnchor!==undefined?150:enemy.shrimp?125:100;
       if (enemy.drop) this.drops.push({ x: enemy.x, y: enemy.y, weapon: enemy.drop });
     }
   }
@@ -871,6 +916,7 @@ export class Flight {
   }
 
   private enter(phase: Phase) {
+    if (this.level === 'preserve' && this.phase === 'boss' && (phase === 'won' || phase === 'lost')) this.groundskeeperFinalTime = this.time;
     this.phase = phase;
     this.time = 0;
     if (phase === 'approach' || phase === 'won') {
