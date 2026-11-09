@@ -15,7 +15,7 @@ export function createHovercar(m:BoulevardMaterials,heavy=false){
   part(root,new T.BoxGeometry(.055,.83,.035),m.pink,side*.54,.1,.20);
   part(root,new T.BoxGeometry(.22,.045,.045),m.amber,side*.23,-.74,.12);
  }
- const jet=part(root,new T.ConeGeometry(.13,.45,8).rotateX(Math.PI/2),m.cyan,0,.94,.02);jet.name='hovercar-exhaust';
+ const jet=part(root,new T.ConeGeometry(.13,.45,8).translate(0,.225,0),m.cyan,0,.75,.02);jet.name='hovercar-exhaust';
  if(heavy){root.scale.set(1.15,1.3,1.25);for(const side of[-1,1])part(root,new T.BoxGeometry(.3,1.0,.23),m.chrome,side*.52,.12,.02);}
  mergeBoulevard(root);return{root};
 }

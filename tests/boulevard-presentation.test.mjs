@@ -126,7 +126,10 @@ test('roadside cascades reserve clear lots, stay below flight and animate with f
   const masonry=root.parent.getObjectByName('boulevard-masonry'),matrix=new T.Matrix4();masonry.geometry.computeBoundingBox();for(let i=0;i<masonry.count;i++){masonry.getMatrixAt(i,matrix);const b=masonry.geometry.boundingBox.clone().applyMatrix4(matrix).applyMatrix4(masonry.matrixWorld);if(b.max.z>BOULEVARD_DECK+.4)assert(!b.intersectsBox(bounds),'building occupies cascade lot');}
  }
  const root=s.waterfalls.roots[0],spray=root.getObjectByName('boulevard-waterfall-splash'),sheet=root.getObjectByName('boulevard-waterfall-flow'),matrices=spray.instanceMatrix.array,vertices=sheet.geometry.attributes.position.array,before=matrices.slice();
+ const stream=root.getObjectByName('boulevard-waterfall-source-particles'),streamMatrices=stream.instanceMatrix.array,streamBefore=streamMatrices.slice();assert.equal(stream.count,24);assert(stream.geometry.attributes.streamPhase.array.every(n=>n>=0&&n<1));assert.equal(stream.material.uniforms.clock,s.waterfalls.clock);
+ const bottomY=sheet.geometry.attributes.position.getY(18*9);let impacts;root.traverse(o=>{if(o.isMesh&&o.material.name==='boulevard-waterfall-basins')impacts=o.material.uniforms.impacts.value;});assert.equal(impacts.length,7);for(const p of impacts){assert(Math.abs(p.y-bottomY)<1e-6);assert(Math.abs(p.x)<.9);}
  s.update(30,0,18);assert.equal(s.waterfalls.clock.value,18);s.update(180,1,18);assert.equal(s.waterfalls.clock.value,18);s.update(180,1,19);assert.equal(s.waterfalls.clock.value,19);assert.equal(spray.instanceMatrix.array,matrices);assert.deepEqual(matrices,before);assert.equal(sheet.geometry.attributes.position.array,vertices);assert(spray.boundingSphere.radius>1);s.dispose();
+ assert.equal(stream.instanceMatrix.array,streamMatrices);assert.deepEqual(streamMatrices,streamBefore);
 });
 
 test('palm uplights belong to their own trunk/canopy materials and match each tree foot',()=>{

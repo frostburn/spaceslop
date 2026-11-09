@@ -3,6 +3,7 @@ export const BOULEVARD_DURATION=100, BOULEVARD_SPEED=1.7, BOULEVARD_APPROACH=7;
 export const BOULEVARD_HP=100, BOULEVARD_INTERVAL=3.4, BOULEVARD_WINDUP=.55, BOULEVARD_FIRE=1.55, BOULEVARD_TRAVEL=.85;
 export const BOULEVARD_PITCH=Math.PI*.415, BOULEVARD_VIEW=.40, BOULEVARD_DECK=-3.1, BOULEVARD_RISE=6, BOULEVARD_POOL=16;
 export const BOULEVARD_SPAWN_LEAD=4;
+export function turnBoulevardTurret(angle:number,target:number,dt:number){const delta=Math.atan2(Math.sin(target-angle),Math.cos(target-angle)),step=6*Math.max(0,dt);return angle+Math.max(-step,Math.min(step,delta));}
 export type BoulevardCourse={formation:'chevron'|'cross'|'train'|'rush'|'intercept';slot:number;mirror:number;heavy?:boolean};
 const clamp=(v:number)=>Math.max(0,Math.min(1,v));
 const smooth=(v:number)=>{const t=clamp(v);return t*t*(3-2*t);};
