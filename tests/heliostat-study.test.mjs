@@ -9,6 +9,7 @@ const server = await createServer({ root: new URL('..', import.meta.url).pathnam
 after(() => server.close());
 const layout = await server.ssrLoadModule('/src/studies/heliostat-layout.ts');
 const { createHeliostatBay } = await server.ssrLoadModule('/src/studies/heliostat-bay.ts');
+const { heliostatBackdropCrop, createHeliostatSky } = await server.ssrLoadModule('/src/studies/heliostat-sky.ts');
 const { loadStudyTexture, loadStudyArt } = await server.ssrLoadModule('/src/studies/heliostat-assets.ts');
 
 test('rectified panels expose different physical faces and stay inside their own atlas cell', () => {
@@ -64,6 +65,24 @@ test('swing and timeline are continuous, reversible and deterministic at all thr
   assert.deepEqual(layout.cameraPose(2), layout.cameraPose(1));
   for (let t = 0; t < 8; t += .1) assert(layout.bayTravel(t + .1) <= layout.bayTravel(t), 'bay reverses scroll direction');
   assert.equal(layout.bayTravel(7), layout.bayTravel(18), 'stopped bay drifts during the settled view');
+});
+
+test('flat backdrop keeps square source pixels square while only the vertical crop advances', () => {
+  for (const [viewW, viewH] of [[470,835],[390,844],[844,390]]) for (const [imageW,imageH] of [[1024,1536],[512,768],[1024,4096]]) {
+    let previous;
+    for (const progress of [0,.25,.5,.75,1]) {
+      const crop = heliostatBackdropCrop(viewW/viewH,imageW/imageH,progress);
+      assert(Math.abs(crop.width*imageW/viewW - crop.height*imageH/viewH) < 1e-12, 'unequal X/Y image scale stretches the artwork');
+      assert(crop.x >= 0 && crop.y >= 0 && crop.x+crop.width <= 1+1e-12 && crop.y+crop.height <= 1+1e-12, 'crop exposes an image edge');
+      if (previous) { assert(crop.y > previous.y); assert.equal(crop.x, previous.x); assert.equal(crop.width, previous.width); assert.equal(crop.height, previous.height); }
+      previous = crop;
+    }
+  }
+  const sky = createHeliostatSky(); sky.update(390,844,.5);
+  assert.equal(sky.root.geometry.attributes.position.count,4, 'backdrop needs only one flat quad');
+  assert.equal(sky.material.depthWrite,false); assert.equal(sky.material.depthTest,false);
+  assert(sky.root.renderOrder<0, 'backdrop must draw before foreground geometry');
+  sky.root.geometry.dispose();sky.material.dispose();
 });
 
 test('missing, cancelled and late study art cannot change a disposed scene', async () => {

@@ -105,7 +105,7 @@ export function createHeliostatView(canvas: HTMLCanvasElement) {
       }
       const pose = cameraPose(progress);
       camera.position.copy(pose.position); camera.lookAt(pose.target); camera.updateMatrixWorld();
-      sky.root.position.copy(camera.position);
+      sky.update(w, h, progress);
       bay.root.position.y = bayTravel(time);
       ship.position.set(Math.sin(time * .36) * .8, -4.5, .4);
       ship.rotation.set(pose.shipPitch, Math.sin(time * .36) * .035, 0);

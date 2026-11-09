@@ -4,7 +4,7 @@ Run `npm run dev`, then choose **Uranus corridor study** below the main menu, or
 
 ## Scene construction
 
-- A direction-locked Uranus panorama follows camera translation without rotating with it. Turning the camera reveals a different part of the same overscanned image; scrolling does not move the planet.
+- A flat Uranus image sits behind the 3D scene. A fixed, uniform scale preserves its aspect ratio; the camera swing only scrolls the crop vertically from the lower part of the image to the upper part. The backdrop reserves at least half a screen of vertical travel, with a fixed horizontal crop. It stays still during ordinary bay travel and when paused. Ordinary portrait artwork works directly, without spherical or perspective projection.
 - Four distant plant modules occupy different depths. Fixed, oblique raster cards remain readable from flight through head-on. Solid stand-ins occupy those layers when artwork is absent.
 - Rectified front, side and top panel tiles wrap shallow, closed foreground solids. Frames, rails, flanged pipes, radiator edges, beacons and the electric bus project from these surfaces. Crossmembers sit below the clear flight lane. The camera supplies actual perspective and depth occlusion.
 - The artificial star and its collector ring, ship and sample shots are 3D. The star is a scale/lighting reference; this study has no boss, combat simulation or wave schedule.
@@ -15,7 +15,7 @@ All three images are delivered in chat, separately from the code PR. The experim
 
 | Repo path | Format / grid | Import behavior |
 | --- | --- | --- |
-| `public/encounters/heliostat-panorama.png` | Opaque RGB, portrait 2:3 | sRGB; clamp; direction-locked, overscanned panorama |
+| `public/encounters/heliostat-panorama.png` | Opaque RGB, portrait 2:3 or taller | sRGB; clamp; flat image, uniform scale and vertical crop; ordinary raster artwork |
 | `public/encounters/heliostat-distant.png` | RGBA, landscape 3:2; three equal columns | sRGB; clamp; alpha-tested cutouts, untrimmed grid |
 | `public/encounters/heliostat-panels.png` | Opaque RGB, landscape 3:2; three columns × two rows | sRGB; clamp; inset UVs; untrimmed grid |
 
