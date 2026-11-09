@@ -1,3 +1,4 @@
+import {vectorMaterial} from './boulevard-vectors';
 import {texturedSurface} from './encounter-surfaces';
 import * as T from 'three';
 import {boulevardRandom} from './boulevard-geometry';
@@ -15,22 +16,7 @@ export function createBoulevardMaterials(){
  const bark=new T.MeshStandardMaterial({color:0x695442,roughness:.93});
  const leaf=new T.MeshStandardMaterial({color:0x42815d,roughness:.75,side:T.DoubleSide});
  const pink=new T.MeshBasicMaterial({color:0xf743bd,toneMapped:false}),cyan=new T.MeshBasicMaterial({color:0x41d9f2,toneMapped:false}),amber=new T.MeshBasicMaterial({color:0xffba65,toneMapped:false});
- const wire=new T.ShaderMaterial({name:'boulevard-neon-lattice',side:T.DoubleSide,transparent:true,depthWrite:false,toneMapped:false,uniforms:{tint:{value:new T.Color(0x86ddf4)}},
- vertexShader:`attribute vec3 barycentric;varying vec3 vBary;varying vec3 vTint;uniform vec3 tint;
- void main(){vBary=barycentric;vTint=tint;vec4 p=vec4(position,1.);
- #ifdef USE_INSTANCING
- p=instanceMatrix*p;
- #endif
- #ifdef USE_INSTANCING_COLOR
- vTint*=instanceColor;
- #endif
- gl_Position=projectionMatrix*modelViewMatrix*p;}`,
- fragmentShader:`varying vec3 vBary;varying vec3 vTint;
- void main(){vec3 d=max(fwidth(vBary),vec3(.0001));vec3 a=smoothstep(vec3(0.),d*1.25,vBary),b=smoothstep(vec3(0.),d*5.,vBary);
- float line=1.-min(a.x,min(a.y,a.z)),halo=1.-min(b.x,min(b.y,b.z));
- gl_FragColor=vec4(vTint*(line*1.45+halo*.24)+vec3(.008,.006,.025),.12+line*.87+halo*.17);
- #include <colorspace_fragment>
- }`});
+ const wire=vectorMaterial();
  const roadData=new Uint8Array(128*128*4);for(let i=0;i<128*128;i++){const noise=105+random()*70;roadData.set([noise,noise,noise,255],i*4);}
  const roadMap=new T.DataTexture(roadData,128,128);roadMap.wrapS=roadMap.wrapT=T.RepeatWrapping;roadMap.generateMipmaps=true;roadMap.minFilter=T.LinearMipmapLinearFilter;roadMap.needsUpdate=true;
  return{chrome,shell,stone,glass,bark,leaf,pink,cyan,amber,wire,roadMap};

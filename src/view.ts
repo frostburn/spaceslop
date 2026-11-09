@@ -223,7 +223,8 @@ export class FlightView {
       this.renderer.setScissorTest(true);
       try {
         this.level.capture?.(this.renderer, camera);
-        this.renderer.render(this.scene, camera);
+        if (this.level.present) this.level.present(this.renderer, this.scene, camera);
+        else this.renderer.render(this.scene, camera);
       }
       finally {
         objects.forEach((o, i) => {
@@ -401,7 +402,8 @@ export class FlightView {
     this.pulse.material.opacity = flight.pulseFlash / 0.3;
     this.level.effects?.(this.plane, this.bubbleSources, levelFrame, this.renderer);
     this.level.capture?.(this.renderer, camera);
-    this.renderer.render(this.scene, camera);
+    if (this.level.present) this.level.present(this.renderer, this.scene, camera);
+    else this.renderer.render(this.scene, camera);
   }
   private drawWings(flight: Flight, reveal: number, velocity: T.Vector2, distance?: number) {
     const fighting = flight.phase === 'stage' || flight.phase === 'boss';

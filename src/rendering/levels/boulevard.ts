@@ -1,5 +1,6 @@
 import * as T from 'three';
 import {type LevelFactory,addRoots} from '../level';
+import {createBoulevardGlow} from '../../boulevard-glow';
 import {createBoulevardScenery} from '../../boulevard-scenery';
 import {createHovercar,cloneHovercar,createPursuitCruiser} from '../../boulevard-rigs';
 import {boulevardFrame,boulevardBossPoint,boulevardMotion,BOULEVARD_POOL} from '../../boulevard';
@@ -7,7 +8,7 @@ import {loadEncounterTexture} from '../../encounter-texture';
 import {createBossLaserContact} from '../../laser-contact';
 import {BOSS_RECOIL_TIME} from '../../encounters';
 export const createLevel:LevelFactory=({plane,signal})=>{
- const root=new T.Group(),scenery=createBoulevardScenery(),boss=createPursuitCruiser(scenery.materials);
+ const glow=createBoulevardGlow(),root=new T.Group(),scenery=createBoulevardScenery(),boss=createPursuitCruiser(scenery.materials);
  const light=createHovercar(scenery.materials),heavy=createHovercar(scenery.materials,true);
  const cars=Array.from({length:BOULEVARD_POOL},()=>cloneHovercar(light.root)),haulers=Array.from({length:3},()=>cloneHovercar(heavy.root));
  const models:(T.Object3D|undefined)[]=[];addRoots(root,scenery,boss,...cars,...haulers);
@@ -18,7 +19,7 @@ export const createLevel:LevelFactory=({plane,signal})=>{
   contacts:[boss.root,...actors],warmup:[[scenery.root,boss.root,...actors]],
   prepare(){scenery.prime(true);for(const r of actors)r.traverse(o=>{if(o instanceof T.Mesh)o.frustumCulled=false;});},
   afterWarmup(){scenery.prime(false);for(const r of actors)r.traverse(o=>{if(o instanceof T.Mesh)o.frustumCulled=true;});},
-  dispose(){scenery.dispose();},contact:(x,d)=>contact(x,d),
+  present:glow.present,dispose(){glow.dispose();scenery.dispose();},contact:(x,d)=>contact(x,d),
   update({flight,time,reveal,animationTime}){
    scenery.update(time,reveal,animationTime);
    const p=boulevardBossPoint(time,reveal);boss.root.position.set(p.x,p.y,p.z);boss.root.rotation.x=-boulevardFrame(reveal).pitch;

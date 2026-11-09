@@ -1,3 +1,4 @@
+import {createBoulevardGlow} from './boulevard-glow';
 import {createBoulevardArch} from './boulevard-arch';
 import {createBoulevardScenery} from './boulevard-scenery';
 import {createHovercar,createPursuitCruiser} from './boulevard-rigs';
@@ -56,6 +57,7 @@ function element<T extends HTMLElement>(id: string) {
 }
 
 function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
+  const glow=createBoulevardGlow();window.addEventListener('pagehide',()=>glow.dispose(),{once:true});
   const scene = new T.Scene();
   const camera = new T.PerspectiveCamera(39, 1, 0.05, 200);
   const controls = new OrbitControls(camera, canvas);
@@ -181,7 +183,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   void loadEncounterTexture('boulevardFacades',boulevard.facades.setAtlas);
   const boulevardArch=createBoulevardArch(boulevard.materials);boulevardArch.root.rotation.x=-Math.PI/2;
   const assets = {
-    boulevard_arch:{root:boulevardArch.root,bounds:new T.Box3(new T.Vector3(-5,-3.2,-1),new T.Vector3(5,3.6,1)),duration:1,pose:()=> 'curved chrome shell / luminous triangular lattice'},
+    boulevard_arch:{root:boulevardArch.root,bounds:new T.Box3(new T.Vector3(-5,-3.2,-1),new T.Vector3(5,3.6,1)),duration:1,pose:()=> 'curved chrome shell / swept vector ribs'},
     boulevard_route:{root:boulevardPreview,duration:125,bounds:new T.Box3(new T.Vector3(-5,-8,-5),new T.Vector3(5,8,1)),pose(time:number){const reveal=T.MathUtils.smoothstep(time,100,107);boulevard.update(time,reveal,time);const p=boulevardBossPoint(time,reveal);routeCruiser.root.position.set(p.x,p.y,p.z);routeCruiser.root.rotation.x=-BOULEVARD_PITCH*reveal;routeCruiser.pose(time,Math.max(0,Math.sin(time*2)),0);return boulevardSection(time);}},
     pursuit_cruiser:{root:cruiser.root,duration:6.8,pose(time:number){cruiser.pose(time,T.MathUtils.smoothstep(time%3.4,.55,1.55),time%3.4>1.55?Math.max(0,1-(time%3.4-1.55)/.24):0);return 'rotary cannons / exposed lattice / cyan core';}},
     hovercar:{root:hovercar.root,duration:3.4,pose:()=> 'solid core / luminous cage'},
@@ -390,7 +392,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     previous = now;
     controls.update();
     if(iceField.root.visible)iceField.capture(renderer,camera);
-    renderer.render(scene, camera);
+    if(sector.value==='boulevard')glow.present(renderer,scene,camera);else renderer.render(scene,camera);
   });
 }
 

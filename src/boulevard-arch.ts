@@ -1,7 +1,8 @@
 import * as T from 'three';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
-import {wireGeometry,mergeBoulevard} from './boulevard-geometry';
+import {mergeBoulevard} from './boulevard-geometry';
+import {vectorGeometry,vectorMaterial,type VectorPath,type VectorPoint} from './boulevard-vectors';
 import {BOULEVARD_DECK} from './boulevard';
 import {part} from './rig-geometry';
 import type {BoulevardMaterials} from './boulevard-materials';
@@ -43,11 +44,17 @@ class ArchEdge extends T.Curve<T.Vector3>{
   return target.copy(center).addScaledVector(normal,this.radial*(.64+.13*Math.sin(angle))).setY(this.depth);
  }
 }
+export function archDrains(){return[.26,.74].map(t=>{const a=t*Math.PI,{center,normal}=frame(a);center.addScaledVector(normal,-.5*(.64+.13*Math.sin(a)));center.y=-.50;return center;});}
 export function createBoulevardArch(m:BoulevardMaterials){
  const root=new T.Group();root.name='boulevard-chrome-lattice-arch';
- const chrome=polishedChrome(),wire=m.wire.clone();wire.uniforms.tint.value=new T.Color(0xff70eb);
+ const chrome=polishedChrome(),wire=vectorMaterial();wire.uniforms.tint.value=new T.Color(0xff70eb);
  const left=part(root,shell(Math.PI/2,Math.PI,32),chrome,0,0,0);left.name='arch-polished-shell';
- const source=shell(0,Math.PI/2,7),lattice=wireGeometry(source);source.dispose();part(root,lattice,wire,0,0,0).name='arch-triangular-shell';
+ const paths:VectorPath[]=[],point=(angle:number,r:number,d:number):VectorPoint=>{const{center,normal}=frame(angle);center.addScaledVector(normal,r*(.64+.13*Math.sin(angle)));return[center.x,d,center.z];};
+ for(const depth of[-.49,.49])for(const radial of[-.5,.5])paths.push({points:Array.from({length:25},(_,i)=>point(i/24*Math.PI/2,radial,depth)),weight:depth<0?1:.45});
+ // Two long woven strokes make broad lozenges; a few saddles describe the arch's depth.
+ for(const flip of[-1,1])paths.push({points:Array.from({length:19},(_,i)=>{const a=i/18*Math.PI/2;return point(a,flip*.5*Math.cos(a*6),-.50);}),weight:.85});
+ for(const a of[.08,.26,.44])paths.push({points:[point(a*Math.PI,-.5,-.49),point(a*Math.PI,-.5,.49),point(a*Math.PI,.5,.49),point(a*Math.PI,.5,-.49)],weight:.5});
+ part(root,vectorGeometry(paths),wire,0,0,0).name='arch-drawn-lattice';
  const panels=[.61,.73,.85,.96].map(t=>shell(Math.PI*t-.003,Math.PI*t+.003,1,.008)),seams=mergeGeometries(panels);panels.forEach(g=>g.dispose());
  part(root,seams,m.shell,0,0,0);
  const halo=new T.ShaderMaterial({transparent:true,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false,uniforms:{tint:{value:new T.Color(0xfd38b6)}},

@@ -45,6 +45,7 @@ export interface LevelScene {
     z?: number;
   };
   capture?: (renderer: T.WebGLRenderer, camera: T.Camera) => void;
+  present?: (renderer: T.WebGLRenderer, scene: T.Scene, camera: T.Camera) => void;
   effects?: (plane: T.Group, sources: readonly T.Mesh[], frame: LevelFrame, renderer: T.WebGLRenderer) => void;
   dispose?: () => void;
 }

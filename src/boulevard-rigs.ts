@@ -1,12 +1,13 @@
 import * as T from 'three';
 import {part,pivot,plating} from './rig-geometry';
-import {mergeBoulevard,wireGeometry} from './boulevard-geometry';
+import {mergeBoulevard} from './boulevard-geometry';
+import {hovercarVectors,cruiserWingVectors} from './boulevard-vectors';
 import {cruiserHull,cruiserCanopy,cruiserStrut} from './boulevard-cruiser-geometry';
 import type {BoulevardMaterials} from './boulevard-materials';
 export function createHovercar(m:BoulevardMaterials,heavy=false){
  const root=new T.Group();root.name=heavy?'boulevard-armored-hovercar':'boulevard-pursuit-hovercar';
  const hull=plating([[-.42,.75],[.42,.75],[.64,-.25],[.42,-.8],[-.42,-.8],[-.64,-.25]],.22,.035);
- part(root,hull,m.shell,0,0,-.08);part(root,wireGeometry(hull),m.wire,0,0,-.058).scale.set(1.015,1.015,1.015);
+ part(root,hull,m.shell,0,0,-.08);part(root,hovercarVectors(),m.wire,0,0,0);
  const cockpit=part(root,plating([[-.26,.36],[.26,.36],[.32,-.13],[-.32,-.13]],.12,.025),m.glass,0,0,.16);cockpit.rotation.x=-.12;
  for(const side of[-1,1]){
   part(root,new T.BoxGeometry(.10,.9,.12),m.chrome,side*.48,.1,.14);
@@ -43,9 +44,8 @@ export function createPursuitCruiser(m:BoulevardMaterials){
    part(wing,new T.CylinderGeometry(.22,.22,1.8,10),m.pink,side*.9,.2,.08);
    for(let y=0;y<4;y++)part(wing,new T.TorusGeometry(.51,.045,5,12).rotateX(Math.PI/2),m.chrome,side*.9,-.45+y*.42,.05);
   }
-  part(wing,wireGeometry(plate),m.wire,0,0,.12);
+  part(wing,cruiserWingVectors(side),m.wire,0,0,0);
   if(side<0){
-   part(wing,wireGeometry(plate),m.wire,0,0,-.26);
    for(const[x,y]of[[0,-.8],[side*1.7,-1.5],[side*2.5,.7],[side*1.9,1.8],[0,1.0]])part(wing,new T.CylinderGeometry(.035,.035,.55,6).rotateX(Math.PI/2),m.cyan,x,y,-.06);
   }else for(let k=0;k<3;k++)part(wing,new T.BoxGeometry(.055,1.4,.04),m.shell,side*(.7+k*.38),.2,.42);
   part(wing,new T.BoxGeometry(.11,1.2,.23),m.pink,side*1.6,.2,.25);
