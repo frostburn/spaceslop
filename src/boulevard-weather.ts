@@ -14,7 +14,7 @@ export function roadRelief(sites:readonly DrainSite[]){
  const heights=new Float32Array(W*H),data=new Uint8Array(W*H*4);
  for(let row=0;row<H;row++)for(let col=0;col<W;col++){
   const x=-SPAN/2+(col+.5)*SPAN/W,y=(row+.5)*ROAD_PERIOD/H,angle=y/ROAD_PERIOD*Math.PI*2;
-  heights[row*W+col]=.011+.012*Math.sin(x*2.4+angle*5)*Math.sin(angle*11)+.009*Math.cos(x*.9-angle*17);
+  heights[row*W+col]=.024+.012*Math.sin(x*2.4+angle*5)*Math.sin(angle*11)+.009*Math.cos(x*.9-angle*17);
  }
  function basin(x:number,y:number,rx:number,ry:number){
   const minX=Math.max(0,Math.floor((x-rx*1.25+SPAN/2)/SPAN*W)),maxX=Math.min(W-1,Math.ceil((x+rx*1.25+SPAN/2)/SPAN*W));

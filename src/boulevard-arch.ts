@@ -55,6 +55,7 @@ export function createBoulevardArch(m:BoulevardMaterials){
  for(const flip of[-1,1])paths.push({points:Array.from({length:19},(_,i)=>{const a=i/18*Math.PI/2;return point(a,flip*.5*Math.cos(a*6),-.50);}),weight:.85});
  for(const a of[.08,.26,.44])paths.push({points:[point(a*Math.PI,-.5,-.49),point(a*Math.PI,-.5,.49),point(a*Math.PI,.5,.49),point(a*Math.PI,.5,-.49)],weight:.5});
  part(root,vectorGeometry(paths),wire,0,0,0).name='arch-drawn-lattice';
+ part(root,shell(0,Math.PI/2,24),m.backFaces,0,0,0);
  const panels=[.61,.73,.85,.96].map(t=>shell(Math.PI*t-.003,Math.PI*t+.003,1,.008)),seams=mergeGeometries(panels);panels.forEach(g=>g.dispose());
  part(root,seams,m.shell,0,0,0);
  const halo=new T.ShaderMaterial({transparent:true,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false,uniforms:{tint:{value:new T.Color(0xfd38b6)}},

@@ -16,6 +16,7 @@ import { levelLoaders } from './rendering/loaders';
 import { type LevelFactory, type LevelScene, type LevelFrame } from './rendering/level';
 import { loadCommonTextures } from './rendering/common-textures';
 import { tiltFlightCamera } from './rendering/flight-camera';
+import { boostFriendlyGlow } from './rendering/friendly-glow';
 import { disposeScene } from './rendering/dispose';
 export async function createFlightView(canvas: HTMLCanvasElement, level: LevelId, signal = new AbortController().signal) {
   const { createLevel } = await levelLoaders[level]();
@@ -152,6 +153,10 @@ export class FlightView {
         }
       });
     this.bubbleSources = [...this.playerBurners, ...this.droneBurners, ...pods.flatMap(shipBurners)];
+    boostFriendlyGlow([this.player.root,this.drone,...pods,
+      ...(['ship','drone','homing','cannon','omega'] as const).map(kind=>this.projectiles[kind].root),
+      ...this.wingLasers.map(r=>r.root),this.playerMuzzle.root,this.droneMuzzle.root,
+      this.towlineGlow,this.towlineCore,this.droneGoal,this.pulse],p.friendlyGlow??1);
     // Start texture timers after synchronous geometry construction has finished.
     this.texturesReady = Promise.all([p.ready, loadCommonTextures([this.player.root, this.drone, ...pods, ...ammo, ...this.drops.map(r => r.root), ...(p.surfaces ?? [])], p.applyArmor, signal)]).then(textures => {
       this.surfacesReady = true;

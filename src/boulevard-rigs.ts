@@ -40,6 +40,7 @@ export function createPursuitCruiser(m:BoulevardMaterials){
   const wing=pivot(root,'cruiser-wing-'+side,side*2.25,.2,0);
   const plate=plating([[0,-.8],[side*1.7,-1.5],[side*2.5,.7],[side*1.9,1.8],[0,1.0]],.25,.07);
   if(side>0)part(wing,plate,m.chrome,0,0,.08);else{
+   part(wing,plate,m.backFaces,0,0,.08);
    const rotor=part(wing,new T.CylinderGeometry(.48,.5,1.6,12),m.chrome,side*.9,.2,.05);rotor.rotation.z=.1;
    part(wing,new T.CylinderGeometry(.22,.22,1.8,10),m.pink,side*.9,.2,.08);
    for(let y=0;y<4;y++)part(wing,new T.TorusGeometry(.51,.045,5,12).rotateX(Math.PI/2),m.chrome,side*.9,-.45+y*.42,.05);

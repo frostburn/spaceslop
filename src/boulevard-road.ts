@@ -30,7 +30,7 @@ export function createBoulevardRoad(map:T.Texture,sites:readonly DrainSite[]=[])
  vec2 delta=vec2(.05625,.1640625);vec3 n=normalize(vec3((roadHeight(vRoad-vec2(delta.x,0.))-roadHeight(vRoad+vec2(delta.x,0.)))/(2.*delta.x),(roadHeight(vRoad-vec2(0.,delta.y))-roadHeight(vRoad+vec2(0.,delta.y)))/(2.*delta.y),1.));
  float grain=texture2D(asphalt,vRoad*.18).r,wet=1.-smoothstep(WATER_LEVEL,WATER_LEVEL+.015,h);float light=.65+max(0.,dot(n,normalize(vec3(-.8,-.5,1.))))*.35;
  vec2 uv=vReflection.xy/vReflection.w;vec3 reflection=(texture2D(tDiffuse,uv).rgb+texture2D(tDiffuse,uv+vec2(.003,.002)).rgb+texture2D(tDiffuse,uv-vec2(.003,.002)).rgb)/3.;
- vec3 c=vec3(.020,.016,.028)*(.40+grain*.65)*light*(1.-wet*.22)+reflection*(.055+wet*.065+grazing*.025)+roadPaint(vRoad);gl_FragColor=vec4(c,1.);
+ vec3 c=vec3(.034,.029,.040)*(.40+grain*.90)*light*(1.-wet*.22)+reflection*wet*.018+roadPaint(vRoad);gl_FragColor=vec4(c,1.);
  #include <colorspace_fragment>
  }`});
  const ground=new T.Mesh(new T.PlaneGeometry(7.2,140,32,280),groundMaterial);ground.name='boulevard-road-relief';ground.renderOrder=-1;ground.frustumCulled=false;root.add(ground,water,rain.root);

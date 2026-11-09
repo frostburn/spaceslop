@@ -22,6 +22,7 @@ export interface LevelScene {
   key?: number;
   sky?: number;
   ground?: number;
+  friendlyGlow?: number;
   keyIntensity?: number;
   skyIntensity?: number;
   surfaces?: T.Group[];
