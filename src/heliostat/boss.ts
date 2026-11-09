@@ -1,9 +1,11 @@
 import * as T from 'three';
 import { heliostatBatch } from './geometry';
 import type { HeliostatMaterials } from './materials';
-import { HELIOSTAT_PITCH,HELIOSTAT_EMITTER_X,heliostatFeedPoint } from './combat';
+import { HELIOSTAT_PITCH,HELIOSTAT_EMITTER_X,heliostatFeedPoint,heliostatPlasmaPhase } from './combat';
 import {createPlasmaResources,type PlasmaResources} from './plasma';
 import {starConduit} from './thermal';
+import {createStellarDebris} from './stellar-debris';
+export type RegulatorState={unstable:number;pattern:number;attackTime:number;active?:boolean};
 
 /** The regulator hangs in front of the star; two curved magnetic ducts feed it. */
 export function createHeliostatRegulator(m:HeliostatMaterials,resources:PlasmaResources=createPlasmaResources()) {
@@ -39,6 +41,9 @@ export function createHeliostatRegulator(m:HeliostatMaterials,resources:PlasmaRe
     }
     g.finish();return rootGyro;
   });
+  const fault=new T.Mesh(new T.TorusGeometry(1.25,.035,6,40),new T.MeshBasicMaterial({color:new T.Color(3,.4,.025),transparent:true,opacity:.7,blending:T.AdditiveBlending,depthWrite:false}));
+  fault.name='unstable-lens-warning';fault.rotation.x=Math.PI/2;fault.position.y=-.34;gyros[1].add(fault);fault.visible=false;
+  const debris=createStellarDebris();root.add(debris.root);
   const rotor=new T.Group();rotor.name='regulator-vane-rotor';root.add(rotor);const r=heliostatBatch(rotor);
   for(let i=0;i<12;i++) {
     const a=i*Math.PI/6; r.box([.18,.25,.42],[Math.cos(a)*1.08,origin[1]-.02,Math.sin(a)*1.08+origin[2]],m.titanium,.02,[0,-a,0]);
@@ -55,9 +60,17 @@ export function createHeliostatRegulator(m:HeliostatMaterials,resources:PlasmaRe
   const charge=new T.MeshBasicMaterial({color:new T.Color(2.8,1,.18)}),lights=new T.Group();const l=heliostatBatch(lights);
   for(const side of[-1,1])l.rod([side*HELIOSTAT_EMITTER_X,origin[1]-.025,origin[2]],[side*HELIOSTAT_EMITTER_X,origin[1]+.025,origin[2]],.24,charge,16);
   l.finish();root.add(lights);
-  return {root,ducts,rotor,pose(time:number,windup:number,recoil:number) {
-    rotor.rotation.y=time*.23;feeds.forEach(feed=>feed.pose(time,.65+windup*.35));gyros.forEach((g,i)=>g.rotation.y=time*(i?.22:-.19));glowLights.forEach(light=>light.intensity=12+windup*45);
+  return {root,ducts,rotor,gyros,debris,pose(time:number,windup:number,recoil:number,state?:RegulatorState) {
+    const instability=Math.min(1,(state?.unstable??0)/.9);
+    rotor.rotation.y=time*.23;feeds.forEach((feed,i)=>{
+      const channel=state&&state.active!==false?heliostatPlasmaPhase(state.attackTime,i?1:-1,state.pattern).strength:0;
+      feed.pose(time,(.65+Math.max(windup,channel)*.35)*(i?1-instability*(.08+.05*Math.sin(time*6.7)):1));
+      glowLights[i].intensity=12+Math.max(windup,channel)*45;
+    });
+    gyros.forEach((g,i)=>{g.rotation.y=time*(i?.22:-.19);g.rotation.x=i?instability*(.1*Math.sin(time*5.3)+.045*Math.sin(time*8.1)):0;g.rotation.z=i?instability*.07*Math.sin(time*4.1+.6):0;});
+    fault.visible=instability>0;fault.material.opacity=instability*(.58+.15*Math.sin(time*4.7));
+    debris.update(state?.unstable??0,instability>0);
     charge.color.setRGB(.65+windup*2.2,.12+windup*.85,.025+windup*.12);
     lights.position.y=recoil*.12;
-  }};
+  },prime(){const restore=debris.prime(),visible=fault.visible;fault.visible=true;return()=>{restore();fault.visible=visible;};}};
 }

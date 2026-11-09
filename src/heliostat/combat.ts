@@ -67,10 +67,16 @@ export function electricHits(site: number, time: number, previous: number, point
   const p=electricPose(site,time), a=electricPose(site,previous);
   return p.hot && Math.abs(point.x-p.gap) > ELECTRIC_GAP/2-.22 && point.y >= Math.min(p.y,a.y)-.28 && point.y <= Math.max(p.y,a.y)+.28;
 }
-export function heliostatPlasmaPhase(time:number) {
-  const t=Math.max(0,time)%HELIOSTAT_INTERVAL,age=t-HELIOSTAT_FIRE;
+/** An asymmetric cycle delays the trailing lens; a locked cycle never changes. */
+export function heliostatPlasmaPhase(time:number,side=0,pattern=0) {
+  const delay=pattern!==0&&side!==0&&side!==pattern ? .55 : 0;
+  const t=Math.max(0,time)%HELIOSTAT_INTERVAL,age=t-HELIOSTAT_FIRE-delay;
   return {growth:smooth(age/HELIOSTAT_GROW),strength:smooth(age/HELIOSTAT_GROW)*(1-smooth((age-HELIOSTAT_CHANNEL)/HELIOSTAT_FADE)),
     hot:age>=HELIOSTAT_GROW&&age<HELIOSTAT_CHANNEL};
+}
+export function heliostatLockTargets(player:{x:number;y:number},pattern=0){
+  const x=Math.max(-2.5,Math.min(2.5,player.x)),y=Math.max(-5.9,Math.min(5.1,player.y));
+  return [-1,1].map(side=>({x:x+side*(pattern===0 ? .75 : side===pattern ? .35 : 1.45),y:y+(pattern!==0&&side!==pattern ? .6 : 0)}));
 }
 export type PlasmaPoint={x:number;y:number;z:number};
 export function heliostatPlasmaControls(side:number,target:{x:number;y:number}):PlasmaPoint[] {
@@ -85,8 +91,8 @@ export function heliostatPlasmaPoint(u:number,points:readonly PlasmaPoint[]) {
   if(u>.84){const x=d.x-c.x,y=d.y-c.y,z=d.z-c.z,length=Math.hypot(x,y,z),distance=(u-.84)/.16*3;p.x+=x/length*distance;p.y+=y/length*distance;p.z+=z/length*distance;}
   return p;
 }
-export function heliostatPlasmaHits(time:number,targets:readonly {x:number;y:number}[],point:{x:number;y:number}) {
-  return heliostatPlasmaPhase(time).hot&&targets.some(t=>Math.hypot(point.x-t.x,point.y-t.y)<.44);
+export function heliostatPlasmaHits(time:number,targets:readonly {x:number;y:number}[],point:{x:number;y:number},pattern=0) {
+  return targets.some((t,i)=>heliostatPlasmaPhase(time,i?1:-1,pattern).hot&&Math.hypot(point.x-t.x,point.y-t.y)<.44);
 }
 export function heliostatSunspot(side:number) {
   return {x:side*4.65*.78,y:-4.65*.044,z:4.65*Math.sqrt(1-.78*.78-.044*.044)};

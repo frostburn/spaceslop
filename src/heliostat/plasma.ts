@@ -48,9 +48,10 @@ export function createAttackPlasma(resources:PlasmaResources){
   const root=new T.Group();root.name='regulator-channeled-plasma';
   const streams=[-1,1].map(side=>resources.tube(heliostatPlasmaControls(side,{x:side*.75,y:-5.3}),true,1.4));
   streams.forEach(s=>root.add(s.root));root.visible=false;
-  return{root,streams,update(time:number,clock:number,targets:readonly {x:number;y:number}[],visible:boolean){
-    const p=heliostatPlasmaPhase(time);root.visible=visible&&targets.length===2&&p.strength>0;
+  return{root,streams,update(time:number,clock:number,targets:readonly {x:number;y:number}[],visible:boolean,pattern=0){
+    root.visible=visible&&targets.length===2;
     if(!root.visible)return;
-    streams.forEach((s,i)=>{s.setPath(heliostatPlasmaControls(i?1:-1,targets[i]));s.pose(clock,p.strength,p.growth);});
+    streams.forEach((s,i)=>{const p=heliostatPlasmaPhase(time,i?1:-1,pattern);s.root.visible=p.strength>0;s.setPath(heliostatPlasmaControls(i?1:-1,targets[i]));s.pose(clock,p.strength,p.growth);});
+    root.visible=streams.some(s=>s.root.visible);
   },prime(){root.visible=true;streams.forEach(s=>s.pose(0,1));}};
 }

@@ -1,4 +1,6 @@
 import { HELIOSTAT_HP,HELIOSTAT_APPROACH,HELIOSTAT_INTERVAL,HELIOSTAT_WINDUP,HELIOSTAT_FIRE,HELIOSTAT_CHANNEL,HELIOSTAT_FADE,HELIOSTAT_GUARD_FIRE,HELIOSTAT_SPAWN_LEAD,heliostatWaves,heliostatMotion,heliostatCanAttack,heliostatPlasmaHits,electricSites,electricHits,type HeliostatCourse } from './heliostat/combat';
+import {heliostatLockTargets} from './heliostat/combat';
+import {crawlerSites,crawlerPose,stepCrawler,crawlerHits,CRAWLER_HP,type CrawlerState} from './heliostat/crawler';
 import {mineSites,minePose,triggerMine,mineBurst,MINE_WINDUP,MINE_JUMP,MINE_BURST_TIME,type BoulevardMine} from './boulevard-mines';
 import {BOULEVARD_HP,BOULEVARD_APPROACH,BOULEVARD_INTERVAL,BOULEVARD_WINDUP,BOULEVARD_FIRE,BOULEVARD_TRAVEL,BOULEVARD_SPAWN_LEAD,boulevardWaves,boulevardMotion,turnBoulevardTurret,type BoulevardCourse} from './boulevard';
 import { AMBUSHER_HP, AMBUSHER_SPAWN_LEAD, AMBUSHER_CORPSE_TIME, ambusherSites, ambusherHome, createAmbusherState, stepAmbusher, ambusherPose, ambusherHulls, ambusherBodyHit, ambusherBeamEntry, ambusherHits, defeatAmbusher, type AmbusherState } from './preserve-ambusher';
@@ -52,6 +54,7 @@ type Shot = Point & {
 };
 type Threat = Shot & { graze?: 'near' | 'counted' };
 type Enemy = Point & {
+  crawler?:CrawlerState;
   heliostat?: HeliostatCourse;
   boulevard?: BoulevardCourse;
   mine?: BoulevardMine; interceptorAim?:number; interceptorHeading?:number;
@@ -213,6 +216,10 @@ export class Flight {
   private heliostatAimCycle = -1;
   private heliostatCancelledCycle = -1;
   private heliostatFinalTime = 0;
+  private nextCrawler=0;
+  private heliostatEscalationAt=Infinity;
+  private heliostatEscalationCycle=Infinity;
+  private heliostatLockedPattern=0;
   private ioCollapseAge = -1;
   private towlineEnemies = new Set<Enemy>();
   private towlineHitCannon = false;
@@ -244,6 +251,9 @@ export class Flight {
   }
 
   get heliostatAttackTime(){return this.phase==='boss'?this.time:this.heliostatFinalTime;}
+  get heliostatPattern(){return this.heliostatLockedPattern;}
+  get heliostatUnstable(){return Number.isFinite(this.heliostatEscalationAt);}
+  get heliostatUnstableAge(){return Math.max(0,this.heliostatAttackTime-this.heliostatEscalationAt);}
   get heliostatTargets(){return this.heliostatAimCycle===Math.floor(this.heliostatAttackTime/HELIOSTAT_INTERVAL)&&this.heliostatCancelledCycle!==this.heliostatAimCycle?this.markers:[];}
 
   get transitionDuration() { if(this.level==='heliostat')return HELIOSTAT_APPROACH;if(this.level==='boulevard')return BOULEVARD_APPROACH;return this.level === 'preserve' ? PRESERVE_APPROACH : this.level === 'vents' ? VENT_APPROACH : this.level === 'io' ? IO_APPROACH : this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
@@ -666,6 +676,11 @@ export class Flight {
   }
 
   private stepStage(dt: number) {
+    if(this.level==='heliostat')while(this.nextCrawler<crawlerSites.length){
+      const crawler={site:this.nextCrawler},p=crawlerPose(crawler,this.time);if(p.physicalY>23)break;
+      this.nextCrawler++;if(p.y<-10)continue;
+      this.enemies.push({x:p.x,y:p.y,lane:p.x,age:0,fire:Infinity,hp:CRAWLER_HP,crawler,drop:crawler.site%2?'omega':'laser'});
+    }
     if(this.level==='heliostat')for(let site=0;site<electricSites.length;site++)if(electricHits(site,this.time,this.time-dt,this.player))this.hit();
     // Mines are invulnerable scenery hazards; hp is only their active/spent flag.
     if(this.level==='boulevard')while(this.nextMine<mineSites.length){const mine={site:this.nextMine},p=minePose(mine,this.time);if(p.physicalY>28)break;this.nextMine++;this.enemies.push({x:p.x,y:p.y,lane:p.x,age:0,fire:Infinity,hp:1,mine});}
@@ -710,7 +725,10 @@ export class Flight {
       if (enemy.hp <= 0) continue;
       enemy.age += dt;
       const motion = enemy.raptor ? raptorFlight(enemy.age) : undefined;
-      if(enemy.mine){
+      if(enemy.crawler){
+        const p=stepCrawler(enemy.crawler,this.time,this.player);enemy.x=p.x;enemy.y=p.y;
+        if(crawlerHits(enemy.crawler,this.time,this.time-dt,this.player))this.hit();
+      } else if(enemy.mine){
         const p=triggerMine(enemy.mine,this.time,this.player);enemy.x=p.x;enemy.y=p.y;
         if(p.elapsed>=MINE_WINDUP+MINE_JUMP){enemy.mine.burstAt=this.time;enemy.hp=0;this.threats.push(...mineBurst(p.x,p.y));continue;}
       } else if (enemy.ambusher) {
@@ -847,14 +865,18 @@ export class Flight {
 
   private stepHeliostat(){
     const cycle=Math.floor(this.time/HELIOSTAT_INTERVAL),t=this.time%HELIOSTAT_INTERVAL;
+    if(!this.heliostatUnstable&&this.bossHealth<HELIOSTAT_HP/2){
+      this.heliostatEscalationAt=this.time;this.heliostatEscalationCycle=cycle+1;
+      this.pickupMessage='Magnetic lens unstable · Alternating channels';this.pickupTime=3;
+    }
     if(this.heliostatCancelledCycle===cycle)return;
     if(cycle!==this.heliostatAimCycle&&t>=HELIOSTAT_WINDUP&&t<HELIOSTAT_FIRE){
       this.heliostatAimCycle=cycle;
-      const x=clamp(this.player.x,-2.5,2.5),y=clamp(this.player.y,-5.9,5.1);
-      this.markers=[-.75,.75].map(offset=>({x:x+offset,y}));
+      this.heliostatLockedPattern=cycle>=this.heliostatEscalationCycle?(cycle%2?1:-1):0;
+      this.markers=heliostatLockTargets(this.player,this.heliostatPattern);
     }
-    if(heliostatPlasmaHits(this.time,this.heliostatTargets,this.player))this.hit();
-    if(t>HELIOSTAT_FIRE+HELIOSTAT_CHANNEL+HELIOSTAT_FADE+.02)this.markers=[];
+    if(heliostatPlasmaHits(this.time,this.heliostatTargets,this.player,this.heliostatPattern))this.hit();
+    if(t>HELIOSTAT_FIRE+HELIOSTAT_CHANNEL+HELIOSTAT_FADE+(this.heliostatPattern ? .55 : 0)+.02)this.markers=[];
   }
 
   private stepBoulevard(){

@@ -3,6 +3,8 @@ import {createGuardAssets,createHeliostatGuard} from './heliostat/guard';
 import {createHeliostatDrone,actorPose} from './heliostat/actors';
 import {createHeliostatRegulator} from './heliostat/boss';
 import {HELIOSTAT_PITCH} from './heliostat/combat';
+import {crawlerPose,crawlerSites} from './heliostat/crawler';
+import {createCrawlerAssets,createCrawlerRig} from './heliostat/crawler-rig';
 import {createBoulevardMine,createBoulevardInterceptor} from './boulevard-enemies';
 import {createBoulevardGlow} from './boulevard-glow';
 import {createBoulevardFountain} from './boulevard-fountain';
@@ -194,6 +196,8 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const studyWaterfall=boulevard.waterfalls.create(2,1);studyWaterfall.position.set(0,0,0);studyWaterfall.rotation.x=-Math.PI/2;
   const helioMaterials=createHeliostatMaterials(),helioGuardAssets=createGuardAssets(helioMaterials),helioGuard=createHeliostatGuard(helioGuardAssets),helioGuardPose=actorPose(helioGuard);
   const helioDrone=createHeliostatDrone(helioMaterials),helioBoss=createHeliostatRegulator(helioMaterials);helioBoss.root.rotation.x=-HELIOSTAT_PITCH;helioBoss.ducts.visible=false;
+  const helioCrawler=createCrawlerRig(createCrawlerAssets(helioMaterials));
+  const helioUnstableBoss=createHeliostatRegulator(helioMaterials);helioUnstableBoss.root.rotation.x=-HELIOSTAT_PITCH;helioUnstableBoss.ducts.visible=false;
   window.addEventListener('pagehide',()=>helioMaterials.releaseTextures(),{once:true});
   void loadEncounterTexture('heliostatGuard',helioGuardAssets.setAtlas);
   const helioArt:{heliostatMetal?:T.Texture;heliostatCeramic?:T.Texture}={};
@@ -202,7 +206,9 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const assets = {
     heliostat_manowar:{root:helioGuard,duration:4,pose(time:number){helioGuardPose(time,0,T.MathUtils.smoothstep(time,2.4,3.3));return 'raster float / ruffled sail / rigid harness / swaying tendrils';}},
     heliostat_drone:{root:helioDrone,duration:3,pose(time:number){helioDrone.rotation.y=.12*Math.sin(time*2);return 'inspection drone';}},
+    heliostat_crawler:{root:helioCrawler.root,duration:8,bounds:new T.Box3(new T.Vector3(-4,-7,-5.6),new T.Vector3(1,3,1)),pose(time:number){const p=crawlerPose({site:0,aimY:-4},crawlerSites[0].at-4+time);helioCrawler.pose(p,time);helioCrawler.root.position.y=-p.physicalY;return p.hot?'cutting sweep':p.warning?'locked aim / marked sweep':p.brace>.5?'braced on rail':'rail traversal / telescoping cutter';}},
     heliostat_regulator:{root:helioBoss.root,duration:4.4,bounds:new T.Box3(new T.Vector3(-5.5,-2,-2),new T.Vector3(5.5,3,2)),pose(time:number){helioMaterials.updateThermal(time);helioBoss.pose(time,T.MathUtils.smoothstep(time,.65,1.9),0);return 'hot magnetic lenses / plasma conduits / exposed cyan aperture';}},
+    heliostat_regulator_unstable:{root:helioUnstableBoss.root,duration:8.8,bounds:new T.Box3(new T.Vector3(-5.5,-2,-2),new T.Vector3(5.5,3,2)),pose(time:number){helioMaterials.updateThermal(time);const pattern=Math.floor(time/4.4)%2?1:-1;helioUnstableBoss.pose(time,Math.max(0,Math.min(1,(time%4.4-.65)/1.25)),0,{unstable:time+.1,pattern,attackTime:time});return 'unstable right lens / alternating lead / harmless stellar shards';}},
     boulevard_waterfall:{root:studyWaterfall,bounds:new T.Box3(new T.Vector3(-1.2,-.2,-1.6),new T.Vector3(1.2,2.5,1.6)),duration:6,pose(time:number){boulevard.waterfalls.update(time);return 'raised source pool / falling curtain / catch basin / spray';}},
     boulevard_mine:{root:studyMine.root,bounds:new T.Box3(new T.Vector3(-2.5,-2.5,-3.2),new T.Vector3(2.5,2.5,1.2)),duration:2.8,pose(time:number){const state={site:0,triggeredAt:21,burstAt:time>=2?22:undefined};studyMine.pose(state,20+time,time<2);studyMine.body.position.x=studyMine.body.position.y=0;studyMine.warning.position.x=studyMine.warning.position.y=0;studyMine.flash.position.x=studyMine.flash.position.y=0;return time<1?'armed · proximity radius':time<1.4?'triggered · fuse':time<2?'jumping':'radial burst';}},
     boulevard_interceptor:{root:studyInterceptor.root,duration:3.4,pose(time:number){const phase=time%2.8;studyInterceptor.pose(T.MathUtils.clamp((phase-1.05)/.65,0,1),.30*Math.sin(time*.8),time);return phase<1.05?'lane change':phase<1.7?'locked aim · charge':'three-shot volley';}},

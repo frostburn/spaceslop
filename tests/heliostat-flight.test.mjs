@@ -16,10 +16,10 @@ test('complete Heliostat route fits its prewarmed drone/guard pools and grants a
   for(let i=0;i<6001&&f.phase==='stage';i++){
     f.step(STEP);const drones=f.enemies.filter(e=>e.heliostat?.kind==='drone'),guards=f.enemies.filter(e=>e.heliostat?.kind==='guard');
     maxD=Math.max(maxD,drones.length);maxG=Math.max(maxG,guards.length);
-    for(const e of f.enemies){assert(e.heliostat,'prototype fauna leaked into station');encountered.add(e.heliostat.kind);if(e.drop)drops.add(e.drop);assert(Number.isFinite(e.x+e.y));}
+    for(const e of f.enemies){assert(e.heliostat||e.crawler,'prototype fauna leaked into station');encountered.add(e.crawler?'crawler':e.heliostat.kind);if(e.drop)drops.add(e.drop);assert(Number.isFinite(e.x+e.y));}
   }
   assert.equal(f.phase,'approach');assert.equal(f.nextWave,20);assert.equal(f.transitionDuration,8);
-  assert.deepEqual([...encountered].sort(),['drone','guard']);assert.equal(drops.size,4);
+  assert.deepEqual([...encountered].sort(),['crawler','drone','guard']);assert.equal(drops.size,4);
   assert(maxD<=c.HELIOSTAT_DRONE_POOL);assert(maxG<=c.HELIOSTAT_GUARD_POOL);
   for(let i=0;i<481;i++)f.step(STEP);assert.equal(f.phase,'boss');assert.equal(f.bossHealth,c.HELIOSTAT_HP);
 });
