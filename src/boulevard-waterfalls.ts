@@ -46,14 +46,14 @@ export function createBoulevardWaterfalls(m:BoulevardMaterials){
   }`});
  const sheet=part(prototype,geometry,flow,0,0,0);sheet.name='boulevard-waterfall-flow';mergeBoulevard(prototype);
  const sprayMaterial=new T.ShaderMaterial({name:'boulevard-waterfall-spray',uniforms:{clock},transparent:true,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false,
-  vertexShader:`uniform float clock;varying float fade;void main(){vec3 origin=instanceMatrix[3].xyz;float seed=dot(origin,vec3(23.7,17.3,11.9)),age=fract(clock*.85+seed);fade=(1.-age)*(1.-age);
+  vertexShader:`uniform float clock;varying float fade;void main(){vec3 origin=instanceMatrix[3].xyz;float seed=dot(origin,vec3(23.7,17.3,11.9)),age=fract(clock*(.65+.40*fract(sin(seed*7.13)*43758.5453))+fract(sin(seed*19.7)*15731.743));fade=(1.-age)*(1.-age);
    vec3 p=(instanceMatrix*vec4(position*(1.-age*.7),1.)).xyz;p+=vec3(sin(seed)*age*.24,-age*.28,(age-age*age)*1.15);gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}`,
   fragmentShader:'varying float fade;void main(){gl_FragColor=vec4(vec3(.33,.85,1.1),fade*.55);\n#include <colorspace_fragment>\n}'});
  const spray=new T.InstancedMesh(new T.SphereGeometry(.018,5,3),sprayMaterial,24),dummy=new T.Object3D();spray.name='boulevard-waterfall-splash';
  for(let i=0;i<24;i++){dummy.position.set((i/23-.5)*1.73,WATERFALL_IMPACT_Y+.035*Math.sin(i*2.7),.255);dummy.scale.set(.65,.65,1.3);dummy.updateMatrix();spray.setMatrixAt(i,dummy.matrix);}spray.computeBoundingSphere();if(spray.boundingSphere)spray.boundingSphere.radius+=.65;prototype.add(spray);
  const streamGeometry=new T.SphereGeometry(.018,5,3),phases=new Float32Array(24);for(let i=0;i<phases.length;i++)phases[i]=(i*.381966)%1;streamGeometry.setAttribute('streamPhase',new T.InstancedBufferAttribute(phases,1));
  const streamMaterial=new T.ShaderMaterial({name:'boulevard-waterfall-source-flow',uniforms:{clock},transparent:true,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false,
-  vertexShader:`uniform float clock;attribute float streamPhase;varying float fade;void main(){float age=fract(clock*.62+streamPhase);fade=sin(age*3.14159265);
+  vertexShader:`uniform float clock;attribute float streamPhase;varying float fade;void main(){float age=fract(clock*(.45+.34*fract(sin(streamPhase*127.1)*43758.5453))+streamPhase);fade=sin(age*3.14159265);
    vec3 p=(instanceMatrix*vec4(position,1.)).xyz;p.y=1.22-age*1.27+position.y*3.2;p.x+=sin(age*5.+streamPhase*13.)*.018;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}`,
   fragmentShader:'varying float fade;void main(){gl_FragColor=vec4(vec3(.56,.95,1.15),fade*.70);\n#include <colorspace_fragment>\n}'});
  const streams=new T.InstancedMesh(streamGeometry,streamMaterial,24);streams.name='boulevard-waterfall-source-particles';
