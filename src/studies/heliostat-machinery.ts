@@ -54,7 +54,7 @@ export function addServiceMachinery(root:T.Group,m:HeliostatMaterials,kind:Helio
       b.rod([side*8.6,-6.5,-3.5],[side*8.6,-6.5,-2.45],.35,m.dark,12);
     }
   }
-  if(kind==='containment')for(const y of[-1,8]){
+  if(kind==='containment')for(const y of[-6,12.5]){
     const points=Array.from({length:33},(_,i)=>new T.Vector3(Math.cos(i*Math.PI/32)*6.1,y,.4+Math.sin(i*Math.PI/32)*6.1));
     b.add(new T.TubeGeometry(new T.CatmullRomCurve3(points),48,.095,8,false),m.copper);
     for(const side of[-1,1])b.rod([side*6.1,y,-3.4],[side*6.1,y,.4],.14,m.titanium);
