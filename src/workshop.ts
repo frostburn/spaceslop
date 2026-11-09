@@ -186,7 +186,9 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const boulevardArch=createBoulevardArch(boulevard.materials);boulevardArch.root.rotation.x=-Math.PI/2;
   const fountain=createBoulevardFountain(boulevard.materials);fountain.root.rotation.x=-Math.PI/2;
   const studyMine=createBoulevardMine(boulevard.materials),studyInterceptor=createBoulevardInterceptor(boulevard.materials);
+  const studyWaterfall=boulevard.waterfalls.create(2,1);studyWaterfall.position.set(0,0,0);studyWaterfall.rotation.x=-Math.PI/2;
   const assets = {
+    boulevard_waterfall:{root:studyWaterfall,bounds:new T.Box3(new T.Vector3(-1.2,-.2,-1.6),new T.Vector3(1.2,2.5,1.6)),duration:6,pose(time:number){boulevard.waterfalls.update(time);return 'raised source pool / falling curtain / catch basin / spray';}},
     boulevard_mine:{root:studyMine.root,bounds:new T.Box3(new T.Vector3(-2.5,-2.5,-3.2),new T.Vector3(2.5,2.5,1.2)),duration:2.8,pose(time:number){const state={site:0,triggeredAt:21,burstAt:time>=2?22:undefined};studyMine.pose(state,20+time,time<2);studyMine.body.position.x=studyMine.body.position.y=0;studyMine.warning.position.x=studyMine.warning.position.y=0;studyMine.flash.position.x=studyMine.flash.position.y=0;return time<1?'armed · proximity radius':time<1.4?'triggered · fuse':time<2?'jumping':'radial burst';}},
     boulevard_interceptor:{root:studyInterceptor.root,duration:3.4,pose(time:number){const phase=time%2.8;studyInterceptor.pose(T.MathUtils.clamp((phase-1.05)/.65,0,1),.30*Math.sin(time*.8));return phase<1.05?'lane change':phase<1.7?'locked aim · charge':'three-shot volley';}},
     boulevard_fountain:{root:fountain.root,bounds:new T.Box3(new T.Vector3(-1.7,-.2,-1.7),new T.Vector3(1.7,2.2,1.7)),duration:6,pose(time:number){fountain.update(time);return 'tiered basin / flowing jets / fine spray';}},

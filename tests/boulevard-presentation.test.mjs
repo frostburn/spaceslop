@@ -112,3 +112,26 @@ test('city color clocks remain scene-owned and independent of actor materials an
 test('sun bands remain static with solid caps while the warmth clock advances',async()=>{
  const{createBoulevardSun}=await server.ssrLoadModule('/src/boulevard-sun.ts'),sun=createBoulevardSun(),positions=sun.disk.geometry.attributes.position.array,before=positions.slice(),fragment=sun.disk.material.fragmentShader;sun.update(20);sun.update(26);assert.equal(sun.clock.value,26);assert.equal(sun.disk.geometry.attributes.position.array,positions);assert.deepEqual(positions,before);assert.deepEqual(sun.disk.material.uniforms,{});assert.equal(sun.disk.material.fragmentShader,fragment);assert(sun.disk.material.depthWrite);
 });
+
+test('sun geometry has progressively thicker upper bands, real gaps and closed circular caps',async()=>{
+ const{createBoulevardSun,SUN_BANDS,SUN_RADIUS}=await server.ssrLoadModule('/src/boulevard-sun.ts'),sun=createBoulevardSun(),disk=new T.Mesh(sun.disk.geometry,sun.disk.material);disk.updateMatrixWorld(true);
+ const hit=y=>new T.Raycaster(new T.Vector3(0,y,2),new T.Vector3(0,0,-1)).intersectObject(disk).length>0;
+ for(let i=0;i<SUN_BANDS.length;i++){const[lo,hi]=SUN_BANDS[i];assert(hit((lo+hi)/2));if(i>1)assert(hi-lo>SUN_BANDS[i-1][1]-SUN_BANDS[i-1][0]);if(i>0)assert(!hit((lo+SUN_BANDS[i-1][1])/2),'sun gap is filled');}
+ assert(hit(-SUN_RADIUS+.02)&&hit(SUN_RADIUS-.02));assert(!hit(SUN_RADIUS+.02));const p=disk.geometry.attributes.position;for(let i=0;i<p.count;i++)assert(Math.hypot(p.getX(i),p.getY(i))<=SUN_RADIUS+1e-5);
+});
+
+test('roadside cascades reserve clear lots, stay below flight and animate with fixed GPU storage',()=>{
+ const s=createBoulevardScenery();assert.equal(s.waterfalls.roots.length,14);s.root.updateMatrixWorld(true);
+ for(const root of s.waterfalls.roots){const bay=Number(root.parent.name.replace('boulevard-bay-',''));assert(![1,4,5,6,7,10].includes(bay),'cascade blocks crossing, arch or monorail');const bounds=new T.Box3().setFromObject(root);assert(bounds.max.z<-.7);assert(Math.min(Math.abs(bounds.min.x),Math.abs(bounds.max.x))>3.6*s.world.scale.x);
+  const masonry=root.parent.getObjectByName('boulevard-masonry'),matrix=new T.Matrix4();masonry.geometry.computeBoundingBox();for(let i=0;i<masonry.count;i++){masonry.getMatrixAt(i,matrix);const b=masonry.geometry.boundingBox.clone().applyMatrix4(matrix).applyMatrix4(masonry.matrixWorld);if(b.max.z>BOULEVARD_DECK+.4)assert(!b.intersectsBox(bounds),'building occupies cascade lot');}
+ }
+ const root=s.waterfalls.roots[0],spray=root.getObjectByName('boulevard-waterfall-splash'),sheet=root.getObjectByName('boulevard-waterfall-flow'),matrices=spray.instanceMatrix.array,vertices=sheet.geometry.attributes.position.array,before=matrices.slice();
+ s.update(30,0,18);assert.equal(s.waterfalls.clock.value,18);s.update(180,1,18);assert.equal(s.waterfalls.clock.value,18);s.update(180,1,19);assert.equal(s.waterfalls.clock.value,19);assert.equal(spray.instanceMatrix.array,matrices);assert.deepEqual(matrices,before);assert.equal(sheet.geometry.attributes.position.array,vertices);assert(spray.boundingSphere.radius>1);s.dispose();
+});
+
+test('palm uplights belong to their own trunk/canopy materials and match each tree foot',()=>{
+ const s=createBoulevardScenery();assert.notEqual(s.palmLighting.bark,s.materials.bark);assert.notEqual(s.palmLighting.leaf,s.materials.leaf);
+ for(const material of[s.palmLighting.bark,s.palmLighting.leaf]){const shader={uniforms:{},vertexShader:T.ShaderLib.standard.vertexShader,fragmentShader:T.ShaderLib.standard.fragmentShader};material.onBeforeCompile(shader);assert.equal(shader.uniforms.palmUplight,s.palmLighting.strength);}
+ const m=new T.Matrix4(),p=new T.Vector3(),q=new T.Vector3();for(const chunk of s.chunks){const trunks=chunk.getObjectByName('boulevard-palm-trunks'),lamps=chunk.getObjectByName('boulevard-palm-uplights');assert.equal(trunks.count,lamps.count);for(let i=0;i<trunks.count;i++){trunks.getMatrixAt(i,m);p.setFromMatrixPosition(m);lamps.getMatrixAt(i,m);q.setFromMatrixPosition(m);assert(Math.abs(q.y-p.y)<1e-6);assert(Math.abs(q.x-p.x+Math.sign(p.x)*.17)<1e-6);assert(Math.abs(q.z-BOULEVARD_DECK-.34)<1e-6);}}
+ s.dispose();
+});
