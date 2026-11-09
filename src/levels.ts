@@ -1,4 +1,5 @@
 export const levels = {
+  boulevard: {name:'Synthwave · Boulevard',sector:'BOULEVARD',boss:'PURSUIT CRUISER',duration:100},
   vents: { name: 'Hadal · Hydrothermal vents', sector: 'HADAL', boss: 'BARNACLE SOVEREIGN', duration: 100 },
   io: { name: 'Io · Caldera', sector: 'IO', boss: 'CALDERA ENGINE', duration: 100 },
   titan: { name: 'Titan · Research station', sector: 'TITAN', boss: 'TITAN CICADA', duration: 84 },

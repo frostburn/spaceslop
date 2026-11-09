@@ -18,6 +18,7 @@
       <aside class="tools" aria-label="Asset inspection controls">
         <label for="sector">Sector</label>
         <select id="sector">
+          <option value="boulevard">Synthwave boulevard</option>
           <option value="preserve">Orbital preserve</option>
           <option value="broodlock">Broodlock · Ant hive</option>
           <option value="ice">Frostwake · Ice field</option>
@@ -29,6 +30,11 @@
         </select>
         <label for="asset">Asset</label>
         <select id="asset">
+          <optgroup label="Synthwave boulevard" data-sector="boulevard">
+            <option value="boulevard_route">Boulevard · Full route</option>
+            <option value="pursuit_cruiser">Pursuit cruiser</option>
+            <option value="hovercar">Hovercar patrol</option>
+          </optgroup>
           <optgroup label="Orbital preserve" data-sector="preserve">
             <option value="preserve_section">Patrol &amp; boss arena</option>
             <option value="raptor">Feathered raptor</option>

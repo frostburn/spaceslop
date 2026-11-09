@@ -1,3 +1,6 @@
+import {createBoulevardScenery} from './boulevard-scenery';
+import {createHovercar,createPursuitCruiser} from './boulevard-rigs';
+import {boulevardBossPoint,BOULEVARD_PITCH,boulevardSection} from './boulevard';
 import { createAmbusherMaterials, createPoolAmbusher } from './preserve-ambusher-rig';
 import { ambusherStudy, AMBUSHER_DURATION, AMBUSHER_FALL } from './preserve-ambusher';
 import { createPreserveUv, preserveLighting } from './preserve-lighting';
@@ -171,7 +174,13 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   keeperPreview.rotation.x = -Math.PI / 2; keeperPreview.position.y = -7; keeperPreview.add(keeper.root);
   void loadEncounterTexture('feathers', texture => { keeper.setFeatherTexture(texture); preserve.boss.setFeatherTexture(texture); });
   void loadEncounterTexture('scales', texture => { keeper.setScaleTexture(texture); preserve.boss.setScaleTexture(texture); });
+  const boulevard=createBoulevardScenery(),cruiser=createPursuitCruiser(boulevard.materials),hovercar=createHovercar(boulevard.materials),boulevardPreview=new T.Group(),routeCruiser=createPursuitCruiser(boulevard.materials);
+  boulevardPreview.add(boulevard.root,routeCruiser.root);cruiser.root.rotation.x=-BOULEVARD_PITCH;
+  void loadEncounterTexture('boulevardRoad',boulevard.road.setMap);
   const assets = {
+    boulevard_route:{root:boulevardPreview,duration:125,bounds:new T.Box3(new T.Vector3(-5,-8,-5),new T.Vector3(5,8,1)),pose(time:number){const reveal=T.MathUtils.smoothstep(time,100,107);boulevard.update(time,reveal,time);const p=boulevardBossPoint(time,reveal);routeCruiser.root.position.set(p.x,p.y,p.z);routeCruiser.root.rotation.x=-BOULEVARD_PITCH*reveal;routeCruiser.pose(time,Math.max(0,Math.sin(time*2)),0);return boulevardSection(time);}},
+    pursuit_cruiser:{root:cruiser.root,duration:6.8,pose(time:number){cruiser.pose(time,T.MathUtils.smoothstep(time%3.4,.55,1.55),time%3.4>1.55?Math.max(0,1-(time%3.4-1.55)/.24):0);return 'rotary cannons / exposed lattice / cyan core';}},
+    hovercar:{root:hovercar.root,duration:3.4,pose:()=> 'solid core / luminous cage'},
     microraptor:{root:flyer.root,duration:5.6,pose(time:number){const p=flyerMotion(time,0,{...loopCourse,formation:'swoop'});const stroke=flyer.pose(time,{...loopCourse,formation:'swoop'},p.bank);return stroke.tuck>.1?'tucked swoop':stroke.burst>.1?'burst wingbeats':'four-wing glide';}},
     microraptor_flock:{root:flockRoot,duration:12,bounds:new T.Box3(new T.Vector3(-3.5,-9,-1),new T.Vector3(3.5,10,1)),pose(time:number){flock.forEach((r,i)=>{const course={...loopCourse,slot:i},p=flyerMotion(time,0,course);r.root.position.set(p.x,p.y,0);r.pose(time,course,p.bank,p.heading);});return 'staggered train · tangent-continuous loop';}},
     pool_ambusher:{root:ambusher.root,duration:AMBUSHER_DURATION+2.5,bounds:new T.Box3(new T.Vector3(-3.5,-6.2,-4),new T.Vector3(3.5,3.7,1.5)),pose(time:number){const p=ambusherStudy(time);ambusher.pose(p);return p.phase;}},

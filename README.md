@@ -39,3 +39,6 @@ A versioned content URL keeps replaced artwork fresh. Updates are offered in the
 - [Level and atlas reference](docs/level-reference.md).
 - [Asset handoff and import settings](docs/assets.md).
 - [Agent instructions](AGENTS.md): generated art stays in chat; the owner uploads it after review.
+
+
+The sector menu also includes **Synthwave · Boulevard**: a 100-second neon resort route with solid/wireframe architecture, live wet-road reflections, hovercar waves and a head-on Pursuit Cruiser fight. Its optional asphalt texture is reviewed/uploaded separately through chat; the stage remains playable without media. See `docs/level-reference.md` for the asset path and development workshop controls.
