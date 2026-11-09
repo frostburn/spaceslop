@@ -48,7 +48,7 @@ test('palm crowns clear nearby roofs and their trunks remain on the promenade',(
 
 test('mountains remain behind the pursuit city and back faces hide scenery while leaving interiors open',()=>{
  const scene=createBoulevardScenery();scene.horizon.geometry.computeBoundingBox();
- for(const time of[100,107,180,300]){scene.update(time,1,time);const near=scene.horizon.position.y+scene.horizon.geometry.boundingBox.min.y*scene.horizon.scale.y;assert(near>Math.max(...scene.chunks.map(c=>c.position.y+14))+20);}
+ for(const time of[100,107,180,300]){scene.update(time,1,time);const near=scene.horizon.position.y+scene.horizon.geometry.boundingBox.min.y*scene.horizon.scale.y;assert(near>Math.max(...scene.chunks.map(c=>c.position.y+14))+20);assert(scene.sunRoot.position.y>scene.horizon.position.y+scene.horizon.geometry.boundingBox.max.y*scene.horizon.scale.y+50);assert(scene.mountains.material.depthWrite&&!scene.mountains.material.transparent);}
  const shell=new T.Mesh(new T.BoxGeometry(1,1,1),scene.materials.backFaces);shell.updateMatrixWorld(true);
  const ray=new T.Raycaster(new T.Vector3(0,-3,0),new T.Vector3(0,1,0)),hit=ray.intersectObject(shell)[0];assert(hit&&Math.abs(hit.distance-3.5)<1e-9,'rear surface should sit behind internal machinery');assert(scene.materials.backFaces.depthWrite&&!scene.materials.backFaces.transparent);scene.dispose();
 });
@@ -109,6 +109,6 @@ test('city color clocks remain scene-owned and independent of actor materials an
  for(const[i,key]of['pink','cyan','amber','streetLamp'].entries())assert(s.materials[key].color.equals(original[i]),'city animations changed an actor emitter');s.dispose();
 });
 
-test('sun bands translate upward within fixed disk geometry on the shared frozen clock',async()=>{
- const{createBoulevardSun,SUN_BAND_PERIOD,SUN_BAND_SPEED}=await server.ssrLoadModule('/src/boulevard-sun.ts'),sun=createBoulevardSun(),positions=sun.disk.geometry.attributes.position.array,before=positions.slice();sun.update(20);const rise=sun.rise.value;sun.update(26);assert(Math.abs(sun.rise.value-rise-6*SUN_BAND_SPEED)<1e-12);sun.update(26+SUN_BAND_PERIOD/SUN_BAND_SPEED);assert(Math.abs(sun.rise.value-(rise+6*SUN_BAND_SPEED))<1e-12);sun.update(26);assert.equal(sun.clock.value,26);sun.update(26);assert.equal(sun.clock.value,26);assert.equal(sun.disk.geometry.attributes.position.array,positions);assert.deepEqual(positions,before);assert(sun.disk.material.depthWrite,'disk must occlude the skyline between its moving gaps');
+test('sun bands remain static with solid caps while the warmth clock advances',async()=>{
+ const{createBoulevardSun}=await server.ssrLoadModule('/src/boulevard-sun.ts'),sun=createBoulevardSun(),positions=sun.disk.geometry.attributes.position.array,before=positions.slice(),fragment=sun.disk.material.fragmentShader;sun.update(20);sun.update(26);assert.equal(sun.clock.value,26);assert.equal(sun.disk.geometry.attributes.position.array,positions);assert.deepEqual(positions,before);assert.deepEqual(sun.disk.material.uniforms,{});assert.equal(sun.disk.material.fragmentShader,fragment);assert(sun.disk.material.depthWrite);
 });

@@ -136,6 +136,8 @@ export class FlightView {
     this.renderer.shadowMap.type = T.PCFShadowMap;
     this.scene.add(this.plane);
     this.level = createLevel({ plane: this.plane, scene: this.scene, signal });
+    this.perspective.far = this.level.farDistance ?? 240;
+    this.perspective.updateProjectionMatrix();
     this.cannonMarker.renderOrder = 12;
     const p = this.level;
     this.scene.background = new T.Color(p.background ?? sceneColor);

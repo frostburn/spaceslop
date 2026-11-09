@@ -60,7 +60,7 @@ function element<T extends HTMLElement>(id: string) {
 function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const glow=createBoulevardGlow();window.addEventListener('pagehide',()=>glow.dispose(),{once:true});
   const scene = new T.Scene();
-  const camera = new T.PerspectiveCamera(39, 1, 0.05, 200);
+  const camera = new T.PerspectiveCamera(39, 1, 0.05, 600);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
 

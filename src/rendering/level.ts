@@ -18,6 +18,7 @@ export interface LevelScene {
   models: (T.Object3D | undefined)[];
   ready: Promise<TextureResult[]>;
   stageDistance: number;
+  farDistance?: number;
   background?: number;
   key?: number;
   sky?: number;

@@ -1,7 +1,8 @@
 // Stable simulation coordinates; the scenery and camera do the head-on swing.
 export const BOULEVARD_DURATION=100, BOULEVARD_SPEED=1.7, BOULEVARD_APPROACH=7;
 export const BOULEVARD_HP=100, BOULEVARD_INTERVAL=3.4, BOULEVARD_WINDUP=.55, BOULEVARD_FIRE=1.55, BOULEVARD_TRAVEL=.85;
-export const BOULEVARD_PITCH=Math.PI*.415, BOULEVARD_VIEW=.40, BOULEVARD_DECK=-3.1, BOULEVARD_RISE=6, BOULEVARD_POOL=12;
+export const BOULEVARD_PITCH=Math.PI*.415, BOULEVARD_VIEW=.40, BOULEVARD_DECK=-3.1, BOULEVARD_RISE=6, BOULEVARD_POOL=16;
+export const BOULEVARD_SPAWN_LEAD=4;
 export type BoulevardCourse={formation:'chevron'|'cross'|'train'|'rush';slot:number;mirror:number;heavy?:boolean};
 const clamp=(v:number)=>Math.max(0,Math.min(1,v));
 const smooth=(v:number)=>{const t=clamp(v);return t*t*(3-2*t);};

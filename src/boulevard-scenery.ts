@@ -36,7 +36,7 @@ export function createBoulevardScenery(){
  const chunks:T.Group[]=[],tracks:{root:T.Group;y:number;direction:number}[]=[],traffic:{root:T.Group;y:number;lane:number;phase:number}[]=[];
  const poolWater=new T.ShaderMaterial({uniforms:{clock:{value:0}},vertexShader:'varying vec2 vUv;void main(){vUv=uv;vec4 p=vec4(position,1.);\n#ifdef USE_INSTANCING\np=instanceMatrix*p;\n#endif\ngl_Position=projectionMatrix*modelViewMatrix*p;}',fragmentShader:'uniform float clock;varying vec2 vUv;void main(){vec2 p=(vUv-.5)*2.;float wave=sin(p.x*17.+sin(p.y*9.+clock*.5))*cos(p.y*19.-clock*.7);float glint=pow(max(0.,wave),24.);vec3 c=vec3(.005,.075,.12)+vec3(.035,.18,.23)*glint;gl_FragColor=vec4(c,1.);\n#include <colorspace_fragment>\n}'});
  const glowSource=new T.ShaderMaterial({transparent:true,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false,vertexShader:'varying vec2 vUv;varying vec3 vColor;void main(){vUv=uv;vColor=vec3(1.);vec4 p=vec4(position,1.);\n#ifdef USE_INSTANCING\np=instanceMatrix*p;\n#endif\n#ifdef USE_INSTANCING_COLOR\nvColor=instanceColor;\n#endif\ngl_Position=projectionMatrix*modelViewMatrix*p;}',fragmentShader:'varying vec2 vUv;varying vec3 vColor;void main(){float a=pow(max(0.,1.-length((vUv-.5)*2.)),2.);gl_FragColor=vec4(vColor,a*.28);\n#include <colorspace_fragment>\n}'});
- const glowMaterial=city.emission(glowSource,.38,.85);glowSource.dispose();
+ const glowMaterial=city.emission(glowSource,.86,.85);glowSource.dispose();
  for(let index=0;index<22;index++){
   const chunk=new T.Group(),base=index*14-14,random=boulevardRandom(901+index*71);chunk.position.y=base;chunk.name='boulevard-bay-'+index;chunks.push(chunk);world.add(chunk);
   const solid:BoulevardPart[]=[],metal:BoulevardPart[]=[],pink:BoulevardPart[]=[],cyan:BoulevardPart[]=[],warm:BoulevardPart[]=[],wires:BoulevardPart[]=[],trunks:BoulevardPart[]=[],fronds:BoulevardPart[]=[],holo:BoulevardPart[]=[],holoTrunks:BoulevardPart[]=[],glows:BoulevardPart[]=[];
@@ -116,16 +116,17 @@ export function createBoulevardScenery(){
  // Low-poly horizon relief is a true mesh, not a backdrop plate.
  const hills=new T.PlaneGeometry(70,30,20,7),hp=hills.attributes.position;const random=boulevardRandom(552);
  for(let i=0;i<hp.count;i++){const x=hp.getX(i),y=hp.getY(i);hp.setXYZ(i,x,y,Math.max(0,Math.abs(x)-9)*.23+random()*4);}
- hills.computeVertexNormals();const horizon=new T.Mesh(horizonVectors(hills),materials.wire);horizon.name='boulevard-distant-mountains';horizon.scale.setScalar(2.2);world.add(horizon);hills.dispose();
- const sun=createBoulevardSun(),sunRoot=sun.root;world.add(sunRoot);
- const skyStars=new T.BufferGeometry(),positions:number[]=[];for(let i=0;i<350;i++)positions.push((random()-.5)*220,80+random()*100,-8+random()*70);skyStars.setAttribute('position',new T.Float32BufferAttribute(positions,3));const stars=new T.Points(skyStars,new T.PointsMaterial({color:0x69658d,size:.13}));world.add(stars);
+ hills.computeVertexNormals();const horizon=new T.Mesh(horizonVectors(hills),materials.wire);horizon.name='boulevard-distant-mountains';horizon.scale.setScalar(2.2);world.add(horizon);
+ const mountainMaterial=new T.MeshBasicMaterial({color:0x10091d,side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1}),mountains=new T.Mesh(hills,mountainMaterial);mountains.name='boulevard-mountain-relief';horizon.add(mountains);
+ const sun=createBoulevardSun(),sunRoot=sun.root;sunRoot.scale.setScalar(5);world.add(sunRoot);
+ const skyStars=new T.BufferGeometry(),positions:number[]=[];for(let i=0;i<350;i++)positions.push((random()-.5)*220,80+random()*100,-8+random()*70);skyStars.setAttribute('position',new T.Float32BufferAttribute(positions,3));const stars=new T.Points(skyStars,new T.PointsMaterial({color:0x69658d,size:.13,depthWrite:false}));stars.renderOrder=-10;world.add(stars);
  // Small ground traffic stays below combat altitude and flows through the resort.
  for(let i=0;i<8;i++){const car=new T.Group(),body=new T.Mesh(new T.BoxGeometry(.40,.82,.18),materials.shell);car.add(body);const light=new T.Mesh(new T.BoxGeometry(.33,.035,.05),materials.amber);light.position.set(0,-.41,.02);car.add(light);world.add(car);traffic.push({root:car,y:0,lane:i%2?1.3:-1.3,phase:i*13.7});}
- return{root,world,materials,road,fountain,chunks,tracks,traffic,horizon,sunRoot,sun,city,
+ return{root,world,materials,road,fountain,chunks,tracks,traffic,horizon,mountains,sunRoot,sun,city,
   update(time:number,reveal:number,clock:number){const scroll=boulevardScroll(time),pitch=BOULEVARD_PITCH*reveal;poolWater.uniforms.clock.value=clock;city.update(clock);sun.update(clock);world.rotation.x=-pitch;world.position.set(0,-scroll*Math.cos(pitch)-BOULEVARD_RISE*reveal*Math.sin(pitch),scroll*Math.sin(pitch)-BOULEVARD_RISE*reveal*Math.cos(pitch));road.update(scroll,clock,reveal);fountain.update(clock);
    for(const[i,chunk]of chunks.entries()){const base=i*14-14;chunk.position.y=base+(i>=16&&time>100?Math.max(0,Math.floor((scroll-base+25)/84))*84:0);}
    for(const t of tracks)t.root.position.x=((clock*.8*t.direction+20)%28+28)%28-14;
    traffic.forEach(c=>{const y=scroll+((c.phase+clock*(c.lane>0?.8:-1.1))%48+48)%48-17,divert=1-T.MathUtils.smoothstep(Math.abs(y-FOUNTAIN_Y),1.5,5);c.root.position.set(c.lane+Math.sign(c.lane)*divert*.95,y,BOULEVARD_DECK+.22);c.root.rotation.z=c.lane>0?0:Math.PI;});
-   horizon.position.set(0,scroll+180,-6.6);sunRoot.position.set(0,scroll+48,10);stars.position.y=scroll;
+   horizon.position.set(0,scroll+180,-6.6);sunRoot.position.set(0,scroll+325,2.8);stars.position.y=scroll;
   },prime(active:boolean){road.prime(active);world.traverse(o=>{if(o instanceof T.Mesh)o.frustumCulled=!active;});road.rain.root.frustumCulled=false;fountain.drops.frustumCulled=false;},dispose(){road.dispose();}};
 }

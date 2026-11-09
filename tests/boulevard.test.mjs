@@ -16,6 +16,12 @@ test('absolute hovercar paths have continuous tangents, safe entry, bounded lane
  }
 });
 
+test('Boulevard waves are present in the reflected approach before their original entrance and firing times',()=>{
+ const f=new Flight('sentry',[],'vex','boulevard');f.cooldown=f.droneCooldown=1e6;f.player.x=3.95;let max=0,spawnY=Infinity;const known=new Set();
+ while(f.phase==='stage'){f.invulnerable=100;f.step(STEP);max=Math.max(max,f.enemies.length);for(const e of f.enemies){if(!known.has(e)){known.add(e);spawnY=Math.min(spawnY,e.y);if(f.time>2)assert(e.age<-b.BOULEVARD_SPAWN_LEAD+.04);assert(e.age<0,'wave created after its original entrance');}assert.deepEqual({x:e.x,y:e.y},{x:b.boulevardMotion(e.age,e.lane,e.boulevard).x,y:b.boulevardMotion(e.age,e.lane,e.boulevard).y});if(e.age<0)assert(e.fire>=1.7,'lead-in enables early fire');}}
+ assert(spawnY>13);assert(max<=b.BOULEVARD_POOL);assert.equal(f.phase,'approach');
+});
+
 test('boss enters the same 3D boulevard continuously and settles on the shared weapon target',()=>{
  for(const t of[0,1,3.5,6,7]){const e=t/7,p=b.boulevardBossPoint(100+t,e);assert(Object.values(p).every(Number.isFinite));}
  const p=b.boulevardBossPoint(107,1);assert(Math.abs(p.y-4.2)<1e-10);assert(Math.abs(p.z+12)<1e-10);

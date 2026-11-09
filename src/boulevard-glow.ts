@@ -16,8 +16,11 @@ export function createBoulevardGlow(){
    if(heatStrength>0.){
     vec2 p=(vUv-sun.xy)/max(sun.zw,vec2(.0001));float r=length(p);
     float envelope=smoothstep(.72,1.,r)*(1.-smoothstep(1.10,1.75,r))*mix(.45,1.,smoothstep(-.6,.8,p.y));
-    float wave=sin(p.y*16.-heatClock*.8+sin(p.x*5.+heatClock*.21)*1.9)+.45*sin(r*19.-heatClock*.47);
-    vec2 bent=clamp(vUv+vec2(wave,.35*cos(p.x*11.+p.y*8.-heatClock*.53))*envelope*2.8*texel,texel*.5,vec2(1.)-texel*.5);
+    vec2 directionA=vec2(cos(heatClock*.13),sin(heatClock*.13)),directionB=vec2(cos(1.9-heatClock*.09),sin(1.9-heatClock*.09));
+    vec2 curl=vec2(-p.y,p.x)/max(r,.1);
+    vec2 flow=.65*directionA*sin(dot(p,directionA)*13.-heatClock*.65+sin(p.y*4.+heatClock*.17));
+    flow+=.50*directionB*sin(dot(p,directionB)*17.+heatClock*.43)+.30*curl*sin(r*18.+atan(p.y,p.x)*2.+heatClock*.35);
+    vec2 bent=clamp(vUv+flow*envelope*2.8*texel,texel*.5,vec2(1.)-texel*.5);
     // Reject both ends of a bend at solid foreground geometry. This prevents
     // distant heat from dragging a hull or a building edge into the skyline.
     float farPixels=step(heatDepth,texture2D(depth,vUv).r)*step(heatDepth,texture2D(depth,bent).r);
@@ -35,7 +38,8 @@ export function createBoulevardGlow(){
   sun.updateWorldMatrix(true,false);center.set(0,0,0).applyMatrix4(sun.matrixWorld);near.copy(center).applyMatrix4(view.matrixWorldInverse);if(near.z>=-1)return;
   center.project(view);right.set(SUN_RADIUS,0,0).applyMatrix4(sun.matrixWorld).project(view);top.set(0,SUN_RADIUS,0).applyMatrix4(sun.matrixWorld).project(view);
   const rx=Math.abs(right.x-center.x)*.5,ry=Math.abs(top.y-center.y)*.5;if(rx<.001||ry<.001||Math.abs(center.x)>1+rx*4||Math.abs(center.y)>1+ry*4)return;
-  uniforms.sun.value.set(center.x*.5+.5,center.y*.5+.5,rx,ry);near.z+=8;near.applyMatrix4(view.projectionMatrix);uniforms.heatDepth.value=near.z*.5+.5;uniforms.heatClock.value=sunClock.value;uniforms.heatStrength.value=1;uniforms.texel.value.set(1/width,1/height);
+  uniforms.sun.value.set(center.x*.5+.5,center.y*.5+.5,rx,ry);// The warm air column sits in front of the distant ridges, even though the sun is farther away.
+  near.z=Math.max(near.z+8,-70);near.applyMatrix4(view.projectionMatrix);uniforms.heatDepth.value=near.z*.5+.5;uniforms.heatClock.value=sunClock.value;uniforms.heatStrength.value=1;uniforms.texel.value.set(1/width,1/height);
  }
  return{targets:[beauty,horizontal,vertical],heat,setSun(source:T.Object3D,time:{value:number}){sun=source;sunClock=time;},
   present(renderer:T.WebGLRenderer,scene:T.Scene,view:T.Camera){
