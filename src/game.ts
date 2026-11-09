@@ -899,10 +899,10 @@ export class Flight {
 
     const duration = 0.38;
     const targetsBoss = !drone && Math.abs(x) < 1.65;
-    // Drone shots follow the sight line through their launch point, with no lock-on.
+    // Preserve horizontal drone placement while advancing visibly toward boss depth.
     const expansion = 1 / BOSS_PROJECTION - 1;
     const dx = drone ? x * expansion : (targetsBoss ? (this.level === 'io'||this.level==='vents' ? this.exposedCannonX : 0) - x : 0);
-    const dy = drone ? y * expansion : (targetsBoss ? this.bossAimY - y : 0);
+    const dy = drone || targetsBoss ? this.bossAimY - y : 0;
     this.shots.push({ x, y, z: 0, vx: dx / duration, vy: dy / duration,
       vz: BOSS_DEPTH / duration, targetsBoss, bossSupport: this.level === 'io' ? !this.ioLegBroken : undefined, crabTarget:this.level==='vents'?this.crabTargetX:undefined, drone, damage });
   }
