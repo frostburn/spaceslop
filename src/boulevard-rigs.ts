@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {boulevardHover} from './boulevard';
 import {part,pivot,plating} from './rig-geometry';
 import {mergeBoulevard} from './boulevard-geometry';
 import {hovercarVectors,cruiserWingVectors} from './boulevard-vectors';
@@ -20,24 +21,24 @@ export function createHovercar(m:BoulevardMaterials,heavy=false){
 }
 export function cloneHovercar(template:T.Group){const root=template.clone(true);return{root,pose(time:number,bank:number){root.rotation.y=bank;const body=root.getObjectByName('hovercar-exhaust');if(body)body.scale.y=.75+.22*Math.sin(time*13);}};}
 export function createPursuitCruiser(m:BoulevardMaterials){
- const root=new T.Group();root.name='pursuit-cruiser';
- const main=cruiserHull();part(root,main,m.shell,0,0,0);
- const canopy=cruiserCanopy();part(root,canopy,m.glass,0,0,0);
+ const root=new T.Group(),body=new T.Group();root.name='pursuit-cruiser';body.name='cruiser-hover-frame';root.add(body);
+ const main=cruiserHull();part(body,main,m.shell,0,0,0);
+ const canopy=cruiserCanopy();part(body,canopy,m.glass,0,0,0);
  // Metallic windshield ribs and a split roof give the cabin real depth from every view.
  for(const side of[-1,1]){
-  part(root,cruiserStrut(new T.Vector3(side*1.62,-.83,1.01),new T.Vector3(side*1.4,.88,1.89)),m.chrome,0,0,0);
-  part(root,cruiserStrut(new T.Vector3(side*.78,-1.75,.56),new T.Vector3(side*1.18,-.80,1.01),.028),m.pink,0,0,0);
+  part(body,cruiserStrut(new T.Vector3(side*1.62,-.83,1.01),new T.Vector3(side*1.4,.88,1.89)),m.chrome,0,0,0);
+  part(body,cruiserStrut(new T.Vector3(side*.78,-1.75,.56),new T.Vector3(side*1.18,-.80,1.01),.028),m.pink,0,0,0);
  }
- part(root,cruiserStrut(new T.Vector3(0,-.83,1.01),new T.Vector3(0,.88,1.89),.045),m.chrome,0,0,0);
- part(root,cruiserStrut(new T.Vector3(-1.4,.88,1.89),new T.Vector3(1.4,.88,1.89),.06),m.chrome,0,0,0);
- part(root,new T.BoxGeometry(2.85,.44,.10),m.shell,0,1.03,1.83);
+ part(body,cruiserStrut(new T.Vector3(0,-.83,1.01),new T.Vector3(0,.88,1.89),.045),m.chrome,0,0,0);
+ part(body,cruiserStrut(new T.Vector3(-1.4,.88,1.89),new T.Vector3(1.4,.88,1.89),.06),m.chrome,0,0,0);
+ part(body,new T.BoxGeometry(2.85,.44,.10),m.shell,0,1.03,1.83);
  for(const side of[-1,1]){
-  part(root,new T.BoxGeometry(.85,.11,.075),m.amber,side*.82,-1.81,.42);
-  part(root,new T.BoxGeometry(1.0,.14,.13),m.chrome,side*.82,-1.78,.31);
+  part(body,new T.BoxGeometry(.85,.11,.075),m.amber,side*.82,-1.81,.42);
+  part(body,new T.BoxGeometry(1.0,.14,.13),m.chrome,side*.82,-1.78,.31);
  }
- part(root,new T.BoxGeometry(1.1,.16,.21),m.cyan,0,-1.86,.11).name='cruiser-core';
+ part(body,new T.BoxGeometry(1.1,.16,.21),m.cyan,0,-1.86,.11).name='cruiser-core';
  const wings=[-1,1].map(side=>{
-  const wing=pivot(root,'cruiser-wing-'+side,side*2.25,.2,0);
+  const wing=pivot(body,'cruiser-wing-'+side,side*2.25,.2,0);
   const plate=plating([[0,-.8],[side*1.7,-1.5],[side*2.5,.7],[side*1.9,1.8],[0,1.0]],.25,.07);
   if(side>0)part(wing,plate,m.chrome,0,0,.08);else{
    part(wing,plate,m.backFaces,0,0,.08);
@@ -53,7 +54,7 @@ export function createPursuitCruiser(m:BoulevardMaterials){
   return wing;
  });
  const guns=[-1,1].map(side=>{
-  const base=pivot(root,'cruiser-cannon-'+side,side*2.4,-1.15,-.19);
+  const base=pivot(body,'cruiser-cannon-'+side,side*2.4,-1.15,-.19);
   part(base,new T.CylinderGeometry(.48,.58,.8,12),m.chrome,0,0,0);
   for(let k=-1;k<=1;k++)part(base,new T.BoxGeometry(.9,.045,.08),m.shell,0,k*.2,.38);
   const rotor=pivot(base,'rotary-barrels-'+side,0,-.7,0);
@@ -66,10 +67,10 @@ export function createPursuitCruiser(m:BoulevardMaterials){
  });
  const vents:T.Mesh[]=[];
  for(const side of[-1,1]){
-  part(root,new T.BoxGeometry(.9,.65,.4),m.shell,side*1.9,1.1,1.0);
-  for(let i=0;i<4;i++)vents.push(part(root,new T.BoxGeometry(.7,.045,.04),m.pink,side*1.9,.89+i*.13,1.21));
+  part(body,new T.BoxGeometry(.9,.65,.4),m.shell,side*1.9,1.1,1.0);
+  for(let i=0;i<4;i++)vents.push(part(body,new T.BoxGeometry(.7,.045,.04),m.pink,side*1.9,.89+i*.13,1.21));
  }
- for(const name of['laser_contact_L','laser_contact_C','laser_contact_R'])pivot(root,name,0,-1.87,.20);
- mergeBoulevard(root);
- return{root,pose(time:number,charge:number,recoil:number){guns.forEach(g=>{g.rotor.rotation.y=time*(2+charge*12);g.base.position.y=-1.15+recoil*.22;});wings.forEach((w,i)=>w.rotation.y=(i?1:-1)*(.035+.035*Math.sin(time*.7)));},guns,vents};
+ for(const name of['laser_contact_L','laser_contact_C','laser_contact_R'])pivot(body,name,0,-1.87,.20);
+ mergeBoulevard(body);
+ return{root,pose(time:number,charge:number,recoil:number){const h=boulevardHover(time);body.position.set(h.x,h.y,h.z);body.rotation.set(h.pitch,h.roll,h.yaw);guns.forEach(g=>{g.rotor.rotation.y=time*(2+charge*12);g.base.position.y=-1.15+recoil*.22;});wings.forEach((w,i)=>w.rotation.y=(i?1:-1)*(.035+.035*Math.sin(time*.7)));},guns,vents};
 }

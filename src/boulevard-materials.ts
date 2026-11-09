@@ -13,6 +13,8 @@ export function createBoulevardMaterials(){
  const shell=new T.MeshStandardMaterial({color:0x575268,roughness:.28,metalness:.45,envMap:env,envMapIntensity:1.8});
  const stone=new T.MeshStandardMaterial({color:0x7d697f,roughness:.77});
  const glass=new T.MeshStandardMaterial({color:0x1a2337,roughness:.12,metalness:.75,envMap:env,envMapIntensity:1.7});
+ const windows=new T.MeshStandardMaterial({color:0x86bdd0,roughness:.16,metalness:.28,envMap:env,envMapIntensity:1.5,transparent:true,opacity:.23,depthWrite:false});
+ const interior=new T.MeshStandardMaterial({color:0x887987,roughness:.8,emissive:0x543628,emissiveIntensity:.24});
  const bark=new T.MeshStandardMaterial({color:0x695442,roughness:.93});
  const leaf=new T.MeshStandardMaterial({color:0x42815d,roughness:.75,side:T.DoubleSide});
  const pink=new T.MeshBasicMaterial({color:0xf743bd,toneMapped:false}),cyan=new T.MeshBasicMaterial({color:0x41d9f2,toneMapped:false}),amber=new T.MeshBasicMaterial({color:0xffba65,toneMapped:false});
@@ -20,6 +22,6 @@ export function createBoulevardMaterials(){
  const wire=vectorMaterial();
  const roadData=new Uint8Array(128*128*4);for(let i=0;i<128*128;i++){const noise=105+random()*70;roadData.set([noise,noise,noise,255],i*4);}
  const roadMap=new T.DataTexture(roadData,128,128);roadMap.wrapS=roadMap.wrapT=T.RepeatWrapping;roadMap.generateMipmaps=true;roadMap.minFilter=T.LinearMipmapLinearFilter;roadMap.needsUpdate=true;
- return{chrome,shell,stone,glass,bark,leaf,pink,cyan,amber,wire,backFaces,roadMap};
+ return{chrome,shell,stone,glass,windows,interior,bark,leaf,pink,cyan,amber,wire,backFaces,roadMap};
 }
 export type BoulevardMaterials=ReturnType<typeof createBoulevardMaterials>;

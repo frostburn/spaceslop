@@ -1,51 +1,62 @@
 import * as T from 'three';
 import {block,type BoulevardPart} from './boulevard-geometry';
-import type {FacadePart} from './boulevard-facades';
-export type VenueBatches={solid:BoulevardPart[];metal:BoulevardPart[];pink:BoulevardPart[];cyan:BoulevardPart[];warm:BoulevardPart[];round:BoulevardPart[];marquee:BoulevardPart[];water:BoulevardPart[];facades:FacadePart[]};
+export type VenueBatches={solid:BoulevardPart[];metal:BoulevardPart[];pink:BoulevardPart[];cyan:BoulevardPart[];warm:BoulevardPart[];round:BoulevardPart[];marquee:BoulevardPart[];water:BoulevardPart[];windows:BoulevardPart[];rooms:BoulevardPart[];columns:BoulevardPart[]};
 export function addBoulevardVenue(b:VenueBatches,index:number,lot:number,side:number,x:number,y:number,w:number,depth:number,h:number,deck:number){
- const kind=(index+lot+(side>0?1:0))%3,z=deck+h/2,front=y-depth/2,street=x-side*w/2;
- b.solid.push(block(x,y,z,w,depth,h,kind===0?0x6b536c:kind===1?0x3b2e49:0x44475c));
- b.facades.push({...block(x,front-.045,z,w*.94,h*.88,1),cell:kind===0?0:kind===1?1:2});
- b.facades.push({...block(street-side*.045,y,z,depth*.94,h*.88,1),cell:kind===0?3:kind,side});
- // Recessed entrance and load-bearing jambs, set inside the ground-level frontage.
- const doorX=x-side*w*.17;
- b.metal.push(block(doorX-w*.17,front-.12,deck+.52,.07,.22,1.0));b.metal.push(block(doorX+w*.17,front-.12,deck+.52,.07,.22,1.0));
- b.warm.push(block(doorX,front-.19,deck+.91,w*.33,.16,.035));
- if(kind===0){
-  // A stepped hotel with setback roof terraces and continuous neon balcony lips.
-  for(let tier=0;tier<2;tier++){
-   const tw=w*(.78-tier*.13),td=depth*(.72-tier*.14),tz=deck+h+.08+tier*.20;
-   b.solid.push(block(x+side*.12,y+.16,tz,tw,td,.14,0x75556c));b.pink.push(block(x+side*.12,y+.16-td/2,tz+.08,tw,.03,.025));
+ const kind=(index+lot+(side>0?1:0))%3,front=y-depth/2,street=x-side*w/2;
+ const floors=Math.max(2,Math.round(h/.95)),rise=h/floors,stone=kind===0?0x8e7486:kind===1?0x514365:0x69808a;
+ // Open L-shaped room shells. Slabs, columns, glass and furniture occupy different depths.
+ b.solid.push(block(x,y+depth/2-.13,deck+h/2,w,.26,h,stone));
+ b.solid.push(block(x+side*(w/2-.13),y,deck+h/2,.26,depth,h,stone));
+ b.solid.push(block(x+side*w*.18,y+depth*.16,deck+h/2,w*.28,depth*.32,h,0x3e354e));
+ for(let floor=0;floor<=floors;floor++){
+  const z=deck+floor*rise,inset=kind===0&&floor===floors?.22:0;
+  b.solid.push(block(x+side*inset/2,y+inset/2,z,w-inset,depth-inset,.12,stone));
+  if(floor===floors)continue;
+  const mid=z+rise*.5;
+  for(let bay=0;bay<3;bay++){
+   const bx=x-w/2+(bay+.5)*w/3,by=front+(bay+.5)*depth/3;
+   b.solid.push(block(bx-w/6+.045,front+.05,mid,.09,.24,rise,stone));
+   b.solid.push(block(street+side*.07,by-depth/6+.045,mid,.24,.09,rise,stone));
+   b.windows.push(block(bx,front+.18,mid,w/3-.13,.035,rise-.18));
+   b.windows.push(block(street+side*.22,by,mid,.035,depth/3-.13,rise-.18));
+   b.rooms.push(block(bx,front+.77,mid,w/3-.17,.10,rise-.17,0x8f796c));
+   b.rooms.push(block(street+side*.79,by,mid,.10,depth/3-.16,rise-.17,0x5c7284));
+   if((bay+floor+index)%3!==0){
+    b.warm.push(block(bx,front+.48,z+rise*.72,.13,.13,.08));
+    b.metal.push(block(bx,front+.51,z+.23,.32,.25,.08));
+    b.warm.push(block(street+side*.48,by,z+rise*.69,.11,.11,.07));
+   }
   }
-  b.round.push(block(street+side*.3,y-depth*.3,deck+h*.43,.38,.38,h*.86,0x66516f));
+  if(kind===0&&floor>0){
+   b.solid.push(block(street-side*.22,y,z,.56,depth+.18,.10,stone));
+   b.metal.push(block(street-side*.48,y,z+.33,.035,depth+.10,.035));
+   b.pink.push(block(street-side*.50,y,z+.02,.025,depth+.18,.025));
+   for(let rail=0;rail<5;rail++)b.metal.push(block(street-side*.48,front+rail*depth/4,z+.19,.025,.025,.29));
+  }
+ }
+ if(kind===0){
+  b.round.push(block(street+side*.30,front+.42,deck+h*.40,.47,.47,h*.80,0x52667d));
+  b.solid.push(block(x+side*.22,y+.20,deck+h+.15,w*.68,depth*.65,.24,stone));
+  b.pink.push(block(x+side*.22,y+.20-depth*.325,deck+h+.28,w*.68,.035,.025));
  }else if(kind===1){
-  // Fan-shaped club marquee faces the camera, with nested chrome/neon arches.
-  b.marquee.push({...block(x,front-.16,deck+h*.63,w*.30,1,h*.30,0xffffff),rx:Math.PI/2});
-  b.pink.push(block(x,front-.25,deck+h*.27,w*.84,.40,.08));
-  b.cyan.push(block(x,front-.32,deck+h*.30,w*.81,.045,.035));
-  for(let k=-2;k<=2;k++)b.metal.push(block(x+k*w*.12,front-.09,deck+h*.76,.055,.10,h*.63));
+  b.marquee.push({...block(x,front-.22,deck+h*.67,w*.31,1,h*.31),rx:Math.PI/2});
+  b.solid.push(block(x,front-.38,deck+.80,w*.92,.88,.12,stone));
+  b.pink.push(block(x,front-.82,deck+.85,w*.94,.05,.035));
+  for(const end of[-1,1])b.columns.push(block(x+end*w*.38,front-.62,deck+.4,.075,.075,.8));
+  for(let slat=0;slat<5;slat++)b.metal.push(block(x-w*.32+slat*w*.16,y+.25,deck+h+.13,w*.055,depth*.64,.18));
  }else{
-  // Glass atrium with a rounded street corner, a shade canopy and rooftop pool.
-  b.round.push(block(street+side*.43,y,deck+h*.48,.58,.58,h*.96,0x536e7b));
+  b.round.push(block(street+side*.44,y,deck+h*.42,.59,.59,h*.84,0x52798a));
   b.metal.push(block(street-side*.12,y,deck+h*.83,.8,depth*.72,.09));
   b.cyan.push(block(street-side*.51,y,deck+h*.85,.035,depth*.74,.035));
-  b.solid.push(block(x,y+.25,deck+h+.05,w*.67,depth*.55,.11,0x092e46));
-  b.water.push(block(x,y+.25,deck+h+.115,w*.64,depth*.52,1));
-  for(const end of[-1,1]){
-   b.cyan.push(block(x,y+.25+end*depth*.275,deck+h+.13,w*.68,.025,.02));
-   b.metal.push(block(x+end*w*.34,y+.25,deck+h+.13,.035,depth*.56,.04));
-  }
+  for(const end of[-1,1])b.windows.push({...block(x+end*w*.16,y-depth*.22,deck+h+.27,w*.36,depth*.35,.045),ry:end*.40});
+  b.solid.push(block(x,y+depth*.23,deck+h+.07,w*.67,depth*.40,.12,0x123b48));
+  b.water.push(block(x,y+depth*.23,deck+h+.135,w*.63,depth*.36,1));
+  for(const end of[-1,1])b.cyan.push(block(x,y+depth*.23+end*depth*.20,deck+h+.14,w*.68,.025,.02));
  }
- // Hotel roof rails keep the terraces legible from overhead.
- if(kind===0)for(const end of[-1,1]){
-  b.metal.push(block(x+side*.12,y+.16+end*depth*.29,deck+h+.56,w*.65,.025,.025));
-  for(const edge of[-1,1])b.metal.push(block(x+side*.12+edge*w*.31,y+.16+end*depth*.29,deck+h+.46,.025,.025,.2));
- }
- if(kind===1)for(let slat=0;slat<7;slat++)b.metal.push(block(x-w*.33+slat*w*.11,y+.3,deck+h+.055,w*.045,depth*.65,.10));
- // Roof lounge furniture varies between lots rather than forming a grid.
- for(let seat=0;seat<(kind===1?2:3);seat++){
-  const sx=x-w*.23+seat*w*.22,sy=y+(kind===2?-depth*.36:seat%2?.25:-.12),raise=kind===0?.28:0;
-  b.metal.push(block(sx,sy,deck+h+.24+raise,.24,.34,.07));b.warm.push(block(sx,sy-.25,deck+h+.16+raise,.13,.13,.07));
+ for(let seat=0;seat<2;seat++){
+  const sx=x-w*.2+seat*w*.34,sy=y+(kind===2?-depth*.10:.12);
+  b.metal.push(block(sx,sy,deck+h+.26,.25,.36,.08));
+  b.warm.push(block(sx,sy-.28,deck+h+.20,.12,.12,.06));
  }
 }
 export function venueMarqueeGeometry(){

@@ -7,7 +7,7 @@ import {createBoulevardMaterials} from './boulevard-materials';
 import {createBoulevardArch,archDrains} from './boulevard-arch';
 import {drainSite,type DrainSite} from './boulevard-weather';
 import {createBoulevardRoad} from './boulevard-road';
-import {createBoulevardFacades,facadeInstances,type FacadePart} from './boulevard-facades';
+import {createBoulevardFountain,FOUNTAIN_Y} from './boulevard-fountain';
 import {addBoulevardVenue,venueMarqueeGeometry} from './boulevard-venues';
 import {BOULEVARD_DECK,BOULEVARD_PITCH,BOULEVARD_RISE,boulevardScroll} from './boulevard';
 const CYAN=0x4acddd,VIOLET=0xa259ef;
@@ -36,7 +36,7 @@ function sunGeometry(){
 }
 export function createBoulevardScenery(){
  const root=new T.Group();root.name='synthwave-boulevard';const world=new T.Group();root.add(world);world.scale.x=.78;
- const materials=createBoulevardMaterials(),facades=createBoulevardFacades(),drains:DrainSite[]=[];
+ const materials=createBoulevardMaterials(),drains:DrainSite[]=[];
  const masonry=new RoundedBoxGeometry(1,1,1,2,.08),box=new T.BoxGeometry(1,1,1),wireBox=buildingVectors(),cylinder=new T.CylinderGeometry(1,1,1,10).rotateX(Math.PI/2),leaves=organicLeaves(),wireLeaves=palmVectors(),wireTrunk=trunkVectors(),arch=createBoulevardArch(materials),marqueeGeometry=venueMarqueeGeometry(),wireSpire=buildingVectors(.51),spireBody=new T.CylinderGeometry(.36,Math.SQRT1_2,1,4,1,false,Math.PI/4).rotateX(Math.PI/2);
  const chunks:T.Group[]=[],tracks:{root:T.Group;y:number;direction:number}[]=[],traffic:{root:T.Group;y:number;lane:number;phase:number}[]=[];
  const poolWater=new T.ShaderMaterial({uniforms:{clock:{value:0}},vertexShader:'varying vec2 vUv;void main(){vUv=uv;vec4 p=vec4(position,1.);\n#ifdef USE_INSTANCING\np=instanceMatrix*p;\n#endif\ngl_Position=projectionMatrix*modelViewMatrix*p;}',fragmentShader:'uniform float clock;varying vec2 vUv;void main(){vec2 p=(vUv-.5)*2.;float wave=sin(p.x*17.+sin(p.y*9.+clock*.5))*cos(p.y*19.-clock*.7);float glint=pow(max(0.,wave),24.);vec3 c=vec3(.005,.075,.12)+vec3(.035,.18,.23)*glint;gl_FragColor=vec4(c,1.);\n#include <colorspace_fragment>\n}'});
@@ -44,17 +44,21 @@ export function createBoulevardScenery(){
  for(let index=0;index<22;index++){
   const chunk=new T.Group(),base=index*14-14,random=boulevardRandom(901+index*71);chunk.position.y=base;chunk.name='boulevard-bay-'+index;chunks.push(chunk);world.add(chunk);
   const solid:BoulevardPart[]=[],metal:BoulevardPart[]=[],pink:BoulevardPart[]=[],cyan:BoulevardPart[]=[],warm:BoulevardPart[]=[],wires:BoulevardPart[]=[],trunks:BoulevardPart[]=[],fronds:BoulevardPart[]=[],holo:BoulevardPart[]=[],holoTrunks:BoulevardPart[]=[],glows:BoulevardPart[]=[];
-  const round:BoulevardPart[]=[],marquee:BoulevardPart[]=[],water:BoulevardPart[]=[],spires:BoulevardPart[]=[],facadeParts:FacadePart[]=[];
-  const venues={solid,metal,pink,cyan,warm,round,marquee,water,facades:facadeParts},nightlife=index>=4,dense=index>=9;
+  const round:BoulevardPart[]=[],marquee:BoulevardPart[]=[],water:BoulevardPart[]=[],spires:BoulevardPart[]=[],windows:BoulevardPart[]=[],rooms:BoulevardPart[]=[],columns:BoulevardPart[]=[];
+  const venues={solid,metal,pink,cyan,warm,round,marquee,water,windows,rooms,columns},nightlife=index>=4,dense=index>=9;
   for(const side of[-1,1]){
    solid.push(block(side*4.5,7,BOULEVARD_DECK-.1,1.8,14,.3,0x615268));
    metal.push(block(side*3.65,7,BOULEVARD_DECK+.18,.06,14,.12));pink.push(block(side*3.67,7,BOULEVARD_DECK+.25,.025,14,.025));
    let roofLine=0;
    for(let by=0;by<3;by++){
-    const y=1.6+by*4.6,w=2.5+random()*1.4,h=1.8+random()*1.0,x=side*(4.05+w/2),depth=3+random();
+    // Pocket courts, a fountain plaza and staggered setbacks keep the route straight
+    // while changing the silhouette and distance to the street.
+    if(by===1&&(index===5||index===6||index===10||index%7===3))continue;
+    const y=1.6+by*4.6,w=2.4+random()*2.1,h=1.6+random()*1.8,depth=2.5+random()*1.4;
+    const street=4.15+(index===5?1.2:((index+by)%4===0?.9:random()*.35)),x=side*(street+w/2);
     addBoulevardVenue(venues,index,by,side,x,y,w,depth,h,BOULEVARD_DECK);
     roofLine=Math.max(roofLine,h+(nightlife?2.6:.62));
-    if((index+by+(side>0?1:0))%3===2&&index%4===2&&by===1)drains.push(drainSite(side*3.54,base+y,BOULEVARD_DECK+h*.83-.05,index,index*3+(side>0?1:0)));
+    if((index+by+(side>0?1:0))%3===2&&index%4===2&&by===1&&street-.51<3.6)drains.push(drainSite(side*(street-.51),base+y,BOULEVARD_DECK+h*.83-.05,index,index*3+(side>0?1:0)));
     if(nightlife){
      const wx=x+side*.35,tier=(index+by)%3;
      if(tier===0)spires.push(block(wx,y,BOULEVARD_DECK+h+1.0,w*.90,depth*.85,2.0,side<0?CYAN:VIOLET));
@@ -75,14 +79,19 @@ export function createBoulevardScenery(){
     (i===index%3?holo:fronds).push({...foliage,color:i===index%3?(side<0?CYAN:VIOLET):foliage.color});glows.push(block(x,y,BOULEVARD_DECK+.035,3.8,4.5,1,side<0?0x38c0df:0xed39ac));
    }
   }
+  // A taller opposite-side lot must not swallow the lower promenade's crowns.
+  const crownFloor=Math.max(...solid.map(p=>p.z+p.sz/2))+1.05;
+  for(const p of[...fronds,...holo])p.z=Math.max(p.z,crownFloor);
+  for(const p of trunks){p.sz=Math.max(p.sz,crownFloor-BOULEVARD_DECK);p.z=BOULEVARD_DECK+p.sz/2;}
+  for(const p of holoTrunks)p.sz=Math.max(p.sz,crownFloor-BOULEVARD_DECK);
   const add=(name:string,g:T.BufferGeometry,m:T.Material,parts:BoulevardPart[])=>{if(parts.length)chunk.add(boulevardBatch(name,g,m,parts));};
   add('boulevard-masonry',masonry,materials.stone,solid);add('boulevard-chrome',box,materials.chrome,metal);
-  add('boulevard-rounded-corners',cylinder,materials.glass,round);add('boulevard-club-marquees',marqueeGeometry,materials.pink,marquee);chunk.add(facadeInstances(facadeParts,facades.material));
+  add('boulevard-rounded-corners',cylinder,materials.glass,round);add('boulevard-club-marquees',marqueeGeometry,materials.pink,marquee);add('boulevard-recessed-glazing',box,materials.windows,windows);add('boulevard-room-interiors',box,materials.interior,rooms);add('boulevard-portico-columns',cylinder,materials.chrome,columns);
   add('boulevard-pink-fixtures',box,materials.pink,pink);add('boulevard-cyan-fixtures',box,materials.cyan,cyan);add('boulevard-warm-windows',box,materials.amber,warm);
   add('boulevard-building-backs',box,materials.backFaces,wires);add('boulevard-spire-backs',spireBody,materials.backFaces,spires);
   add('boulevard-holographic-buildings',wireBox,materials.wire,wires);add('boulevard-holographic-spires',wireSpire,materials.wire,spires);add('boulevard-rooftop-pools',new T.PlaneGeometry(1,1),poolWater,water);add('boulevard-palm-trunks',cylinder,materials.bark,trunks);add('boulevard-organic-palms',leaves,materials.leaf,fronds);add('boulevard-wire-palms',wireLeaves,materials.wire,holo);add('boulevard-vector-palm-trunks',wireTrunk,materials.wire,holoTrunks);add('boulevard-light-pools',new T.PlaneGeometry(1,1),glowMaterial,glows);
   if(index%3===1&&index<=7){const gateway=arch.root.clone(true);gateway.position.y=8;chunk.add(gateway);archDrains().forEach((p,i)=>drains.push(drainSite(p.x,base+8+p.y,p.z,index,index*5+i)));}
-  if(index===5||index===10){
+  if(index===6||index===10){
    const bridge=new T.Group();bridge.position.set(0,7,0);bridge.rotation.z=index%2?.25:-.25;chunk.add(bridge);
    for(const side of[-1,1]){const x=side*2.1,y=-.30,a=bridge.rotation.z;drains.push(drainSite(x*Math.cos(a)-y*Math.sin(a),base+7+x*Math.sin(a)+y*Math.cos(a),1.94,index,index*7+(side>0?1:0)));}
    const beams:BoulevardPart[]=[];for(let i=0;i<10;i++){const x=-7+i*1.5;beams.push(boulevardBeam(new T.Vector3(x,0,1.35),new T.Vector3(x+1.5,0,1.95),.045,CYAN));beams.push(boulevardBeam(new T.Vector3(x,0,1.95),new T.Vector3(x+1.5,0,1.35),.045,CYAN));}
@@ -93,20 +102,20 @@ export function createBoulevardScenery(){
    bridge.add(train);tracks.push({root:train,y:base+7,direction:index%2?1:-1});
   }
  }
- const road=createBoulevardRoad(materials.roadMap,drains);world.add(road.root);
+ const road=createBoulevardRoad(materials.roadMap,drains),fountain=createBoulevardFountain(materials);world.add(road.root,fountain.root);fountain.root.position.set(0,FOUNTAIN_Y,BOULEVARD_DECK);
  // Low-poly horizon relief is a true mesh, not a backdrop plate.
  const hills=new T.PlaneGeometry(70,30,20,7),hp=hills.attributes.position;const random=boulevardRandom(552);
  for(let i=0;i<hp.count;i++){const x=hp.getX(i),y=hp.getY(i);hp.setXYZ(i,x,y,Math.max(0,Math.abs(x)-9)*.23+random()*4);}
  hills.computeVertexNormals();const horizon=new T.Mesh(horizonVectors(hills),materials.wire);horizon.name='boulevard-distant-mountains';horizon.scale.setScalar(2.2);world.add(horizon);hills.dispose();
- const sunRoot=new T.Group(),sun=new T.Mesh(sunGeometry(),materials.amber);sun.rotation.x=Math.PI/2;sunRoot.add(sun);world.add(sunRoot);
+ const sunRoot=new T.Group(),sun=new T.Mesh(sunGeometry(),materials.amber);sun.rotation.x=Math.PI/2;sunRoot.name='boulevard-setting-sun';sunRoot.add(sun);world.add(sunRoot);
  const skyStars=new T.BufferGeometry(),positions:number[]=[];for(let i=0;i<350;i++)positions.push((random()-.5)*220,80+random()*100,-8+random()*70);skyStars.setAttribute('position',new T.Float32BufferAttribute(positions,3));const stars=new T.Points(skyStars,new T.PointsMaterial({color:0x69658d,size:.13}));world.add(stars);
  // Small ground traffic stays below combat altitude and flows through the resort.
  for(let i=0;i<8;i++){const car=new T.Group(),body=new T.Mesh(new T.BoxGeometry(.40,.82,.18),materials.shell);car.add(body);const light=new T.Mesh(new T.BoxGeometry(.33,.035,.05),materials.amber);light.position.set(0,-.41,.02);car.add(light);world.add(car);traffic.push({root:car,y:0,lane:i%2?1.3:-1.3,phase:i*13.7});}
- return{root,world,materials,road,facades,chunks,tracks,traffic,horizon,
-  update(time:number,reveal:number,clock:number){const scroll=boulevardScroll(time),pitch=BOULEVARD_PITCH*reveal;poolWater.uniforms.clock.value=clock;world.rotation.x=-pitch;world.position.set(0,-scroll*Math.cos(pitch)-BOULEVARD_RISE*reveal*Math.sin(pitch),scroll*Math.sin(pitch)-BOULEVARD_RISE*reveal*Math.cos(pitch));road.update(scroll,clock,reveal);
+ return{root,world,materials,road,fountain,chunks,tracks,traffic,horizon,sunRoot,
+  update(time:number,reveal:number,clock:number){const scroll=boulevardScroll(time),pitch=BOULEVARD_PITCH*reveal;poolWater.uniforms.clock.value=clock;world.rotation.x=-pitch;world.position.set(0,-scroll*Math.cos(pitch)-BOULEVARD_RISE*reveal*Math.sin(pitch),scroll*Math.sin(pitch)-BOULEVARD_RISE*reveal*Math.cos(pitch));road.update(scroll,clock,reveal);fountain.update(clock);
    for(const[i,chunk]of chunks.entries()){const base=i*14-14;chunk.position.y=base+(i>=16&&time>100?Math.max(0,Math.floor((scroll-base+25)/84))*84:0);}
    for(const t of tracks)t.root.position.x=((clock*.8*t.direction+20)%28+28)%28-14;
-   traffic.forEach(c=>{c.root.position.set(c.lane,scroll+((c.phase+clock*(c.lane>0?.8:-1.1))%48+48)%48-17,BOULEVARD_DECK+.22);c.root.rotation.z=c.lane>0?0:Math.PI;});
+   traffic.forEach(c=>{const y=scroll+((c.phase+clock*(c.lane>0?.8:-1.1))%48+48)%48-17,divert=1-T.MathUtils.smoothstep(Math.abs(y-FOUNTAIN_Y),1.5,5);c.root.position.set(c.lane+Math.sign(c.lane)*divert*.95,y,BOULEVARD_DECK+.22);c.root.rotation.z=c.lane>0?0:Math.PI;});
    horizon.position.set(0,scroll+180,-6.6);sunRoot.position.set(0,scroll+48,10);stars.position.y=scroll;
-  },prime(active:boolean){road.prime(active);world.traverse(o=>{if(o instanceof T.Mesh)o.frustumCulled=!active;});road.rain.root.frustumCulled=false;},dispose(){road.dispose();}};
+  },prime(active:boolean){road.prime(active);world.traverse(o=>{if(o instanceof T.Mesh)o.frustumCulled=!active;});road.rain.root.frustumCulled=false;fountain.drops.frustumCulled=false;},dispose(){road.dispose();}};
 }

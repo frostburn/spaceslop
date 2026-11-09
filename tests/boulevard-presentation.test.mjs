@@ -59,3 +59,28 @@ test('friendly light gain applies once to session-owned emitters and leaves pain
  const otherBefore=rootColors(other.root),enemyBefore=rootColors(enemy);let led,paint,jet;ship.root.traverse(o=>{if(o.isMesh){if(o.material.isMeshBasicMaterial)led??=o.material;if(o.material.isMeshStandardMaterial)paint??=o.material;if(o.material.isShaderMaterial)jet??=o.material;}});
  const lightBefore=led.color.clone(),paintBefore=paint.color.clone();boostFriendlyGlow([ship.root,ship.root],2.5);assert(led.color.equals(lightBefore.multiplyScalar(2.5)));assert(paint.color.equals(paintBefore));assert.equal((jet.fragmentShader.match(/gl_FragColor.rgb \*=/g)||[]).length,1);assert.deepEqual(rootColors(other.root),otherBefore);assert.deepEqual(rootColors(enemy),enemyBefore);
 });
+
+test('venue windows reveal recessed modeled rooms behind structural columns',async()=>{
+ const{addBoulevardVenue}=await server.ssrLoadModule('/src/boulevard-venues.ts'),{boulevardBatch}=await server.ssrLoadModule('/src/boulevard-geometry.ts');
+ const parts=Object.fromEntries(['solid','metal','pink','cyan','warm','round','marquee','water','windows','rooms','columns'].map(k=>[k,[]]));
+ addBoulevardVenue(parts,0,0,1,6,0,3,3,2,0);
+ const group=new T.Group(),box=new T.BoxGeometry(1,1,1),m=new T.MeshBasicMaterial();for(const name of['solid','rooms'])group.add(boulevardBatch(name,box,m,parts[name]));group.updateMatrixWorld(true);
+ const ray=x=>new T.Raycaster(new T.Vector3(x,-3.5,.5),new T.Vector3(0,1,0)).intersectObject(group)[0];
+ assert(ray(6).distance>2.55,'window should look into a recessed room');assert(ray(5.545).distance<2.2,'load-bearing jamb must stand in front of the interior');assert(parts.windows.every(p=>Math.min(p.sx,p.sy,p.sz)>.02));
+});
+
+test('fountain stays below combat, diverts ground cars and freezes its existing spray buffer',()=>{
+ const s=createBoulevardScenery(),f=s.fountain,matrices=f.drops.instanceMatrix.array;
+ assert(new T.Box3().setFromObject(f.root).max.z<-.8,'fountain intrudes into flight plane');
+ s.prime(true);s.prime(false);assert.equal(f.drops.frustumCulled,false);
+ for(let time=30;time<46;time+=.1){s.update(time,0,time);for(const c of s.traffic)assert(Math.hypot(c.root.position.x,c.root.position.y-f.root.position.y)>1.8,'ground car intersects fountain basin');}
+ s.update(37,0,37);const frozen=matrices.slice();s.update(37,0,37);assert.equal(matrices,f.drops.instanceMatrix.array);assert.deepEqual(matrices,frozen);s.update(37,0,37.2);assert.notDeepEqual(matrices,frozen);
+ const widths=new Set();for(const chunk of s.chunks){assert(!chunk.getObjectByName('boulevard-facade-cards'));const rooms=chunk.getObjectByName('boulevard-room-interiors');assert(rooms?.count>0);const masonry=chunk.getObjectByName('boulevard-masonry'),m=new T.Matrix4();for(let i=0;i<masonry.count;i++){masonry.getMatrixAt(i,m);widths.add(m.elements[0].toFixed(2));}}assert(widths.size>50,'buildings repeat identical footprints');s.dispose();
+});
+
+test('cruiser hover remains gentle and laser contact follows its posed cyan core',async()=>{
+ const{createPursuitCruiser}=await server.ssrLoadModule('/src/boulevard-rigs.ts'),{createBossLaserContact}=await server.ssrLoadModule('/src/laser-contact.ts'),{BOULEVARD_PITCH,boulevardBossPoint}=await server.ssrLoadModule('/src/boulevard.ts');
+ const s=createBoulevardScenery(),rig=createPursuitCruiser(s.materials),plane=new T.Group(),contact=createBossLaserContact(plane,rig.root),p=boulevardBossPoint(107,1);plane.add(rig.root);rig.root.position.set(p.x,p.y,p.z);rig.root.rotation.x=-BOULEVARD_PITCH;
+ let spread=0,first;for(let t=0;t<60;t+=.1){rig.pose(t,0,0);plane.updateMatrixWorld(true);const a=rig.root.getObjectByName('laser_contact_C').getWorldPosition(new T.Vector3()),c=contact(0,22).clone();assert(c.distanceTo(new T.Vector2(a.x*22/(22-a.z),a.y*22/(22-a.z)))<1e-9);assert(Math.hypot(c.x,c.y-4.2*22/34)<.35,'hover moves core outside broad combat proxy');first??=c;spread=Math.max(spread,c.distanceTo(first));}
+ assert(spread>.05);rig.pose(8,0,0);const body=rig.root.getObjectByName('cruiser-hover-frame');body.updateMatrix();const matrix=body.matrix.clone();rig.pose(8,0,0);body.updateMatrix();assert(body.matrix.equals(matrix));s.dispose();
+});

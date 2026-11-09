@@ -16,7 +16,7 @@ export function boulevardBossPoint(time:number,reveal:number){
  const y=final+relative+travel-boulevardScroll(time);
  return{x:0,y:y*Math.cos(pitch)+(height-BOULEVARD_RISE*reveal)*Math.sin(pitch),z:-y*Math.sin(pitch)+(height-BOULEVARD_RISE*reveal)*Math.cos(pitch)};
 }
-export function boulevardSection(time:number){return time<30?'Palm approach':time<65?'Entertainment district':time<100?'Skyline express':time<107?'Sunset plaza approach':'Pursuit cruiser';}
+export function boulevardSection(time:number){return time<30?'Palm approach':time<43?'Fountain court':time<65?'Entertainment district':time<100?'Skyline express':time<107?'Sunset plaza approach':'Pursuit cruiser';}
 function coursePoint(age:number,lane:number,c:BoulevardCourse){
  const t=age-(c.formation==='train'?c.slot*.65:0),speed=c.heavy?1.7:2.65;
  if(c.formation==='cross')return{x:lane*Math.cos(Math.PI*smooth((t-1.1)/3.7)),y:10+c.slot*1.6-speed*t};
@@ -32,3 +32,6 @@ export function boulevardMotion(age:number,lane:number,c:BoulevardCourse){
 const drops=['homing','cannon','laser','omega'] as const;
 export const boulevardWaves=Array.from({length:20},(_,i)=>({time:1.5+i*4.8,lanes:i%5===4?[0]:i%4===1?[-2,2]:i%4===2?[0,0,0,0]:[-2.1,0,2.1],carrier:i%5===4?0:i%4===2?2:1,drop:drops[i%4],
  boulevard:{formation:(i%5===4?'rush':i%4===1?'cross':i%4===2?'train':'chevron') as BoulevardCourse['formation'],mirror:i%2?1:-1,heavy:i%5===4}}));
+
+// Small, deterministic trim corrections stay inside the fixed combat proxy.
+export function boulevardHover(time:number){return{x:.06*Math.sin(time*.73)+.02*Math.sin(time*1.19),y:.045*Math.sin(time*.47),z:.075*Math.sin(time*.91),pitch:.012*Math.sin(time*.61),roll:.014*Math.sin(time*.83),yaw:.010*Math.sin(time*.39)};}

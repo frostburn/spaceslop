@@ -1,4 +1,5 @@
 import {createBoulevardGlow} from './boulevard-glow';
+import {createBoulevardFountain} from './boulevard-fountain';
 import {createBoulevardArch} from './boulevard-arch';
 import {createBoulevardScenery} from './boulevard-scenery';
 import {createHovercar,createPursuitCruiser} from './boulevard-rigs';
@@ -180,9 +181,10 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const boulevard=createBoulevardScenery(),cruiser=createPursuitCruiser(boulevard.materials),hovercar=createHovercar(boulevard.materials),boulevardPreview=new T.Group(),routeCruiser=createPursuitCruiser(boulevard.materials);
   boulevardPreview.add(boulevard.root,routeCruiser.root);cruiser.root.rotation.x=-BOULEVARD_PITCH;
   void loadEncounterTexture('boulevardRoad',boulevard.road.setMap);
-  void loadEncounterTexture('boulevardFacades',boulevard.facades.setAtlas);
   const boulevardArch=createBoulevardArch(boulevard.materials);boulevardArch.root.rotation.x=-Math.PI/2;
+  const fountain=createBoulevardFountain(boulevard.materials);fountain.root.rotation.x=-Math.PI/2;
   const assets = {
+    boulevard_fountain:{root:fountain.root,bounds:new T.Box3(new T.Vector3(-1.7,-.2,-1.7),new T.Vector3(1.7,2.2,1.7)),duration:6,pose(time:number){fountain.update(time);return 'tiered basin / flowing jets / fine spray';}},
     boulevard_arch:{root:boulevardArch.root,bounds:new T.Box3(new T.Vector3(-5,-3.2,-1),new T.Vector3(5,3.6,1)),duration:1,pose:()=> 'curved chrome shell / swept vector ribs'},
     boulevard_route:{root:boulevardPreview,duration:125,bounds:new T.Box3(new T.Vector3(-5,-8,-5),new T.Vector3(5,8,1)),pose(time:number){const reveal=T.MathUtils.smoothstep(time,100,107);boulevard.update(time,reveal,time);const p=boulevardBossPoint(time,reveal);routeCruiser.root.position.set(p.x,p.y,p.z);routeCruiser.root.rotation.x=-BOULEVARD_PITCH*reveal;routeCruiser.pose(time,Math.max(0,Math.sin(time*2)),0);return boulevardSection(time);}},
     pursuit_cruiser:{root:cruiser.root,duration:6.8,pose(time:number){cruiser.pose(time,T.MathUtils.smoothstep(time%3.4,.55,1.55),time%3.4>1.55?Math.max(0,1-(time%3.4-1.55)/.24):0);return 'rotary cannons / exposed lattice / cyan core';}},

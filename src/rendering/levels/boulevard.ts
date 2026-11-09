@@ -14,7 +14,7 @@ export const createLevel:LevelFactory=({plane,signal})=>{
  const models:(T.Object3D|undefined)[]=[];addRoots(root,scenery,boss,...cars,...haulers);
  const actors=[...cars,...haulers].map(r=>r.root),contact=createBossLaserContact(plane,boss.root);
  return{root,boss:boss.root,models,stageDistance:36,background:0x0d071d,key:0xe7b8e8,sky:0x7d92cd,ground:0x321746,keyIntensity:2.3,skyIntensity:1.8,friendlyGlow:2.5,
-  ready:Promise.all([loadEncounterTexture('boulevardRoad',scenery.road.setMap,1,signal),loadEncounterTexture('boulevardFacades',scenery.facades.setAtlas,undefined,signal)]),surfaces:[root],
+  ready:Promise.all([loadEncounterTexture('boulevardRoad',scenery.road.setMap,1,signal)]),surfaces:[root],
   orientation:(_time,reveal)=>boulevardFrame(reveal),
   contacts:[boss.root,...actors],warmup:[[scenery.root,boss.root,...actors]],
   prepare(){scenery.prime(true);for(const r of actors)r.traverse(o=>{if(o instanceof T.Mesh)o.frustumCulled=false;});},
