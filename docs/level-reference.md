@@ -141,6 +141,6 @@ Six proximity mines are anchored to the street. Their dashed amber circles show 
 
 The optional **asphalt** image goes at `public/encounters/boulevard-asphalt.png`: square PNG, 512–1024px recommended, repeat wrapping and mip filtering. Keep it unlit and free of painted neon or road markings; real reflections and lane lights come from the engine. It was generated in chat for review and owner upload, and is not committed. The existing reviewed ship armor adds optional metal relief. A complete source-drawn stage, combat and offline route work with no uploaded media.
 
-The former façade atlas is retired in favor of modeled architecture. Its uploaded file is left untouched, but is no longer requested or included in the selected offline package.
+The former façade atlas is retired in favor of modeled architecture. The unused raster file has been removed from the repository.
 
 Vite dev exposes **Launch at transition**. The **Synthwave boulevard** workshop sector includes **Boulevard · Full route**, **Pursuit cruiser** and **Hovercar patrol**, with camera presets, scrubbing and play/pause. **Chrome / vector arch** isolates the complete gate, and **Central fountain** exposes the basin, jets and spray for close inspection. The route timeline covers all three districts, the transition and eighteen seconds of pursuit. Controls and actor/weapon targets stay in the stable flight plane throughout the camera move.
