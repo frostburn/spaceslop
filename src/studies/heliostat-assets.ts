@@ -30,7 +30,7 @@ export function loadStudyTexture(url: string, signal: AbortSignal): Promise<T.Te
     new T.TextureLoader().load(url, texture => {
       if (!pending || signal.aborted) { texture.dispose(); return; }
       texture.colorSpace = T.SRGBColorSpace;
-      texture.wrapS = texture.wrapT = T.ClampToEdgeWrapping;
+      texture.wrapS = texture.wrapT = T.RepeatWrapping;
       texture.anisotropy = 4;
       finish(texture);
     }, undefined, cancel);

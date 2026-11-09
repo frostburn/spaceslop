@@ -23,23 +23,24 @@
     <div class="stage"><canvas id="preview" aria-label="Three-dimensional Uranus power-plant corridor"></canvas><span class="tag">Heliostat / Bay 01</span></div>
     <aside>
       <a href="./">← Main menu</a>
-      <h1><small>Uranus orbital power plant</small>Layered corridor study.</h1>
-      <p>A single corridor bay to judge the layered approach: a flat planet backdrop, distant station cutouts and detailed panels wrapped around solid foreground machinery.</p>
+      <h1><small>Uranus orbital power plant</small>3D corridor study.</h1>
+      <p>Modeled generators, coolant pumps, radiators and a complete stellar collector. Uranus is a lit 3D globe with narrow rings in its equatorial plane.</p>
       <fieldset><legend>Camera swing</legend>
-        <div class="presets"><button data-pose="0" aria-pressed="true">Flight</button><button data-pose="0.5" aria-pressed="false">Midpoint</button><button data-pose="1" aria-pressed="false">Head-on</button></div>
+        <div class="presets"><button data-pose="0" aria-pressed="true">Flight</button><button data-pose="0.5" aria-pressed="false">Midpoint</button><button data-pose="1" aria-pressed="false">Head-on</button><button id="inspect-planet" aria-pressed="false">Uranus</button></div>
         <label for="swing">View angle <output id="angle">0%</output></label>
         <input id="swing" type="range" min="0" max="1" step="0.005" value="0" aria-label="Camera swing">
         <output id="clock">0.0 s · Flight</output><br><button id="play" aria-pressed="false">Play study</button>
       </fieldset>
       <fieldset><legend>Inspect layers</legend>
-        <label><input id="artwork" type="checkbox" checked> Reviewed artwork</label>
-        <label><input id="sky" type="checkbox" checked> Scrolling Uranus backdrop</label>
+        <label><input id="artwork" type="checkbox" checked> Uploaded surface maps</label>
+        <label><input id="sky" type="checkbox" checked> Uranus and stars</label>
         <label><input id="distant" type="checkbox" checked> Distant power plant</label>
         <label><input id="corridor" type="checkbox" checked> Foreground corridor</label>
         <label><input id="wireframe" type="checkbox"> Inspect wireframe</label>
+        <label><input id="orbit" type="checkbox"> Orbit view · drag to inspect</label>
         <p id="assets" role="status">Preparing procedural scene…</p>
       </fieldset>
-      <p>The tall Uranus image scrolls vertically during the swing. The bay moves past the ship before the camera turns. Pause freezes every animation.</p>
+      <p>Every structure keeps its depth through the camera swing. The ship and sample shots share a physical heading. Pause freezes machinery, star rotation and travel.</p>
       <p id="error" role="alert" hidden></p>
       <footer><a href="./workshop.html">Asset workshop</a><a href="./io-study.html">Io camera study</a><p>Vite development only. This is an art/camera experiment; the full stage, enemy roster and boss follow after review.</p></footer>
     </aside>

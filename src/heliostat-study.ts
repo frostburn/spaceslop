@@ -11,19 +11,25 @@ if (import.meta.env.DEV) {
   const assets = document.querySelector<HTMLParagraphElement>('#assets')!;
   const error = document.querySelector<HTMLParagraphElement>('#error')!;
   const lifetime = new AbortController(), { signal } = lifetime;
-  let raf = 0, time = 0, progress = 0, playing = false, last = 0;
+  let raf = 0, time = 0, progress = 0, playing = false, last = 0, planetInspection = false;
   let observer: ResizeObserver | undefined, view: ReturnType<typeof createHeliostatView> | undefined;
   let preparation: Promise<void> = Promise.resolve();
-  const options: StudyOptions = { artwork: true, sky: true, distant: true, corridor: true, wireframe: false };
+  const options: StudyOptions = { artwork: true, sky: true, distant: true, corridor: true, wireframe: false, orbit: false };
 
   const stop = () => { playing = false; play.textContent = 'Play study'; play.setAttribute('aria-pressed', 'false'); };
+  const leaveOrbit = () => {
+    options.orbit = false; document.querySelector<HTMLInputElement>('#orbit')!.checked = false;
+    view?.setOptions(options);
+  };
+  const mainView = () => { planetInspection = false; view?.inspectPlanet(false); leaveOrbit(); };
   function draw() {
     view?.draw(time, progress);
-    angle.value = `${Math.round(progress * 100)}%`;
-    clock.value = `${time.toFixed(1)} s · ${progress < .01 ? 'Flight' : progress > .99 ? 'Head-on' : 'Swing'}`;
+    angle.value = planetInspection ? 'Uranus' : `${Math.round(progress * 100)}%`;
+    clock.value = `${time.toFixed(1)} s · ${planetInspection ? 'Planet inspection' : progress < .01 ? 'Flight' : progress > .99 ? 'Head-on' : 'Swing'}`;
     document.querySelectorAll<HTMLButtonElement>('[data-pose]').forEach(button => {
-      button.setAttribute('aria-pressed', String(Math.abs(Number(button.dataset.pose) - progress) < .005));
+      button.setAttribute('aria-pressed', String(!planetInspection && Math.abs(Number(button.dataset.pose) - progress) < .005));
     });
+    document.querySelector('#inspect-planet')!.setAttribute('aria-pressed',String(planetInspection));
   }
   function cleanup() {
     if (signal.aborted) return;
@@ -37,16 +43,22 @@ if (import.meta.env.DEV) {
   import.meta.hot?.dispose(() => { cleanup(); window.removeEventListener('pageshow', restore); });
   try {
     view = createHeliostatView(canvas);
-    slider.addEventListener('input', () => { stop(); progress = slider.valueAsNumber; draw(); }, { signal });
+    slider.addEventListener('input', () => { stop(); mainView(); progress = slider.valueAsNumber; draw(); }, { signal });
     document.querySelectorAll<HTMLButtonElement>('[data-pose]').forEach(button => {
-      button.addEventListener('click', () => { stop(); progress = Number(button.dataset.pose); slider.value = String(progress); draw(); }, { signal });
+      button.addEventListener('click', () => { stop(); mainView(); progress = Number(button.dataset.pose); slider.value = String(progress); draw(); }, { signal });
     });
+    document.querySelector('#inspect-planet')!.addEventListener('click',()=>{
+      stop(); leaveOrbit(); planetInspection = true; view?.inspectPlanet(true); draw();
+    },{signal});
     for (const id of Object.keys(options) as (keyof StudyOptions)[]) {
       document.querySelector<HTMLInputElement>('#' + id)!.addEventListener('change', event => {
-        options[id] = (event.target as HTMLInputElement).checked; view?.setOptions(options); draw();
+        options[id] = (event.target as HTMLInputElement).checked;
+        if (id === 'orbit') stop();
+        view?.setOptions(options); draw();
       }, { signal });
     }
     play.addEventListener('click', () => {
+      mainView();
       if (playing) stop();
       else { if (time >= STUDY_DURATION) time = 0; playing = true; play.textContent = 'Pause'; play.setAttribute('aria-pressed', 'true'); }
     }, { signal });
@@ -69,7 +81,7 @@ if (import.meta.env.DEV) {
     preparation = loadStudyArt(signal).then(async art => {
       if (signal.aborted) return;
       view!.setArt(art); draw();
-      assets.textContent = `${Object.keys(art).length}/3 artwork files loaded · missing files use solid procedural stand-ins.`;
+      assets.textContent = `${Object.keys(art).length}/2 surface maps loaded · missing maps use procedural grain on the same 3D geometry.`;
       await view!.warmup();
     }).catch(reason => {
       if (signal.aborted) return;

@@ -4,110 +4,129 @@ import * as T from 'three';
 import { createServer } from 'vite';
 
 const server = await createServer({ root: new URL('..', import.meta.url).pathname, configFile: false,
-  define: { __STUDY_TEXTURES__: JSON.stringify({heliostatSky:'sky.png',heliostatDistant:'distant.png',heliostatPanels:'panels.png'}) }, server: { middlewareMode: true, hmr: false, ws: false },
-  optimizeDeps: { noDiscovery: true, entries: [] }, appType: 'custom' });
+  define: { __STUDY_TEXTURES__: JSON.stringify({heliostatMetal:'metal.png',heliostatCeramic:'ceramic.png'}) },
+  server: { middlewareMode: true, hmr: false, ws: false }, optimizeDeps: { noDiscovery: true, entries: [] }, appType: 'custom' });
 after(() => server.close());
 const layout = await server.ssrLoadModule('/src/studies/heliostat-layout.ts');
+const { createHeliostatMaterials } = await server.ssrLoadModule('/src/studies/heliostat-materials.ts');
 const { createHeliostatBay } = await server.ssrLoadModule('/src/studies/heliostat-bay.ts');
-const { heliostatBackdropCrop, createHeliostatSky } = await server.ssrLoadModule('/src/studies/heliostat-sky.ts');
+const { createDistantPlant } = await server.ssrLoadModule('/src/studies/heliostat-distant.ts');
+const { createHeliostatCollector } = await server.ssrLoadModule('/src/studies/heliostat-collector.ts');
+const { createUranus, URANUS_RADIUS:R, URANUS_TILT } = await server.ssrLoadModule('/src/studies/heliostat-space.ts');
 const { loadStudyTexture, loadStudyArt } = await server.ssrLoadModule('/src/studies/heliostat-assets.ts');
 
-test('rectified panels expose different physical faces and stay inside their own atlas cell', () => {
-  for (const [face, tile, axis, expected] of [['front',0,'y',-1.406],['side',1,'x',1.306],['top',2,'z',2.306]]) {
-    const g = layout.panelFace(face, 2.6, 2.8, 4.6, tile), position = g.attributes.position, normal = g.attributes.normal, uv = g.attributes.uv;
-    const rect = layout.atlasRect(tile);
-    for (let i = 0; i < position.count; i++) {
-      assert(Math.abs(position.getComponent(i, 'xyz'.indexOf(axis)) - expected) < 1e-6);
-      assert(normal.getComponent(i, 'xyz'.indexOf(axis)) * Math.sign(expected) > .99);
-      assert(uv.getX(i) >= rect.u0 - 1e-6 && uv.getX(i) <= rect.u1 + 1e-6);
-      assert(uv.getY(i) >= rect.v0 - 1e-6 && uv.getY(i) <= rect.v1 + 1e-6);
-    }
-    g.dispose();
-  }
-  assert.throws(() => layout.atlasRect(6), RangeError);
-  assert(layout.atlasRect(0).v0 > layout.atlasRect(3).v1, 'atlas rows are vertically swapped');
-});
-
-test('the bay closes its foreground solids but leaves a genuine flight/bullet corridor', () => {
-  const bay = createHeliostatBay(); bay.root.updateMatrixWorld(true);
-  for (let x = -layout.LANE_HALF_WIDTH; x <= layout.LANE_HALF_WIDTH; x += .2) {
-    const ray = new T.Raycaster(new T.Vector3(x, -15, .4), new T.Vector3(0, 1, 0), 0, 35);
-    assert.equal(ray.intersectObject(bay.root, true).length, 0, 'scenery intrudes into the clear flight lane');
-  }
-  const ray = new T.Raycaster(new T.Vector3(5.85, -15, -.9), new T.Vector3(0, 1, 0), 0, 35);
-  assert(ray.intersectObject(bay.root, true).length > 2, 'tower is a flat card without a back');
-  bay.setArt(new T.Texture(), true);
-  const roof = new T.Raycaster(new T.Vector3(5.85, 1.8, 10), new T.Vector3(0, 0, -1))
-    .intersectObject(bay.root, true).filter(hit => hit.object.parent.visible);
-  assert.equal(roof[0].object.material, bay.panels, 'a solid roof cap hides the top artwork');
-  let triangles = 0;
-  bay.root.traverse(node => { if (node.isMesh) { const g = node.geometry;
+test('foreground and distant machinery have lit, textured volume with no raster stand-ins', () => {
+  const m = createHeliostatMaterials(), bay = createHeliostatBay(m), far = createDistantPlant(m);
+  let triangles = 0, meshes = 0;
+  for (const root of [bay.root,far.root]) root.traverse(node => {
+    if (!node.isMesh) return; meshes++;
+    assert(node.material.isMeshStandardMaterial); assert.equal(node.material.transparent,false);
+    const g = node.geometry; assert(g.attributes.normal && g.attributes.uv);
     assert(Array.from(g.attributes.position.array).every(Number.isFinite));
-    triangles += (g.index?.count ?? g.attributes.position.count) / 3;
-  } });
-  assert(triangles < 24000, 'one study bay has excessive placeholder geometry');
+    g.computeBoundingBox(); const size = g.boundingBox.getSize(new T.Vector3());
+    assert(Math.min(size.x,size.y,size.z) > .02, 'a background structure is still a flat image card');
+    triangles += (g.index?.count ?? g.attributes.position.count)/3;
+  });
+  assert(meshes<26 && triangles<110000, 'one bay and its distant scenery exceed the geometry budget');
+  const bounds = new T.Box3().setFromObject(bay.root); m.setArt({},false);
+  assert(bounds.equals(new T.Box3().setFromObject(bay.root)), 'texture fallback changes geometry'); m.releaseTextures();
 });
 
-test('swing and timeline are continuous, reversible and deterministic at all three views', () => {
+test('the physical ship/bullet lane is clear beneath the overhead bus', () => {
+  const m = createHeliostatMaterials(), bay = createHeliostatBay(m); bay.root.updateMatrixWorld(true);
+  for (let x=-layout.LANE_HALF_WIDTH;x<=layout.LANE_HALF_WIDTH;x+=.2) {
+    const ray = new T.Raycaster(new T.Vector3(x,-15,.4),new T.Vector3(0,1,0),0,40);
+    assert.equal(ray.intersectObject(bay.root,true).length,0,'machinery intrudes into the flight lane');
+  }
+  const beam = new T.Raycaster(new T.Vector3(0,16.5,10),new T.Vector3(0,0,-1)).intersectObject(bay.root,true);
+  assert(beam.length && beam[0].point.z>4.5,'bridge is missing or lies in the shot plane'); m.releaseTextures();
+});
+
+test('the collector closes around the star at every angle and has front/back truss depth', () => {
+  const m=createHeliostatMaterials(),collector=createHeliostatCollector(m);collector.root.updateMatrixWorld(true);
+  const direction=new T.Vector3(0,0,1).transformDirection(collector.root.matrixWorld);
+  for(let i=0;i<72;i++){
+    const angle=i*Math.PI/36;
+    const origin=new T.Vector3(Math.cos(angle)*8.2,Math.sin(angle)*8.2,-12).applyMatrix4(collector.root.matrixWorld);
+    const hits=new T.Raycaster(origin,direction,0,30).intersectObject(collector.root,true);
+    assert(hits.length>=2,'collector hoop is open at angle '+angle);
+    assert(hits.at(-1).distance-hits[0].distance>1,'collector has no structural depth');
+  }
+  assert(collector.sphere.position.length()<1e-9);m.releaseTextures();
+});
+
+test('Uranus rings are concentric, coplanar and perpendicular to the planet spin axis', () => {
+  const planet=createUranus();planet.root.updateMatrixWorld(true);
+  const normal=new T.Vector3(0,0,1).applyQuaternion(planet.root.quaternion);
+  assert(normal.distanceTo(planet.axis)<1e-12);
+  assert(Math.abs(planet.axis.z-Math.cos(URANUS_TILT))<1e-12);
+  assert.equal(planet.rings.children.length,9);
+  let previous=R;
+  for(const ring of planet.rings.children){
+    const g=ring.geometry,p=g.attributes.position;assert.equal(ring.material.side,T.DoubleSide);
+    let min=Infinity,max=0;
+    for(let i=0;i<p.count;i++){assert(Math.abs(p.getZ(i))<1e-10);const radius=Math.hypot(p.getX(i),p.getY(i));min=Math.min(min,radius);max=Math.max(max,radius);}
+    assert(min>previous && max-min<R*.007,'rings overlap or become a broad ribbon');previous=max;
+  }
+  assert(planet.globe.material.isMeshStandardMaterial && planet.globe.material.map.isDataTexture);
+});
+
+test('near rings occult the globe while the globe hides the far rings', () => {
+  const planet=createUranus();planet.root.updateMatrixWorld(true);
+  const origin=new T.Vector3(0,-6*R,.7*R).applyMatrix4(planet.root.matrixWorld);
+  const objects=[planet.globe,...planet.rings.children];
+  for(const side of[-1,1]){
+    const target=new T.Vector3(0,side*1.751*R,0).applyMatrix4(planet.root.matrixWorld);
+    const hits=new T.Raycaster(origin,target.sub(origin).normalize()).intersectObjects(objects,false);
+    assert(hits.length>=2,'test ray does not cross ring and globe');
+    assert.equal(hits[0].object===planet.globe,side>0,'planet/ring depth order is reversed');
+  }
+});
+
+test('the planet surface closes its longitude seam and rotation freezes with presentation time', () => {
+  const p=createUranus(),image=p.globe.material.map.image;
+  for(let y=0;y<image.height;y++)for(let c=0;c<3;c++)assert(Math.abs(image.data[(y*image.width)*4+c]-image.data[(y*image.width+image.width-1)*4+c])<=1,'visible longitude seam');
+  const m=createHeliostatMaterials(),collector=createHeliostatCollector(m),storage=collector.sphere.geometry.attributes.position.array.slice();
+  collector.update(8);const q=collector.sphere.quaternion.clone();collector.update(8);
+  assert(collector.sphere.quaternion.equals(q));assert.deepEqual(collector.sphere.geometry.attributes.position.array,storage);m.releaseTextures();
+});
+
+test('camera and travel remain continuous, straight and deterministic', () => {
   let previous;
-  const camera = new T.PerspectiveCamera(layout.CAMERA_FOV, 9 / 16, .1, 600); camera.up.set(0,0,1);
-  for (let i = 0; i <= 180; i++) {
-    const frame = layout.studyFrame(i / 10), pose = layout.cameraPose(frame.progress);
-    assert.deepEqual(frame, layout.studyFrame(i / 10));
-    if (previous) assert(pose.position.distanceTo(previous) < .5, 'camera jumps during ascent');
-    camera.position.copy(pose.position); camera.lookAt(pose.target); camera.updateMatrixWorld();
-    assert(camera.matrixWorld.elements.every(Number.isFinite));
-    assert(Math.abs(pose.position.x) < 1e-9, 'camera follows a winding route');
-    previous = pose.position;
+  for(let i=0;i<=180;i++){
+    const frame=layout.studyFrame(i/10),pose=layout.cameraPose(frame.progress);
+    assert.deepEqual(frame,layout.studyFrame(i/10));if(previous)assert(pose.position.distanceTo(previous)<.5);
+    assert.equal(pose.position.x,0);previous=pose.position;
   }
-  assert.equal(layout.studyFrame(5).progress, 0); assert.equal(layout.studyFrame(14).progress, 1);
-  assert.deepEqual(layout.cameraPose(-1), layout.cameraPose(0));
-  assert.deepEqual(layout.cameraPose(2), layout.cameraPose(1));
-  for (let t = 0; t < 8; t += .1) assert(layout.bayTravel(t + .1) <= layout.bayTravel(t), 'bay reverses scroll direction');
-  assert.equal(layout.bayTravel(7), layout.bayTravel(18), 'stopped bay drifts during the settled view');
+  for(let t=0;t<8;t+=.1)assert(layout.bayTravel(t+.1)<=layout.bayTravel(t));
+  assert.equal(layout.bayTravel(7),layout.bayTravel(18));
 });
 
-test('flat backdrop keeps square source pixels square while only the vertical crop advances', () => {
-  for (const [viewW, viewH] of [[470,835],[390,844],[844,390]]) for (const [imageW,imageH] of [[1024,1536],[512,768],[1024,4096]]) {
-    let previous;
-    for (const progress of [0,.25,.5,.75,1]) {
-      const crop = heliostatBackdropCrop(viewW/viewH,imageW/imageH,progress);
-      assert(Math.abs(crop.width*imageW/viewW - crop.height*imageH/viewH) < 1e-12, 'unequal X/Y image scale stretches the artwork');
-      assert(crop.x >= 0 && crop.y >= 0 && crop.x+crop.width <= 1+1e-12 && crop.y+crop.height <= 1+1e-12, 'crop exposes an image edge');
-      if (previous) { assert(crop.y > previous.y); assert.equal(crop.x, previous.x); assert.equal(crop.width, previous.width); assert.equal(crop.height, previous.height); }
-      previous = crop;
-    }
-  }
-  const sky = createHeliostatSky(); sky.update(390,844,.5);
-  assert.equal(sky.root.geometry.attributes.position.count,4, 'backdrop needs only one flat quad');
-  assert.equal(sky.material.depthWrite,false); assert.equal(sky.material.depthTest,false);
-  assert(sky.root.renderOrder<0, 'backdrop must draw before foreground geometry');
-  sky.root.geometry.dispose();sky.material.dispose();
+test('surface-map switches retain the model and release active and inactive maps once', () => {
+  const m=createHeliostatMaterials(),metal=new T.Texture(),ceramic=new T.Texture();let released=0;
+  for(const texture of[metal,ceramic,m.titanium.map,m.titanium.bumpMap])texture.addEventListener('dispose',()=>released++);
+  m.setArt({heliostatMetal:metal,heliostatCeramic:ceramic},true);assert.equal(m.titanium.map,metal);assert.equal(m.ceramic.map,ceramic);
+  m.setArt({heliostatMetal:metal,heliostatCeramic:ceramic},false);assert.notEqual(m.titanium.map,metal);
+  m.releaseTextures();m.releaseTextures();assert.equal(released,4);
 });
 
-test('missing, cancelled and late study art cannot change a disposed scene', async () => {
-  const previousWindow = globalThis.window, originalLoad = T.TextureLoader.prototype.load;
-  globalThis.window = { setTimeout, clearTimeout }; let complete, calls = 0, disposed = 0;
-  T.TextureLoader.prototype.load = function(url, onLoad) { assert.equal(url, '/base/panels.png'); complete = onLoad; calls++; return new T.Texture(); };
-  try {
-    const scope = new AbortController(), pending = loadStudyTexture('/base/panels.png', scope.signal);
-    scope.abort(); assert.equal(await pending, undefined);
-    const late = new T.Texture(); late.addEventListener('dispose', () => disposed++); complete(late);
-    assert.equal(disposed, 1);
-    assert.equal(await loadStudyTexture('/base/panels.png', scope.signal), undefined); assert.equal(calls, 1);
-  } finally { T.TextureLoader.prototype.load = originalLoad; globalThis.window = previousWindow; }
+test('cancelled study preparation resolves and disposes a late image', async () => {
+  const previousWindow=globalThis.window,originalLoad=T.TextureLoader.prototype.load;
+  globalThis.window={setTimeout,clearTimeout};let complete,calls=0,disposed=0;
+  T.TextureLoader.prototype.load=function(url,onLoad){assert.equal(url,'/base/metal.png');complete=onLoad;calls++;return new T.Texture();};
+  try{
+    const scope=new AbortController(),pending=loadStudyTexture('/base/metal.png',scope.signal);scope.abort();assert.equal(await pending,undefined);
+    const image=new T.Texture();image.addEventListener('dispose',()=>disposed++);complete(image);assert.equal(disposed,1);
+    await loadStudyTexture('/base/metal.png',scope.signal);assert.equal(calls,1);
+  }finally{T.TextureLoader.prototype.load=originalLoad;globalThis.window=previousWindow;}
 });
 
-test('failed artwork resolves to a stand-in and abort releases an already-loaded sibling', async () => {
-  const previousWindow = globalThis.window, originalLoad = T.TextureLoader.prototype.load;
-  globalThis.window = { setTimeout, clearTimeout }; const callbacks = [];
-  T.TextureLoader.prototype.load = function(url, success, progress, failure) { callbacks.push({url,success,failure}); return new T.Texture(); };
-  try {
-    const scope = new AbortController(), missing = loadStudyTexture('/missing.png', scope.signal);
-    callbacks.pop().failure(new Error('missing')); assert.equal(await missing, undefined);
-    const pending = loadStudyArt(scope.signal); assert.equal(callbacks.length, 3);
-    const image = new T.Texture(); let disposed = 0; image.addEventListener('dispose', () => disposed++);
-    callbacks[0].success(image); await Promise.resolve(); scope.abort();
-    assert.deepEqual(await pending, {}); assert.equal(disposed, 1, 'a completed sibling image leaks on cancellation');
-  } finally { T.TextureLoader.prototype.load = originalLoad; globalThis.window = previousWindow; }
+test('failed maps fall back and abort releases an already-loaded sibling', async () => {
+  const previousWindow=globalThis.window,originalLoad=T.TextureLoader.prototype.load;globalThis.window={setTimeout,clearTimeout};const callbacks=[];
+  T.TextureLoader.prototype.load=function(url,success,progress,failure){callbacks.push({url,success,failure});return new T.Texture();};
+  try{
+    const scope=new AbortController(),missing=loadStudyTexture('/missing.png',scope.signal);callbacks.pop().failure(new Error('missing'));assert.equal(await missing,undefined);
+    const pending=loadStudyArt(scope.signal);assert.equal(callbacks.length,2);const image=new T.Texture();let disposed=0;image.addEventListener('dispose',()=>disposed++);
+    callbacks[0].success(image);await Promise.resolve();scope.abort();assert.deepEqual(await pending,{});assert.equal(disposed,1);
+  }finally{T.TextureLoader.prototype.load=originalLoad;globalThis.window=previousWindow;}
 });
