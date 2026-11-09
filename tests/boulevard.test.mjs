@@ -4,13 +4,13 @@ const b=await server.ssrLoadModule('/src/boulevard.ts'),{Flight,STEP}=await serv
 
 test('ten-screen boulevard uses its own waves, all four repeat drops, armored escorts and a quiet plaza approach',()=>{
  const f=new Flight('sentry',[],'vex','boulevard');f.cooldown=f.droneCooldown=1e6;f.player.x=3.95;const forms=new Set(),drops=new Set();let heavy=false,max=0;
- while(f.phase==='stage'){f.invulnerable=100;f.step(STEP);max=Math.max(max,f.enemies.length);for(const e of f.enemies){assert(e.boulevard&&!e.raptor&&!e.flyer);forms.add(e.boulevard.formation);if(e.drop)drops.add(e.drop);heavy||=!!e.boulevard.heavy;}}
- assert.equal(forms.size,4);assert.equal(drops.size,4);assert(heavy);assert(max<=b.BOULEVARD_POOL);assert.equal(f.time,0);assert.equal(f.phase,'approach');assert.equal(f.enemies.length,0);assert.equal(f.transitionDuration,7);assert.equal(f.bossHealth,b.BOULEVARD_HP);
+ while(f.phase==='stage'){f.invulnerable=100;f.step(STEP);max=Math.max(max,f.enemies.length);for(const e of f.enemies){assert((e.boulevard||e.mine)&&!e.raptor&&!e.flyer);if(e.mine)continue;forms.add(e.boulevard.formation);if(e.drop)drops.add(e.drop);heavy||=!!e.boulevard.heavy;}}
+ assert.equal(forms.size,5);assert.equal(drops.size,4);assert(heavy);assert(max<=b.BOULEVARD_POOL);assert.equal(f.time,0);assert.equal(f.phase,'approach');assert.equal(f.enemies.length,0);assert.equal(f.transitionDuration,7);assert.equal(f.bossHealth,b.BOULEVARD_HP);
  for(let t=0;t<7.01;t+=STEP)f.step(STEP);assert.equal(f.phase,'boss');
 });
 
 test('absolute hovercar paths have continuous tangents, safe entry, bounded lanes and finite exits',()=>{
- for(const formation of['chevron','cross','train','rush'])for(const mirror of[-1,1])for(let slot=0;slot<4;slot++){
+ for(const formation of['chevron','cross','train','rush','intercept'])for(const mirror of[-1,1])for(let slot=0;slot<4;slot++){
   const c={formation,mirror,slot},lane=mirror*(slot%2?2:-2);assert(b.boulevardMotion(0,lane,c).y>=10);assert(b.boulevardMotion(13,lane,c).y<-9);
   for(let age=0;age<11;age+=.035){const p=b.boulevardMotion(age,lane,c),next=b.boulevardMotion(age+.001,lane,c);assert(Object.values(p).every(Number.isFinite));assert(Math.abs(p.x)<2.6);assert(Math.hypot(next.x-p.x,next.y-p.y)<.02);assert(Math.abs(Math.atan2(Math.sin(next.heading-p.heading),Math.cos(next.heading-p.heading)))<.01);}
  }
@@ -18,7 +18,7 @@ test('absolute hovercar paths have continuous tangents, safe entry, bounded lane
 
 test('Boulevard waves are present in the reflected approach before their original entrance and firing times',()=>{
  const f=new Flight('sentry',[],'vex','boulevard');f.cooldown=f.droneCooldown=1e6;f.player.x=3.95;let max=0,spawnY=Infinity;const known=new Set();
- while(f.phase==='stage'){f.invulnerable=100;f.step(STEP);max=Math.max(max,f.enemies.length);for(const e of f.enemies){if(!known.has(e)){known.add(e);spawnY=Math.min(spawnY,e.y);if(f.time>2)assert(e.age<-b.BOULEVARD_SPAWN_LEAD+.04);assert(e.age<0,'wave created after its original entrance');}assert.deepEqual({x:e.x,y:e.y},{x:b.boulevardMotion(e.age,e.lane,e.boulevard).x,y:b.boulevardMotion(e.age,e.lane,e.boulevard).y});if(e.age<0)assert(e.fire>=1.7,'lead-in enables early fire');}}
+ while(f.phase==='stage'){f.invulnerable=100;f.step(STEP);max=Math.max(max,f.enemies.length);for(const e of f.enemies){if(!e.boulevard)continue;if(!known.has(e)){known.add(e);spawnY=Math.min(spawnY,e.y);if(f.time>2)assert(e.age<-b.BOULEVARD_SPAWN_LEAD+.04);assert(e.age<0,'wave created after its original entrance');}assert.deepEqual({x:e.x,y:e.y},{x:b.boulevardMotion(e.age,e.lane,e.boulevard).x,y:b.boulevardMotion(e.age,e.lane,e.boulevard).y});if(e.age<0)assert(e.fire>=1.7,'lead-in enables early fire');}}
  assert(spawnY>13);assert(max<=b.BOULEVARD_POOL);assert.equal(f.phase,'approach');
 });
 

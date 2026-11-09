@@ -2,6 +2,8 @@ import * as T from 'three';
 import {type LevelFactory,addRoots} from '../level';
 import {createBoulevardGlow} from '../../boulevard-glow';
 import {createBoulevardScenery} from '../../boulevard-scenery';
+import {createBoulevardMine,createBoulevardInterceptor} from '../../boulevard-enemies';
+import {MINE_POOL} from '../../boulevard-mines';
 import {createHovercar,cloneHovercar,createPursuitCruiser} from '../../boulevard-rigs';
 import {boulevardFrame,boulevardBossPoint,boulevardMotion,BOULEVARD_POOL} from '../../boulevard';
 import {loadEncounterTexture} from '../../encounter-texture';
@@ -12,21 +14,24 @@ export const createLevel:LevelFactory=({plane,signal})=>{
  glow.setSun(scenery.sun.disk,scenery.sun.clock);
  const light=createHovercar(scenery.materials),heavy=createHovercar(scenery.materials,true);
  const cars=Array.from({length:BOULEVARD_POOL},()=>cloneHovercar(light.root)),haulers=Array.from({length:3},()=>cloneHovercar(heavy.root));
- const models:(T.Object3D|undefined)[]=[];addRoots(root,scenery,boss,...cars,...haulers);
- const actors=[...cars,...haulers].map(r=>r.root),contact=createBossLaserContact(plane,boss.root);
+ const mines=Array.from({length:MINE_POOL},()=>createBoulevardMine(scenery.materials)),interceptors=Array.from({length:4},()=>createBoulevardInterceptor(scenery.materials));
+ const models:(T.Object3D|undefined)[]=[];addRoots(root,scenery,boss,...cars,...haulers,...mines,...interceptors);
+ const actors=[...cars,...haulers,...mines,...interceptors].map(r=>r.root),contact=createBossLaserContact(plane,boss.root);
  return{root,boss:boss.root,models,stageDistance:36,farDistance:520,background:0x0d071d,key:0xe7b8e8,sky:0x7d92cd,ground:0x321746,keyIntensity:2.3,skyIntensity:1.8,friendlyGlow:2.5,
   ready:Promise.all([loadEncounterTexture('boulevardRoad',scenery.road.setMap,1,signal)]),surfaces:[root],
   orientation:(_time,reveal)=>boulevardFrame(reveal),
   contacts:[boss.root,...actors],warmup:[[scenery.root,boss.root,...actors]],
-  prepare(){scenery.prime(true);for(const r of actors)r.traverse(o=>{if(o instanceof T.Mesh)o.frustumCulled=false;});},
-  afterWarmup(){scenery.prime(false);for(const r of actors)r.traverse(o=>{if(o instanceof T.Mesh)o.frustumCulled=true;});},
+  prepare(){scenery.prime(true);for(const m of mines)m.prime(true);for(const r of actors)r.traverse(o=>{if(o instanceof T.Mesh)o.frustumCulled=false;});},
+  afterWarmup(){scenery.prime(false);for(const m of mines)m.prime(false);for(const r of actors)r.traverse(o=>{if(o instanceof T.Mesh)o.frustumCulled=true;});},
   present:glow.present,dispose(){glow.dispose();scenery.dispose();},contact:(x,d)=>contact(x,d),
   update({flight,time,reveal,animationTime}){
    scenery.update(time,reveal,animationTime);
    const p=boulevardBossPoint(time,reveal);boss.root.position.set(p.x,p.y,p.z);boss.root.rotation.x=-boulevardFrame(reveal).pitch;
    boss.root.visible=flight.bossHealth>0;boss.pose(animationTime,flight.cannonWindup,flight.bossRecoil/BOSS_RECOIL_TIME);
-   models.length=flight.enemies.length;models.fill(undefined);let lights=0,heavies=0;for(const r of[...cars,...haulers])r.root.visible=false;
+   models.length=flight.enemies.length;models.fill(undefined);let lights=0,heavies=0,mineCount=0,interceptorCount=0;for(const r of[...cars,...haulers,...mines,...interceptors])r.root.visible=false;
    for(const[i,enemy]of flight.enemies.entries()){
+    if(enemy.mine){const rig=mines[mineCount++];if(rig){rig.root.visible=true;rig.pose(enemy.mine,time,enemy.hp>0);if(enemy.hp>0)models[i]=rig.root;}continue;}
+    if(enemy.boulevard?.formation==='intercept'){const rig=interceptors[interceptorCount++];if(rig){rig.root.visible=true;rig.root.position.set(enemy.x,enemy.y,0);rig.root.rotation.z=enemy.heading??0;const aim=enemy.interceptorAim??Math.PI;rig.pose(T.MathUtils.clamp(1-(enemy.fire-enemy.age)/.65,0,1),Math.atan2(Math.sin(aim),-Math.cos(aim))-(enemy.heading??0));models[i]=rig.root;}continue;}
     if(!enemy.boulevard)continue;const rig=enemy.boulevard.heavy?haulers[heavies++]:cars[lights++];if(!rig)continue;
     const motion=boulevardMotion(enemy.age,enemy.lane,enemy.boulevard);rig.root.visible=true;rig.root.position.set(enemy.x,enemy.y,0);rig.root.rotation.z=enemy.heading??0;rig.pose(enemy.age,motion.bank);models[i]=rig.root;
    }

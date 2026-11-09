@@ -1,3 +1,4 @@
+import {mineSites,minePose,triggerMine,mineBurst,MINE_HP,MINE_RADIUS,MINE_WINDUP,MINE_JUMP,MINE_BURST_TIME,type BoulevardMine} from './boulevard-mines';
 import {BOULEVARD_HP,BOULEVARD_APPROACH,BOULEVARD_INTERVAL,BOULEVARD_WINDUP,BOULEVARD_FIRE,BOULEVARD_TRAVEL,BOULEVARD_SPAWN_LEAD,boulevardWaves,boulevardMotion,type BoulevardCourse} from './boulevard';
 import { AMBUSHER_HP, AMBUSHER_SPAWN_LEAD, AMBUSHER_CORPSE_TIME, ambusherSites, ambusherHome, createAmbusherState, stepAmbusher, ambusherPose, ambusherHulls, ambusherBodyHit, ambusherBeamEntry, ambusherHits, defeatAmbusher, type AmbusherState } from './preserve-ambusher';
 import { preserveWaves } from './preserve-waves';
@@ -51,6 +52,7 @@ type Shot = Point & {
 type Threat = Shot & { graze?: 'near' | 'counted' };
 type Enemy = Point & {
   boulevard?: BoulevardCourse;
+  mine?: BoulevardMine; interceptorAim?:number;
   flyer?: FlyerCourse;
   ambusher?: AmbusherState;
   lane: number; age: number; fire: number; hp: number; drop?: WingWeapon; raptor?: boolean; ant?: 'worker' | 'soldier'; marine?: MarineKind; school?: MarineSchool;
@@ -123,7 +125,7 @@ export const iceWaves: Wave[] = [
 export const titanWaves: Wave[] = titanInsectWaves;
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
-const enemyRadius=(enemy:Enemy,ordinary=.52)=>enemy.crucible?CRUCIBLE_RADIUS:enemy.slag?SLAG_RADIUS:(enemy.ventAnchor!==undefined?MORTAR_RADIUS:ordinary)*(enemy.ventScale??1)*(enemy.boulevard?.heavy?1.2:1);
+const enemyRadius=(enemy:Enemy,ordinary=.52)=>enemy.mine?MINE_RADIUS:enemy.crucible?CRUCIBLE_RADIUS:enemy.slag?SLAG_RADIUS:(enemy.ventAnchor!==undefined?MORTAR_RADIUS:ordinary)*(enemy.ventScale??1)*(enemy.boulevard?.heavy?1.2:1);
 const near = (a: Point, b: Point, radius: number) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 < radius ** 2;
 
 function moveWithinField(point: Point, dx: number, dy: number) {
@@ -200,6 +202,7 @@ export class Flight {
   private towlineDamage = TOWLINE_DAMAGE;
   private aim?: Point;
   private nextWave = 0;
+  private nextMine = 0;
   private nextAmbusher = 0;
   private cooldown = 0;
   private droneCooldown = 0;
@@ -443,7 +446,7 @@ export class Flight {
       }
       return shot.y < 9 && Math.abs(shot.x) < 5;
     });
-    this.enemies = this.enemies.filter((enemy) => (enemy.hp > 0 || enemy.ambusher?.defeatedAt!==undefined && this.time-enemy.ambusher.defeatedAt<AMBUSHER_CORPSE_TIME) && (enemy.ambusher ? ambusherHome(enemy.ambusher.site,this.time).y > -12 : enemy.y > -9) && (!enemy.centipede || Math.abs(enemy.x) < 5.8) && (!(enemy.crucible || enemy.slag) || Math.abs(enemy.x)<6.8) && (!enemy.slag || (enemy.y<10 && enemy.age<10)));
+    this.enemies = this.enemies.filter((enemy) => (enemy.hp > 0 || enemy.mine?.burstAt!==undefined&&this.time-enemy.mine.burstAt<MINE_BURST_TIME || enemy.ambusher?.defeatedAt!==undefined && this.time-enemy.ambusher.defeatedAt<AMBUSHER_CORPSE_TIME) && (enemy.ambusher ? ambusherHome(enemy.ambusher.site,this.time).y > -12 : enemy.y > -9) && (!enemy.centipede || Math.abs(enemy.x) < 5.8) && (!(enemy.crucible || enemy.slag) || Math.abs(enemy.x)<6.8) && (!enemy.slag || (enemy.y<10 && enemy.age<10)));
 
     this.threats = this.threats.filter((shot) => {
       this.advance(shot, dt);
@@ -650,6 +653,7 @@ export class Flight {
   }
 
   private stepStage(dt: number) {
+    if(this.level==='boulevard')while(this.nextMine<mineSites.length){const mine={site:this.nextMine},p=minePose(mine,this.time);if(p.physicalY>28)break;this.nextMine++;this.enemies.push({x:p.x,y:p.y,lane:p.x,age:0,fire:Infinity,hp:MINE_HP,mine});}
     if(this.level==='preserve')while(this.nextAmbusher<ambusherSites.length){
       const site=this.nextAmbusher,home=ambusherHome(site,this.time);if(home.y>AMBUSHER_SPAWN_LEAD)break;this.nextAmbusher++;
       if(home.y<-12)continue;
@@ -678,7 +682,7 @@ export class Flight {
         return {
           x: start.x, y: start.y, lane, age: boulevard?boulevardAge:wave.ventAnchor!==undefined?-VENT_SPAWN_LEAD:0, boulevard,flyer, school, cicada: course, skipper: wave.skipper, crucible: wave.crucible, ventAnchor:wave.ventAnchor, ventWorm:wave.ventWorm, shrimp, slot: index,
           fire: boulevard?1.7+index*.22:flyer ? Infinity : shrimp ? SHRIMP_FIRST_FIRE+index*.25 : wave.ventWorm ? WORM_FIRST_ATTACK : wave.ventAnchor!==undefined ? MORTAR_FIRST_FIRE : wave.crucible ? CRUCIBLE_FIRST_POUR : schoolDelay(school) + (wave.marine === 'plesiosaur' ? 1.8 : wave.ant === 'soldier' ? 1.6 : 1.1) + index * 0.28,
-          hp: boulevard?(boulevard.heavy?6:3):flyer ? FLYER_HP : shrimp ? SHRIMP_HP : wave.ventWorm ? WORM_HP : wave.ventAnchor!==undefined ? MORTAR_HP : wave.crucible ? CRUCIBLE_HP : wave.marine ? marineSpecs[wave.marine].hp : wave.ant === 'soldier' ? 5 : 2, ant: wave.ant, marine: wave.marine,
+          hp: boulevard?(boulevard.formation==='intercept'?5:boulevard.heavy?6:3):flyer ? FLYER_HP : shrimp ? SHRIMP_HP : wave.ventWorm ? WORM_HP : wave.ventAnchor!==undefined ? MORTAR_HP : wave.crucible ? CRUCIBLE_HP : wave.marine ? marineSpecs[wave.marine].hp : wave.ant === 'soldier' ? 5 : 2, ant: wave.ant, marine: wave.marine,
           drop: index === wave.carrier ? wave.drop : undefined,
           raptor: index === wave.raptor,
         };
@@ -690,11 +694,15 @@ export class Flight {
       if (enemy.hp <= 0) continue;
       enemy.age += dt;
       const motion = enemy.raptor ? raptorFlight(enemy.age) : undefined;
-      if (enemy.ambusher) {
+      if(enemy.mine){
+        const p=triggerMine(enemy.mine,this.time,this.player);enemy.x=p.x;enemy.y=p.y;
+        if(p.elapsed>=MINE_WINDUP+MINE_JUMP){enemy.mine.burstAt=this.time;enemy.hp=0;this.threats.push(...mineBurst(p.x,p.y));continue;}
+      } else if (enemy.ambusher) {
         stepAmbusher(enemy.ambusher,this.time,this.player,dt);
         const p=ambusherPose(enemy.ambusher,this.time);enemy.x=p.head.x;enemy.y=p.head.y;
       } else if(enemy.boulevard){
         const p=boulevardMotion(enemy.age,enemy.lane,enemy.boulevard);enemy.x=p.x;enemy.y=p.y;enemy.heading=p.heading;
+        if(enemy.boulevard.formation==='intercept'&&enemy.y<8&&enemy.age>=enemy.fire-.65&&enemy.interceptorAim===undefined)enemy.interceptorAim=Math.atan2(this.player.x-enemy.x,this.player.y-enemy.y);
       } else if (enemy.flyer) {
         const p=flyerMotion(enemy.age,enemy.lane,enemy.flyer);enemy.x=p.x;enemy.y=p.y;enemy.heading=p.heading;
       } else if (enemy.ventAnchor!==undefined) {
@@ -754,19 +762,21 @@ export class Flight {
         const hull = enemy.marine ? [{x:0,y:0,radius:marineSpecs[enemy.marine].radius}] : enemy.raptor ? [{ x: 0, y: 0, radius: 1.05 }] : DRONE_HULL;
         this.obstacles.move(enemy, 0, 0, hull, { minX: -2.4, maxX: 2.4, minY: -10, maxY: 10 });
       }
-      if (!enemy.flyer && !enemy.ambusher && !enemy.shrimp && enemy.ventAnchor===undefined && !enemy.crucible && !enemy.slag && !motion && (!enemy.centipede || (enemy.centipede.slot === 0 && !enemy.centipede.chain.escape)) && enemy.age >= enemy.fire && enemy.y < 8) {
-        enemy.fire += enemy.boulevard?3.4:enemy.centipede ? 3.5 : enemy.cicada ? 3 : enemy.marine === 'plesiosaur' ? 3.2 : enemy.ant === 'soldier' ? 3.1 : 2.4;
+      if (!enemy.mine && !enemy.flyer && !enemy.ambusher && !enemy.shrimp && enemy.ventAnchor===undefined && !enemy.crucible && !enemy.slag && !motion && (!enemy.centipede || (enemy.centipede.slot === 0 && !enemy.centipede.chain.escape)) && enemy.age >= enemy.fire && enemy.y < 8) {
+        enemy.fire += enemy.boulevard?.formation==='intercept'?2.8:enemy.boulevard?3.4:enemy.centipede ? 3.5 : enemy.cicada ? 3 : enemy.marine === 'plesiosaur' ? 3.2 : enemy.ant === 'soldier' ? 3.1 : 2.4;
         const dx = this.player.x - enemy.x;
         const dy = this.player.y - enemy.y;
-        const angle = Math.atan2(dx, dy);
+        const angle = enemy.interceptorAim ?? Math.atan2(dx, dy);
         const speed = enemy.marine ? (enemy.marine === 'plesiosaur' ? 4 : 5) : enemy.ant ? 4.6 : 5.7;
-        const spread = enemy.boulevard?.heavy?[-.18,0,.18]:enemy.marine === 'plesiosaur' ? [-.3,-.15,0,.15,.3] : enemy.ant === 'soldier' ? [-0.24, 0, 0.24] : [0];
+        const spread = enemy.boulevard?.formation==='intercept'?[-.12,0,.12]:enemy.boulevard?.heavy?[-.18,0,.18]:enemy.marine === 'plesiosaur' ? [-.3,-.15,0,.15,.3] : enemy.ant === 'soldier' ? [-0.24, 0, 0.24] : [0];
         for (const offset of spread) {
           const muzzle = enemy.marine ? marineSpecs[enemy.marine].halfLength : 0;
           this.threats.push({ x: enemy.x + Math.sin(enemy.heading ?? 0)*muzzle, y: enemy.y - Math.cos(enemy.heading ?? 0)*muzzle, z: 0,
             vx: Math.sin(angle + offset) * speed, vy: Math.cos(angle + offset) * speed, vz: 0 });
         }
+        enemy.interceptorAim=undefined;
       }
+      if(enemy.mine)continue;
       if(enemy.ambusher){
         if(ambusherHits(enemy.ambusher,this.time,this.time-dt,this.player))this.hit();
       } else if (enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},this.player,this.player,.16) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,this.player,this.player,.16) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind},this.player,this.player,.2-marineSpecs[enemy.marine].radius*.2) : near(enemy, this.player, enemyRadius(enemy)+.16)) {
@@ -909,7 +919,7 @@ export class Flight {
       if(enemy.ambusher)defeatAmbusher(enemy.ambusher,this.time);
       if(enemy.ventWorm&&enemy.ventAnchor!==undefined)this.defeatedVentWorms.add(enemy.ventAnchor);
       if (enemy.centipede) severCentipede(enemy);
-      this.score += enemy.ambusher?200:enemy.crucible?300:enemy.slag?10:enemy.ventWorm?250:enemy.ventAnchor!==undefined?150:enemy.shrimp?125:100;
+      this.score += enemy.mine?50:enemy.ambusher?200:enemy.crucible?300:enemy.slag?10:enemy.ventWorm?250:enemy.ventAnchor!==undefined?150:enemy.shrimp?125:100;
       if (enemy.drop) this.drops.push({ x: enemy.x, y: enemy.y, weapon: enemy.drop });
     }
   }
