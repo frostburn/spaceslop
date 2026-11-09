@@ -1,8 +1,9 @@
 import * as T from 'three';
+import { HELIOSTAT_DURATION, HELIOSTAT_APPROACH, HELIOSTAT_END, heliostatScroll } from './combat';
 
 export const LANE_HALF_WIDTH = 3.8;
-export const ROUTE_DURATION = 100;
-export const SWING_DURATION = 8;
+export const ROUTE_DURATION = HELIOSTAT_DURATION;
+export const SWING_DURATION = HELIOSTAT_APPROACH;
 export const STUDY_DURATION = ROUTE_DURATION + SWING_DURATION;
 export const BAY_SPACING = 28;
 export const ROUTE_SPEED = BAY_SPACING / 10;
@@ -18,11 +19,10 @@ export function cameraPose(progress: number) {
 
 /** Constant straight flight, followed by a continuous deceleration to rest. */
 export function bayTravel(time: number) {
-  const t = T.MathUtils.clamp(time,0,STUDY_DURATION), u = T.MathUtils.clamp((t-ROUTE_DURATION)/SWING_DURATION,0,1);
-  return -ROUTE_SPEED * (Math.min(t,ROUTE_DURATION) + SWING_DURATION * (u-u*u+u*u*u/3));
+  return -heliostatScroll(time);
 }
 
-export const ROUTE_END = -bayTravel(STUDY_DURATION);
+export const ROUTE_END = HELIOSTAT_END;
 
 export function routeSection(time: number) {
   return time < 20 ? 'Docking spine' : time < 45 ? 'Generator galleries' : time < 70 ? 'Heat exchange'

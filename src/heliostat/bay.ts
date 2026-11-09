@@ -1,7 +1,7 @@
 import * as T from 'three';
-import { heliostatBatch, type Point3 } from './heliostat-geometry';
-import type { HeliostatMaterials } from './heliostat-materials';
-import { addServiceMachinery, coolingCell, dockingCell, type HeliostatBayKind } from './heliostat-machinery';
+import { heliostatBatch, type Point3 } from './geometry';
+import type { HeliostatMaterials } from './materials';
+import { addServiceMachinery, coolingCell, dockingCell, type HeliostatBayKind } from './machinery';
 
 export function createHeliostatBay(m: HeliostatMaterials,kind:HeliostatBayKind='generation') {
   const root = new T.Group(); root.name = 'modeled-corridor-bay';
@@ -89,9 +89,11 @@ export function createHeliostatBay(m: HeliostatMaterials,kind:HeliostatBayKind='
     b.box([16.8, .35, .38], [0, y, -4], m.dark);
     for (let i = -8; i < 8; i++) b.rod([i, y, -4], [i + 1, y, -3.45], .045, m.titanium, 6);
   }
-  shell.box([11.7, .7, .75], [0, 16.5, 4.7], m.dark, .08);
-  for (const side of [-1, 1]) b.rod([side * 5.5, 16.5, -3.3], [side * 5.5, 16.5, 4.5], .15, m.titanium);
-  for (let i = -5; i <= 5; i++) b.box([.42, .12, .12], [i, 16.1, 4.7], m.amber);
+  if(kind!=='containment'){
+    shell.box([11.7, .7, .75], [0, 16.5, 4.7], m.dark, .08);
+    for (const side of [-1, 1]) b.rod([side * 5.5, 16.5, -3.3], [side * 5.5, 16.5, 4.5], .15, m.titanium);
+    for (let i = -5; i <= 5; i++) b.box([.42, .12, .12], [i, 16.1, 4.7], m.amber);
+  }
   b.finish(); shell.finish();
   casings.traverse(node => { if (node instanceof T.Mesh) node.castShadow = true; });
   addServiceMachinery(root,m,kind);

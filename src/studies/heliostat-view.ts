@@ -1,11 +1,11 @@
 import * as T from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createHeliostatRoute } from './heliostat-route';
-import { createDistantPlant } from './heliostat-distant';
-import { createHeliostatBackdrop } from './heliostat-backdrop';
-import { createHeliostatCollector } from './heliostat-collector';
-import { createHeliostatMaterials, createHeliostatEnvironment } from './heliostat-materials';
-import { bayTravel, cameraPose, CAMERA_FOV, ROUTE_END } from './heliostat-layout';
+import { createHeliostatRoute } from '../heliostat/route';
+import { createDistantPlant } from '../heliostat/distant';
+import { createHeliostatBackdrop } from '../heliostat/backdrop';
+import { createHeliostatCollector } from '../heliostat/collector';
+import { createHeliostatMaterials, createHeliostatEnvironment } from '../heliostat/materials';
+import { bayTravel, cameraPose, CAMERA_FOV, ROUTE_END } from '../heliostat/layout';
 import type { StudyArt } from './heliostat-assets';
 import { createFighterRig } from '../ship-rigs';
 import { shipBurners, poseBurners } from '../burners';

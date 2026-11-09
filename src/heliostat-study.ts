@@ -1,6 +1,6 @@
 import { createHeliostatView,type StudyOptions } from './studies/heliostat-view';
 import { loadStudyArt } from './studies/heliostat-assets';
-import { studyFrame,studyTimeAtSwing,routeSection,STUDY_DURATION,ROUTE_DURATION } from './studies/heliostat-layout';
+import { studyFrame,studyTimeAtSwing,routeSection,STUDY_DURATION,ROUTE_DURATION } from './heliostat/layout';
 
 if(import.meta.env.DEV){
   const canvas=document.querySelector<HTMLCanvasElement>('#preview')!,slider=document.querySelector<HTMLInputElement>('#swing')!;

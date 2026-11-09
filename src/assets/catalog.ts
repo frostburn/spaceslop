@@ -1,5 +1,6 @@
 import type { LevelId } from '../levels';
 export const textureFiles = {
+  heliostatBackdrop:'encounters/heliostat-uranus-backdrop.png',
   boulevardRoad:'encounters/boulevard-asphalt.png',
   ventMortar: 'encounters/vent-barnacle.png',
   ventFauna: 'encounters/vent-fauna.png',
@@ -29,15 +30,16 @@ export const textureFiles = {
 } as const;
 export type EncounterTexture = keyof typeof textureFiles;
 
-// Development studies are deliberately outside every flight/offline package.
+// Study aliases share the catalog's media paths; only the study loader is DEV.
 export const studyTextureFiles = {
-  heliostatMetal: 'encounters/interceptor-metal.png',
-  heliostatCeramic: 'encounters/io-ceramic.png',
-  heliostatBackdrop: 'encounters/heliostat-uranus-backdrop.png',
+  heliostatMetal: textureFiles.armor,
+  heliostatCeramic: textureFiles.ioCeramic,
+  heliostatBackdrop: textureFiles.heliostatBackdrop,
 } as const;
 export type StudyTexture = keyof typeof studyTextureFiles;
 
 export const levelTextures: Record<LevelId, readonly EncounterTexture[]> = {
+  heliostat:['armor','ioCeramic','heliostatBackdrop'],
   boulevard:['armor','boulevardRoad'],
   preserve: ['armor', 'feathers', 'scales'],
   broodlock: ['armor', 'hive', 'hiveMask', 'hiveStars', 'hiveMines', 'chitin', 'fungus', 'mold'],

@@ -1,5 +1,5 @@
 import * as T from 'three';
-import type { StudyArt } from './heliostat-assets';
+import type { HeliostatArt } from './art';
 
 function grainMap(bump: boolean) {
   const n = 128, bytes = new Uint8Array(n * n * 4);
@@ -41,7 +41,7 @@ export function createHeliostatMaterials() {
   };
   return {
     ...materials,
-    setArt(art: StudyArt, enabled: boolean) {
+    setArt(art: HeliostatArt, enabled: boolean) {
       for (const key of ['heliostatMetal','heliostatCeramic'] as const) if (art[key]) owned.add(art[key]);
       for (const [key, material] of Object.entries(materials)) {
         if (key === 'cyan' || key === 'amber') continue;

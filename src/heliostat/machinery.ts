@@ -1,6 +1,6 @@
 import * as T from 'three';
-import { heliostatBatch } from './heliostat-geometry';
-import type { HeliostatMaterials } from './heliostat-materials';
+import { heliostatBatch } from './geometry';
+import type { HeliostatMaterials } from './materials';
 
 export type HeliostatBayKind='docking'|'generation'|'cooling'|'containment';
 type Batch=ReturnType<typeof heliostatBatch>;

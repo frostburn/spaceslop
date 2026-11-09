@@ -1,6 +1,6 @@
 import * as T from 'three';
-import { heliostatBatch } from './heliostat-geometry';
-import type { HeliostatMaterials } from './heliostat-materials';
+import { heliostatBatch } from './geometry';
+import type { HeliostatMaterials } from './materials';
 
 function photosphere() {
   const w = 256, h = 128, bytes = new Uint8Array(w * h * 4);

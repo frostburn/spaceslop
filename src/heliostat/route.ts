@@ -1,8 +1,8 @@
 import * as T from 'three';
-import { createHeliostatBay,createHeliostatBus } from './heliostat-bay';
-import { machineryPose,type HeliostatBayKind } from './heliostat-machinery';
-import { BAY_SPACING,bayTravel } from './heliostat-layout';
-import type { HeliostatMaterials } from './heliostat-materials';
+import { createHeliostatBay,createHeliostatBus } from './bay';
+import { machineryPose,type HeliostatBayKind } from './machinery';
+import { BAY_SPACING,bayTravel } from './layout';
+import type { HeliostatMaterials } from './materials';
 
 export const routeKinds:readonly HeliostatBayKind[]=['docking','docking','generation','generation','cooling',
   'cooling','generation','containment','containment','containment','containment'];

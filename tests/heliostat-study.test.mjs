@@ -7,14 +7,14 @@ const server = await createServer({ root: new URL('..', import.meta.url).pathnam
   define: { __STUDY_TEXTURES__: JSON.stringify({heliostatMetal:'metal.png',heliostatCeramic:'ceramic.png',heliostatBackdrop:'backdrop.png'}) },
   server: { middlewareMode: true, hmr: false, ws: false }, optimizeDeps: { noDiscovery: true, entries: [] }, appType: 'custom' });
 after(() => server.close());
-const layout = await server.ssrLoadModule('/src/studies/heliostat-layout.ts');
-const { createHeliostatMaterials } = await server.ssrLoadModule('/src/studies/heliostat-materials.ts');
-const { createHeliostatBay } = await server.ssrLoadModule('/src/studies/heliostat-bay.ts');
-const { createDistantPlant } = await server.ssrLoadModule('/src/studies/heliostat-distant.ts');
-const { createHeliostatCollector } = await server.ssrLoadModule('/src/studies/heliostat-collector.ts');
-const { createHeliostatRoute,routeKinds } = await server.ssrLoadModule('/src/studies/heliostat-route.ts');
-const { machineryPose } = await server.ssrLoadModule('/src/studies/heliostat-machinery.ts');
-const { createHeliostatBackdrop,backdropCrop } = await server.ssrLoadModule('/src/studies/heliostat-backdrop.ts');
+const layout = await server.ssrLoadModule('/src/heliostat/layout.ts');
+const { createHeliostatMaterials } = await server.ssrLoadModule('/src/heliostat/materials.ts');
+const { createHeliostatBay } = await server.ssrLoadModule('/src/heliostat/bay.ts');
+const { createDistantPlant } = await server.ssrLoadModule('/src/heliostat/distant.ts');
+const { createHeliostatCollector } = await server.ssrLoadModule('/src/heliostat/collector.ts');
+const { createHeliostatRoute,routeKinds } = await server.ssrLoadModule('/src/heliostat/route.ts');
+const { machineryPose } = await server.ssrLoadModule('/src/heliostat/machinery.ts');
+const { createHeliostatBackdrop,backdropCrop } = await server.ssrLoadModule('/src/heliostat/backdrop.ts');
 const { loadStudyTexture, loadStudyArt } = await server.ssrLoadModule('/src/studies/heliostat-assets.ts');
 
 test('foreground and distant machinery have lit, textured volume with no raster stand-ins', () => {

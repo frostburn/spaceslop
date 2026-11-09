@@ -1,3 +1,4 @@
+import { HELIOSTAT_HP,HELIOSTAT_APPROACH,HELIOSTAT_INTERVAL,HELIOSTAT_WINDUP,HELIOSTAT_FIRE,HELIOSTAT_TRAVEL,HELIOSTAT_SPAWN_LEAD,heliostatWaves,heliostatMotion,heliostatPackets,electricSites,electricHits,type HeliostatCourse } from './heliostat/combat';
 import {mineSites,minePose,triggerMine,mineBurst,MINE_WINDUP,MINE_JUMP,MINE_BURST_TIME,type BoulevardMine} from './boulevard-mines';
 import {BOULEVARD_HP,BOULEVARD_APPROACH,BOULEVARD_INTERVAL,BOULEVARD_WINDUP,BOULEVARD_FIRE,BOULEVARD_TRAVEL,BOULEVARD_SPAWN_LEAD,boulevardWaves,boulevardMotion,turnBoulevardTurret,type BoulevardCourse} from './boulevard';
 import { AMBUSHER_HP, AMBUSHER_SPAWN_LEAD, AMBUSHER_CORPSE_TIME, ambusherSites, ambusherHome, createAmbusherState, stepAmbusher, ambusherPose, ambusherHulls, ambusherBodyHit, ambusherBeamEntry, ambusherHits, defeatAmbusher, type AmbusherState } from './preserve-ambusher';
@@ -51,6 +52,7 @@ type Shot = Point & {
 };
 type Threat = Shot & { graze?: 'near' | 'counted' };
 type Enemy = Point & {
+  heliostat?: HeliostatCourse;
   boulevard?: BoulevardCourse;
   mine?: BoulevardMine; interceptorAim?:number; interceptorHeading?:number;
   flyer?: FlyerCourse;
@@ -81,6 +83,7 @@ const wingShots = {
 };
 
 type Wave = { time: number; lanes: number[]; carrier?: number; drop?: WingWeapon;
+  heliostat?: Omit<HeliostatCourse,'slot'>;
   boulevard?: Omit<BoulevardCourse,'slot'>;
   flyer?: Omit<FlyerCourse, 'slot' | 'count'>;
   raptor?: number; ant?: 'worker' | 'soldier'; marine?: MarineKind; formation?: MarineFormation; mirror?: number;
@@ -125,7 +128,7 @@ export const iceWaves: Wave[] = [
 export const titanWaves: Wave[] = titanInsectWaves;
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
-const enemyRadius=(enemy:Enemy,ordinary=.52)=>enemy.crucible?CRUCIBLE_RADIUS:enemy.slag?SLAG_RADIUS:(enemy.ventAnchor!==undefined?MORTAR_RADIUS:ordinary)*(enemy.ventScale??1)*(enemy.boulevard?.heavy?1.2:1);
+const enemyRadius=(enemy:Enemy,ordinary=.52)=>enemy.heliostat?.kind === 'guard' ? .8 : enemy.crucible?CRUCIBLE_RADIUS:enemy.slag?SLAG_RADIUS:(enemy.ventAnchor!==undefined?MORTAR_RADIUS:ordinary)*(enemy.ventScale??1)*(enemy.boulevard?.heavy?1.2:1);
 const near = (a: Point, b: Point, radius: number) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 < radius ** 2;
 
 function moveWithinField(point: Point, dx: number, dy: number) {
@@ -207,6 +210,7 @@ export class Flight {
   private cooldown = 0;
   private droneCooldown = 0;
   private volley = 0;
+  private heliostatAimCycle = -1;
   private ioCollapseAge = -1;
   private towlineEnemies = new Set<Enemy>();
   private towlineHitCannon = false;
@@ -222,6 +226,7 @@ export class Flight {
   ) {
     this.droneWeapon = droneWeapon;
     this.pilot = pilot;
+    if (level === 'heliostat')this.bossHealth=HELIOSTAT_HP;
     if (level === 'boulevard')this.bossHealth=BOULEVARD_HP;
     if (level === 'preserve') this.bossHealth = GROUNDSKEEPER_HP;
     if (level === 'vents')this.bossHealth=CRAB_HP;
@@ -236,10 +241,10 @@ export class Flight {
     }
   }
 
-  get transitionDuration() { if(this.level==='boulevard')return BOULEVARD_APPROACH;return this.level === 'preserve' ? PRESERVE_APPROACH : this.level === 'vents' ? VENT_APPROACH : this.level === 'io' ? IO_APPROACH : this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
+  get transitionDuration() { if(this.level==='heliostat')return HELIOSTAT_APPROACH;if(this.level==='boulevard')return BOULEVARD_APPROACH;return this.level === 'preserve' ? PRESERVE_APPROACH : this.level === 'vents' ? VENT_APPROACH : this.level === 'io' ? IO_APPROACH : this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
 
-  get bossMaxHealth() { if(this.level==='boulevard')return BOULEVARD_HP;return this.level === 'preserve' ? GROUNDSKEEPER_HP : this.level === 'vents' ? CRAB_HP : this.level === 'io' ? IO_HP : this.level === 'titan' ? CICADA_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
-  get bossTargetRadius() { if(this.level==='boulevard')return 1.25;return this.level === 'preserve' ? GROUNDSKEEPER_RADIUS : BOSS_CANNON_RADIUS; }
+  get bossMaxHealth() { if(this.level==='heliostat')return HELIOSTAT_HP;if(this.level==='boulevard')return BOULEVARD_HP;return this.level === 'preserve' ? GROUNDSKEEPER_HP : this.level === 'vents' ? CRAB_HP : this.level === 'io' ? IO_HP : this.level === 'titan' ? CICADA_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
+  get bossTargetRadius() { if(this.level==='boulevard'||this.level==='heliostat')return 1.25;return this.level === 'preserve' ? GROUNDSKEEPER_RADIUS : BOSS_CANNON_RADIUS; }
   get groundskeeperTime() {
     // Negative time is a quiet idle, continuous through the camera approach.
     if (this.phase === 'stage') return this.time - this.stageDuration - this.transitionDuration;
@@ -295,7 +300,7 @@ export class Flight {
   }
 
   get exposedCannonX() {
-    if (this.level === 'preserve'||this.level==='boulevard') return 0;
+    if (this.level === 'preserve'||this.level==='boulevard'||this.level==='heliostat') return 0;
     return this.level==='vents'?this.crabTargetX+this.crabOffsetX:this.level === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).x : this.level === 'ice' ? 0 : this.volley % 2 === 0 ? -BOSS_CANNON_X : BOSS_CANNON_X;
   }
 
@@ -309,6 +314,7 @@ export class Flight {
   }
 
   get cannonWindup() {
+    if(this.level==='heliostat'){const t=this.time%HELIOSTAT_INTERVAL;return this.phase==='boss'&&t<HELIOSTAT_FIRE?clamp((t-HELIOSTAT_WINDUP)/(HELIOSTAT_FIRE-HELIOSTAT_WINDUP),0,1):0;}
     if(this.level==='boulevard'){const t=this.time%BOULEVARD_INTERVAL;return this.phase==='boss'&&t<BOULEVARD_FIRE?clamp((t-BOULEVARD_WINDUP)/(BOULEVARD_FIRE-BOULEVARD_WINDUP),0,1):0;}
     if (this.phase !== 'boss' || this.volley !== Math.floor(this.time / (this.level === 'io' ? IO_INTERVAL : this.level === 'titan' ? CICADA_INTERVAL : this.level === 'ice' ? LEVIATHAN_INTERVAL : BOSS_VOLLEY_INTERVAL))) return 0;
     const interval = this.level === 'io' ? IO_INTERVAL : this.level === 'titan' ? CICADA_INTERVAL : this.level === 'ice' ? LEVIATHAN_INTERVAL : BOSS_VOLLEY_INTERVAL;
@@ -654,6 +660,7 @@ export class Flight {
   }
 
   private stepStage(dt: number) {
+    if(this.level==='heliostat')for(let site=0;site<electricSites.length;site++)if(electricHits(site,this.time,this.time-dt,this.player))this.hit();
     // Mines are invulnerable scenery hazards; hp is only their active/spent flag.
     if(this.level==='boulevard')while(this.nextMine<mineSites.length){const mine={site:this.nextMine},p=minePose(mine,this.time);if(p.physicalY>28)break;this.nextMine++;this.enemies.push({x:p.x,y:p.y,lane:p.x,age:0,fire:Infinity,hp:1,mine});}
     if(this.level==='preserve')while(this.nextAmbusher<ambusherSites.length){
@@ -662,8 +669,8 @@ export class Flight {
       const ambusher=createAmbusherState(site),pose=ambusherPose(ambusher,this.time);
       this.enemies.push({x:pose.head.x,y:pose.head.y,lane:home.x,age:0,fire:Infinity,hp:AMBUSHER_HP,ambusher,drop:ambusherSites[site].drop as WingWeapon});
     }
-    const wave: Wave | undefined = (this.level==='boulevard'?boulevardWaves:this.level === 'broodlock' ? hiveWaves : this.level === 'ice' ? iceWaves : this.level === 'vents' ? ventWaves : this.level === 'io' ? ioWaves : this.level === 'titan' ? titanWaves : stageWaves)[this.nextWave];
-    if (wave && this.time >= wave.time-(wave.boulevard?BOULEVARD_SPAWN_LEAD:0)) {
+    const wave: Wave | undefined = (this.level==='heliostat'?heliostatWaves:this.level==='boulevard'?boulevardWaves:this.level === 'broodlock' ? hiveWaves : this.level === 'ice' ? iceWaves : this.level === 'vents' ? ventWaves : this.level === 'io' ? ioWaves : this.level === 'titan' ? titanWaves : stageWaves)[this.nextWave];
+    if (wave && this.time >= wave.time-(wave.heliostat?HELIOSTAT_SPAWN_LEAD:wave.boulevard?BOULEVARD_SPAWN_LEAD:0)) {
       this.nextWave++;
       if (wave.centipede) {
         const parts: Enemy[] = Array.from({ length: wave.centipede }, (_, i) => ({
@@ -674,17 +681,18 @@ export class Flight {
         bindCentipede(parts);
         this.enemies.push(...parts);
       } else this.enemies.push(...wave.lanes.map((lane, index) => {
+        const heliostat=wave.heliostat?{...wave.heliostat,slot:index}:undefined;
         const boulevard=wave.boulevard?{...wave.boulevard,slot:index}:undefined;
         const flyer = wave.flyer && index !== wave.raptor ? { ...wave.flyer, slot: index - (wave.raptor !== undefined && index > wave.raptor ? 1 : 0), count: wave.lanes.length - (wave.raptor !== undefined ? 1 : 0) } : undefined;
         const school = wave.formation ? {formation: wave.formation, slot: index, count: wave.lanes.length, mirror: wave.mirror ?? 1} : undefined;
         const shrimp=wave.shrimp?{...wave.shrimp,slot:index}:undefined;
         const course = wave.cicada ? { ...wave.cicada, slot: index, count: wave.lanes.length } : undefined;
-        const boulevardAge=boulevard?this.time-wave.time-dt:0;
-        const start = boulevard?boulevardMotion(boulevardAge,lane,boulevard):flyer ? flyerMotion(0,lane,flyer) : shrimp ? shrimpMotion(0,lane,shrimp) : wave.ventAnchor!==undefined ? ventAnchorPoint(wave.ventAnchor,this.time) : wave.crucible ? crucibleMotion(0,lane) : wave.skipper ? skipperMotion(0,lane,index) : course ? cicadaMotion(0, lane, course) : wave.marine ? marineMotion(wave.marine, 0, lane, school) : {x: lane, y: 8.6};
+        const courseAge=boulevard||heliostat?this.time-wave.time-dt:0;
+        const start = heliostat?heliostatMotion(courseAge,lane,heliostat):boulevard?boulevardMotion(courseAge,lane,boulevard):flyer ? flyerMotion(0,lane,flyer) : shrimp ? shrimpMotion(0,lane,shrimp) : wave.ventAnchor!==undefined ? ventAnchorPoint(wave.ventAnchor,this.time) : wave.crucible ? crucibleMotion(0,lane) : wave.skipper ? skipperMotion(0,lane,index) : course ? cicadaMotion(0, lane, course) : wave.marine ? marineMotion(wave.marine, 0, lane, school) : {x: lane, y: 8.6};
         return {
-          x: start.x, y: start.y, lane, age: boulevard?boulevardAge:wave.ventAnchor!==undefined?-VENT_SPAWN_LEAD:0, boulevard,flyer, school, cicada: course, skipper: wave.skipper, crucible: wave.crucible, ventAnchor:wave.ventAnchor, ventWorm:wave.ventWorm, shrimp, slot: index,
-          fire: boulevard?1.7+index*.22:flyer ? Infinity : shrimp ? SHRIMP_FIRST_FIRE+index*.25 : wave.ventWorm ? WORM_FIRST_ATTACK : wave.ventAnchor!==undefined ? MORTAR_FIRST_FIRE : wave.crucible ? CRUCIBLE_FIRST_POUR : schoolDelay(school) + (wave.marine === 'plesiosaur' ? 1.8 : wave.ant === 'soldier' ? 1.6 : 1.1) + index * 0.28,
-          hp: boulevard?(boulevard.formation==='intercept'?5:boulevard.heavy?6:3):flyer ? FLYER_HP : shrimp ? SHRIMP_HP : wave.ventWorm ? WORM_HP : wave.ventAnchor!==undefined ? MORTAR_HP : wave.crucible ? CRUCIBLE_HP : wave.marine ? marineSpecs[wave.marine].hp : wave.ant === 'soldier' ? 5 : 2, ant: wave.ant, marine: wave.marine,
+          x: start.x, y: start.y, lane, age: boulevard||heliostat?courseAge:wave.ventAnchor!==undefined?-VENT_SPAWN_LEAD:0, heliostat,boulevard,flyer, school, cicada: course, skipper: wave.skipper, crucible: wave.crucible, ventAnchor:wave.ventAnchor, ventWorm:wave.ventWorm, shrimp, slot: index,
+          fire: heliostat?1.85+index*.25:boulevard?1.7+index*.22:flyer ? Infinity : shrimp ? SHRIMP_FIRST_FIRE+index*.25 : wave.ventWorm ? WORM_FIRST_ATTACK : wave.ventAnchor!==undefined ? MORTAR_FIRST_FIRE : wave.crucible ? CRUCIBLE_FIRST_POUR : schoolDelay(school) + (wave.marine === 'plesiosaur' ? 1.8 : wave.ant === 'soldier' ? 1.6 : 1.1) + index * 0.28,
+          hp: heliostat?(heliostat.kind==='guard'?8:3):boulevard?(boulevard.formation==='intercept'?5:boulevard.heavy?6:3):flyer ? FLYER_HP : shrimp ? SHRIMP_HP : wave.ventWorm ? WORM_HP : wave.ventAnchor!==undefined ? MORTAR_HP : wave.crucible ? CRUCIBLE_HP : wave.marine ? marineSpecs[wave.marine].hp : wave.ant === 'soldier' ? 5 : 2, ant: wave.ant, marine: wave.marine,
           drop: index === wave.carrier ? wave.drop : undefined,
           raptor: index === wave.raptor,
         };
@@ -702,6 +710,8 @@ export class Flight {
       } else if (enemy.ambusher) {
         stepAmbusher(enemy.ambusher,this.time,this.player,dt);
         const p=ambusherPose(enemy.ambusher,this.time);enemy.x=p.head.x;enemy.y=p.head.y;
+      } else if(enemy.heliostat){
+        const p=heliostatMotion(enemy.age,enemy.lane,enemy.heliostat);enemy.x=p.x;enemy.y=p.y;enemy.heading=p.heading;
       } else if(enemy.boulevard){
         const p=boulevardMotion(enemy.age,enemy.lane,enemy.boulevard);enemy.x=p.x;enemy.y=p.y;enemy.heading=p.heading;
         if(enemy.boulevard.formation==='intercept'&&enemy.y<8&&enemy.age>=enemy.fire-.65&&enemy.interceptorAim===undefined)enemy.interceptorAim=Math.atan2(this.player.x-enemy.x,this.player.y-enemy.y);
@@ -766,12 +776,12 @@ export class Flight {
         this.obstacles.move(enemy, 0, 0, hull, { minX: -2.4, maxX: 2.4, minY: -10, maxY: 10 });
       }
       if (!enemy.mine && !enemy.flyer && !enemy.ambusher && !enemy.shrimp && enemy.ventAnchor===undefined && !enemy.crucible && !enemy.slag && !motion && (!enemy.centipede || (enemy.centipede.slot === 0 && !enemy.centipede.chain.escape)) && enemy.age >= enemy.fire && enemy.y < 8) {
-        enemy.fire += enemy.boulevard?.formation==='intercept'?2.8:enemy.boulevard?3.4:enemy.centipede ? 3.5 : enemy.cicada ? 3 : enemy.marine === 'plesiosaur' ? 3.2 : enemy.ant === 'soldier' ? 3.1 : 2.4;
+        enemy.fire += enemy.heliostat?.kind==='guard'?3.2:enemy.boulevard?.formation==='intercept'?2.8:enemy.boulevard?3.4:enemy.centipede ? 3.5 : enemy.cicada ? 3 : enemy.marine === 'plesiosaur' ? 3.2 : enemy.ant === 'soldier' ? 3.1 : 2.4;
         const dx = this.player.x - enemy.x;
         const dy = this.player.y - enemy.y;
         const angle = enemy.interceptorAim ?? Math.atan2(dx, dy);
         const speed = enemy.marine ? (enemy.marine === 'plesiosaur' ? 4 : 5) : enemy.ant ? 4.6 : 5.7;
-        const spread = enemy.boulevard?.formation==='intercept'?[-.12,0,.12]:enemy.boulevard?.heavy?[-.18,0,.18]:enemy.marine === 'plesiosaur' ? [-.3,-.15,0,.15,.3] : enemy.ant === 'soldier' ? [-0.24, 0, 0.24] : [0];
+        const spread = enemy.heliostat?.kind==='guard'?[-.19,0,.19]:enemy.boulevard?.formation==='intercept'?[-.12,0,.12]:enemy.boulevard?.heavy?[-.18,0,.18]:enemy.marine === 'plesiosaur' ? [-.3,-.15,0,.15,.3] : enemy.ant === 'soldier' ? [-0.24, 0, 0.24] : [0];
         for (const offset of spread) {
           const muzzle = enemy.marine ? marineSpecs[enemy.marine].halfLength : 0;
           this.threats.push({ x: enemy.x + Math.sin(enemy.heading ?? 0)*muzzle, y: enemy.y - Math.cos(enemy.heading ?? 0)*muzzle, z: 0,
@@ -791,6 +801,7 @@ export class Flight {
   }
 
   private stepBoss(dt: number) {
+    if(this.level==='heliostat'){this.stepHeliostat(dt);return;}
     if (this.level === 'preserve') {
       const attack = groundskeeperAttack(this.time);
       if (attack.warning && this.groundskeeperAimCycle !== attack.cycle) {
@@ -826,6 +837,24 @@ export class Flight {
       this.volley++;
     }
     if (elapsed >= BOSS_FIRE_AT + BOSS_IMPACT_TRAVEL + 0.02) this.markers = [];
+  }
+
+  private stepHeliostat(dt:number){
+    const cycle=Math.floor(this.time/HELIOSTAT_INTERVAL),t=this.time%HELIOSTAT_INTERVAL;
+    if(cycle!==this.heliostatAimCycle&&t>=HELIOSTAT_WINDUP&&t<HELIOSTAT_FIRE){
+      this.heliostatAimCycle=cycle;
+      const x=clamp(this.player.x,-2.5,2.5),y=clamp(this.player.y,-5.9,5.1);
+      this.markers=[-.75,.75].map(offset=>({x:x+offset,y}));
+    }
+    for(const packet of heliostatPackets(this.time-dt,this.time)){
+      if(packet.cycle!==this.heliostatAimCycle)continue;
+      for(const[index,side]of[-1,1].entries()){
+        const target=this.markers[index],x=side*2.4,z=BOSS_DEPTH+BOSS_MUZZLE_Z;
+        this.threats.push({x,y:BOSS_Y,z,vx:(target.x-x)/HELIOSTAT_TRAVEL,vy:(target.y-BOSS_Y)/HELIOSTAT_TRAVEL,vz:-z/HELIOSTAT_TRAVEL});
+      }
+      this.bossRecoil=BOSS_RECOIL_TIME;
+    }
+    if(t>HELIOSTAT_FIRE+.7+HELIOSTAT_TRAVEL+.1)this.markers=[];
   }
 
   private stepBoulevard(){

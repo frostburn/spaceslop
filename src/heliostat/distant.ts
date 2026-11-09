@@ -1,6 +1,6 @@
 import * as T from 'three';
-import { heliostatBatch } from './heliostat-geometry';
-import type { HeliostatMaterials } from './heliostat-materials';
+import { heliostatBatch } from './geometry';
+import type { HeliostatMaterials } from './materials';
 
 export function createDistantPlant(m: HeliostatMaterials) {
   const root = new T.Group(); root.name = 'modeled-distant-plant'; const b = heliostatBatch(root);

@@ -4,7 +4,7 @@ Run `npm run dev`, then choose **Uranus corridor study** from the main menu. The
 
 ## Route and machinery
 
-Four geometry templates create eleven bays: ten route bays and a collector apron. Docking bays contain service cabinets and articulated two-link arms. Generator galleries expose windings, pumps and return pipes. Heat-exchange bays replace the windings with capped pressure tanks, cooling stacks and rotating fans. Containment bays carry overhead curved conductor ribs. Deck couplers and flexible pipe sections bridge the gaps between bays. The distant towers and complete cross-braced stellar collector share the approach's coordinate frame.
+The standalone study and playable route share four geometry templates and eleven bays: ten route bays and a collector apron. Docking bays contain service cabinets and articulated two-link arms. Generator galleries expose windings, pumps and return pipes. Heat-exchange bays replace the windings with capped pressure tanks, cooling stacks and rotating fans. Containment bays carry overhead curved conductor ribs. Deck couplers and flexible pipe sections bridge the gaps between bays. The distant towers and complete cross-braced stellar collector share the approach's coordinate frame. Containment omits opaque overhead headers to preserve the star view. The playable view lowers side machinery three units and narrows its deck by 18%, keeping its casings below the ships while showing more of the equipment.
 
 The route travels straight at a constant speed before smoothly decelerating into the camera swing. The ship and sample shots share a physical heading toward the collector. Scenery still uses ordinary lit meshes and surface UVs, with broad casing shadows rather than fine winding/grid shadows.
 
@@ -12,7 +12,7 @@ Bay copies share template geometry and materials. At most four are active; absol
 
 ## Backdrop handoff
 
-The generated image is delivered in chat for owner review and separate upload. Use the finished ring-free version:
+The generated image is delivered in chat for owner review and separate upload. The uploaded version is active. The revised **ringed** version is delivered in chat for review; replace the same file after approval:
 
 | Repo path | Format | Import |
 | --- | --- | --- |
@@ -28,4 +28,4 @@ The station also reuses `public/encounters/interceptor-metal.png` and `public/en
 
 The palette owns active and inactive metal/ceramic maps; the backdrop owns its image independently. Repeated control changes do not reupload the backdrop or dispose it twice. Geometry batches by material, and template clones share buffers. Pausing freezes every clock-driven pose, light bus, star rotation, world movement and backdrop crop.
 
-Leaving the study cancels UI/orbit listeners, observation, texture loading and frame scheduling. Disposal waits for preparation and releases both scenes, owned maps, environment/shadow resources and renderer/context. The study stays outside production navigation and the seven offline flight packages. This PR covers the route scenery and camera behavior; combat follows visual review.
+Leaving the study cancels UI/orbit listeners, observation, texture loading and frame scheduling. Disposal waits for preparation and releases both scenes, owned maps, environment/shadow resources and renderer/context. The study UI stays outside production navigation and all eight offline flight packages. Shared scenery and backdrop code are used by the playable Heliostat sector; only its three required media files are requested and cached. `src/heliostat/` owns shared code, while `src/studies/heliostat-view.ts` and `heliostat-assets.ts` remain development-only.
