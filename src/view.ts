@@ -385,14 +385,7 @@ export class FlightView {
         model.pose(drop.weapon, this.animationTime, (this.animationTime - this.seenDrops.get(drop)!) / 0.22);
       }
     }
-    this.projectiles.ship.draw(flight.shots.filter((shot) => !shot.drone && !shot.wing), this.animationTime);
-    this.projectiles.drone.draw(flight.shots.filter((shot) => shot.drone), this.animationTime);
-    for (const weapon of ['homing', 'cannon', 'omega'] as const) {
-      this.projectiles[weapon].draw(flight.shots.filter((shot) => shot.wing === weapon), this.animationTime);
-    }
-    this.projectiles.hostile.draw(flight.level === 'vents' || flight.level === 'preserve' || flight.level === 'titan' || flight.level === 'io' ? flight.threats : [], this.animationTime);
-    this.projectiles.brine.draw(flight.level === 'ice' ? flight.threats : [], this.animationTime);
-    this.projectiles.spore.draw(flight.level === 'broodlock' ? flight.threats : [], this.animationTime);
+    this.drawProjectiles(flight);
     this.drawFeedback(flight, elapsed);
     for (const [index, ring] of this.markers.entries()) {
       const marker = flight.markers[index];
@@ -442,6 +435,16 @@ export class FlightView {
         laser.draw(origin, end, wing.laserHold, this.animationTime, typeof target === 'number' || Boolean(model), flight.phase === 'boss' && target === undefined);
       }
     }
+  }
+  private drawProjectiles(flight: Flight) {
+    this.projectiles.ship.draw(flight.shots.filter((shot) => !shot.drone && !shot.wing), this.animationTime);
+    this.projectiles.drone.draw(flight.shots.filter((shot) => shot.drone), this.animationTime);
+    for (const weapon of ['homing', 'cannon', 'omega'] as const) {
+      this.projectiles[weapon].draw(flight.shots.filter((shot) => shot.wing === weapon), this.animationTime);
+    }
+    this.projectiles.hostile.draw(flight.level !== 'ice' && flight.level !== 'broodlock' ? flight.threats : [], this.animationTime);
+    this.projectiles.brine.draw(flight.level === 'ice' ? flight.threats : [], this.animationTime);
+    this.projectiles.spore.draw(flight.level === 'broodlock' ? flight.threats : [], this.animationTime);
   }
   private drawFeedback(flight: Flight, elapsed: number) {
     this.combat.update(elapsed);

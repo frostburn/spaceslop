@@ -3,6 +3,7 @@ import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js'
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {block,boulevardBatch,boulevardBeam,boulevardRandom,wireGeometry,type BoulevardPart} from './boulevard-geometry';
 import {createBoulevardMaterials} from './boulevard-materials';
+import {createBoulevardArch} from './boulevard-arch';
 import {createBoulevardRoad} from './boulevard-road';
 import {createBoulevardFacades,facadeInstances,type FacadePart} from './boulevard-facades';
 import {addBoulevardVenue,venueMarqueeGeometry} from './boulevard-venues';
@@ -35,15 +36,6 @@ function organicLeaves(){
  }
  const g=mergeGeometries(pieces);pieces.forEach(p=>p.dispose());return g;
 }
-function archGeometry(start=0,end=16){
- const pieces:T.BufferGeometry[]=[];
- for(let i=start;i<end;i++){
-  const a=i/16*Math.PI,b=(i+1)/16*Math.PI;
-  const p=new T.Vector3(Math.cos(a)*4.1,0,Math.sin(a)*1.6+1.5),q=new T.Vector3(Math.cos(b)*4.1,0,Math.sin(b)*1.6+1.5);
-  const g=new T.BoxGeometry(.16,.24,p.distanceTo(q));g.applyQuaternion(new T.Quaternion().setFromUnitVectors(new T.Vector3(0,0,1),q.clone().sub(p).normalize()));g.translate((p.x+q.x)/2,0,(p.z+q.z)/2);pieces.push(g);
- }
- const g=mergeGeometries(pieces);pieces.forEach(p=>p.dispose());return g;
-}
 function sunGeometry(){
  const pieces:T.BufferGeometry[]=[];
  for(let i=0;i<9;i++){
@@ -55,7 +47,7 @@ function sunGeometry(){
 export function createBoulevardScenery(){
  const root=new T.Group();root.name='synthwave-boulevard';const world=new T.Group();root.add(world);world.scale.x=.78;
  const materials=createBoulevardMaterials(),facades=createBoulevardFacades(),road=createBoulevardRoad(materials.roadMap);world.add(road.root);
- const masonry=new RoundedBoxGeometry(1,1,1,2,.08),box=new T.BoxGeometry(1,1,1),wireBox=wireGeometry(new T.BoxGeometry(1,1,1,1,1,2)),cylinder=new T.CylinderGeometry(1,1,1,10).rotateX(Math.PI/2),simpleLeaves=palmLeaves(),leaves=organicLeaves(),wireLeaves=wireGeometry(simpleLeaves),arch=archGeometry(8,16),wireArch=wireGeometry(archGeometry(0,8)),marqueeGeometry=venueMarqueeGeometry(),wireSpire=wireGeometry(new T.CylinderGeometry(.36,Math.SQRT1_2,1,4,1,false,Math.PI/4).rotateX(Math.PI/2));
+ const masonry=new RoundedBoxGeometry(1,1,1,2,.08),box=new T.BoxGeometry(1,1,1),wireBox=wireGeometry(new T.BoxGeometry(1,1,1,1,1,2)),cylinder=new T.CylinderGeometry(1,1,1,10).rotateX(Math.PI/2),simpleLeaves=palmLeaves(),leaves=organicLeaves(),wireLeaves=wireGeometry(simpleLeaves),arch=createBoulevardArch(materials),marqueeGeometry=venueMarqueeGeometry(),wireSpire=wireGeometry(new T.CylinderGeometry(.36,Math.SQRT1_2,1,4,1,false,Math.PI/4).rotateX(Math.PI/2));
  const chunks:T.Group[]=[],tracks:{root:T.Group;y:number;direction:number}[]=[],traffic:{root:T.Group;y:number;lane:number;phase:number}[]=[];
  const poolWater=new T.ShaderMaterial({uniforms:{clock:{value:0}},vertexShader:'varying vec2 vUv;void main(){vUv=uv;vec4 p=vec4(position,1.);\n#ifdef USE_INSTANCING\np=instanceMatrix*p;\n#endif\ngl_Position=projectionMatrix*modelViewMatrix*p;}',fragmentShader:'uniform float clock;varying vec2 vUv;void main(){vec2 p=(vUv-.5)*2.;float wave=sin(p.x*17.+sin(p.y*9.+clock*.5))*cos(p.y*19.-clock*.7);float glint=pow(max(0.,wave),24.);vec3 c=vec3(.005,.075,.12)+vec3(.035,.18,.23)*glint;gl_FragColor=vec4(c,1.);\n#include <colorspace_fragment>\n}'});
  const glowMaterial=new T.ShaderMaterial({transparent:true,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false,vertexShader:'varying vec2 vUv;varying vec3 vColor;void main(){vUv=uv;vColor=vec3(1.);vec4 p=vec4(position,1.);\n#ifdef USE_INSTANCING\np=instanceMatrix*p;\n#endif\n#ifdef USE_INSTANCING_COLOR\nvColor=instanceColor;\n#endif\ngl_Position=projectionMatrix*modelViewMatrix*p;}',fragmentShader:'varying vec2 vUv;varying vec3 vColor;void main(){float a=pow(max(0.,1.-length((vUv-.5)*2.)),2.);gl_FragColor=vec4(vColor,a*.28);}'});
@@ -95,7 +87,7 @@ export function createBoulevardScenery(){
   add('boulevard-rounded-corners',cylinder,materials.glass,round);add('boulevard-club-marquees',marqueeGeometry,materials.pink,marquee);chunk.add(facadeInstances(facadeParts,facades.material));
   add('boulevard-pink-fixtures',box,materials.pink,pink);add('boulevard-cyan-fixtures',box,materials.cyan,cyan);add('boulevard-warm-windows',box,materials.amber,warm);
   add('boulevard-holographic-buildings',wireBox,materials.wire,wires);add('boulevard-holographic-spires',wireSpire,materials.wire,spires);add('boulevard-rooftop-pools',new T.PlaneGeometry(1,1),poolWater,water);add('boulevard-palm-trunks',cylinder,materials.bark,trunks);add('boulevard-organic-palms',leaves,materials.leaf,fronds);add('boulevard-wire-palms',wireLeaves,materials.wire,holo);add('boulevard-light-pools',new T.PlaneGeometry(1,1),glowMaterial,glows);
-  if(index%3===1&&index<=10){const a=new T.Mesh(arch,materials.chrome);a.position.y=8;chunk.add(a);const lattice=new T.Mesh(wireArch,materials.wire);lattice.position.y=8;chunk.add(lattice);for(const side of[-1,1]){const leg=new T.Mesh(new T.BoxGeometry(.20,.28,4.6),materials.chrome);leg.position.set(side*4.1,8,-.8);chunk.add(leg);}}
+  if(index%3===1&&index<=7){const gateway=arch.root.clone(true);gateway.position.y=8;chunk.add(gateway);}
   if(index===5||index===10){
    const bridge=new T.Group();bridge.position.set(0,7,0);bridge.rotation.z=index%2?.25:-.25;chunk.add(bridge);
    const beams:BoulevardPart[]=[];for(let i=0;i<10;i++){const x=-7+i*1.5;beams.push(boulevardBeam(new T.Vector3(x,0,1.35),new T.Vector3(x+1.5,0,1.95),.045,CYAN));beams.push(boulevardBeam(new T.Vector3(x,0,1.95),new T.Vector3(x+1.5,0,1.35),.045,CYAN));}

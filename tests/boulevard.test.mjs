@@ -38,3 +38,19 @@ test('cruiser aim locks before two-cannon fans and every weapon can finish the f
  for(const weapon of['homing','cannon','laser','omega']){const g=new Flight('sentry',[weapon,weapon],'vex','boulevard');g.phase='boss';g.deployDrone(0,1);for(let n=0;n<60*80&&g.phase==='boss';n++){g.invulnerable=100;g.step(STEP);}assert.equal(g.phase,'won',weapon);}
  const tow=new Flight('towline',[],'vex','boulevard');tow.phase='boss';tow.player={x:-2,y:2.5};tow.drone={x:2,y:2.5};tow.droneCooldown=0;const hp=tow.bossHealth;tow.stepDroneWeapon(STEP);assert(tow.bossHealth<hp);tow.pulse();assert(tow.bossHealth<hp-1);
 });
+
+// Exercise the renderer's dispatch with actual simulation threats and real instance batches.
+test('Boulevard patrol and cruiser threats reach visible hostile batches; special sectors keep their own art',async()=>{
+ const {FlightView}=await server.ssrLoadModule('/src/view.ts'),{createProjectileBatch,projectileKinds}=await server.ssrLoadModule('/src/projectile-graphics.ts');
+ const projectiles=Object.fromEntries(projectileKinds.map(kind=>[kind,createProjectileBatch(kind)]));
+ const view={projectiles,animationTime:0};
+ function check(f,kind){
+  assert(f.threats.length>0);FlightView.prototype.drawProjectiles.call(view,f);
+  for(const name of['hostile','brine','spore']){const batch=projectiles[name];assert.equal(batch.root.visible,name===kind);assert.equal(batch.root.children[0].count,name===kind?f.threats.length:0);}
+ }
+ const f=new Flight('sentry',[],'vex','boulevard');f.cooldown=f.droneCooldown=1e6;f.player.x=3.95;
+ while(!f.threats.length&&f.time<10){f.invulnerable=100;f.step(STEP);}check(f,'hostile');
+ f.phase='boss';f.time=0;f.volley=0;f.markers=[];f.threats=[];
+ while(!f.threats.length&&f.time<2){f.invulnerable=100;f.step(STEP);}assert.equal(f.threats.length,10);check(f,'hostile');
+ for(const[level,kind]of[['ice','brine'],['broodlock','spore'],['io','hostile'],['titan','hostile'],['vents','hostile'],['preserve','hostile']]){const other=new Flight('sentry',[],'vex',level);other.threats=f.threats;check(other,kind);}
+});
