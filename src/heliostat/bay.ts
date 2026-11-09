@@ -87,7 +87,9 @@ export function createHeliostatBay(m: HeliostatMaterials,kind:HeliostatBayKind='
   }
   for (const y of [-8.7, 17.5]) {
     b.box([16.8, .35, .38], [0, y, -4], m.dark);
-    for (let i = -8; i < 8; i++) b.rod([i, y, -4], [i + 1, y, -3.45], .045, m.titanium, 6);
+    b.box([16.8,.2,.14],[0,y,-3.45],m.titanium);
+    for (let i = -8; i < 8; i++) b.rod([i,y,i%2?-4:-3.45],[i+1,y,i%2?-3.45:-4],.045,m.titanium,6);
+    for(const x of[-8.3,8.3])b.rod([x,y,-4],[x,y,-3.45],.065,m.titanium,6);
   }
   if(kind!=='containment'){
     shell.box([11.7, .7, .75], [0, 16.5, 4.7], m.dark, .08);

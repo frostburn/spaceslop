@@ -18,6 +18,7 @@
       <aside class="tools" aria-label="Asset inspection controls">
         <label for="sector">Sector</label>
         <select id="sector">
+          <option value="heliostat">Uranus · Heliostat</option>
           <option value="boulevard">Synthwave boulevard</option>
           <option value="preserve">Orbital preserve</option>
           <option value="broodlock">Broodlock · Ant hive</option>
@@ -30,6 +31,11 @@
         </select>
         <label for="asset">Asset</label>
         <select id="asset">
+          <optgroup label="Uranus · Heliostat" data-sector="heliostat">
+            <option value="heliostat_manowar">Cyborg man o’war</option>
+            <option value="heliostat_drone">Inspection drone</option>
+            <option value="heliostat_regulator">Sunspot Regulator · Magnetic lenses</option>
+          </optgroup>
           <optgroup label="Synthwave boulevard" data-sector="boulevard">
             <option value="boulevard_route">Boulevard · Full route</option>
             <option value="boulevard_waterfall">Streetside waterfall</option>

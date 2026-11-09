@@ -1,14 +1,18 @@
 import * as T from 'three';
 import { heliostatBatch } from './geometry';
 import type { HeliostatMaterials } from './materials';
+import {heliostatSunspot} from './combat';
 
 function photosphere() {
   const w = 256, h = 128, bytes = new Uint8Array(w * h * 4);
+  const hash=(x:number,y:number)=>{let n=Math.imul((x+80)%80+471,374761393)^Math.imul((y+40)%40+37,668265263);n=Math.imul(n^(n>>>13),1274126177);return((n^(n>>>16))>>>0)/4294967296;};
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const u = x / (w - 1) * Math.PI * 2, v = y / (h - 1) * Math.PI;
-    const cells = Math.sin(u * 19 + Math.sin(v * 42)) * Math.sin(v * 49);
-    const spot = Math.max(0, (Math.sin(u * 5 + Math.sin(v * 7)) * Math.sin(v * 9) - .86) / .14);
-    bytes.set([245 - spot * 125 + cells * 8, 175 - spot * 130 + cells * 12, 77 - spot * 61, 255], (y * w + x) * 4);
+    const u=x/w*80,v=y/h*40,ix=Math.floor(u),iy=Math.floor(v);let d=4;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+      const px=ix+dx+.1+.8*hash(ix+dx,iy+dy),py=iy+dy+.1+.8*hash(ix+dx+23,iy+dy+17);d=Math.min(d,(u-px)**2+(v-py)**2);
+    }
+    const granule=.2+.68*Math.exp(-d*3.5)+hash(x,y)*.1;
+    bytes.set([250,80+175*granule,8+80*granule,255], (y * w + x) * 4);
   }
   const map = new T.DataTexture(bytes, w, h); map.colorSpace = T.SRGBColorSpace;
   map.magFilter = T.LinearFilter; map.minFilter = T.LinearMipmapLinearFilter;
@@ -38,6 +42,13 @@ export function createHeliostatCollector(m: HeliostatMaterials) {
   b.finish();
   const sphere = new T.Mesh(new T.SphereGeometry(4.65,48,32), new T.MeshBasicMaterial({ map: photosphere(), color: 0xffffff }));
   sphere.name = 'artificial-star'; root.add(sphere);
+  const spotMaterial=new T.MeshBasicMaterial({color:0x351009}),penumbra=new T.MeshBasicMaterial({color:0xb14d12});
+  for(const side of[-1,1]){
+    const p=heliostatSunspot(side),spot=new T.Group();spot.name='plasma-source-sunspot';spot.position.set(p.x,p.y,p.z);
+    spot.quaternion.setFromUnitVectors(new T.Vector3(0,0,1),spot.position.clone().normalize());root.add(spot);
+    const rim=new T.Mesh(new T.SphereGeometry(1,24,12),penumbra);rim.scale.set(.68,.51,.045);rim.position.z=.035;spot.add(rim);
+    const core=new T.Mesh(new T.SphereGeometry(1,24,12),spotMaterial);core.scale.set(.48,.34,.035);core.position.z=.08;spot.add(core);
+  }
   const light = new T.PointLight(0xffcb8c, 1800, 160, 2); root.add(light);
   return { root, sphere, update(time: number) { sphere.rotation.y = time * .023; } };
 }

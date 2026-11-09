@@ -8,11 +8,11 @@ The standalone study and playable route share four geometry templates and eleven
 
 The route travels straight at a constant speed before smoothly decelerating into the camera swing. The ship and sample shots share a physical heading toward the collector. Scenery still uses ordinary lit meshes and surface UVs, with broad casing shadows rather than fine winding/grid shadows.
 
-Bay copies share template geometry and materials. At most four are active; absolute clock poses keep fans, service arms and electric buses repeatable after culling or timeline scrubbing. Preflight temporarily exposes one bay of each type and the distant/collector meshes with culling disabled, uploads their buffers, then restores the visible route before enabling playback. Later sections allocate no new geometry.
+Fifteen deeper service islands repeat annular platforms, generator piers, transfer bridges and radiator banks below the lane; they are controlled by the distant-plant switch. Bay copies share template geometry and materials. At most four are active; absolute clock poses keep fans, service arms and electric buses repeatable after culling or timeline scrubbing. Preflight temporarily exposes one bay of each type and the distant/collector meshes with culling disabled, uploads their buffers, then restores the visible route before enabling playback. Later sections allocate no new geometry.
 
 ## Backdrop handoff
 
-The generated image is delivered in chat for owner review and separate upload. The uploaded version is active. The revised **ringed** version is delivered in chat for review; replace the same file after approval:
+The generated image is delivered in chat for owner review and separate upload. The uploaded version is active. The latest **wide ring-system** version is delivered in chat for review. It reframes the planet to leave room for the ring arcs; replace the same file after approval:
 
 | Repo path | Format | Import |
 | --- | --- | --- |
@@ -28,4 +28,4 @@ The station also reuses `public/encounters/interceptor-metal.png` and `public/en
 
 The palette owns active and inactive metal/ceramic maps; the backdrop owns its image independently. Repeated control changes do not reupload the backdrop or dispose it twice. Geometry batches by material, and template clones share buffers. Pausing freezes every clock-driven pose, light bus, star rotation, world movement and backdrop crop.
 
-Leaving the study cancels UI/orbit listeners, observation, texture loading and frame scheduling. Disposal waits for preparation and releases both scenes, owned maps, environment/shadow resources and renderer/context. The study UI stays outside production navigation and all eight offline flight packages. Shared scenery and backdrop code are used by the playable Heliostat sector; only its three required media files are requested and cached. `src/heliostat/` owns shared code, while `src/studies/heliostat-view.ts` and `heliostat-assets.ts` remain development-only.
+Leaving the study cancels UI/orbit listeners, observation, texture loading and frame scheduling. Disposal waits for preparation and releases both scenes, owned maps, environment/shadow resources and renderer/context. The study UI stays outside production navigation and all eight offline flight packages. Shared scenery and backdrop code are used by the playable Heliostat sector; only its four required media files are requested and cached. `src/heliostat/` owns shared code, while `src/studies/heliostat-view.ts` and `heliostat-assets.ts` remain development-only.

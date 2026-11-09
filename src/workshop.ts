@@ -1,3 +1,8 @@
+import {createHeliostatMaterials} from './heliostat/materials';
+import {createGuardAssets,createHeliostatGuard} from './heliostat/guard';
+import {createHeliostatDrone,actorPose} from './heliostat/actors';
+import {createHeliostatRegulator} from './heliostat/boss';
+import {HELIOSTAT_PITCH} from './heliostat/combat';
 import {createBoulevardMine,createBoulevardInterceptor} from './boulevard-enemies';
 import {createBoulevardGlow} from './boulevard-glow';
 import {createBoulevardFountain} from './boulevard-fountain';
@@ -187,7 +192,17 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const fountain=createBoulevardFountain(boulevard.materials);fountain.root.rotation.x=-Math.PI/2;
   const studyMine=createBoulevardMine(boulevard.materials),studyInterceptor=createBoulevardInterceptor(boulevard.materials);
   const studyWaterfall=boulevard.waterfalls.create(2,1);studyWaterfall.position.set(0,0,0);studyWaterfall.rotation.x=-Math.PI/2;
+  const helioMaterials=createHeliostatMaterials(),helioGuardAssets=createGuardAssets(helioMaterials),helioGuard=createHeliostatGuard(helioGuardAssets),helioGuardPose=actorPose(helioGuard);
+  const helioDrone=createHeliostatDrone(helioMaterials),helioBoss=createHeliostatRegulator(helioMaterials);helioBoss.root.rotation.x=-HELIOSTAT_PITCH;helioBoss.ducts.visible=false;
+  window.addEventListener('pagehide',()=>helioMaterials.releaseTextures(),{once:true});
+  void loadEncounterTexture('heliostatGuard',helioGuardAssets.setAtlas);
+  const helioArt:{heliostatMetal?:T.Texture;heliostatCeramic?:T.Texture}={};
+  void loadEncounterTexture('armor',texture=>{helioArt.heliostatMetal=texture;helioMaterials.setArt(helioArt,true);},1);
+  void loadEncounterTexture('ioCeramic',texture=>{helioArt.heliostatCeramic=texture;helioMaterials.setArt(helioArt,true);},1);
   const assets = {
+    heliostat_manowar:{root:helioGuard,duration:4,pose(time:number){helioGuardPose(time,0,T.MathUtils.smoothstep(time,2.4,3.3));return 'raster float / ruffled sail / rigid harness / swaying tendrils';}},
+    heliostat_drone:{root:helioDrone,duration:3,pose(time:number){helioDrone.rotation.y=.12*Math.sin(time*2);return 'inspection drone';}},
+    heliostat_regulator:{root:helioBoss.root,duration:4.4,bounds:new T.Box3(new T.Vector3(-5.5,-2,-2),new T.Vector3(5.5,3,2)),pose(time:number){helioBoss.pose(time,T.MathUtils.smoothstep(time,.65,1.9),0);return 'magnetic plasma lenses / exposed cyan aperture';}},
     boulevard_waterfall:{root:studyWaterfall,bounds:new T.Box3(new T.Vector3(-1.2,-.2,-1.6),new T.Vector3(1.2,2.5,1.6)),duration:6,pose(time:number){boulevard.waterfalls.update(time);return 'raised source pool / falling curtain / catch basin / spray';}},
     boulevard_mine:{root:studyMine.root,bounds:new T.Box3(new T.Vector3(-2.5,-2.5,-3.2),new T.Vector3(2.5,2.5,1.2)),duration:2.8,pose(time:number){const state={site:0,triggeredAt:21,burstAt:time>=2?22:undefined};studyMine.pose(state,20+time,time<2);studyMine.body.position.x=studyMine.body.position.y=0;studyMine.warning.position.x=studyMine.warning.position.y=0;studyMine.flash.position.x=studyMine.flash.position.y=0;return time<1?'armed · proximity radius':time<1.4?'triggered · fuse':time<2?'jumping':'radial burst';}},
     boulevard_interceptor:{root:studyInterceptor.root,duration:3.4,pose(time:number){const phase=time%2.8;studyInterceptor.pose(T.MathUtils.clamp((phase-1.05)/.65,0,1),.30*Math.sin(time*.8),time);return phase<1.05?'lane change':phase<1.7?'locked aim · charge':'three-shot volley';}},

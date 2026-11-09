@@ -18,7 +18,7 @@ export function createHeliostatDrone(m: HeliostatMaterials) {
 }
 
 /** Pneumatophore, raised sail and trailing articulated stinging filaments. */
-export function createHeliostatGuard(m: HeliostatMaterials) {
+export function createGuardFallback(m: HeliostatMaterials) {
   const root = new T.Group(); root.name = 'cyborg-man-o-war'; const b = heliostatBatch(root);
   const bladder = new T.MeshPhysicalMaterial({color:0x6577ab,roughness:.28,metalness:.12,transparent:true,opacity:.7,depthWrite:false,clearcoat:.7});
   const float = new T.SphereGeometry(1,24,16); float.scale(.69,1,.33); b.add(float,bladder,[0,0,.18]);
@@ -43,8 +43,15 @@ export function createHeliostatGuard(m: HeliostatMaterials) {
 
 export function actorPose(root: T.Group) {
   const filaments=root.getObjectsByProperty('name','guard-filament');
-  return (time:number,bank:number) => {
+  const raster=root.getObjectByName('guard-raster'),fallback=root.getObjectByName('guard-fallback');
+  const body=root.getObjectByName('guard-raster-body') as T.Mesh<T.BufferGeometry,T.MeshBasicMaterial>|undefined;
+  const sail=root.getObjectByName('guard-sail'),glow=root.getObjectByName('guard-charge') as T.Mesh<T.BufferGeometry,T.MeshBasicMaterial>|undefined;
+  return (time:number,bank:number,charge=0) => {
     root.rotation.y=bank;
+    if(raster&&fallback){raster.visible=!!body?.material.map;fallback.visible=!raster.visible;}
+    if(body)body.scale.x=1.45*(1+.018*Math.sin(time*1.4));
+    if(sail)sail.rotation.y=.06*Math.sin(time*.9);
+    if(glow)glow.material.color.setRGB(.55+charge*2.3,.16+charge*.9,.025+charge*.1);
     filaments.forEach((f,i)=>{f.rotation.z=.18*Math.sin(time*1.4-i*.7);f.rotation.x=.12*Math.sin(time*1.1+i*.8);});
   };
 }

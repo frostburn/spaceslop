@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createHeliostatRoute } from '../heliostat/route';
+import {createUnderworks} from '../heliostat/underworks';
 import { createDistantPlant } from '../heliostat/distant';
 import { createHeliostatBackdrop } from '../heliostat/backdrop';
 import { createHeliostatCollector } from '../heliostat/collector';
@@ -30,10 +31,10 @@ export function createHeliostatView(canvas: HTMLCanvasElement) {
   scene.add(key, key.target);
   const rim = new T.DirectionalLight(0x7fc8e9, .8); rim.position.set(18, 20, 10); scene.add(rim);
   const materials = createHeliostatMaterials(), world = new T.Group(); scene.add(world);
-  const route = createHeliostatRoute(materials), distant = createDistantPlant(materials);
+  const route = createHeliostatRoute(materials), distant = createDistantPlant(materials),underworks=createUnderworks(materials);
   const collector = createHeliostatCollector(materials), backdrop = createHeliostatBackdrop();
   collector.root.position.y += ROUTE_END; distant.root.position.y = ROUTE_END;
-  world.add(route.root, distant.root, collector.root);
+  world.add(underworks.root,route.root, distant.root, collector.root);
   const ship = createFighterRig().root; ship.scale.setScalar(1.05); scene.add(ship);
   const burners = shipBurners(ship);
   const shots = new T.InstancedMesh(new T.SphereGeometry(1, 6, 8),
@@ -52,7 +53,7 @@ export function createHeliostatView(canvas: HTMLCanvasElement) {
     const enterOrbit = next.orbit && !options.orbit; options = { ...next };
     materials.setArt(art, options.artwork);
     backdrop.setTexture(art.heliostatBackdrop,options.artwork);backdrop.root.visible=options.sky;
-    distant.root.visible = options.distant; route.root.visible = options.corridor;
+    distant.root.visible = options.distant;underworks.root.visible=options.distant; route.root.visible = options.corridor;
     controls.enabled = options.orbit;
     canvas.style.touchAction = options.orbit ? 'none' : 'pan-y';
     if (enterOrbit) {
@@ -79,7 +80,7 @@ export function createHeliostatView(canvas: HTMLCanvasElement) {
       const pose = cameraPose(progress); camera.position.copy(pose.position); camera.lookAt(pose.target);
       camera.updateMatrixWorld();
     }
-    world.position.y = bayTravel(time);route.update(time);world.updateMatrixWorld(true);
+    world.position.y = bayTravel(time);route.update(time);underworks.update(time);world.updateMatrixWorld(true);
     const updateShadows = world.position.y !== lastScroll;
     ship.position.set(Math.sin(time * .36) * .8, -4.5, .4);
     // Hull and shots share a real heading towards the physical collector.
@@ -118,14 +119,15 @@ export function createHeliostatView(canvas: HTMLCanvasElement) {
         else renderer.compile(layer,camera);
       }
       const restore=route.prepare(-world.position.y);
+      const restoreUnderworks=underworks.prepare(-world.position.y);
       const flags=new Map<T.Mesh,boolean>(),visibility=[distant.root,collector.root].map(root=>({root,visible:root.visible}));
-      for(const item of visibility){
+      for(const item of [...visibility,{root:underworks.root,visible:true}]){
         item.root.visible=true;item.root.traverse(node=>{if(node instanceof T.Mesh){flags.set(node,node.frustumCulled);node.frustumCulled=false;}});
       }
       try{
         renderer.shadowMap.needsUpdate=true;renderer.render(scene,camera);
       }finally{
-        restore();for(const[node,flag]of flags)node.frustumCulled=flag;
+        restore();restoreUnderworks();for(const[node,flag]of flags)node.frustumCulled=flag;
         for(const item of visibility)item.root.visible=item.visible;
         lastScroll=Infinity;draw(frame.time,frame.progress);
       }

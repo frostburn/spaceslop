@@ -27,7 +27,7 @@ test('complete Heliostat route fits its prewarmed drone/guard pools and grants a
 test('capacitors warn harmlessly, hurt only across active filaments, and leave a genuine safe gap',()=>{
   for(let site=0;site<c.electricSites.length;site++){
     const at=c.electricSites[site].at,warning=c.electricPose(site,at-2.2),hot=c.electricPose(site,at-1.1);
-    assert(warning.warning&&!warning.hot);assert(hot.hot);
+    assert(warning.warning&&!warning.hot);assert(hot.hot);assert(c.electricPose(site,at+6).hot&&c.electricPose(site,at+6).visible,'gate vanished while still in view');
     assert(!c.electricHits(site,at-2.2,at-2.2-STEP,{x:3,y:warning.y}));
     assert(c.electricHits(site,at-1.1,at-1.1-STEP,{x:hot.gap>0?-3:3,y:hot.y}));
     for(let t=at-3;t<at+3;t+=STEP)assert(!c.electricHits(site,t,t-STEP,{x:hot.gap,y:c.electricPose(site,t).y}));
@@ -36,20 +36,37 @@ test('capacitors warn harmlessly, hurt only across active filaments, and leave a
   for(const safe of[false,true]){const f=new Flight('sentry',[],'vex','heliostat');f.time=time;f.nextWave=20;f.player={x:safe?p.gap:3,y:p.y};f.step(STEP);assert.equal(f.hull,safe?4:3);f.step(STEP);assert.equal(f.hull,safe?4:3);}
 });
 
-test('plasma packets cannot duplicate or disappear at fixed-step and cycle boundaries',()=>{
-  const whole=c.heliostatPackets(0,44),stepped=[];
-  for(let i=1;i<=2640;i++)stepped.push(...c.heliostatPackets((i-1)*STEP,i*STEP));
-  assert.deepEqual(stepped,whole);assert.equal(whole.length,60);assert.equal(new Set(whole.map(p=>`${p.cycle}:${p.pulse}`)).size,60);
+test('continuous plasma crosses the flight plane exactly at its locked contact and has a harmless grow/fade',()=>{
+  assert(!c.heliostatPlasmaPhase(c.HELIOSTAT_FIRE+.1).hot);assert(c.heliostatPlasmaPhase(c.HELIOSTAT_FIRE+.4).hot);
+  assert(!c.heliostatPlasmaPhase(c.HELIOSTAT_FIRE+c.HELIOSTAT_CHANNEL+.1).hot);
+  for(const side of[-1,1]){
+    const target={x:side*1.3,y:-4.5},path=c.heliostatPlasmaControls(side,target),hit=c.heliostatPlasmaPoint(.84,path);
+    assert(Math.hypot(hit.x-target.x,hit.y-target.y,hit.z)<1e-9);let last=-20;
+    for(let i=0;i<=1000;i++){const p=c.heliostatPlasmaPoint(i/1000,path);assert(Number.isFinite(p.x+p.y+p.z));assert(p.z>=last);last=p.z;}
+    const a=c.heliostatPlasmaPoint(.84-1e-7,path),b=c.heliostatPlasmaPoint(.84+1e-7,path);assert(Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z)<1e-4);
+    assert(c.heliostatPlasmaHits(2.5,[target],target));assert(!c.heliostatPlasmaHits(2.5,[target],{x:target.x+1,y:target.y}));
+  }
 });
 
-test('regulator locks its two target lanes before six paired plasma packets',()=>{
-  const f=new Flight('sentry',[],'vex','heliostat');f.phase='boss';f.cooldown=f.droneCooldown=1e5;f.invulnerable=1e5;f.player={x:1,y:-4};
+test('regulator channels locked plasma without creating bullets, and Pulse interrupts the current channel',()=>{
+  const f=new Flight('sentry',[],'vex','heliostat');f.phase='boss';f.cooldown=f.droneCooldown=1e5;f.player={x:1,y:-4};
   for(let i=0;i<50;i++)f.step(STEP);const locked=structuredClone(f.markers);assert.equal(locked.length,2);
   f.player={x:-3,y:-6};for(let i=0;i<115;i++)f.step(STEP);
-  assert.equal(f.threats.length,12);assert.deepEqual(f.markers,locked);
-  for(const [i,shot]of f.threats.entries()){
-    const t=-shot.z/shot.vz;assert(Math.abs(shot.x+shot.vx*t-locked[i%2].x)<1e-8);assert(Math.abs(shot.y+shot.vy*t-locked[i%2].y)<1e-8);
-  }
+  assert.equal(f.threats.length,0);assert.deepEqual(f.markers,locked);assert.deepEqual(f.heliostatTargets,locked);
+  f.player={...locked[0]};const hull=f.hull;f.step(STEP);assert.equal(f.hull,hull-1);
+  f.pulse();assert.deepEqual(f.heliostatTargets,[]);const after=f.hull;
+  for(let i=0;i<12;i++){f.invulnerable=0;f.step(STEP);}assert.equal(f.hull,after);
+});
+
+test('man o’war first fire waits for its full body and a visible charge, including negative entry ages',()=>{
+  const f=new Flight('sentry',[],'vex','heliostat');f.nextWave=20;f.cooldown=f.droneCooldown=1e5;f.invulnerable=1e5;
+  const course={kind:'guard',formation:'vee',slot:0,mirror:1},lane=-2.15,p=c.heliostatMotion(-3,lane,course);
+  const enemy={...p,lane,age:-3,fire:c.HELIOSTAT_GUARD_FIRE,hp:8,heliostat:course};f.enemies=[enemy];
+  let shot=false;for(let i=0;i<700;i++){
+    const before=f.threats.length;f.step(STEP);
+    if(enemy.age<c.HELIOSTAT_GUARD_FIRE)assert.equal(f.threats.length,0);
+    if(f.threats.length>before){shot=true;assert(enemy.y+1.5<8);assert(enemy.y>=-5.2);assert(enemy.age>=c.HELIOSTAT_GUARD_FIRE);break;}
+  }assert(shot);
 });
 
 for(const weapon of['homing','cannon','laser','omega','sentry','towline','pulse'])test(`regulator accepts ${weapon} damage on its visible aperture`,()=>{
@@ -95,4 +112,38 @@ test('flight prewarm restores nested route culling and shared geometry after pri
   level.prepare();assert([...before.keys()].every(m=>!m.frustumCulled));level.afterWarmup();
   for(const[m,[cull,geometry]]of before){assert.equal(m.frustumCulled,cull);assert.equal(m.geometry,geometry);}
   level.dispose();
+});
+
+test('deep service islands share templates, stay below flight and restore priming state',async()=>{
+  const {createHeliostatMaterials}=await server.ssrLoadModule('/src/heliostat/materials.ts'),{createUnderworks}=await server.ssrLoadModule('/src/heliostat/underworks.ts');
+  const m=createHeliostatMaterials(),s=createUnderworks(m);assert.equal(s.islands.length,15);
+  for(let t=0;t<=108;t+=.5){s.update(t);assert(s.islands.filter(i=>i.root.visible).length<=4);}
+  const bounds=new T.Box3().setFromObject(s.root);assert(bounds.max.z < -10,'background machinery intersects combat altitude');
+  s.root.visible=false;const before=s.islands.map(i=>[i.root.position.y,i.root.visible]),restore=s.prepare(50);assert(s.root.visible);assert.equal(s.islands.filter(i=>i.root.visible).length,3);
+  restore();assert(!s.root.visible);assert.deepEqual(s.islands.map(i=>[i.root.position.y,i.root.visible]),before);m.releaseTextures();
+});
+
+test('raster guards share atlas geometry, keep their 3D fallback and freeze rig poses',async()=>{
+  const {createHeliostatMaterials}=await server.ssrLoadModule('/src/heliostat/materials.ts'),{createGuardAssets,createHeliostatGuard}=await server.ssrLoadModule('/src/heliostat/guard.ts'),{actorPose}=await server.ssrLoadModule('/src/heliostat/actors.ts');
+  const m=createHeliostatMaterials(),a=createGuardAssets(m),one=createHeliostatGuard(a),two=createHeliostatGuard(a),pose=actorPose(one);
+  pose(2,0,.8);assert(one.getObjectByName('guard-fallback').visible);assert(!one.getObjectByName('guard-raster').visible);
+  const texture=new T.Texture();a.setAtlas(texture);pose(2,0,.8);assert(one.getObjectByName('guard-raster').visible);assert(!one.getObjectByName('guard-fallback').visible);
+  assert.equal(one.getObjectByName('guard-raster-body').geometry,two.getObjectByName('guard-raster-body').geometry);
+  const before=one.getObjectsByProperty('name','guard-filament').map(n=>n.quaternion.toArray());pose(2,0,.8);assert.deepEqual(one.getObjectsByProperty('name','guard-filament').map(n=>n.quaternion.toArray()),before);
+  texture.dispose();m.releaseTextures();
+});
+
+test('sunspot feed cores stay visible through the actual distant plant geometry',async()=>{
+  const scene=new T.Scene(),plane=new T.Group();scene.add(plane);const level=createLevel({scene,plane,signal:new AbortController().signal});plane.add(level.root);await level.ready;
+  const f=new Flight('sentry',[],'vex','heliostat');f.phase='boss';f.time=2.8;f.markers=[{x:-.75,y:-5.3},{x:.75,y:-5.3}];
+  level.update({flight:f,time:110.8,reveal:1,animationTime:110.8});scene.updateMatrixWorld(true);
+  const opaque=[];level.root.traverseVisible(o=>{if(o.isMesh&&!o.material.transparent)opaque.push(o);});
+  for(const feed of level.boss.getObjectByName('sunspot-feed-ducts').children){
+    const mesh=feed.children[0],u=mesh.material.uniforms,curve=new T.CubicBezierCurve3(u.a.value,u.b.value,u.c.value,u.d.value);
+    for(const t of[.2,.4,.6,.8]){
+      const p=curve.getPoint(t).applyMatrix4(mesh.matrixWorld),camera=new T.Vector3(0,0,22),delta=p.clone().sub(camera),distance=delta.length();
+      const hit=new T.Raycaster(camera,delta.normalize(),0,distance-.05).intersectObjects(opaque,false);
+      assert(!hit.length,'plant obscures a sunspot feed at '+t);
+    }
+  }level.dispose();
 });

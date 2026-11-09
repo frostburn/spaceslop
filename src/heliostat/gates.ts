@@ -35,10 +35,10 @@ export function createElectricGates(m:HeliostatMaterials) {
     return {root:node,beams,material:shader,site:i};
   });
   material.dispose();
-  return {root,gates,update(time:number,active:boolean) {
+  return {root,gates,update(time:number) {
     clock.value=time;
     for(const gate of gates) {
-      const p=electricPose(gate.site,time);gate.root.visible=active&&p.visible;
+      const p=electricPose(gate.site,time);gate.root.visible=p.visible;
       gate.beams.visible=p.warning||p.hot;gate.material.uniforms.hot.value=+p.hot;gate.material.uniforms.charge.value=p.charge;
     }
   },prime(){for(const g of gates){g.root.visible=true;g.beams.visible=true;}}};
