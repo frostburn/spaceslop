@@ -26,7 +26,7 @@ test('boss enters the same 3D boulevard continuously and settles on the shared w
 
 test('scenery, designed vector strokes and both actor variants construct without incompatible merged attributes',()=>{
  const s=createBoulevardScenery(),car=createHovercar(s.materials),heavy=createHovercar(s.materials,true),boss=createPursuitCruiser(s.materials);let wires=0;
- for(const root of[s.root,car.root,heavy.root,boss.root])root.traverse(o=>{if(o.isMesh){assert(o.geometry&&o.geometry.attributes.position);for(const a of Object.values(o.geometry.attributes))assert(a.array.every(Number.isFinite));if(o.material===s.materials.wire){assert(o.geometry.attributes.otherPosition&&o.geometry.attributes.strokeEdge);assert(!o.geometry.attributes.barycentric);wires++;}}});
+ for(const root of[s.root,car.root,heavy.root,boss.root])root.traverse(o=>{if(o.isMesh){assert(o.geometry&&o.geometry.attributes.position);for(const a of Object.values(o.geometry.attributes))assert(a.array.every(Number.isFinite));if(o.material===s.materials.wire||o.material===s.city.wire){assert(o.geometry.attributes.otherPosition&&o.geometry.attributes.strokeEdge);assert(!o.geometry.attributes.barycentric);wires++;}}});
  assert(wires>25);assert.equal(s.chunks.length,22);assert.equal(s.tracks.length,2);
  s.update(55,0,55);const train=s.tracks[0].root.position.x;s.update(56,0,56);assert.notEqual(s.tracks[0].root.position.x,train);
  s.update(56,0,56);const frozen=s.traffic.map(t=>t.root.position.clone());s.update(56,0,56);assert(s.traffic.every((t,i)=>t.root.position.equals(frozen[i])));

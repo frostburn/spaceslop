@@ -9,6 +9,7 @@ import {createBossLaserContact} from '../../laser-contact';
 import {BOSS_RECOIL_TIME} from '../../encounters';
 export const createLevel:LevelFactory=({plane,signal})=>{
  const glow=createBoulevardGlow(),root=new T.Group(),scenery=createBoulevardScenery(),boss=createPursuitCruiser(scenery.materials);
+ glow.setSun(scenery.sun.disk,scenery.sun.clock);
  const light=createHovercar(scenery.materials),heavy=createHovercar(scenery.materials,true);
  const cars=Array.from({length:BOULEVARD_POOL},()=>cloneHovercar(light.root)),haulers=Array.from({length:3},()=>cloneHovercar(heavy.root));
  const models:(T.Object3D|undefined)[]=[];addRoots(root,scenery,boss,...cars,...haulers);

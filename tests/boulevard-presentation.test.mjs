@@ -32,7 +32,7 @@ test('lens diffusion restores renderer state after capture failure and releases 
  const{createBoulevardGlow}=await server.ssrLoadModule('/src/boulevard-glow.ts'),glow=createBoulevardGlow(),initial=new T.WebGLRenderTarget(200,300);let target=initial,test=true;const viewport=new T.Vector4(3,4,111,222),scissor=new T.Vector4(7,8,99,100);
  const renderer={getDrawingBufferSize:v=>v.set(400,800),getRenderTarget:()=>target,getScissorTest:()=>test,getViewport:v=>v.copy(viewport),getScissor:v=>v.copy(scissor),setScissorTest:v=>{test=v;},setRenderTarget:v=>{target=v;viewport.set(0,0,v?.width??400,v?.height??800);},setViewport:v=>viewport.copy(v),setScissor:v=>scissor.copy(v),render:()=>{throw Error('capture failed');}};
  assert.throws(()=>glow.present(renderer,new T.Scene(),new T.Camera()),/capture failed/);assert.equal(target,initial);assert(test);assert.deepEqual(viewport.toArray(),[3,4,111,222]);assert.deepEqual(scissor.toArray(),[7,8,99,100]);assert.deepEqual(glow.targets.map(t=>[t.width,t.height]),[[400,800],[200,400],[200,400]]);
- let released=0;for(const t of glow.targets)t.addEventListener('dispose',()=>released++);glow.dispose();assert.equal(released,3);initial.dispose();
+ let depthReleased=0;assert(glow.targets[0].depthTexture);glow.targets[0].depthTexture.addEventListener('dispose',()=>depthReleased++);let released=0;for(const t of glow.targets)t.addEventListener('dispose',()=>released++);glow.dispose();assert.equal(released,3);assert.equal(depthReleased,1);initial.dispose();
 });
 
 
@@ -98,4 +98,17 @@ test('fountain occupies a clear cross street with curb cuts and non-overlapping 
  for(let i=0;i<g.count;i++)assert(Math.abs(g.getX(i))>=3.599,'side asphalt overlaps main road');
  const chunk=s.chunks[5],buildings=chunk.getObjectByName('boulevard-masonry');buildings.geometry.computeBoundingBox();for(let i=0;i<buildings.count;i++){buildings.getMatrixAt(i,m);const bounds=buildings.geometry.boundingBox.clone().applyMatrix4(m);for(const side of[-1,1]){const area=rect.clone();if(side<0){area.min.x=-19;area.max.x=-3.6;}assert(!bounds.intersectsBox(area),'cross street blocked by sidewalk or building');}}
  for(const time of[0,37,107,180]){s.update(time,time>=107?1:0,time);assert(Math.abs(s.road.root.position.y+cross.position.y-s.fountain.root.position.y)<1e-9,'intersection scrolls away from fountain');}s.dispose();
+});
+
+
+test('city color clocks remain scene-owned and independent of actor materials and geometry',()=>{
+ const s=createBoulevardScenery(),original=[s.materials.pink,s.materials.cyan,s.materials.amber,s.materials.streetLamp].map(m=>m.color.clone()),matrices=s.chunks[9].getObjectByName('boulevard-pink-fixtures').instanceMatrix.array.slice();
+ for(const key of['stone','interior','pink','cyan','amber','streetLamp']){assert.notEqual(s.city[key],s.materials[key]);const shader={uniforms:{},vertexShader:T.ShaderLib.basic.vertexShader,fragmentShader:T.ShaderLib.basic.fragmentShader};s.city[key].onBeforeCompile(shader);assert.equal(shader.uniforms.cityClock,s.city.clock);}
+ assert.equal(s.city.wire.uniforms.cityClock,s.city.clock);assert.notEqual(s.city.wire,s.materials.wire);
+ s.update(37,0,12);assert.equal(s.city.clock.value,12);s.update(160,1,12);assert.equal(s.city.clock.value,12,'camera movement or recycling advances paused light colors');assert.deepEqual(s.chunks[9].getObjectByName('boulevard-pink-fixtures').instanceMatrix.array,matrices);s.update(160,1,18);assert.equal(s.city.clock.value,18);
+ for(const[i,key]of['pink','cyan','amber','streetLamp'].entries())assert(s.materials[key].color.equals(original[i]),'city animations changed an actor emitter');s.dispose();
+});
+
+test('sun bands translate upward within fixed disk geometry on the shared frozen clock',async()=>{
+ const{createBoulevardSun,SUN_BAND_PERIOD,SUN_BAND_SPEED}=await server.ssrLoadModule('/src/boulevard-sun.ts'),sun=createBoulevardSun(),positions=sun.disk.geometry.attributes.position.array,before=positions.slice();sun.update(20);const rise=sun.rise.value;sun.update(26);assert(Math.abs(sun.rise.value-rise-6*SUN_BAND_SPEED)<1e-12);sun.update(26+SUN_BAND_PERIOD/SUN_BAND_SPEED);assert(Math.abs(sun.rise.value-(rise+6*SUN_BAND_SPEED))<1e-12);sun.update(26);assert.equal(sun.clock.value,26);sun.update(26);assert.equal(sun.clock.value,26);assert.equal(sun.disk.geometry.attributes.position.array,positions);assert.deepEqual(positions,before);assert(sun.disk.material.depthWrite,'disk must occlude the skyline between its moving gaps');
 });
