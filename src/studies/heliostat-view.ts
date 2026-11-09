@@ -71,6 +71,7 @@ export function createHeliostatView(canvas: HTMLCanvasElement) {
   function draw(time: number, progress: number) {
     if (disposed) return;
     frame.time = time; frame.progress = progress;
+    materials.updateThermal(time);
     const w = Math.max(1, canvas.clientWidth), h = Math.max(1, canvas.clientHeight);
     if (w !== width || h !== height) {
       width = w; height = h; renderer.setSize(w, h, false);

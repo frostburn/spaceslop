@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { heliostatBatch, type Point3 } from './geometry';
 import type { HeliostatMaterials } from './materials';
-import { addServiceMachinery, coolingCell, dockingCell, type HeliostatBayKind } from './machinery';
+import { addServiceMachinery, addThermalCircuit, coolingCell, dockingCell, type HeliostatBayKind } from './machinery';
 
 export function createHeliostatBay(m: HeliostatMaterials,kind:HeliostatBayKind='generation') {
   const root = new T.Group(); root.name = 'modeled-corridor-bay';
@@ -42,7 +42,7 @@ export function createHeliostatBay(m: HeliostatMaterials,kind:HeliostatBayKind='
       for (let c = 0; c < 2; c++) {
         const cx = x + (c - .5) * 1.14;
         b.rod([cx, y - 1.6, -.9], [cx, y + 1.6, -.9], .42, m.graphite, 16);
-        for (let turn = 0; turn < 11; turn++) b.ring(.48, .052, [cx, y - 1.35 + turn * .27, -.9], m.copper);
+        for (let turn = 0; turn < 11; turn++) b.ring(.48, .052, [cx, y - 1.35 + turn * .27, -.9], m.hotCoil, [Math.PI/2,0,0],20);
         for (const end of [-1, 1]) b.rod([cx, y + end * 1.55, -.9], [cx, y + end * 1.75, -.9], .59, m.titanium, 14);
         b.rod([cx, y + 1.7, -.9], [cx, y + 1.7, .9], .12, m.copper);
         b.box([.32, .4, .12], [cx, y + 1.7, .95], m.cyan, .03);
@@ -96,6 +96,7 @@ export function createHeliostatBay(m: HeliostatMaterials,kind:HeliostatBayKind='
     for (const side of [-1, 1]) b.rod([side * 5.5, 16.5, -3.3], [side * 5.5, 16.5, 4.5], .15, m.titanium);
     for (let i = -5; i <= 5; i++) b.box([.42, .12, .12], [i, 16.1, 4.7], m.amber);
   }
+  addThermalCircuit(b,m,kind);
   b.finish(); shell.finish();
   casings.traverse(node => { if (node instanceof T.Mesh) node.castShadow = true; });
   addServiceMachinery(root,m,kind);

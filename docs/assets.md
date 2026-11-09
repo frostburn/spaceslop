@@ -47,7 +47,7 @@ Generated revisions are delivered through chat for review and manual owner uploa
 
 | Path | Format / layout | Use |
 | --- | --- | --- |
-| `public/encounters/heliostat-uranus-backdrop.png` | RGB PNG, 724×2172, whole 1:3 image, sRGB/clamp | Latest wide ring-system backdrop; flat vertical pan during the turn |
-| `public/encounters/heliostat-manowar.png` | RGBA PNG, 1254×1254, equal 2×2 cells; preserve alpha | Top row: float / sail. Bottom row: harness / tendril. Whole-sheet resizing to 1024×1024 or 512×512 is supported. |
+| `public/encounters/heliostat-uranus-backdrop.png` | RGB PNG, 724×2172, whole 1:3 image, sRGB/clamp | Owner's revised ring-system backdrop; flat vertical pan during the turn |
+| `public/encounters/heliostat-manowar.png` | RGBA PNG, currently 627×627, equal 2×2 cells; preserve alpha | Top row: float / sail. Bottom row: harness / tendril. UV crops are resolution independent; resize the whole sheet with its layout and alpha intact. |
 
 The guard’s optional raster modules share one alpha-tested material, pose without new geometry and warm before launch. The modeled body remains the fallback when the image is absent or fails. Alpha never changes hitboxes or firing time. Existing alloy and ceramic maps supply the station surfaces. Both the playable sector and Heliostat workshop use the same atlas. No new generated image binaries belong in the code PR.

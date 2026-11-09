@@ -24,7 +24,15 @@ export function heliostatBossPoint(time: number, reveal: number) {
   return { x: 0, y: y * Math.cos(pitch) + z * Math.sin(pitch), z: -y * Math.sin(pitch) + z * Math.cos(pitch) };
 }
 function coursePoint(age: number, lane: number, c: HeliostatCourse) {
-  if (c.kind === 'guard') return { x: lane + .24 * Math.sin(age * .9 + c.slot), y: 10 - 1.35*age + 2.6*smooth((age - 1)/2) };
+  if (c.kind === 'guard') {
+    // Decelerate only as the whole float enters. The visible station-keeping
+    // maneuver follows arrival, rather than spending its turn above the screen.
+    const entry = Math.min(3, Math.max(0, age)), hover = Math.max(0, age - 3);
+    const drift = smooth(hover / .8), exit = Math.max(0, age - 7.2);
+    return { x: lane + .68 * Math.sin(hover * 1.1 + c.slot * .5) * drift,
+      y: age < 0 ? 10 - 3.6 * age : 10 - 3.6 * (entry - entry * entry / 6)
+        + .28 * Math.sin(hover * 1.3 + c.slot) * drift - 1.9 * exit * smooth(exit / 1.2) };
+  }
   const t = age - (c.formation === 'line' ? c.slot * .52 : 0);
   if (c.formation === 'cross') return { x: lane * Math.cos(Math.PI * smooth((t - .5)/3.4)), y: 10 + c.slot*.5 - 2.8*t };
   if (c.formation === 'line') return { x: c.mirror * 2.15 * Math.sin(t * 1.05), y: 10 - 3*t };
@@ -32,7 +40,7 @@ function coursePoint(age: number, lane: number, c: HeliostatCourse) {
 }
 export function heliostatMotion(age: number, lane: number, c: HeliostatCourse) {
   const p = coursePoint(age,lane,c), a = coursePoint(age-.002,lane,c), b = coursePoint(age+.002,lane,c);
-  return { ...p, heading: Math.atan2(b.x-a.x, a.y-b.y), bank: Math.max(-.3, Math.min(.3,(b.x-a.x)*25)) };
+  return { ...p, heading: c.kind === 'guard' ? Math.max(-.16, Math.min(.16, (b.x-a.x)*35)) : Math.atan2(b.x-a.x, a.y-b.y), bank: Math.max(-.3, Math.min(.3,(b.x-a.x)*25)) };
 }
 export function heliostatCanAttack(age:number,lane:number,c:HeliostatCourse) {
   const p=heliostatMotion(age,lane,c);

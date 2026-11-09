@@ -8,11 +8,13 @@ The standalone study and playable route share four geometry templates and eleven
 
 The route travels straight at a constant speed before smoothly decelerating into the camera swing. The ship and sample shots share a physical heading toward the collector. Scenery still uses ordinary lit meshes and surface UVs, with broad casing shadows rather than fine winding/grid shadows.
 
+The windings run orange-hot. Paired, collar-supported containment mains meet at bay boundaries, branch into generators and heat exchangers, and return on the outside of the corridor. Clear sleeves surround animated stellar material and a wider soft halo. Deep service islands, distant radiator towers and regulator plumbing use the same materials. `src/heliostat/thermal.ts` owns those shaders and metric conduit UVs; one presentation-clock uniform controls flow and slower winding heat variation. Template copies share buffers and materials, straight pipes use fewer subdivisions, and all variants warm before flight. These effects need no additional media or render targets, and pause/scrubbing freeze them exactly.
+
 Fifteen deeper service islands repeat annular platforms, generator piers, transfer bridges and radiator banks below the lane; they are controlled by the distant-plant switch. Bay copies share template geometry and materials. At most four are active; absolute clock poses keep fans, service arms and electric buses repeatable after culling or timeline scrubbing. Preflight temporarily exposes one bay of each type and the distant/collector meshes with culling disabled, uploads their buffers, then restores the visible route before enabling playback. Later sections allocate no new geometry.
 
 ## Backdrop handoff
 
-The generated image is delivered in chat for owner review and separate upload. The uploaded version is active. The latest **wide ring-system** version is delivered in chat for review. It reframes the planet to leave room for the ring arcs; replace the same file after approval:
+The owner's revised ring-system image is active at the existing path:
 
 | Repo path | Format | Import |
 | --- | --- | --- |

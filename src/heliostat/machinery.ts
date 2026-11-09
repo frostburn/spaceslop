@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { heliostatBatch } from './geometry';
 import type { HeliostatMaterials } from './materials';
+import { starConduit } from './thermal';
 
 export type HeliostatBayKind='docking'|'generation'|'cooling'|'containment';
 type Batch=ReturnType<typeof heliostatBatch>;
@@ -8,15 +9,34 @@ type Batch=ReturnType<typeof heliostatBatch>;
 export function coolingCell(b:Batch,shell:Batch,m:HeliostatMaterials,x:number,y:number){
   shell.box([3.2,4.8,.3],[x,y,-2.85],m.titanium,.08);
   for(const dx of[-.72,.72]){
-    b.rod([x+dx,y-1.55,-1.65],[x+dx,y+1.55,-1.65],.55,m.blue,20);
+    starConduit(b,m,[[x+dx,y-1.55,-1.65],[x+dx,y+1.55,-1.65]],.55);
     for(const end of[-1,1]){
       const cap=new T.SphereGeometry(.55,16,10);cap.scale(1,.4,1);b.add(cap,m.titanium,[x+dx,y+end*1.55,-1.65]);
     }
-    for(const yy of[-.9,.9])b.ring(.57,.06,[x+dx,y+yy,-1.65],m.copper);
+    for(const yy of[-.9,.9])b.ring(.57,.06,[x+dx,y+yy,-1.65],m.hotCoil);
     b.pipe([[x+dx,y-1.9,-1.65],[x+dx,y-2.1,-1.0],[x+dx*.7,y-2.1,-.65]],.1,m.copper);
     b.box([.4,.12,.25],[x+dx,y-2.15,-.6],m.cyan,.025);
   }
   shell.box([2.3,.75,1.6],[x,y+1.6,-.25],m.ceramic,.08);
+}
+
+/** Paired supply/return mains join across bay seams and feed actual machines. */
+export function addThermalCircuit(b:Batch,m:HeliostatMaterials,kind:HeliostatBayKind){
+  for(const side of[-1,1]){
+    const supply=side*4.65,returnX=side*7.8,x=side*6.2;
+    starConduit(b,m,[[supply,-9,-1.4],[supply,5,-1.4],[supply,19,-1.4]],.25,false);
+    starConduit(b,m,[[returnX,19,.15],[returnX,5,.15],[returnX,-9,.15]],.21,false);
+    for(const y of(kind==='cooling'?[-.5,9.5]:[-2,8])){
+      if(kind==='docking'&&y<0)continue;
+      for(const dx of(kind==='cooling'?[-.72,.72]:[-.57,.57])){
+        const cx=x+dx,half=kind==='cooling'?1.55:1.75,z=kind==='cooling'?-1.65:-.9;
+        starConduit(b,m,[[supply,y-3.5,-1.4],[supply,y-half-.6,-1.4],[cx,y-half-.4,z],[cx,y-half,z]],.16);
+        starConduit(b,m,[[cx,y+half,z],[cx,y+half+.5,z+.35],[returnX,y+half+.5,.15],[returnX,y+3.5,.15]],.15);
+      }
+    }
+  }
+  // Cross-lane transfer stays below both combat and the pedestrian railing.
+  starConduit(b,m,[[-4.65,-7.1,-1.4],[-3.8,-7.1,-3.05],[3.8,-7.1,-3.05],[4.65,-7.1,-1.4]],.2);
 }
 
 export function dockingCell(b:Batch,shell:Batch,m:HeliostatMaterials,x:number,y:number){

@@ -69,6 +69,30 @@ test('man o’war first fire waits for its full body and a visible charge, inclu
   }assert(shot);
 });
 
+test('the guard maneuvers inside the actual tilted camera and keeps its harness facing the player',async()=>{
+  const {tiltFlightCamera}=await server.ssrLoadModule('/src/rendering/flight-camera.ts');
+  const {createHeliostatMaterials}=await server.ssrLoadModule('/src/heliostat/materials.ts');
+  const {createGuardAssets,createHeliostatGuard}=await server.ssrLoadModule('/src/heliostat/guard.ts');
+  const m=createHeliostatMaterials(),assets=createGuardAssets(m),rig=createHeliostatGuard(assets);
+  const camera=new T.PerspectiveCamera(T.MathUtils.radToDeg(2*Math.atan(8/c.HELIOSTAT_DISTANCE)),9/16,.1,600);
+  tiltFlightCamera(camera,c.HELIOSTAT_DISTANCE,c.heliostatFrame(0).viewPitch,new T.Quaternion());camera.updateMatrixWorld(true);
+  const bounds=new T.Box3().setFromObject(rig),minimum=new T.Vector3(),maximum=new T.Vector3();
+  for(const slot of[0,1]){
+    let left=Infinity,right=-Infinity;
+    const course={kind:'guard',formation:'cross',slot,mirror:1},lane=slot?2.15:-2.15;
+    for(let age=3;age<=7.2;age+=STEP){
+      const p=c.heliostatMotion(age,lane,course);assert(Math.abs(p.heading)<=.17,'float turns away while hovering');
+      left=Math.min(left,p.x);right=Math.max(right,p.x);
+      minimum.copy(bounds.min);maximum.copy(bounds.max);rig.position.set(p.x,p.y,0);rig.rotation.z=p.heading;rig.updateMatrixWorld(true);
+      for(const x of[minimum.x,maximum.x])for(const y of[minimum.y,maximum.y])for(const z of[minimum.z,maximum.z]){
+        const v=new T.Vector3(x,y,z).applyMatrix4(rig.matrixWorld).project(camera);
+        assert(Math.abs(v.x)<1&&Math.abs(v.y)<1,'guard performs its maneuver outside the viewport');
+      }
+    }
+    assert(right-left>1,'entry maneuver is no longer legible');
+  }m.releaseTextures();
+});
+
 for(const weapon of['homing','cannon','laser','omega','sentry','towline','pulse'])test(`regulator accepts ${weapon} damage on its visible aperture`,()=>{
   const wing=['homing','cannon','laser','omega'].includes(weapon);
   const f=new Flight(weapon==='towline'?'towline':'sentry',wing?[undefined,weapon]:[],'vex','heliostat');

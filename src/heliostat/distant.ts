@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { heliostatBatch } from './geometry';
 import type { HeliostatMaterials } from './materials';
+import {starConduit} from './thermal';
 
 export function createDistantPlant(m: HeliostatMaterials) {
   const root = new T.Group(); root.name = 'modeled-distant-plant'; const b = heliostatBatch(root);
@@ -11,7 +12,7 @@ export function createDistantPlant(m: HeliostatMaterials) {
     b.rod([x,y,z],[x,y,z+height],.55,m.titanium,12);
     for(let j=0;j<4;j++){
       const level=z+2+j*(height-3)/4;
-      b.ring(1.8,.28,[x,y,level],m.copper,[0,0,0]);
+      b.ring(1.8,.28,[x,y,level],m.hotCoil,[0,0,0],28);
       b.ring(2.2,.08,[x,y,level+.65],m.titanium,[0,0,0]);
       b.box([.45,.5,1.1],[x,y-.65,level+1.3],m.cyan);
       for(const side of[-1,1])b.rod([x+side*2,y,level],[x+side*.6,y,level+height/4],.07,m.titanium);
@@ -20,6 +21,8 @@ export function createDistantPlant(m: HeliostatMaterials) {
       b.box([6.5,.3,height*.7],[x+side*4.2,y,z+height*.48],m.dark);
       for(let f=0;f<17;f++)b.box([.22,1.1,height*.67],[x+side*(1.4+f*.34),y,z+height*.48],m.graphite);
       for(const dz of[height*.18,height*.8])b.rod([x,y,z+dz],[x+side*7.6,y,z+dz],.09,m.copper);
+      starConduit(b,m,[[x+side*2.6,y,z+height*.8],[x+side*3.2,y,z+height*.5],
+        [x+side*3.2,y,z+1],[x,y,z+1]],.31);
     }
   }
   // Two deep truss spines visibly connect the remote banks to the collector.

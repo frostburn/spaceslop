@@ -35,8 +35,8 @@ export function heliostatBatch(root: T.Group) {
       geometry.applyQuaternion(new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 1, 0), delta.clone().normalize()));
       add(geometry, material, start.addScaledVector(delta, .5).toArray() as Point3);
     },
-    ring(radius: number, tube: number, at: Point3, material: T.Material, rotation: Point3 = [Math.PI / 2, 0, 0]) {
-      add(new T.TorusGeometry(radius, tube, 6, 40), material, at, rotation);
+    ring(radius: number, tube: number, at: Point3, material: T.Material, rotation: Point3 = [Math.PI / 2, 0, 0], segments = 40) {
+      add(new T.TorusGeometry(radius, tube, 6, segments), material, at, rotation);
     },
     pipe(points: Point3[], radius: number, material: T.Material) {
       add(new T.TubeGeometry(new T.CatmullRomCurve3(points.map(p => new T.Vector3(...p))), 24, radius, 6, false), material);

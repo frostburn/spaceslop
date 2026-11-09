@@ -2,6 +2,7 @@ import * as T from 'three';
 import {heliostatBatch} from './geometry';
 import type {HeliostatMaterials} from './materials';
 import {heliostatScroll} from './combat';
+import {starConduit} from './thermal';
 
 function serviceIsland(m:HeliostatMaterials,kind:number){
   const root=new T.Group(),b=heliostatBatch(root),side=kind%2?1:-1,x=side*5.4,z=-19;
@@ -17,7 +18,7 @@ function serviceIsland(m:HeliostatMaterials,kind:number){
   }
   // A substantial generator pier, with copper windings and ceramic shoulders.
   b.rod([x,0,z-.6],[x,0,z+3],1.1,m.dark,16);
-  for(let i=0;i<12;i++)b.ring(1.18,.065,[x,0,z+.2+i*.24],m.copper,[0,0,0]);
+  for(let i=0;i<12;i++)b.ring(1.18,.065,[x,0,z+.2+i*.24],m.hotCoil,[0,0,0],28);
   for(const zz of[z+.2,z+3.1])b.rod([x,0,zz-.16],[x,0,zz+.16],1.45,m.titanium,20);
   for(const dx of[-1.5,1.5])b.box([.45,1.1,2.5],[x+dx,0,z+1.6],m.ceramic,.08);
   b.rod([x,0,z+3.2],[x,0,z+7.4],.16,m.titanium,10);
@@ -30,7 +31,8 @@ function serviceIsland(m:HeliostatMaterials,kind:number){
   for(const side of[-1,1]){
     const tx=side*8.8;
     b.rod([tx,-9,z-3],[tx,9,z-3],.38,m.graphite,12);
-    b.pipe([[tx,-9,z-3],[tx,-10,z-1],[side*3.8,-10,z-1],[side*2.2,-7,z+1]],.23,m.copper);
+    starConduit(b,m,[[tx,side*14,z+1],[tx,0,z+1],[tx,-side*14,z+1]],.36,false);
+    starConduit(b,m,[[tx,side*5,z+1],[tx,side*6.8,z+1.5],[x,side*6.8,z+1.5],[x,side*1.05,z+1.5]],.25);
     for(const y of[-6,-3,0,3,6])b.ring(.47,.07,[tx,y,z-3],m.titanium);
     b.box([4.8,9,.3],[side*12,1,z-1],m.dark,.05,[0,side*.3,0]);
     for(let j=0;j<15;j++)b.box([4.5,.12,.48],[side*12,-3+j*.57,z-.8],m.graphite);

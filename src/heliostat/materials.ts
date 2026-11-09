@@ -1,5 +1,6 @@
 import * as T from 'three';
 import type { HeliostatArt } from './art';
+import { createThermalMaterials } from './thermal';
 
 function grainMap(bump: boolean) {
   const n = 128, bytes = new Uint8Array(n * n * 4);
@@ -29,6 +30,7 @@ function grainMap(bump: boolean) {
 /** Regular lit surfaces share maps, never pictures of completed machinery. */
 export function createHeliostatMaterials() {
   const grain = grainMap(false), relief = grainMap(true), owned = new Set<T.Texture>([grain, relief]);
+  const thermal = createThermalMaterials();
   const make = (color: number, roughness: number, metalness: number) => new T.MeshStandardMaterial({
     color, roughness, metalness, map: grain, bumpMap: relief, bumpScale: .012, envMapIntensity: .65,
   });
@@ -38,20 +40,22 @@ export function createHeliostatMaterials() {
     graphite: make(0x273137, .88, .16), blue: make(0x426b76, .67, .38),
     cyan: new T.MeshStandardMaterial({ color: 0x90e9ee, emissive: 0x55dbe5, emissiveIntensity: 2.2, roughness: .4 }),
     amber: new T.MeshStandardMaterial({ color: 0xf6b35b, emissive: 0xffac38, emissiveIntensity: 2, roughness: .4 }),
+    hotCoil: thermal.hotCoil, starstuff: thermal.starstuff, plasmaHalo: thermal.plasmaHalo, containmentGlass: thermal.containmentGlass,
   };
   return {
     ...materials,
+    updateThermal: thermal.updateThermal,
     setArt(art: HeliostatArt, enabled: boolean) {
       for (const key of ['heliostatMetal','heliostatCeramic'] as const) if (art[key]) owned.add(art[key]);
-      for (const [key, material] of Object.entries(materials)) {
-        if (key === 'cyan' || key === 'amber') continue;
+      for (const key of ['titanium','copper','dark','ceramic','graphite','blue'] as const) {
+        const material = materials[key];
         material.map = enabled ? (key === 'ceramic' ? art.heliostatCeramic : art.heliostatMetal) ?? grain : grain;
         material.needsUpdate = true;
       }
     },
     releaseTextures() {
       // The palette owns inactive fallback maps as well as active uploaded maps.
-      for (const material of Object.values(materials)) { material.map = null; material.bumpMap = null; }
+      for (const material of Object.values(materials)) if (material instanceof T.MeshStandardMaterial) { material.map = null; material.bumpMap = null; }
       for (const texture of owned) texture.dispose(); owned.clear();
     },
   };

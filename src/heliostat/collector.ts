@@ -35,7 +35,7 @@ export function createHeliostatCollector(m: HeliostatMaterials) {
     b.rod([radial.x*6.65,radial.y*6.65,0],[radial.x*7.9,radial.y*7.9,0], .29, m.graphite, 12);
     for (let j = 0; j < 7; j++) {
       const g = new T.TorusGeometry(.33,.038,5,24); g.applyQuaternion(q);
-      b.add(g,m.copper,[radial.x*(6.78+j*.16),radial.y*(6.78+j*.16),0]);
+      b.add(g,m.hotCoil,[radial.x*(6.78+j*.16),radial.y*(6.78+j*.16),0]);
     }
     b.box([.14,.14,.28],[radial.x*6.2,radial.y*6.2,.8],m.amber);
   }
