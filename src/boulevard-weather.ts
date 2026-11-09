@@ -1,5 +1,6 @@
 import * as T from 'three';
 import {BOULEVARD_DECK} from './boulevard';
+import {FOUNTAIN_Y,CROSSING_WIDTH,CROSSING_REACH,LAMP_OFFSETS,LAMP_REACH} from './boulevard-layout';
 export const ROAD_PERIOD=84,ROAD_WATER=.003,ROAD_LOW=-.04,ROAD_RANGE=.10;
 const W=128,H=512,SPAN=7.2,GRAVITY=10;
 export type DrainSite={x:number;y:number;z:number;bay:number;period:number;phase:number};
@@ -25,7 +26,9 @@ export function roadRelief(sites:readonly DrainSite[]){
    const index=((iy%H+H)%H)*W+ix;heights[index]=Math.min(heights[index],-.025+.075*q);
   }
  }
- for(let i=0;i<12;i++){const x=Math.sin(i*71.3)*2.5,y=i*ROAD_PERIOD/12+2;basin(x,y,.8+(i%3)*.35,1.7+(i%4)*.55);}
+ for(let i=0;i<12;i++){const x=Math.sin(i*71.3)*2.5,y=i*ROAD_PERIOD/12+2;basin(x,y,1.8+(i%3)*.60,3.8+(i%4)*.80);}
+ // Curb pools sit under the actual luminaire arms, not just under rain sources.
+ for(let bay=0;bay<6;bay++)for(const offset of LAMP_OFFSETS)for(const side of[-1,1])basin(side*LAMP_REACH,bay*14+offset,1.0,2.0);
  for(const site of sites)basin(site.x,((site.y%ROAD_PERIOD)+ROAD_PERIOD)%ROAD_PERIOD,.72,1.10);
  heights.forEach((height,i)=>{const encoded=Math.round(T.MathUtils.clamp((height-ROAD_LOW)/ROAD_RANGE,0,1)*255);data.set([encoded,0,0,255],i*4);});
  const texture=new T.DataTexture(data,W,H);texture.wrapS=T.ClampToEdgeWrapping;texture.wrapT=T.RepeatWrapping;texture.magFilter=texture.minFilter=T.LinearFilter;texture.needsUpdate=true;
@@ -50,4 +53,8 @@ export function createBoulevardDrips(sites:readonly DrainSite[]){
 }
 export const roadHeightGLSL=`uniform sampler2D relief;const float WATER_LEVEL=${ROAD_WATER.toFixed(4)};
  float roadHeight(vec2 p){return ${ROAD_LOW.toFixed(3)}+texture2D(relief,vec2(p.x/7.2+.5,p.y/${ROAD_PERIOD.toFixed(1)})).r*${ROAD_RANGE.toFixed(3)};}
- vec3 roadPaint(vec2 p){float tick=1.-step(.24,mod(p.y,3.));float center=(1.-smoothstep(.012,.028,abs(p.x)))*tick;float edge=(1.-smoothstep(.025,.045,abs(abs(p.x)-3.35)))*tick;return vec3(.45,.015,.24)*center+vec3(.015,.33,.45)*edge;}`;
+ float roadFootprint(vec2 p){return max(1.-step(3.6,abs(p.x)),(1.-step(${(CROSSING_WIDTH/2).toFixed(2)},abs(p.y-${FOUNTAIN_Y.toFixed(1)})))*(1.-step(${CROSSING_REACH.toFixed(1)},abs(p.x))));}
+ vec3 roadPaint(vec2 p){float tick=1.-step(.24,mod(p.y,3.));float center=(1.-smoothstep(.012,.028,abs(p.x)))*tick;float edge=(1.-smoothstep(.025,.045,abs(abs(p.x)-3.35)))*tick;float crossing=1.-smoothstep(3.2,3.6,abs(p.y-${FOUNTAIN_Y.toFixed(1)}));
+ float zebraY=(1.-step(.34,abs(abs(p.y-${FOUNTAIN_Y.toFixed(1)})-3.7)))*(1.-step(3.1,abs(p.x)))*step(.25,mod(p.x+.1,.55));
+ float zebraX=(1.-step(.34,abs(abs(p.x)-5.6)))*(1.-step(2.1,abs(p.y-${FOUNTAIN_Y.toFixed(1)})))*step(.25,mod(p.y,.55));
+ return (vec3(.45,.015,.24)*center+vec3(.015,.33,.45)*edge)*(1.-crossing)+vec3(.30,.23,.34)*max(zebraX,zebraY);}`;

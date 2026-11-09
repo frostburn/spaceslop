@@ -5,7 +5,7 @@ const{createBoulevardScenery}=await server.ssrLoadModule('/src/boulevard-scenery
 test('road depressions hold level water below actual drainage points and remain continuous through pursuit recycling',()=>{
  const scene=createBoulevardScenery(),{road}=scene;assert(road.sites.length>=10&&road.sites.length<32);let wet=0,dry=0;
  for(let y=0;y<84;y+=.4)for(let x=-3.5;x<3.5;x+=.3){const h=road.field.sample(x,y);assert(h>=-.04&&h<.06);if(h<weather.ROAD_WATER)wet++;else dry++;assert(Math.abs(h-road.field.sample(x,y+84))<1e-12);}
- assert(wet>50&&dry>wet*3);for(const site of road.sites){assert(road.field.sample(site.x,site.y)<weather.ROAD_WATER-.015);assert(site.z>BOULEVARD_DECK+.4);}
+ assert(wet/(wet+dry)>.35&&wet/(wet+dry)<.55,'puddles should cover a substantial, broken part of the road');for(const site of road.sites){assert(road.field.sample(site.x,site.y)<weather.ROAD_WATER-.015);assert(site.z>BOULEVARD_DECK+.4);}
  assert.equal(road.water.position.z,0);assert.equal(road.root.position.z,BOULEVARD_DECK+weather.ROAD_WATER);assert(road.ground.geometry.attributes.position.count>5000);
  // Reflector clones shader uniforms: moving ripples must retain the live source array.
  assert.equal(road.water.material.uniforms.impacts.value,road.rain.impacts);assert.equal(road.water.material.uniforms.relief.value,road.field.texture);
@@ -83,4 +83,19 @@ test('cruiser hover remains gentle and laser contact follows its posed cyan core
  const s=createBoulevardScenery(),rig=createPursuitCruiser(s.materials),plane=new T.Group(),contact=createBossLaserContact(plane,rig.root),p=boulevardBossPoint(107,1);plane.add(rig.root);rig.root.position.set(p.x,p.y,p.z);rig.root.rotation.x=-BOULEVARD_PITCH;
  let spread=0,first;for(let t=0;t<60;t+=.1){rig.pose(t,0,0);plane.updateMatrixWorld(true);const a=rig.root.getObjectByName('laser_contact_C').getWorldPosition(new T.Vector3()),c=contact(0,22).clone();assert(c.distanceTo(new T.Vector2(a.x*22/(22-a.z),a.y*22/(22-a.z)))<1e-9);assert(Math.hypot(c.x,c.y-4.2*22/34)<.35,'hover moves core outside broad combat proxy');first??=c;spread=Math.max(spread,c.distanceTo(first));}
  assert(spread>.05);rig.pose(8,0,0);const body=rig.root.getObjectByName('cruiser-hover-frame');body.updateMatrix();const matrix=body.matrix.clone();rig.pose(8,0,0);body.updateMatrix();assert(body.matrix.equals(matrix));s.dispose();
+});
+
+
+test('street lamps expose bright underside geometry above registered curb puddles',()=>{
+ const s=createBoulevardScenery(),m=new T.Matrix4(),p=new T.Vector3();
+ for(const chunk of s.chunks){const lamps=chunk.getObjectByName('boulevard-street-lamps');assert.equal(lamps.count,4);assert(lamps.material.color.r>2);lamps.updateWorldMatrix(true,false);
+  for(let i=0;i<lamps.count;i++){lamps.getMatrixAt(i,m);p.setFromMatrixPosition(m);assert(s.road.field.sample(p.x,p.y+chunk.position.y)<weather.ROAD_WATER-.015);const source=new T.Mesh(lamps.geometry,lamps.material);source.applyMatrix4(m);source.updateMatrixWorld(true);const hits=new T.Raycaster(new T.Vector3(p.x,p.y,BOULEVARD_DECK+.1),new T.Vector3(0,0,1)).intersectObject(source);assert(hits.length>0,'downward emitter is invisible from water');assert(hits[0].distance<2.3);}
+ }s.dispose();
+});
+
+test('fountain occupies a clear cross street with curb cuts and non-overlapping asphalt arms',()=>{
+ const s=createBoulevardScenery(),cross=s.road.crossGround,g=cross.geometry.attributes.position,rect=new T.Box3(new T.Vector3(3.6,4.4,BOULEVARD_DECK+.2),new T.Vector3(19,9.6,2)),m=new T.Matrix4();
+ for(let i=0;i<g.count;i++)assert(Math.abs(g.getX(i))>=3.599,'side asphalt overlaps main road');
+ const chunk=s.chunks[5],buildings=chunk.getObjectByName('boulevard-masonry');buildings.geometry.computeBoundingBox();for(let i=0;i<buildings.count;i++){buildings.getMatrixAt(i,m);const bounds=buildings.geometry.boundingBox.clone().applyMatrix4(m);for(const side of[-1,1]){const area=rect.clone();if(side<0){area.min.x=-19;area.max.x=-3.6;}assert(!bounds.intersectsBox(area),'cross street blocked by sidewalk or building');}}
+ for(const time of[0,37,107,180]){s.update(time,time>=107?1:0,time);assert(Math.abs(s.road.root.position.y+cross.position.y-s.fountain.root.position.y)<1e-9,'intersection scrolls away from fountain');}s.dispose();
 });

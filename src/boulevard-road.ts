@@ -1,4 +1,6 @@
 import * as T from 'three';
+import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
+import {FOUNTAIN_Y,CROSSING_WIDTH,CROSSING_REACH} from './boulevard-layout';
 import {Reflector} from 'three/addons/objects/Reflector.js';
 import {BOULEVARD_DECK} from './boulevard';
 import {roadRelief,createBoulevardDrips,roadHeightGLSL,ROAD_WATER,type DrainSite} from './boulevard-weather';
@@ -9,7 +11,7 @@ export function createBoulevardRoad(map:T.Texture,sites:readonly DrainSite[]=[])
  const shader={name:'boulevard-standing-water',uniforms:{color:{value:new T.Color(0x141020)},tDiffuse:{value:null},textureMatrix:{value:new T.Matrix4()},relief:{value:field.texture},asphalt:{value:map},travel:{value:0},grazing:{value:0},impacts:{value:rain.impacts}},vertexShader,
  fragmentShader:`uniform sampler2D tDiffuse,asphalt;uniform float grazing;uniform vec4 impacts[6];varying vec4 vReflect;varying vec2 vRoad;
  ${roadHeightGLSL}
- void main(){float depth=WATER_LEVEL-roadHeight(vRoad);if(depth<0.)discard;
+ void main(){if(roadFootprint(vRoad)<.5)discard;float depth=WATER_LEVEL-roadHeight(vRoad);if(depth<0.)discard;
  vec2 slope=vec2(0.);float glint=0.;
  for(int i=0;i<6;i++){float age=impacts[i].z;if(age<0.||age>1.15)continue;vec2 p=vRoad-impacts[i].xy;float d=length(p),front=d-age*1.30;
  float envelope=exp(-front*front/0.022)*exp(-age*2.8)*smoothstep(0.,.05,age);float wave=sin(d*34.-age*16.)*envelope;
@@ -19,14 +21,14 @@ export function createBoulevardRoad(map:T.Texture,sites:readonly DrainSite[]=[])
  c+=vec3(.09,.12,.15)*glint+roadPaint(vRoad)*.45;gl_FragColor=vec4(c,1.);
  #include <colorspace_fragment>
  }`};
- const water=new Reflector(new T.PlaneGeometry(7.2,140),{textureWidth:384,textureHeight:768,multisample:0,clipBias:.003,shader});water.name='boulevard-reflecting-asphalt';water.renderOrder=-2;water.frustumCulled=false;
+ const water=new Reflector(new T.PlaneGeometry(CROSSING_REACH*2,140),{textureWidth:384,textureHeight:768,multisample:0,clipBias:.003,shader});water.name='boulevard-reflecting-asphalt';water.renderOrder=-2;water.frustumCulled=false;
  const uniforms=(water.material as T.ShaderMaterial).uniforms;uniforms.relief.value=field.texture;uniforms.asphalt.value=map;uniforms.impacts.value=rain.impacts;
  const groundUniforms={tDiffuse:uniforms.tDiffuse,textureMatrix:uniforms.textureMatrix,grazing:uniforms.grazing,relief:{value:field.texture},asphalt:{value:map},travel:uniforms.travel};
  const groundMaterial=new T.ShaderMaterial({uniforms:groundUniforms,
  vertexShader:`uniform float travel;uniform mat4 textureMatrix;varying vec4 vReflection;varying vec2 vRoad;${roadHeightGLSL}
  void main(){vReflection=textureMatrix*vec4(position,1.);vRoad=vec2(position.x,position.y+travel);vec3 p=position;p.z=roadHeight(vRoad)-WATER_LEVEL;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}`,
  fragmentShader:`uniform sampler2D asphalt,tDiffuse;uniform float grazing;varying vec4 vReflection;varying vec2 vRoad;${roadHeightGLSL}
- void main(){float h=roadHeight(vRoad);
+ void main(){if(roadFootprint(vRoad)<.5)discard;float h=roadHeight(vRoad);
  vec2 delta=vec2(.05625,.1640625);vec3 n=normalize(vec3((roadHeight(vRoad-vec2(delta.x,0.))-roadHeight(vRoad+vec2(delta.x,0.)))/(2.*delta.x),(roadHeight(vRoad-vec2(0.,delta.y))-roadHeight(vRoad+vec2(0.,delta.y)))/(2.*delta.y),1.));
  float grain=texture2D(asphalt,vRoad*.18).r,wet=1.-smoothstep(WATER_LEVEL,WATER_LEVEL+.015,h);float light=.65+max(0.,dot(n,normalize(vec3(-.8,-.5,1.))))*.35;
  // A thin water film follows the rough asphalt, including above the puddle line.
@@ -41,11 +43,17 @@ export function createBoulevardRoad(map:T.Texture,sites:readonly DrainSite[]=[])
  vec3 c=vec3(.027,.024,.034)*(.40+grain*.90)*light*(1.-wet*.22)+reflection*film+roadPaint(vRoad);gl_FragColor=vec4(c,1.);
  #include <colorspace_fragment>
  }`});
- const ground=new T.Mesh(new T.PlaneGeometry(7.2,140,32,280),groundMaterial);ground.name='boulevard-road-relief';ground.renderOrder=-1;ground.frustumCulled=false;root.add(ground,water,rain.root);
+ const ground=new T.Mesh(new T.PlaneGeometry(7.2,140,32,280),groundMaterial);ground.name='boulevard-road-relief';ground.renderOrder=-1;ground.frustumCulled=false;
+ // Side streets use the same relief and capture as the main road, with no overlap.
+ const armWidth=CROSSING_REACH-3.6,arms=[-1,1].map(side=>new T.PlaneGeometry(armWidth,CROSSING_WIDTH,64,20).translate(side*(CROSSING_REACH+3.6)/2,0,0)),crossGeometry=mergeGeometries(arms);arms.forEach(g=>g.dispose());
+ const crossMaterial=new T.ShaderMaterial({vertexShader:groundMaterial.vertexShader,fragmentShader:groundMaterial.fragmentShader,uniforms:{...groundUniforms,travel:{value:FOUNTAIN_Y},textureMatrix:{value:new T.Matrix4()}}});
+ const crossGround=new T.Mesh(crossGeometry,crossMaterial),offset=new T.Matrix4();crossGround.name='boulevard-cross-street-asphalt';crossGround.renderOrder=-1;
+ crossGround.onBeforeRender=()=>{offset.makeTranslation(0,crossGround.position.y,0);crossMaterial.uniforms.textureMatrix.value.copy(uniforms.textureMatrix.value).multiply(offset);};
+ root.add(ground,crossGround,water,rain.root);
  // Capture objects above the puddles, keeping the bank mesh out of its own reflection.
- const capture=water.onBeforeRender;water.onBeforeRender=function(...args){const visible=ground.visible;ground.visible=false;try{capture.apply(this,args);}finally{ground.visible=visible;}};
- return{root,water,ground,field,rain,sites,prime:rain.prime,
-  update(scroll:number,time:number,reveal:number){const center=scroll+36;root.position.y=center;uniforms.travel.value=center;uniforms.grazing.value=reveal;rain.update(time,scroll,center);},
+ const capture=water.onBeforeRender;water.onBeforeRender=function(...args){const visible=ground.visible,crossVisible=crossGround.visible;ground.visible=crossGround.visible=false;try{capture.apply(this,args);}finally{ground.visible=visible;crossGround.visible=crossVisible;}};
+ return{root,water,ground,crossGround,field,rain,sites,prime:rain.prime,
+  update(scroll:number,time:number,reveal:number){const center=scroll+36;root.position.y=center;crossGround.position.y=FOUNTAIN_Y-center;uniforms.travel.value=center;uniforms.grazing.value=reveal;rain.update(time,scroll,center);},
   setMap(texture:T.Texture){texture.wrapS=texture.wrapT=T.RepeatWrapping;groundUniforms.asphalt.value=texture;uniforms.asphalt.value=texture;},dispose(){water.dispose();}
  };
 }

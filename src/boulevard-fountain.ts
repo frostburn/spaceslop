@@ -1,7 +1,7 @@
 import * as T from 'three';
 import {mergeBoulevard} from './boulevard-geometry';
 import type {BoulevardMaterials} from './boulevard-materials';
-export const FOUNTAIN_Y=63;
+export {FOUNTAIN_Y} from './boulevard-layout';
 export function createBoulevardFountain(m:BoulevardMaterials){
  const root=new T.Group();root.name='boulevard-central-fountain';
  const add=(g:T.BufferGeometry,material:T.Material,z:number)=>{const mesh=new T.Mesh(g,material);mesh.position.z=z;root.add(mesh);return mesh;};

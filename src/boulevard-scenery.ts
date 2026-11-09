@@ -8,6 +8,7 @@ import {createBoulevardArch,archDrains} from './boulevard-arch';
 import {drainSite,type DrainSite} from './boulevard-weather';
 import {createBoulevardRoad} from './boulevard-road';
 import {createBoulevardFountain,FOUNTAIN_Y} from './boulevard-fountain';
+import {CROSSING_BAY,CROSSING_WIDTH,CROSSING_REACH,LAMP_OFFSETS,LAMP_X,LAMP_REACH} from './boulevard-layout';
 import {addBoulevardVenue,venueMarqueeGeometry} from './boulevard-venues';
 import {BOULEVARD_DECK,BOULEVARD_PITCH,BOULEVARD_RISE,boulevardScroll} from './boulevard';
 const CYAN=0x4acddd,VIOLET=0xa259ef;
@@ -44,17 +45,23 @@ export function createBoulevardScenery(){
  for(let index=0;index<22;index++){
   const chunk=new T.Group(),base=index*14-14,random=boulevardRandom(901+index*71);chunk.position.y=base;chunk.name='boulevard-bay-'+index;chunks.push(chunk);world.add(chunk);
   const solid:BoulevardPart[]=[],metal:BoulevardPart[]=[],pink:BoulevardPart[]=[],cyan:BoulevardPart[]=[],warm:BoulevardPart[]=[],wires:BoulevardPart[]=[],trunks:BoulevardPart[]=[],fronds:BoulevardPart[]=[],holo:BoulevardPart[]=[],holoTrunks:BoulevardPart[]=[],glows:BoulevardPart[]=[];
-  const round:BoulevardPart[]=[],marquee:BoulevardPart[]=[],water:BoulevardPart[]=[],spires:BoulevardPart[]=[],windows:BoulevardPart[]=[],rooms:BoulevardPart[]=[],columns:BoulevardPart[]=[];
+  const round:BoulevardPart[]=[],marquee:BoulevardPart[]=[],water:BoulevardPart[]=[],spires:BoulevardPart[]=[],lamps:BoulevardPart[]=[],windows:BoulevardPart[]=[],rooms:BoulevardPart[]=[],columns:BoulevardPart[]=[];
   const venues={solid,metal,pink,cyan,warm,round,marquee,water,windows,rooms,columns},nightlife=index>=4,dense=index>=9;
   for(const side of[-1,1]){
-   solid.push(block(side*4.5,7,BOULEVARD_DECK-.1,1.8,14,.3,0x615268));
-   metal.push(block(side*3.65,7,BOULEVARD_DECK+.18,.06,14,.12));pink.push(block(side*3.67,7,BOULEVARD_DECK+.25,.025,14,.025));
+   const crossing=index===CROSSING_BAY;
+   const walks=crossing?[[2.1,4.2],[11.9,4.2]]:[[7,14]];
+   for(const[y,length]of walks){solid.push(block(side*4.5,y,BOULEVARD_DECK-.1,1.8,length,.3,0x615268));metal.push(block(side*3.65,y,BOULEVARD_DECK+.18,.06,length,.12));pink.push(block(side*3.67,y,BOULEVARD_DECK+.25,.025,length,.025));}
+   if(crossing)for(const end of[-1,1]){
+    solid.push(block(side*(CROSSING_REACH+3.6)/2,7+end*(CROSSING_WIDTH/2+.45),BOULEVARD_DECK-.1,CROSSING_REACH-3.6,.8,.3,0x615268));
+    metal.push(block(side*(CROSSING_REACH+3.6)/2,7+end*(CROSSING_WIDTH/2+.08),BOULEVARD_DECK+.18,CROSSING_REACH-3.6,.06,.12));
+    pink.push(block(side*(CROSSING_REACH+3.6)/2,7+end*(CROSSING_WIDTH/2+.06),BOULEVARD_DECK+.25,CROSSING_REACH-3.6,.025,.025));
+   }
    let roofLine=0;
    for(let by=0;by<3;by++){
     // Pocket courts, a fountain plaza and staggered setbacks keep the route straight
     // while changing the silhouette and distance to the street.
     if(by===1&&(index===5||index===6||index===10||index%7===3))continue;
-    const y=1.6+by*4.6,w=2.4+random()*2.1,h=1.6+random()*1.8,depth=2.5+random()*1.4;
+    const y=crossing?(by===0?1.5:12.2):1.6+by*4.6,w=2.4+random()*2.1,h=1.6+random()*1.8,depth=crossing?2.5:2.5+random()*1.4;
     const street=4.15+(index===5?1.2:((index+by)%4===0?.9:random()*.35)),x=side*(street+w/2);
     addBoulevardVenue(venues,index,by,side,x,y,w,depth,h,BOULEVARD_DECK);
     roofLine=Math.max(roofLine,h+(nightlife?2.6:.62));
@@ -71,12 +78,20 @@ export function createBoulevardScenery(){
     }
    }
    for(let i=0;i<3;i++){
-    const y=.4+i*4.5,x=side*(3.78+random()*.12),h=roofLine+1.0+random()*.45;
+    if(crossing&&i===1)continue;
+    const y=crossing&&i===2?10.1:.4+i*4.5,x=side*(3.78+random()*.12),h=roofLine+1.0+random()*.45;
     trunks.push(block(x,y,BOULEVARD_DECK+h/2,.105,.105,h,0x806343));
     metal.push(block(x,y,BOULEVARD_DECK+.08,.42,.42,.16));warm.push(block(x-side*.17,y,BOULEVARD_DECK+.23,.045,.13,.18));
     const foliage=block(x,y,BOULEVARD_DECK+h,.85,.85,1,0x488e74,random()*6);
     if(i===index%3)holoTrunks.push(block(x,y,BOULEVARD_DECK,.105,.105,h,side<0?CYAN:VIOLET));
     (i===index%3?holo:fronds).push({...foliage,color:i===index%3?(side<0?CYAN:VIOLET):foliage.color});glows.push(block(x,y,BOULEVARD_DECK+.035,3.8,4.5,1,side<0?0x38c0df:0xed39ac));
+   }
+   for(const y of LAMP_OFFSETS){
+    // Downward-facing luminous cores remain visible to the reflection camera.
+    metal.push(block(side*LAMP_X,y,BOULEVARD_DECK+1.22,.07,.07,2.44));
+    metal.push(block(side*(LAMP_X+LAMP_REACH)/2,y,BOULEVARD_DECK+2.44,LAMP_X-LAMP_REACH+.13,.09,.10));
+    metal.push(block(side*LAMP_REACH,y,BOULEVARD_DECK+2.41,.65,.29,.13));
+    lamps.push(block(side*LAMP_REACH,y,BOULEVARD_DECK+2.333,.51,.21,.025));
    }
   }
   // A taller opposite-side lot must not swallow the lower promenade's crowns.
@@ -87,7 +102,7 @@ export function createBoulevardScenery(){
   const add=(name:string,g:T.BufferGeometry,m:T.Material,parts:BoulevardPart[])=>{if(parts.length)chunk.add(boulevardBatch(name,g,m,parts));};
   add('boulevard-masonry',masonry,materials.stone,solid);add('boulevard-chrome',box,materials.chrome,metal);
   add('boulevard-rounded-corners',cylinder,materials.glass,round);add('boulevard-club-marquees',marqueeGeometry,materials.pink,marquee);add('boulevard-recessed-glazing',box,materials.windows,windows);add('boulevard-room-interiors',box,materials.interior,rooms);add('boulevard-portico-columns',cylinder,materials.chrome,columns);
-  add('boulevard-pink-fixtures',box,materials.pink,pink);add('boulevard-cyan-fixtures',box,materials.cyan,cyan);add('boulevard-warm-windows',box,materials.amber,warm);
+  add('boulevard-pink-fixtures',box,materials.pink,pink);add('boulevard-cyan-fixtures',box,materials.cyan,cyan);add('boulevard-warm-windows',box,materials.amber,warm);add('boulevard-street-lamps',box,materials.streetLamp,lamps);
   add('boulevard-building-backs',box,materials.backFaces,wires);add('boulevard-spire-backs',spireBody,materials.backFaces,spires);
   add('boulevard-holographic-buildings',wireBox,materials.wire,wires);add('boulevard-holographic-spires',wireSpire,materials.wire,spires);add('boulevard-rooftop-pools',new T.PlaneGeometry(1,1),poolWater,water);add('boulevard-palm-trunks',cylinder,materials.bark,trunks);add('boulevard-organic-palms',leaves,materials.leaf,fronds);add('boulevard-wire-palms',wireLeaves,materials.wire,holo);add('boulevard-vector-palm-trunks',wireTrunk,materials.wire,holoTrunks);add('boulevard-light-pools',new T.PlaneGeometry(1,1),glowMaterial,glows);
   if(index%3===1&&index<=7){const gateway=arch.root.clone(true);gateway.position.y=8;chunk.add(gateway);archDrains().forEach((p,i)=>drains.push(drainSite(p.x,base+8+p.y,p.z,index,index*5+i)));}

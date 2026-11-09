@@ -18,10 +18,11 @@ export function createBoulevardMaterials(){
  const bark=new T.MeshStandardMaterial({color:0x695442,roughness:.93});
  const leaf=new T.MeshStandardMaterial({color:0x42815d,roughness:.75,side:T.DoubleSide});
  const pink=new T.MeshBasicMaterial({color:0xf743bd,toneMapped:false}),cyan=new T.MeshBasicMaterial({color:0x41d9f2,toneMapped:false}),amber=new T.MeshBasicMaterial({color:0xffba65,toneMapped:false});
+ const streetLamp=new T.MeshBasicMaterial({color:new T.Color(0xf3e9ff).multiplyScalar(3.2),toneMapped:false});
  const backFaces=new T.MeshBasicMaterial({color:0x0d071d,side:T.BackSide});
  const wire=vectorMaterial();
  const roadData=new Uint8Array(128*128*4);for(let i=0;i<128*128;i++){const noise=105+random()*70;roadData.set([noise,noise,noise,255],i*4);}
  const roadMap=new T.DataTexture(roadData,128,128);roadMap.wrapS=roadMap.wrapT=T.RepeatWrapping;roadMap.generateMipmaps=true;roadMap.minFilter=T.LinearMipmapLinearFilter;roadMap.needsUpdate=true;
- return{chrome,shell,stone,glass,windows,interior,bark,leaf,pink,cyan,amber,wire,backFaces,roadMap};
+ return{chrome,shell,stone,glass,windows,interior,bark,leaf,pink,cyan,amber,wire,backFaces,streetLamp,roadMap};
 }
 export type BoulevardMaterials=ReturnType<typeof createBoulevardMaterials>;
