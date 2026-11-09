@@ -24,6 +24,6 @@ assert(pack.required.includes(pack.entry));
  for(const other of ids)assert(!serviceWorker.includes(`url:"${packs.levels[other].entry}`),'The service worker precaches level code.');
  assert(!serviceWorker.includes('encounters/'),'The service worker eagerly downloads level media.');
 }
-for(const file of ['workshop.html','vent-study.html','io-study.html'])await assert.rejects(stat(join(root,file)));
-for(const file of files.filter(f=>f.endsWith('.js'))){const text=await readFile(join(root,'assets',file),'utf8');assert(!text.includes('__qa'),'QA hooks leaked into production.');assert(!/(workshop|vent-study|io-study)\.html/.test(text),'Development links leaked into production.');}
+for(const file of ['workshop.html','vent-study.html','io-study.html','heliostat-study.html'])await assert.rejects(stat(join(root,file)));
+for(const file of files.filter(f=>f.endsWith('.js'))){const text=await readFile(join(root,'assets',file),'utf8');assert(!text.includes('__qa'),'QA hooks leaked into production.');assert(!/(workshop|vent-study|io-study|heliostat-study)\.html/.test(text),'Development links leaked into production.');assert(!text.includes('heliostat-panorama.png'),'Study media leaked into production code.');}
 console.log('Menu size, seven isolated level packages, selective precaching and production dev-page exclusions passed.');

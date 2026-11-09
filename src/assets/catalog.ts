@@ -28,6 +28,15 @@ export const textureFiles = {
   titanChitin: 'encounters/titan-chitin.png',
 } as const;
 export type EncounterTexture = keyof typeof textureFiles;
+
+// Development studies are deliberately outside every flight/offline package.
+export const studyTextureFiles = {
+  heliostatSky: 'encounters/heliostat-panorama.png',
+  heliostatDistant: 'encounters/heliostat-distant.png',
+  heliostatPanels: 'encounters/heliostat-panels.png',
+} as const;
+export type StudyTexture = keyof typeof studyTextureFiles;
+
 export const levelTextures: Record<LevelId, readonly EncounterTexture[]> = {
   boulevard:['armor','boulevardRoad'],
   preserve: ['armor', 'feathers', 'scales'],

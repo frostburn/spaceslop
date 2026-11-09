@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { createHash } from 'node:crypto';
-import { textureFiles } from './src/assets/catalog';
+import { textureFiles, studyTextureFiles } from './src/assets/catalog';
 import { levelPackages } from './scripts/level-packages';
 
 const icons = [192, 512].flatMap((size) => {
@@ -33,7 +33,7 @@ const encounterTextures = Object.fromEntries(Object.entries(textureFiles).filter
 const portraitUrls = Object.fromEntries(portraits.map(src => [src, versioned(src)]));
 const packages = levelPackages(encounterTextures, Object.values(portraitUrls));
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
 
   define: {
 
@@ -42,6 +42,12 @@ export default defineConfig({
     __PILOT_URLS__: JSON.stringify(portraitUrls),
 
     __ENCOUNTER_TEXTURES__: JSON.stringify(encounterTextures),
+
+    __STUDY_TEXTURES__: JSON.stringify(command === 'serve' ? Object.fromEntries(
+      Object.entries(studyTextureFiles)
+        .filter(([, src]) => existsSync(new URL('./public/' + src, import.meta.url)))
+        .map(([key, src]) => [key, versioned(src)]),
+    ) : {}),
 
   },
 
@@ -96,4 +102,4 @@ export default defineConfig({
   }),
   ],
 
-});
+}));

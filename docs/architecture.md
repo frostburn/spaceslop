@@ -21,6 +21,8 @@
 
 Existing level geometry, rig and layout modules retain their descriptive prefixes (`preserve-*`, `vent-*`, `io-*`, `titan-*`, `ice-*`, `hive-*`, marine/ant helpers). The renderer entry point shows which pieces a stage uses. Shared effects stay separate from simulation geometry. The asset workshop intentionally loads the full model collection and its texture helper; it is a development entry point only.
 
+`heliostat-study.html` is a separate Vite-only Uranus corridor experiment, linked on its own line from the development menu. `src/heliostat-study.ts` owns its controls, frozen presentation clock, bounded artwork preparation and page/HMR cleanup. `src/studies/heliostat-*` separates the camera/atlas layout, solid bay, distant plant cards, direction-locked sky, optional art loader and scene. No flight renderer imports these modules. `studyTextureFiles` is outside `textureFiles` and all seven level packages; the study media manifest is populated only by the dev server. Production checks exclude its page, links and code. See `docs/heliostat-study.md` for the art handoff and inspection sequence.
+
 ## Startup and session lifecycle
 
 The initial HTML/CSS and menu contain no WebGL context, game loop, pilot images or level media. Selecting a card changes metadata only. **Prepare flight** imports the session and shared engine, then invokes only the selected level factory. That factory constructs its scenery/actor pools and loads its media. Preflight uploads that level's resources and shared weapons before enabling launch.
