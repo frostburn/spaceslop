@@ -71,6 +71,7 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
   const bossHealth = element<HTMLProgressElement>('boss-health');
   const droneWeapon = element<HTMLSelectElement>('drone-weapon');
   const levelSelector = element<HTMLSelectElement>('level');
+  levelSelector.replaceChildren(...Object.entries(levels).map(([id,level])=>new Option(level.name,id)));
   levelSelector.value = selectedLevel;
   levelSelector.disabled = true;
   const testingWings = import.meta.env.DEV || new URLSearchParams(location.search).get('testLoadout') === '1';
@@ -98,12 +99,12 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     const fighting = flight.phase === 'stage' || flight.phase === 'boss';
     const label = {
       stage: levels[flight.level].sector,
-      approach: flight.level==='boulevard'?'SUNSET PLAZA':flight.level === 'vents' ? 'ABYSSAL DROP' : flight.level === 'io' ? 'CALDERA APPROACH' : flight.level === 'titan' ? 'ASCENT' : 'CONTACT',
+      approach: flight.level==='heliostat'?'COLLECTOR APPROACH':flight.level==='boulevard'?'SUNSET PLAZA':flight.level === 'vents' ? 'ABYSSAL DROP' : flight.level === 'io' ? 'CALDERA APPROACH' : flight.level === 'titan' ? 'ASCENT' : 'CONTACT',
       boss: 'BOSS',
       won: 'CLEAR',
       lost: 'SIGNAL LOST',
     }[flight.phase];
-    sector.textContent = (flight.level === 'vents' || flight.level === 'ice' || flight.level === 'titan') && flight.phase === 'stage'
+    sector.textContent = (flight.level === 'heliostat' || flight.level === 'vents' || flight.level === 'ice' || flight.level === 'titan') && flight.phase === 'stage'
       ? `${label} · ${Math.min(10, Math.floor(flight.hiveProgress * 10) + 1)}/10` : label;
     if (flight.level === 'io' && flight.phase === 'stage')
       sector.textContent = `IO · ${Math.min(IO_SCREENS, Math.floor(flight.hiveProgress * IO_SCREENS) + 1)}/${IO_SCREENS}`;
@@ -125,7 +126,7 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
       bossStart.hidden = !betweenRuns;
       element('vent-study').hidden = !betweenRuns || flight.level !== 'vents';
       element('io-study').hidden = !betweenRuns || flight.level !== 'io';
-      bossStart.textContent = flight.level === 'boulevard' || flight.level === 'preserve' || flight.level === 'vents' || flight.level === 'titan' || flight.level === 'io' ? 'Launch at transition' : 'Launch at boss';
+      bossStart.textContent = flight.level === 'heliostat' || flight.level === 'boulevard' || flight.level === 'preserve' || flight.level === 'vents' || flight.level === 'titan' || flight.level === 'io' ? 'Launch at transition' : 'Launch at boss';
       bossStart.disabled = start.disabled || !view;
     }
     pilotPicker.setVisible(betweenRuns);
@@ -140,9 +141,9 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     else if (screen === 'title')
       tip = offlineReady ? 'Level ready offline' : 'Ready to launch';
     else if (flight.droneWeapon === 'towline') {
-      tip = flight.phase === 'boss' ? (flight.level==='boulevard'?'Sweep the arc across the cyan core.':flight.level === 'ice' ? 'Sweep the arc across the mouth marker.' : flight.level === 'io' ? 'Sweep the arc across the cyan support, then exposed machinery.' : flight.level === 'titan' ? 'Sweep the arc across the glowing thorax vent.' : flight.level === 'vents' ? (flight.crabCoreOpen ? 'Sweep the arc across the exposed gills.' : 'Sweep the arc across a glowing claw joint.') : 'Sweep the arc across the green cannon.') : 'Park the drone · Sweep the arc';
+      tip = flight.phase === 'boss' ? (flight.level==='heliostat'||flight.level==='boulevard'?'Sweep the arc across the cyan core.':flight.level === 'ice' ? 'Sweep the arc across the mouth marker.' : flight.level === 'io' ? 'Sweep the arc across the cyan support, then exposed machinery.' : flight.level === 'titan' ? 'Sweep the arc across the glowing thorax vent.' : flight.level === 'vents' ? (flight.crabCoreOpen ? 'Sweep the arc across the exposed gills.' : 'Sweep the arc across a glowing claw joint.') : 'Sweep the arc across the green cannon.') : 'Park the drone · Sweep the arc';
     }
-    else if(flight.phase==='boss'&&flight.level==='boulevard')tip='Target the cyan core · Move after the amber aim lock.';
+    else if(flight.phase==='boss'&&(flight.level==='boulevard'||flight.level==='heliostat'))tip='Target the cyan core · Move after the amber aim lock.';
     else if (flight.phase === 'boss' && flight.level === 'preserve')
       tip = 'Dodge the claw windups. Pulse interrupts an attack. Fire into the belly.';
     else if (flight.phase === 'boss')

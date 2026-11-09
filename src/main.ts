@@ -12,6 +12,7 @@ let selected = readLevel(new URLSearchParams(location.search).get('level'));
 let session: AbortController | undefined;
 let reloadBeforePreparation = false;
 const descriptions: Record<LevelId, string> = {
+  heliostat:'Fly through an artificial-star power plant above Uranus. Dodge capacitor discharges, cyborg man o’wars and inspection drones, then disable the Sunspot Regulator.',
   boulevard:'A rain-polished neon resort, luminous wireframe architecture and a pursuit cruiser beneath an artificial sunset.',
   vents: 'Mineral gardens, black smokers and the abyss. An articulated crab guards the drop.',
   io: 'Sulfur works, flowing lava and the Caldera Engine.',
@@ -104,7 +105,7 @@ document.querySelector('#clear-offline')!.addEventListener('click', async () => 
 if (import.meta.env.DEV) {
   const links=document.createElement('nav');
   links.id='menu-dev-tools';links.className='dev-links';links.setAttribute('aria-label','Development tools');
-  for(const [path,label]of [['workshop.html','Asset workshop'],['vent-study.html','Abyss camera study'],['io-study.html','Io camera study']]){
+  for(const [path,label]of [['workshop.html','Asset workshop'],['vent-study.html','Abyss camera study'],['io-study.html','Io camera study'],['heliostat-study.html','Uranus corridor study']]){
     const link=document.createElement('a');link.href=import.meta.env.BASE_URL+path;link.textContent=label;links.append(link);
   }
   menu.querySelector('.menu-actions')!.append(links);

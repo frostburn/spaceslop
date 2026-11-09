@@ -39,3 +39,15 @@ Broodlock composites the two distant plates under the alpha foreground, using th
 Ant and mushroom surfaces retain deterministic code-drawn color, bump, and roughness detail without the chitin and fungus albedo files. Those two optional PNGs replace color only; keep them opaque and do not import them as normal maps. The mold patch instead needs alpha, and has a procedural fuzzy fallback when absent or unreadable. Its sprites share materials, blend over the shell, and do not write depth. With no hive foreground, procedural side rails meet the same mushroom roots; positions and collision remain identical. The prototype strip always spans three screens. Shared mushroom, parasite, and mold rendering is warmed before launch, including the variants farther up the strip. Layout and collision live in `src/hive-layout.ts` and `src/hive-collision.ts`, ant avoidance in `src/ant-navigation.ts`, meshes in `src/hive-fungi.ts`, `src/ant-rigs.ts`, and `src/ant-parasite.ts`, and mold sprites in `src/ant-mold.ts`; no model download is required.
 
 Frostwake art is delivered through chat for owner upload. The two surface textures and galactic backdrop are optional and are cached when Frostwake is prepared. Without them, modeled frost colors, procedural surface relief, a procedural galactic sky, and 3D distant rocks preserve the scene. Normal/roughness detail and metal patina are generated in-engine, requiring no additional uploaded maps. Wrecks reuse the existing optional metal texture. New scenery geometry, materials, refinery/station buffers, and textures join preflight warm-up before launch; modules farther along the route are warmed too.
+
+
+## Heliostat media
+
+Generated revisions are delivered through chat for review and manual owner upload. Rebuild production or restart Vite after replacing a file.
+
+| Path | Format / layout | Use |
+| --- | --- | --- |
+| `public/encounters/heliostat-uranus-backdrop.png` | RGB PNG, 724×2172, whole 1:3 image, sRGB/clamp | Owner's revised ring-system backdrop; flat vertical pan during the turn |
+| `public/encounters/heliostat-manowar.png` | RGBA PNG, currently 627×627, equal 2×2 cells; preserve alpha | Top row: float / sail. Bottom row: harness / tendril. UV crops are resolution independent; resize the whole sheet with its layout and alpha intact. |
+
+The guard’s optional raster modules share one alpha-tested material, pose without new geometry and warm before launch. The modeled body remains the fallback when the image is absent or fails. Alpha never changes hitboxes or firing time. Existing alloy and ceramic maps supply the station surfaces. Both the playable sector and Heliostat workshop use the same atlas. No new generated image binaries belong in the code PR.
