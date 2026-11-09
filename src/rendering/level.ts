@@ -18,10 +18,12 @@ export interface LevelScene {
   models: (T.Object3D | undefined)[];
   ready: Promise<TextureResult[]>;
   stageDistance: number;
+  farDistance?: number;
   background?: number;
   key?: number;
   sky?: number;
   ground?: number;
+  friendlyGlow?: number;
   keyIntensity?: number;
   skyIntensity?: number;
   surfaces?: T.Group[];
@@ -45,6 +47,7 @@ export interface LevelScene {
     z?: number;
   };
   capture?: (renderer: T.WebGLRenderer, camera: T.Camera) => void;
+  present?: (renderer: T.WebGLRenderer, scene: T.Scene, camera: T.Camera) => void;
   effects?: (plane: T.Group, sources: readonly T.Mesh[], frame: LevelFrame, renderer: T.WebGLRenderer) => void;
   dispose?: () => void;
 }

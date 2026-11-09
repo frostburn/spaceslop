@@ -42,6 +42,9 @@ const missile = mergeGeometries([
 const missileBand = new T.CylinderGeometry(0.069, 0.069, 0.065, 10).translate(0, 0.025, 0);
 const forward = new T.Vector3(0, 1, 0);
 const white = new T.Color(0xfff8e6);
+const facingGLSL = `float viewFacing(vec3 n, vec3 eye) {
+  return clamp(dot(n, eye) * inversesqrt(max(dot(n,n) * dot(eye,eye), 1e-12)), 0.0, 1.0);
+}`;
 
 function energyMaterial(color: number, danger: boolean) {
   return new T.ShaderMaterial({
@@ -55,8 +58,9 @@ function energyMaterial(color: number, danger: boolean) {
         gl_Position = projectionMatrix * eye;
       }`,
     fragmentShader: `uniform vec3 tint, hot; uniform float edge; varying vec3 vNormal, vView;
+      ${facingGLSL}
       void main() {
-        float facing = max(0.0, dot(normalize(vNormal), normalize(vView)));
+        float facing = viewFacing(vNormal, vView);
         vec3 color = mix(tint * edge, tint, smoothstep(0.15, 0.55, facing));
         color = mix(color, hot, smoothstep(0.67, 0.98, facing));
         gl_FragColor = vec4(color, 1.0);
@@ -78,11 +82,14 @@ function trailMaterial(color: number) {
         gl_Position = projectionMatrix * eye;
       }`,
     fragmentShader: `uniform vec3 tint; uniform float clock; varying float along; varying vec3 vNormal, vView;
+      ${facingGLSL}
       void main() {
-        float center = max(0.0, dot(normalize(vNormal), normalize(vView)));
-        float pulse = 0.85 + 0.15 * sin(along * 24.0 - clock * 37.0);
-        gl_FragColor = vec4(mix(tint, vec3(1.0), pow(along, 5.0) * 0.45),
-          pow(along, 1.8) * (0.12 + 0.45 * center) * pulse);
+        float center = viewFacing(vNormal, vView), t = clamp(along, 0.0, 1.0);
+        // Interpolation at the tail tip can undershoot zero on some GPUs.
+        // A fractional power of that value poisons the HDR blur with NaNs.
+        float pulse = 0.85 + 0.15 * sin(t * 24.0 - clock * 37.0);
+        gl_FragColor = vec4(mix(tint, vec3(1.0), pow(t, 5.0) * 0.45),
+          pow(t, 1.8) * (0.12 + 0.45 * center) * pulse);
         #include <colorspace_fragment>
       }`,
   });

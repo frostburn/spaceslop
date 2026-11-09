@@ -1,0 +1,140 @@
+import assert from 'node:assert/strict';import{test,after}from'node:test';import * as T from 'three';import{createServer}from'vite';
+const server=await createServer({root:new URL('..',import.meta.url).pathname,configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true,entries:[]},appType:'custom'});after(()=>server.close());
+const{createBoulevardScenery}=await server.ssrLoadModule('/src/boulevard-scenery.ts'),weather=await server.ssrLoadModule('/src/boulevard-weather.ts'),{BOULEVARD_DECK}=await server.ssrLoadModule('/src/boulevard.ts');
+
+test('road depressions hold level water below actual drainage points and remain continuous through pursuit recycling',()=>{
+ const scene=createBoulevardScenery(),{road}=scene;assert(road.sites.length>=10&&road.sites.length<32);let wet=0,dry=0;
+ for(let y=0;y<84;y+=.4)for(let x=-3.5;x<3.5;x+=.3){const h=road.field.sample(x,y);assert(h>=-.04&&h<.06);if(h<weather.ROAD_WATER)wet++;else dry++;assert(Math.abs(h-road.field.sample(x,y+84))<1e-12);}
+ assert(wet/(wet+dry)>.35&&wet/(wet+dry)<.55,'puddles should cover a substantial, broken part of the road');for(const site of road.sites){assert(road.field.sample(site.x,site.y)<weather.ROAD_WATER-.015);assert(site.z>BOULEVARD_DECK+.4);}
+ assert.equal(road.water.position.z,0);assert.equal(road.root.position.z,BOULEVARD_DECK+weather.ROAD_WATER);assert(road.ground.geometry.attributes.position.count>5000);
+ // Reflector clones shader uniforms: moving ripples must retain the live source array.
+ assert.equal(road.water.material.uniforms.impacts.value,road.rain.impacts);assert.equal(road.water.material.uniforms.relief.value,road.field.texture);
+ scene.dispose();
+});
+
+test('drips hit their puddles under gravity, share the paused clock and reuse warmed instance storage',()=>{
+ const scene=createBoulevardScenery(),{road}=scene,site=road.sites[0],fall=weather.dripState(0,site).fall;
+ const impactTime=site.period+fall-site.phase,hit=weather.dripState(impactTime,site);assert(Math.abs(hit.z-BOULEVARD_DECK-weather.ROAD_WATER)<1e-10);assert(Math.abs(hit.impact)<1e-10);
+ scene.update(5,0,impactTime+.15);assert(road.rain.impacts.some(v=>Math.abs(v.x-site.x)<1e-9&&Math.abs(v.y-site.y)<1e-9&&v.z>=0&&v.z<1.15));
+ const matrices=road.rain.root.instanceMatrix.array.slice(),rings=road.rain.impacts.map(v=>v.clone()),count=road.rain.root.count;
+ scene.update(5,0,impactTime+.15);assert.deepEqual(road.rain.root.instanceMatrix.array,matrices);assert.equal(road.rain.root.count,count);assert(road.rain.impacts.every((v,i)=>v.equals(rings[i])));
+ road.prime(true);assert.equal(road.rain.root.count,road.sites.length);road.prime(false);assert.equal(road.rain.root.count,count);scene.dispose();
+});
+
+test('authored vector strokes keep both endpoints registered when fixed anatomy is batched',async()=>{
+ const{vectorGeometry,vectorMaterial}=await server.ssrLoadModule('/src/boulevard-vectors.ts'),{mergeBoulevard}=await server.ssrLoadModule('/src/boulevard-geometry.ts');
+ const root=new T.Group(),material=vectorMaterial();for(const x of[-2,2]){const mesh=new T.Mesh(vectorGeometry([{points:[[0,0,0],[1,0,0]]}]),material);mesh.position.set(x,3,4);mesh.rotation.z=Math.PI/2;mesh.scale.set(2,1,1);root.add(mesh);}mergeBoulevard(root);
+ assert.equal(root.children.length,1);const g=root.children[0].geometry,key=(a,i)=>[a.getX(i),a.getY(i),a.getZ(i)].map(n=>n.toFixed(5)).join(','),p=g.attributes.position,q=g.attributes.otherPosition;
+ const positions=new Set(Array.from({length:p.count},(_,i)=>key(p,i))),endpoints=new Set(Array.from({length:q.count},(_,i)=>key(q,i)));assert.deepEqual(endpoints,positions);assert.equal(positions.size,4);assert(positions.has('2.00000,5.00000,4.00000'));assert(!g.attributes.barycentric);
+});
+
+test('lens diffusion restores renderer state after capture failure and releases all its bounded targets',async()=>{
+ const{createBoulevardGlow}=await server.ssrLoadModule('/src/boulevard-glow.ts'),glow=createBoulevardGlow(),initial=new T.WebGLRenderTarget(200,300);let target=initial,test=true;const viewport=new T.Vector4(3,4,111,222),scissor=new T.Vector4(7,8,99,100);
+ const renderer={getDrawingBufferSize:v=>v.set(400,800),getRenderTarget:()=>target,getScissorTest:()=>test,getViewport:v=>v.copy(viewport),getScissor:v=>v.copy(scissor),setScissorTest:v=>{test=v;},setRenderTarget:v=>{target=v;viewport.set(0,0,v?.width??400,v?.height??800);},setViewport:v=>viewport.copy(v),setScissor:v=>scissor.copy(v),render:()=>{throw Error('capture failed');}};
+ assert.throws(()=>glow.present(renderer,new T.Scene(),new T.Camera()),/capture failed/);assert.equal(target,initial);assert(test);assert.deepEqual(viewport.toArray(),[3,4,111,222]);assert.deepEqual(scissor.toArray(),[7,8,99,100]);assert.deepEqual(glow.targets.map(t=>[t.width,t.height]),[[400,800],[200,400],[200,400]]);
+ let depthReleased=0;assert(glow.targets[0].depthTexture);glow.targets[0].depthTexture.addEventListener('dispose',()=>depthReleased++);let released=0;for(const t of glow.targets)t.addEventListener('dispose',()=>released++);glow.dispose();assert.equal(released,3);assert.equal(depthReleased,1);initial.dispose();
+});
+
+
+test('palm crowns clear nearby roofs and their trunks remain on the promenade',()=>{
+ const scene=createBoulevardScenery(),matrix=new T.Matrix4(),point=new T.Vector3(),scale=new T.Vector3(),q=new T.Quaternion();
+ for(const chunk of scene.chunks){
+  const buildings=chunk.getObjectByName('boulevard-masonry');let roof=-Infinity;
+  buildings.geometry.computeBoundingBox();for(let i=0;i<buildings.count;i++){buildings.getMatrixAt(i,matrix);roof=Math.max(roof,buildings.geometry.boundingBox.clone().applyMatrix4(matrix).max.z);}
+  for(const name of['boulevard-organic-palms','boulevard-wire-palms']){const crowns=chunk.getObjectByName(name);for(let i=0;i<crowns.count;i++){crowns.getMatrixAt(i,matrix);point.setFromMatrixPosition(matrix);assert(point.z-.5>roof+.35,'crown intersects neighboring building');}}
+  const trunks=chunk.getObjectByName('boulevard-palm-trunks');for(let i=0;i<trunks.count;i++){trunks.getMatrixAt(i,matrix);matrix.decompose(point,q,scale);assert(Math.abs(point.x)-scale.x>3.6&&Math.abs(point.x)+scale.x<4.05,'trunk is inside a roof or the road');}
+ }scene.dispose();
+});
+
+test('mountains remain behind the pursuit city and back faces hide scenery while leaving interiors open',()=>{
+ const scene=createBoulevardScenery();scene.horizon.geometry.computeBoundingBox();
+ for(const time of[100,107,180,300]){scene.update(time,1,time);const near=scene.horizon.position.y+scene.horizon.geometry.boundingBox.min.y*scene.horizon.scale.y;assert(near>Math.max(...scene.chunks.map(c=>c.position.y+14))+20);assert(scene.sunRoot.position.y>scene.horizon.position.y+scene.horizon.geometry.boundingBox.max.y*scene.horizon.scale.y+50);assert(scene.mountains.material.depthWrite&&!scene.mountains.material.transparent);}
+ const shell=new T.Mesh(new T.BoxGeometry(1,1,1),scene.materials.backFaces);shell.updateMatrixWorld(true);
+ const ray=new T.Raycaster(new T.Vector3(0,-3,0),new T.Vector3(0,1,0)),hit=ray.intersectObject(shell)[0];assert(hit&&Math.abs(hit.distance-3.5)<1e-9,'rear surface should sit behind internal machinery');assert(scene.materials.backFaces.depthWrite&&!scene.materials.backFaces.transparent);scene.dispose();
+});
+
+test('friendly light gain applies once to session-owned emitters and leaves paint and other actors unchanged',async()=>{
+ const{boostFriendlyGlow}=await server.ssrLoadModule('/src/rendering/friendly-glow.ts'),{createFighterRig,createScoutRig}=await server.ssrLoadModule('/src/ship-rigs.ts');
+ const ship=createFighterRig(),other=createFighterRig(),enemy=createScoutRig(),rootColors=root=>{const colors=[];root.traverse(o=>{if(o.isMesh&&o.material.color)colors.push(o.material.color.toArray());});return colors;};
+ const otherBefore=rootColors(other.root),enemyBefore=rootColors(enemy);let led,paint,jet;ship.root.traverse(o=>{if(o.isMesh){if(o.material.isMeshBasicMaterial)led??=o.material;if(o.material.isMeshStandardMaterial)paint??=o.material;if(o.material.isShaderMaterial)jet??=o.material;}});
+ const lightBefore=led.color.clone(),paintBefore=paint.color.clone();boostFriendlyGlow([ship.root,ship.root],2.5);assert(led.color.equals(lightBefore.multiplyScalar(2.5)));assert(paint.color.equals(paintBefore));assert.equal((jet.fragmentShader.match(/gl_FragColor.rgb \*=/g)||[]).length,1);assert.deepEqual(rootColors(other.root),otherBefore);assert.deepEqual(rootColors(enemy),enemyBefore);
+});
+
+test('venue windows reveal recessed modeled rooms behind structural columns',async()=>{
+ const{addBoulevardVenue}=await server.ssrLoadModule('/src/boulevard-venues.ts'),{boulevardBatch}=await server.ssrLoadModule('/src/boulevard-geometry.ts');
+ const parts=Object.fromEntries(['solid','metal','pink','cyan','warm','round','marquee','water','windows','rooms','columns'].map(k=>[k,[]]));
+ addBoulevardVenue(parts,0,0,1,6,0,3,3,2,0);
+ const group=new T.Group(),box=new T.BoxGeometry(1,1,1),m=new T.MeshBasicMaterial();for(const name of['solid','rooms'])group.add(boulevardBatch(name,box,m,parts[name]));group.updateMatrixWorld(true);
+ const ray=x=>new T.Raycaster(new T.Vector3(x,-3.5,.5),new T.Vector3(0,1,0)).intersectObject(group)[0];
+ assert(ray(6).distance>2.55,'window should look into a recessed room');assert(ray(5.545).distance<2.2,'load-bearing jamb must stand in front of the interior');assert(parts.windows.every(p=>Math.min(p.sx,p.sy,p.sz)>.02));
+});
+
+test('fountain stays below combat, diverts ground cars and freezes its existing spray buffer',()=>{
+ const s=createBoulevardScenery(),f=s.fountain,matrices=f.drops.instanceMatrix.array;
+ assert(new T.Box3().setFromObject(f.root).max.z<-.8,'fountain intrudes into flight plane');
+ s.prime(true);s.prime(false);assert.equal(f.drops.frustumCulled,false);
+ for(let time=30;time<46;time+=.1){s.update(time,0,time);for(const c of s.traffic)assert(Math.hypot(c.root.position.x,c.root.position.y-f.root.position.y)>1.8,'ground car intersects fountain basin');}
+ s.update(37,0,37);const frozen=matrices.slice();s.update(37,0,37);assert.equal(matrices,f.drops.instanceMatrix.array);assert.deepEqual(matrices,frozen);s.update(37,0,37.2);assert.notDeepEqual(matrices,frozen);
+ const widths=new Set();for(const chunk of s.chunks){assert(!chunk.getObjectByName('boulevard-facade-cards'));const rooms=chunk.getObjectByName('boulevard-room-interiors');assert(rooms?.count>0);const masonry=chunk.getObjectByName('boulevard-masonry'),m=new T.Matrix4();for(let i=0;i<masonry.count;i++){masonry.getMatrixAt(i,m);widths.add(m.elements[0].toFixed(2));}}assert(widths.size>50,'buildings repeat identical footprints');s.dispose();
+});
+
+test('cruiser hover remains gentle and laser contact follows its posed cyan core',async()=>{
+ const{createPursuitCruiser}=await server.ssrLoadModule('/src/boulevard-rigs.ts'),{createBossLaserContact}=await server.ssrLoadModule('/src/laser-contact.ts'),{BOULEVARD_PITCH,boulevardBossPoint}=await server.ssrLoadModule('/src/boulevard.ts');
+ const s=createBoulevardScenery(),rig=createPursuitCruiser(s.materials),plane=new T.Group(),contact=createBossLaserContact(plane,rig.root),p=boulevardBossPoint(107,1);plane.add(rig.root);rig.root.position.set(p.x,p.y,p.z);rig.root.rotation.x=-BOULEVARD_PITCH;
+ let spread=0,first;for(let t=0;t<60;t+=.1){rig.pose(t,0,0);plane.updateMatrixWorld(true);const a=rig.root.getObjectByName('laser_contact_C').getWorldPosition(new T.Vector3()),c=contact(0,22).clone();assert(c.distanceTo(new T.Vector2(a.x*22/(22-a.z),a.y*22/(22-a.z)))<1e-9);assert(Math.hypot(c.x,c.y-4.2*22/34)<.35,'hover moves core outside broad combat proxy');first??=c;spread=Math.max(spread,c.distanceTo(first));}
+ assert(spread>.05);rig.pose(8,0,0);const body=rig.root.getObjectByName('cruiser-hover-frame');body.updateMatrix();const matrix=body.matrix.clone();rig.pose(8,0,0);body.updateMatrix();assert(body.matrix.equals(matrix));s.dispose();
+});
+
+
+test('street lamps expose bright underside geometry above registered curb puddles',()=>{
+ const s=createBoulevardScenery(),m=new T.Matrix4(),p=new T.Vector3();
+ for(const chunk of s.chunks){const lamps=chunk.getObjectByName('boulevard-street-lamps');assert.equal(lamps.count,4);assert(lamps.material.color.r>2);lamps.updateWorldMatrix(true,false);
+  for(let i=0;i<lamps.count;i++){lamps.getMatrixAt(i,m);p.setFromMatrixPosition(m);assert(s.road.field.sample(p.x,p.y+chunk.position.y)<weather.ROAD_WATER-.015);const source=new T.Mesh(lamps.geometry,lamps.material);source.applyMatrix4(m);source.updateMatrixWorld(true);const hits=new T.Raycaster(new T.Vector3(p.x,p.y,BOULEVARD_DECK+.1),new T.Vector3(0,0,1)).intersectObject(source);assert(hits.length>0,'downward emitter is invisible from water');assert(hits[0].distance<2.3);}
+ }s.dispose();
+});
+
+test('fountain occupies a clear cross street with curb cuts and non-overlapping asphalt arms',()=>{
+ const s=createBoulevardScenery(),cross=s.road.crossGround,g=cross.geometry.attributes.position,rect=new T.Box3(new T.Vector3(3.6,4.4,BOULEVARD_DECK+.2),new T.Vector3(19,9.6,2)),m=new T.Matrix4();
+ for(let i=0;i<g.count;i++)assert(Math.abs(g.getX(i))>=3.599,'side asphalt overlaps main road');
+ const chunk=s.chunks[5],buildings=chunk.getObjectByName('boulevard-masonry');buildings.geometry.computeBoundingBox();for(let i=0;i<buildings.count;i++){buildings.getMatrixAt(i,m);const bounds=buildings.geometry.boundingBox.clone().applyMatrix4(m);for(const side of[-1,1]){const area=rect.clone();if(side<0){area.min.x=-19;area.max.x=-3.6;}assert(!bounds.intersectsBox(area),'cross street blocked by sidewalk or building');}}
+ for(const time of[0,37,107,180]){s.update(time,time>=107?1:0,time);assert(Math.abs(s.road.root.position.y+cross.position.y-s.fountain.root.position.y)<1e-9,'intersection scrolls away from fountain');}s.dispose();
+});
+
+
+test('city color clocks remain scene-owned and independent of actor materials and geometry',()=>{
+ const s=createBoulevardScenery(),original=[s.materials.pink,s.materials.cyan,s.materials.amber,s.materials.streetLamp].map(m=>m.color.clone()),matrices=s.chunks[9].getObjectByName('boulevard-pink-fixtures').instanceMatrix.array.slice();
+ for(const key of['stone','interior','pink','cyan','amber','streetLamp']){assert.notEqual(s.city[key],s.materials[key]);const shader={uniforms:{},vertexShader:T.ShaderLib.basic.vertexShader,fragmentShader:T.ShaderLib.basic.fragmentShader};s.city[key].onBeforeCompile(shader);assert.equal(shader.uniforms.cityClock,s.city.clock);}
+ assert.equal(s.city.wire.uniforms.cityClock,s.city.clock);assert.notEqual(s.city.wire,s.materials.wire);
+ s.update(37,0,12);assert.equal(s.city.clock.value,12);s.update(160,1,12);assert.equal(s.city.clock.value,12,'camera movement or recycling advances paused light colors');assert.deepEqual(s.chunks[9].getObjectByName('boulevard-pink-fixtures').instanceMatrix.array,matrices);s.update(160,1,18);assert.equal(s.city.clock.value,18);
+ for(const[i,key]of['pink','cyan','amber','streetLamp'].entries())assert(s.materials[key].color.equals(original[i]),'city animations changed an actor emitter');s.dispose();
+});
+
+test('sun bands remain static with solid caps while the warmth clock advances',async()=>{
+ const{createBoulevardSun}=await server.ssrLoadModule('/src/boulevard-sun.ts'),sun=createBoulevardSun(),positions=sun.disk.geometry.attributes.position.array,before=positions.slice(),fragment=sun.disk.material.fragmentShader;sun.update(20);sun.update(26);assert.equal(sun.clock.value,26);assert.equal(sun.disk.geometry.attributes.position.array,positions);assert.deepEqual(positions,before);assert.deepEqual(sun.disk.material.uniforms,{});assert.equal(sun.disk.material.fragmentShader,fragment);assert(sun.disk.material.depthWrite);
+});
+
+test('sun geometry has progressively thicker upper bands, real gaps and closed circular caps',async()=>{
+ const{createBoulevardSun,SUN_BANDS,SUN_RADIUS}=await server.ssrLoadModule('/src/boulevard-sun.ts'),sun=createBoulevardSun(),disk=new T.Mesh(sun.disk.geometry,sun.disk.material);disk.updateMatrixWorld(true);
+ const hit=y=>new T.Raycaster(new T.Vector3(0,y,2),new T.Vector3(0,0,-1)).intersectObject(disk).length>0;
+ for(let i=0;i<SUN_BANDS.length;i++){const[lo,hi]=SUN_BANDS[i];assert(hit((lo+hi)/2));if(i>1)assert(hi-lo>SUN_BANDS[i-1][1]-SUN_BANDS[i-1][0]);if(i>0)assert(!hit((lo+SUN_BANDS[i-1][1])/2),'sun gap is filled');}
+ assert(hit(-SUN_RADIUS+.02)&&hit(SUN_RADIUS-.02));assert(!hit(SUN_RADIUS+.02));const p=disk.geometry.attributes.position;for(let i=0;i<p.count;i++)assert(Math.hypot(p.getX(i),p.getY(i))<=SUN_RADIUS+1e-5);
+});
+
+test('roadside cascades reserve clear lots, stay below flight and animate with fixed GPU storage',()=>{
+ const s=createBoulevardScenery();assert.equal(s.waterfalls.roots.length,14);s.root.updateMatrixWorld(true);
+ for(const root of s.waterfalls.roots){const bay=Number(root.parent.name.replace('boulevard-bay-',''));assert(![1,4,5,6,7,10].includes(bay),'cascade blocks crossing, arch or monorail');const bounds=new T.Box3().setFromObject(root);assert(bounds.max.z<-.7);assert(Math.min(Math.abs(bounds.min.x),Math.abs(bounds.max.x))>3.6*s.world.scale.x);
+  const masonry=root.parent.getObjectByName('boulevard-masonry'),matrix=new T.Matrix4();masonry.geometry.computeBoundingBox();for(let i=0;i<masonry.count;i++){masonry.getMatrixAt(i,matrix);const b=masonry.geometry.boundingBox.clone().applyMatrix4(matrix).applyMatrix4(masonry.matrixWorld);if(b.max.z>BOULEVARD_DECK+.4)assert(!b.intersectsBox(bounds),'building occupies cascade lot');}
+ }
+ const root=s.waterfalls.roots[0],spray=root.getObjectByName('boulevard-waterfall-splash'),sheet=root.getObjectByName('boulevard-waterfall-flow'),matrices=spray.instanceMatrix.array,vertices=sheet.geometry.attributes.position.array,before=matrices.slice();
+ const stream=root.getObjectByName('boulevard-waterfall-source-particles'),streamMatrices=stream.instanceMatrix.array,streamBefore=streamMatrices.slice();assert.equal(stream.count,24);assert(stream.geometry.attributes.streamPhase.array.every(n=>n>=0&&n<1));assert.equal(stream.material.uniforms.clock,s.waterfalls.clock);
+ const bottomY=sheet.geometry.attributes.position.getY(18*9);let impacts;root.traverse(o=>{if(o.isMesh&&o.material.name==='boulevard-waterfall-basins')impacts=o.material.uniforms.impacts.value;});assert.equal(impacts.length,7);for(const p of impacts){assert(Math.abs(p.y-bottomY)<1e-6);assert(Math.abs(p.x)<.9);}
+ s.update(30,0,18);assert.equal(s.waterfalls.clock.value,18);s.update(180,1,18);assert.equal(s.waterfalls.clock.value,18);s.update(180,1,19);assert.equal(s.waterfalls.clock.value,19);assert.equal(spray.instanceMatrix.array,matrices);assert.deepEqual(matrices,before);assert.equal(sheet.geometry.attributes.position.array,vertices);assert(spray.boundingSphere.radius>1);s.dispose();
+ assert.equal(stream.instanceMatrix.array,streamMatrices);assert.deepEqual(streamMatrices,streamBefore);
+});
+
+test('palm uplights belong to their own trunk/canopy materials and match each tree foot',()=>{
+ const s=createBoulevardScenery();assert.notEqual(s.palmLighting.bark,s.materials.bark);assert.notEqual(s.palmLighting.leaf,s.materials.leaf);
+ for(const material of[s.palmLighting.bark,s.palmLighting.leaf]){const shader={uniforms:{},vertexShader:T.ShaderLib.standard.vertexShader,fragmentShader:T.ShaderLib.standard.fragmentShader};material.onBeforeCompile(shader);assert.equal(shader.uniforms.palmUplight,s.palmLighting.strength);}
+ const m=new T.Matrix4(),p=new T.Vector3(),q=new T.Vector3();for(const chunk of s.chunks){const trunks=chunk.getObjectByName('boulevard-palm-trunks'),lamps=chunk.getObjectByName('boulevard-palm-uplights');assert.equal(trunks.count,lamps.count);for(let i=0;i<trunks.count;i++){trunks.getMatrixAt(i,m);p.setFromMatrixPosition(m);lamps.getMatrixAt(i,m);q.setFromMatrixPosition(m);assert(Math.abs(q.y-p.y)<1e-6);assert(Math.abs(q.x-p.x+Math.sign(p.x)*.17)<1e-6);assert(Math.abs(q.z-BOULEVARD_DECK-.34)<1e-6);}}
+ s.dispose();
+});

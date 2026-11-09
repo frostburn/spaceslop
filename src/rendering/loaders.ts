@@ -3,6 +3,7 @@ import type { LevelFactory } from './level';
 export const levelLoaders: Record<LevelId, () => Promise<{
   createLevel: LevelFactory;
 }>> = {
+  boulevard: () => import('./levels/boulevard'),
   preserve: () => import('./levels/preserve'),
   broodlock: () => import('./levels/broodlock'),
   ice: () => import('./levels/ice'),

@@ -1,3 +1,10 @@
+import {createBoulevardMine,createBoulevardInterceptor} from './boulevard-enemies';
+import {createBoulevardGlow} from './boulevard-glow';
+import {createBoulevardFountain} from './boulevard-fountain';
+import {createBoulevardArch} from './boulevard-arch';
+import {createBoulevardScenery} from './boulevard-scenery';
+import {createHovercar,createPursuitCruiser} from './boulevard-rigs';
+import {boulevardBossPoint,BOULEVARD_PITCH,boulevardSection} from './boulevard';
 import { createAmbusherMaterials, createPoolAmbusher } from './preserve-ambusher-rig';
 import { ambusherStudy, AMBUSHER_DURATION, AMBUSHER_FALL } from './preserve-ambusher';
 import { createPreserveUv, preserveLighting } from './preserve-lighting';
@@ -52,8 +59,9 @@ function element<T extends HTMLElement>(id: string) {
 }
 
 function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
+  const glow=createBoulevardGlow();window.addEventListener('pagehide',()=>glow.dispose(),{once:true});
   const scene = new T.Scene();
-  const camera = new T.PerspectiveCamera(39, 1, 0.05, 200);
+  const camera = new T.PerspectiveCamera(39, 1, 0.05, 600);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
 
@@ -171,7 +179,23 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   keeperPreview.rotation.x = -Math.PI / 2; keeperPreview.position.y = -7; keeperPreview.add(keeper.root);
   void loadEncounterTexture('feathers', texture => { keeper.setFeatherTexture(texture); preserve.boss.setFeatherTexture(texture); });
   void loadEncounterTexture('scales', texture => { keeper.setScaleTexture(texture); preserve.boss.setScaleTexture(texture); });
+  const boulevard=createBoulevardScenery(),cruiser=createPursuitCruiser(boulevard.materials),hovercar=createHovercar(boulevard.materials),boulevardPreview=new T.Group(),routeCruiser=createPursuitCruiser(boulevard.materials);
+  glow.setSun(boulevard.sun.disk,boulevard.sun.clock);
+  boulevardPreview.add(boulevard.root,routeCruiser.root);cruiser.root.rotation.x=-BOULEVARD_PITCH;
+  void loadEncounterTexture('boulevardRoad',boulevard.road.setMap);
+  const boulevardArch=createBoulevardArch(boulevard.materials);boulevardArch.root.rotation.x=-Math.PI/2;
+  const fountain=createBoulevardFountain(boulevard.materials);fountain.root.rotation.x=-Math.PI/2;
+  const studyMine=createBoulevardMine(boulevard.materials),studyInterceptor=createBoulevardInterceptor(boulevard.materials);
+  const studyWaterfall=boulevard.waterfalls.create(2,1);studyWaterfall.position.set(0,0,0);studyWaterfall.rotation.x=-Math.PI/2;
   const assets = {
+    boulevard_waterfall:{root:studyWaterfall,bounds:new T.Box3(new T.Vector3(-1.2,-.2,-1.6),new T.Vector3(1.2,2.5,1.6)),duration:6,pose(time:number){boulevard.waterfalls.update(time);return 'raised source pool / falling curtain / catch basin / spray';}},
+    boulevard_mine:{root:studyMine.root,bounds:new T.Box3(new T.Vector3(-2.5,-2.5,-3.2),new T.Vector3(2.5,2.5,1.2)),duration:2.8,pose(time:number){const state={site:0,triggeredAt:21,burstAt:time>=2?22:undefined};studyMine.pose(state,20+time,time<2);studyMine.body.position.x=studyMine.body.position.y=0;studyMine.warning.position.x=studyMine.warning.position.y=0;studyMine.flash.position.x=studyMine.flash.position.y=0;return time<1?'armed · proximity radius':time<1.4?'triggered · fuse':time<2?'jumping':'radial burst';}},
+    boulevard_interceptor:{root:studyInterceptor.root,duration:3.4,pose(time:number){const phase=time%2.8;studyInterceptor.pose(T.MathUtils.clamp((phase-1.05)/.65,0,1),.30*Math.sin(time*.8),time);return phase<1.05?'lane change':phase<1.7?'locked aim · charge':'three-shot volley';}},
+    boulevard_fountain:{root:fountain.root,bounds:new T.Box3(new T.Vector3(-1.7,-.2,-1.7),new T.Vector3(1.7,2.2,1.7)),duration:6,pose(time:number){fountain.update(time);return 'tiered basin / flowing jets / fine spray';}},
+    boulevard_arch:{root:boulevardArch.root,bounds:new T.Box3(new T.Vector3(-5,-3.2,-1),new T.Vector3(5,3.6,1)),duration:1,pose:()=> 'curved chrome shell / swept vector ribs'},
+    boulevard_route:{root:boulevardPreview,duration:125,bounds:new T.Box3(new T.Vector3(-5,-8,-5),new T.Vector3(5,8,1)),pose(time:number){const reveal=T.MathUtils.smoothstep(time,100,107);boulevard.update(time,reveal,time);const p=boulevardBossPoint(time,reveal);routeCruiser.root.position.set(p.x,p.y,p.z);routeCruiser.root.rotation.x=-BOULEVARD_PITCH*reveal;routeCruiser.pose(time,Math.max(0,Math.sin(time*2)),0);return boulevardSection(time);}},
+    pursuit_cruiser:{root:cruiser.root,duration:6.8,pose(time:number){cruiser.pose(time,T.MathUtils.smoothstep(time%3.4,.55,1.55),time%3.4>1.55?Math.max(0,1-(time%3.4-1.55)/.24):0);return 'rotary cannons / exposed lattice / cyan core';}},
+    hovercar:{root:hovercar.root,duration:3.4,pose:()=> 'solid core / luminous cage'},
     microraptor:{root:flyer.root,duration:5.6,pose(time:number){const p=flyerMotion(time,0,{...loopCourse,formation:'swoop'});const stroke=flyer.pose(time,{...loopCourse,formation:'swoop'},p.bank);return stroke.tuck>.1?'tucked swoop':stroke.burst>.1?'burst wingbeats':'four-wing glide';}},
     microraptor_flock:{root:flockRoot,duration:12,bounds:new T.Box3(new T.Vector3(-3.5,-9,-1),new T.Vector3(3.5,10,1)),pose(time:number){flock.forEach((r,i)=>{const course={...loopCourse,slot:i},p=flyerMotion(time,0,course);r.root.position.set(p.x,p.y,0);r.pose(time,course,p.bank,p.heading);});return 'staggered train · tangent-continuous loop';}},
     pool_ambusher:{root:ambusher.root,duration:AMBUSHER_DURATION+2.5,bounds:new T.Box3(new T.Vector3(-3.5,-6.2,-4),new T.Vector3(3.5,3.7,1.5)),pose(time:number){const p=ambusherStudy(time);ambusher.pose(p);return p.phase;}},
@@ -377,7 +401,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     previous = now;
     controls.update();
     if(iceField.root.visible)iceField.capture(renderer,camera);
-    renderer.render(scene, camera);
+    if(sector.value==='boulevard')glow.present(renderer,scene,camera);else renderer.render(scene,camera);
   });
 }
 

@@ -16,6 +16,7 @@ import { levelLoaders } from './rendering/loaders';
 import { type LevelFactory, type LevelScene, type LevelFrame } from './rendering/level';
 import { loadCommonTextures } from './rendering/common-textures';
 import { tiltFlightCamera } from './rendering/flight-camera';
+import { boostFriendlyGlow } from './rendering/friendly-glow';
 import { disposeScene } from './rendering/dispose';
 export async function createFlightView(canvas: HTMLCanvasElement, level: LevelId, signal = new AbortController().signal) {
   const { createLevel } = await levelLoaders[level]();
@@ -135,6 +136,8 @@ export class FlightView {
     this.renderer.shadowMap.type = T.PCFShadowMap;
     this.scene.add(this.plane);
     this.level = createLevel({ plane: this.plane, scene: this.scene, signal });
+    this.perspective.far = this.level.farDistance ?? 240;
+    this.perspective.updateProjectionMatrix();
     this.cannonMarker.renderOrder = 12;
     const p = this.level;
     this.scene.background = new T.Color(p.background ?? sceneColor);
@@ -152,6 +155,10 @@ export class FlightView {
         }
       });
     this.bubbleSources = [...this.playerBurners, ...this.droneBurners, ...pods.flatMap(shipBurners)];
+    boostFriendlyGlow([this.player.root,this.drone,...pods,
+      ...(['ship','drone','homing','cannon','omega'] as const).map(kind=>this.projectiles[kind].root),
+      ...this.wingLasers.map(r=>r.root),this.playerMuzzle.root,this.droneMuzzle.root,
+      this.towlineGlow,this.towlineCore,this.droneGoal,this.pulse],p.friendlyGlow??1);
     // Start texture timers after synchronous geometry construction has finished.
     this.texturesReady = Promise.all([p.ready, loadCommonTextures([this.player.root, this.drone, ...pods, ...ammo, ...this.drops.map(r => r.root), ...(p.surfaces ?? [])], p.applyArmor, signal)]).then(textures => {
       this.surfacesReady = true;
@@ -223,7 +230,8 @@ export class FlightView {
       this.renderer.setScissorTest(true);
       try {
         this.level.capture?.(this.renderer, camera);
-        this.renderer.render(this.scene, camera);
+        if (this.level.present) this.level.present(this.renderer, this.scene, camera);
+        else this.renderer.render(this.scene, camera);
       }
       finally {
         objects.forEach((o, i) => {
@@ -385,14 +393,7 @@ export class FlightView {
         model.pose(drop.weapon, this.animationTime, (this.animationTime - this.seenDrops.get(drop)!) / 0.22);
       }
     }
-    this.projectiles.ship.draw(flight.shots.filter((shot) => !shot.drone && !shot.wing), this.animationTime);
-    this.projectiles.drone.draw(flight.shots.filter((shot) => shot.drone), this.animationTime);
-    for (const weapon of ['homing', 'cannon', 'omega'] as const) {
-      this.projectiles[weapon].draw(flight.shots.filter((shot) => shot.wing === weapon), this.animationTime);
-    }
-    this.projectiles.hostile.draw(flight.level === 'vents' || flight.level === 'preserve' || flight.level === 'titan' || flight.level === 'io' ? flight.threats : [], this.animationTime);
-    this.projectiles.brine.draw(flight.level === 'ice' ? flight.threats : [], this.animationTime);
-    this.projectiles.spore.draw(flight.level === 'broodlock' ? flight.threats : [], this.animationTime);
+    this.drawProjectiles(flight);
     this.drawFeedback(flight, elapsed);
     for (const [index, ring] of this.markers.entries()) {
       const marker = flight.markers[index];
@@ -408,7 +409,8 @@ export class FlightView {
     this.pulse.material.opacity = flight.pulseFlash / 0.3;
     this.level.effects?.(this.plane, this.bubbleSources, levelFrame, this.renderer);
     this.level.capture?.(this.renderer, camera);
-    this.renderer.render(this.scene, camera);
+    if (this.level.present) this.level.present(this.renderer, this.scene, camera);
+    else this.renderer.render(this.scene, camera);
   }
   private drawWings(flight: Flight, reveal: number, velocity: T.Vector2, distance?: number) {
     const fighting = flight.phase === 'stage' || flight.phase === 'boss';
@@ -443,6 +445,16 @@ export class FlightView {
       }
     }
   }
+  private drawProjectiles(flight: Flight) {
+    this.projectiles.ship.draw(flight.shots.filter((shot) => !shot.drone && !shot.wing), this.animationTime);
+    this.projectiles.drone.draw(flight.shots.filter((shot) => shot.drone), this.animationTime);
+    for (const weapon of ['homing', 'cannon', 'omega'] as const) {
+      this.projectiles[weapon].draw(flight.shots.filter((shot) => shot.wing === weapon), this.animationTime);
+    }
+    this.projectiles.hostile.draw(flight.level !== 'ice' && flight.level !== 'broodlock' ? flight.threats : [], this.animationTime);
+    this.projectiles.brine.draw(flight.level === 'ice' ? flight.threats : [], this.animationTime);
+    this.projectiles.spore.draw(flight.level === 'broodlock' ? flight.threats : [], this.animationTime);
+  }
   private drawFeedback(flight: Flight, elapsed: number) {
     this.combat.update(elapsed);
     let shipFired = false;
@@ -474,7 +486,7 @@ export class FlightView {
         this.enemyVitals.delete(enemy);
     }
     for (const enemy of flight.enemies)
-      if (!this.enemyVitals.has(enemy))
+      if (!enemy.mine && !this.enemyVitals.has(enemy))
         this.enemyVitals.set(enemy, {
           hp: enemy.hp,
           laserDamage: enemy.laserDamage ?? 0,

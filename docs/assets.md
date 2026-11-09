@@ -15,7 +15,6 @@ The encounter textures and backdrops are optional PNGs. Add the reviewed files a
 | `public/encounters/io-basalt.png` | Optional opaque seamless basalt albedo/bump detail for Io terrain, crust and cliffs. sRGB, repeat, mipmaps, 512 × 512 recommended. Broad terrain pigmentation is authored in-engine. First Io texture delivered in chat. |
 | `public/encounters/io-ceramic.png` | Optional opaque seamless chipped refractory ceramic albedo/bump detail for the Caldera Engine, Skippers and industry. sRGB, repeat, mipmaps, 512 × 512 recommended. Second Io texture delivered in chat. |
 | `public/encounters/titan-chitin.png` | Optional opaque grayscale neutral insect-cuticle albedo/bump detail, sRGB, repeat, mipmaps; 512 × 512 recommended. Species tint stays in-engine. First texture delivered in chat. |
-| `public/encounters/titan-setae.png` | Earlier soft-fur RGBA card; retained as owner artwork, but modeled coarse stubble now replaces it in the game. |
 | `public/encounters/titan-maintenance-parts.png` | Optional RGBA square 2×2 parts atlas: chassis, sensor turret, upper arm, forearm/gripper in reading order. Keep the full transparent canvas and cell positions; sRGB, clamp to edge. 1280 × 1280 original, or resize the whole image uniformly. |
 | `public/encounters/titan-research-ground-10screens.png` | Optional opaque sRGB 720 × 12800 ten-screen strip, opening at the bottom and core at the top. Keep its orientation and full extent. Runtime slicing and procedural masks require no companion image. |
 | `public/encounters/frostwake-galaxy.png` | Optional opaque sRGB galactic plate. A 3:8 image (e.g. 768 × 2048) spans 1.5 portrait screens; other aspect ratios are cropped automatically without stretching stars. Preserve the full image and rebuild after upload. |
@@ -25,8 +24,6 @@ The encounter textures and backdrops are optional PNGs. Add the reviewed files a
 | `public/encounters/interceptor-metal.png` | Tileable brushed metal for ship and pod armor and the corridor bridge |
 | `public/encounters/feather-vane.png` | Raptor wing and tail feathers and the ace's crest. Orient the root down and tip up. |
 | `public/encounters/draconian-scales.png` | Tileable draconian face, snout, and jaw |
-| `public/encounters/preserve-backdrop.png` | Retired prototype artwork. The orbital preserve now uses procedural 3D terrain/structure; this image is neither loaded nor cached in its level package. |
-| `public/encounters/shipyard-backdrop.png` | Retired preserve-boss artwork, retained for a future draconian stage. Not requested or cached by the preserve. |
 | `public/encounters/broodlock-foreground.png` | RGBA 720 × 3840 three-screen hive strip. Preserve its alpha and orientation; it traverses bottom to top once, without mirroring or repeating. |
 | `public/encounters/broodlock-mines-mask.png` | Grayscale mask with the exact foreground dimensions and alignment. White reveals mines through the central channel and bridge grating; black reveals stars through exterior holes. Loaded as linear data. |
 | `public/encounters/broodlock-stars.png` | Opaque portrait starfield, fixed in screen space. sRGB; no tiling required. |

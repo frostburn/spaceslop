@@ -1,5 +1,6 @@
 import type { LevelId } from '../levels';
 export const textureFiles = {
+  boulevardRoad:'encounters/boulevard-asphalt.png',
   ventMortar: 'encounters/vent-barnacle.png',
   ventFauna: 'encounters/vent-fauna.png',
   ventWorm: 'encounters/vent-worm.png',
@@ -28,6 +29,7 @@ export const textureFiles = {
 } as const;
 export type EncounterTexture = keyof typeof textureFiles;
 export const levelTextures: Record<LevelId, readonly EncounterTexture[]> = {
+  boulevard:['armor','boulevardRoad'],
   preserve: ['armor', 'feathers', 'scales'],
   broodlock: ['armor', 'hive', 'hiveMask', 'hiveStars', 'hiveMines', 'chitin', 'fungus', 'mold'],
   ice: ['armor', 'ice', 'rock', 'galaxy', 'marine'],

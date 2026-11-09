@@ -12,6 +12,7 @@ let selected = readLevel(new URLSearchParams(location.search).get('level'));
 let session: AbortController | undefined;
 let reloadBeforePreparation = false;
 const descriptions: Record<LevelId, string> = {
+  boulevard:'A rain-polished neon resort, luminous wireframe architecture and a pursuit cruiser beneath an artificial sunset.',
   vents: 'Mineral gardens, black smokers and the abyss. An articulated crab guards the drop.',
   io: 'Sulfur works, flowing lava and the Caldera Engine.',
   titan: 'An overgrown research station beneath amber haze. Rise to face the cicada.',
@@ -73,6 +74,8 @@ prepare.addEventListener('click', async () => {
   prepare.disabled = true;
   menu.hidden = true;
   app.hidden = false;
+  // Disable the old session's launch control before the async import yields.
+  document.querySelector<HTMLButtonElement>('#start')!.disabled = true;
   try {
     const { openFlightSession } = await import('./app/flight-session');
     if (controller.signal.aborted)
