@@ -4,6 +4,7 @@ import {grassTuft,meadowFlower} from './botany';
 import {createSummerSkyState,summerWaterVertex,summerWaterReflection,type SummerSkyState} from './clouds';
 import {summerChannel,summerRiverShader} from './river';
 import {createRiverGardens} from './gardens';
+import {weatherSummerSurface} from './weathering';
 export function createSummerTerrain(sharedSky?:SummerSkyState){
   const root=new T.Group();root.name='summer-steppe';const clock={value:0},windScroll={value:0},gardens=createRiverGardens();root.add(gardens.root);
   const sky=sharedSky??createSummerSkyState();
@@ -25,12 +26,17 @@ export function createSummerTerrain(sharedSky?:SummerSkyState){
         water+=vec3(.012,.022,.018)*smoothstep(.72,.96,flow);
         float foam=(1.-smoothstep(.02,.14,abs(d-width+.09)))*smoothstep(.64,.83,n(vec2(q.x*4.,q.y*3.-clock*.25)));
         water+=vec3(.05,.065,.045)*foam;
-        float bank=smoothstep(width+shore-.07,width+shore+.1,d),mud=1.-smoothstep(width+.1,width+.6,d);
+        float bank=smoothstep(width+shore-.07,width+shore+.1,d),mud=1.-smoothstep(width+.08,width+.72+(n(q*.8)-.5)*.35,d);
         if(bank<1.)water=summerReflectClouds(water);
         float inner=clamp(side*channel.w*18.,0.,1.);
         float bar=smoothstep(.35,.96,d/width)*inner*(.5+.5*n(q*.7));
         water=mix(water,vec3(.24,.205,.13)*(.78+grain*.35),bar*.88);
-        grass=mix(grass,vec3(.18,.15,.085)*(.7+grain*.4),mud*.85);
+        float damp=1.-smoothstep(width+.1,width+.45,d);
+        vec3 soil=mix(vec3(.23,.18,.10),vec3(.085,.08,.043),damp)*(.74+grain*.36);
+        grass=mix(grass,soil,mud*.9);
+        float bare=smoothstep(.57,.8,n(q*.65+7.8))*(1.-smoothstep(width+.7,width+2.4,d))*(1.-mud);
+        grass=mix(grass,soil,bare*.35);
+        water=mix(water,vec3(.12,.16,.10),smoothstep(width-.55,width,d)*.13);
         gl_FragColor=vec4(mix(water,grass,bank),1.);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -38,6 +44,7 @@ export function createSummerTerrain(sharedSky?:SummerSkyState){
   ground.name='summer-meltwater-meadow';ground.position.set(0,(SUMMER_END+90)/2-30,SUMMER_FLOOR);root.add(ground);
   const leaf=grassTuft(),flowerGeometry=meadowFlower(),rockGeometry=new T.IcosahedronGeometry(1,1);
   const leafMaterial=new T.MeshStandardMaterial({color:0xffffff,roughness:.96,side:T.DoubleSide}),flowerMaterial=new T.MeshStandardMaterial({color:0xffffff,roughness:.85}),rockMaterial=new T.MeshStandardMaterial({color:0x727362,roughness:1});
+  weatherSummerSurface(rockMaterial,'rock');
   leafMaterial.onBeforeCompile=shader=>{shader.uniforms.summerWindTime=clock;shader.uniforms.summerWindScroll=windScroll;
     shader.vertexShader='uniform float summerWindTime;uniform float summerWindScroll;\n'+shader.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
       vec3 stem=(modelMatrix*instanceMatrix*vec4(position,1.)).xyz;

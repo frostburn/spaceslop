@@ -1,12 +1,14 @@
 import * as T from 'three';
 import {atlasRectangles,rasterPart} from './atlas';
 import {smooth} from './layout';
+import {summerNoise} from './noise';
+import {weatherSummerSurface} from './weathering';
 export function createSummerIce(){
   const root=new T.Group();root.name='palette-animated-thaw';const clock={value:0},material=new T.MeshBasicMaterial({alphaTest:.25,side:T.DoubleSide});
   material.onBeforeCompile=shader=>{
     shader.uniforms.thawClock=clock;
     shader.vertexShader='varying vec3 icePosition;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nicePosition=position;');
-    shader.fragmentShader='uniform float thawClock;varying vec3 icePosition;\n'+shader.fragmentShader.replace('#include <map_fragment>',`#include <map_fragment>
+    shader.fragmentShader='uniform float thawClock;varying vec3 icePosition;\n'+summerNoise+'\n'+shader.fragmentShader.replace('#include <map_fragment>',`#include <map_fragment>
       float lum=dot(diffuseColor.rgb,vec3(.2126,.7152,.0722));
       float iceMask=smoothstep(.015,.10,diffuseColor.b-diffuseColor.r*.7);
       float phase=fract(lum*5.+thawClock*.075+sin(icePosition.y*7.+icePosition.x*11.)*.07);
@@ -14,10 +16,18 @@ export function createSummerIce(){
       cold=mix(cold,vec3(.93,.95,.92),smoothstep(.68,.95,phase));
       float stream=pow(max(0.,sin(icePosition.y*39.-thawClock*1.4+sin(icePosition.x*14.))),14.);
       diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*.78+cold*.22,iceMask);
-      diffuseColor.rgb+=iceMask*stream*(1.-smoothstep(.55,.9,lum))*vec3(.035,.06,.065);`);
-  };material.customProgramCacheKey=()=> 'summer-thaw-palette-v1';
+      diffuseColor.rgb+=iceMask*stream*(1.-smoothstep(.55,.9,lum))*vec3(.035,.06,.065);
+      #ifdef USE_MAP
+        vec2 dirtStep=vec2(.0035);
+        float edge=1.-min(min(texture2D(map,vMapUv+vec2(dirtStep.x,0.)).a,texture2D(map,vMapUv-vec2(dirtStep.x,0.)).a),min(texture2D(map,vMapUv+vec2(0.,dirtStep.y)).a,texture2D(map,vMapUv-vec2(0.,dirtStep.y)).a));
+        float silt=n(icePosition.xy*vec2(13.,21.)+5.7);
+        float sediment=(edge*(.18+silt*.27)+smoothstep(.64,.86,silt)*.11)*smoothstep(.25,.65,lum);
+        diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.22,.19,.13),sediment);
+      #endif`);
+  };material.customProgramCacheKey=()=> 'summer-thaw-palette-v2-silt';
   const geometries=atlasRectangles([[5/1246,51/1262,598/1246,615/1262],[613/1246,4/1262,1242/1246,628/1262],[3/1246,655/1262,603/1246,1219/1262],[609/1246,635/1262,1243/1246,1255/1262]]);
   const fallbackMaterial=new T.MeshStandardMaterial({color:0xb9d8db,roughness:.69,metalness:.06}),snow=new T.MeshStandardMaterial({color:0xe6e7dc,roughness:.95});
+  weatherSummerSurface(fallbackMaterial,'rock',-.7);weatherSummerSurface(snow,'snow');
   const fallbackTemplate=new T.Group();
   for(let j=0;j<5;j++){
     const g=new T.IcosahedronGeometry(1,1),ice=new T.Mesh(g,fallbackMaterial);ice.scale.set(2.7,2.1,1);ice.position.set((j-2)*1.5,Math.sin(j*2)*.8,0);fallbackTemplate.add(ice);

@@ -4,6 +4,7 @@ import {SUMMER_END,SUMMER_FLOOR} from './layout';
 import {lotusLeaf,meadowFlower} from './botany';
 import {createSummerSkyState,summerWaterVertex,summerWaterReflection,type SummerSkyState} from './clouds';
 import {createPalaceLotuses} from './lotuses';
+import {weatherSummerSurface} from './weathering';
 
 export function createLotusPalace(sharedSky?:SummerSkyState){
   const root=new T.Group();root.name='botanical-lotus-palace';root.position.y=SUMMER_END;
@@ -15,8 +16,13 @@ export function createLotusPalace(sharedSky?:SummerSkyState){
     float ring=abs(sin(length(stoneP.xy)*8.));float spoke=abs(sin(atan(stoneP.y,stoneP.x)*24.));
     float joint=1.-smoothstep(.025,.08,min(ring,spoke));
     float grain=fract(sin(dot(floor(stoneP.xy*90.),vec2(12.98,78.233)))*43758.5453);
-    diffuseColor.rgb*=.83+grain*.13-joint*.18;`);};
+    diffuseColor.rgb*=.83+grain*.13-joint*.18;
+    float lowStone=1.-smoothstep(-17.4,-16.8,stoneP.z);
+    float poolR=length(stoneP.xy/vec2(1.,1.25));
+    float tide=(1.-smoothstep(.05,.65,abs(poolR-8.8)))*lowStone;
+    diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.105,.13,.068),tide*.34+joint*lowStone*.12);`);};
   stone.customProgramCacheKey=()=> 'summer-palace-inlaid-stone';
+  weatherSummerSurface(stone,'stone');weatherSummerSurface(bronze,'bronze');
   const foliage=new T.MeshStandardMaterial({color:0x46643b,roughness:.9,side:T.DoubleSide}),soil=new T.MeshStandardMaterial({color:0x484638,roughness:1}),bloom=new T.MeshStandardMaterial({color:0xc09bb7,roughness:.75});
   const add=(g:T.BufferGeometry,m:T.Material,at:T.Vector3=new T.Vector3(),angle=0)=>{if(g.index){const source=g;g=g.toNonIndexed();source.dispose();}g.rotateZ(angle);g.translate(at.x,at.y,at.z);const list=buckets.get(m)??[];list.push(g);buckets.set(m,list);};
   add(new T.CircleGeometry(16,80),stone,new T.Vector3(0,0,SUMMER_FLOOR+.2));

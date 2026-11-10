@@ -3,11 +3,13 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {SUMMER_FLOOR} from './layout';
 import {summerChannel,summerShoreDistance} from './river';
 import {lotusLeaf,meadowFlower} from './botany';
+import {weatherSummerSurface} from './weathering';
 
 // Increasingly tended banks introduce the palace's stone and botanical vocabulary.
 export function createRiverGardens(){
   const root=new T.Group();root.name='summer-river-gardens';
   const stone=new T.MeshStandardMaterial({color:0xa9a58b,roughness:.88}),soil=new T.MeshStandardMaterial({color:0x464a32,roughness:1});
+  weatherSummerSurface(stone,'stone');
   const green=new T.MeshStandardMaterial({color:0x657c46,roughness:.9,side:T.DoubleSide}),petal=new T.MeshStandardMaterial({color:0xcbbac3,roughness:.8}),lamp=new T.MeshBasicMaterial({color:0xffdab1});
   const leaf=lotusLeaf(),flower=meadowFlower();
   const sites=[194,212,230,248,264].map((y,i)=>{
