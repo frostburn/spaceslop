@@ -1,5 +1,14 @@
 import * as T from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
+import {weatherSummerSurface} from './weathering';
+
+/** Coat this sector's hulls; preserve their alloy-map shader and emissive parts. */
+export function weatherAircraft(root:T.Group){
+  const materials=new Set<T.MeshStandardMaterial>();
+  root.traverse(node=>{if(node instanceof T.Mesh){const list=Array.isArray(node.material)?node.material:[node.material];for(const m of list)if(m instanceof T.MeshStandardMaterial)materials.add(m);}});
+  for(const material of materials)if(!material.userData.summerAircraftWeathered){weatherSummerSurface(material,'aircraft');material.userData.summerAircraftWeathered=true;}
+  return root;
+}
 
 /** Bake fixed prototype hull pieces together while retaining animated burners. */
 export function batchAircraft(root:T.Group){

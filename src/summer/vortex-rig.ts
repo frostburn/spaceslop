@@ -1,5 +1,5 @@
 import * as T from 'three';
-import {batchAircraft} from './aircraft';
+import {batchAircraft,weatherAircraft} from './aircraft';
 import {vortexAngle,vortexPhase} from './vortex';
 export function createVortexDrone(){
   const root=new T.Group();root.name='vortex-drone';
@@ -20,6 +20,7 @@ export function createVortexDrone(){
     const muzzle=new T.Mesh(new T.CircleGeometry(.085,12),hot);muzzle.position.set(side*.71,0,.1);rotor.add(muzzle);
   }
   const warning=new T.Mesh(new T.RingGeometry(.47,.52,40),new T.MeshBasicMaterial({color:0xffc67b,transparent:true,opacity:0,depthWrite:false}));warning.position.z=.42;root.add(warning);
+  weatherAircraft(root);
   return{root,rotor,warning,pose(age:number,mirror=1){
     const state=vortexPhase(age);rotor.rotation.z=vortexAngle(age,mirror);
     warning.material.opacity=state.charge*.82+(state.firing?.28:0);warning.scale.setScalar(1+.18*state.charge);

@@ -40,13 +40,24 @@ export function createLotusPalace(sharedSky?:SummerSkyState){
     }`});
   const water=new T.Mesh(new T.CircleGeometry(8.7,80),waterMaterial);water.name='lotus-reflecting-pool';water.scale.y=1.25;water.position.z=SUMMER_FLOOR+.25;root.add(water);
   const leaf=lotusLeaf(),flower=meadowFlower();
+  // A complete annular trellis carries the dome at its outer waist. Both rows
+  // of posts seat into the same beams instead of ending below empty glass.
+  const inner=11.1,outer=14.6,roofZ=SUMMER_FLOOR+23*Math.sqrt(1-(outer/15)**2),footZ=SUMMER_FLOOR+.56;
+  for(const r of[inner,outer])add(new T.TorusGeometry(r,.16,8,128),bronze,new T.Vector3(0,0,roofZ));
   for(let i=0;i<8;i++){
     const angle=i*Math.PI/4;
     const a=angle+Math.PI/8;
-    for(const r of[11.1,14.6]){
+    for(const r of[inner,outer]){
       const x=Math.cos(a)*r,y=Math.sin(a)*r;
-      add(new T.CylinderGeometry(.17,.28,4.8,12).rotateX(Math.PI/2),bronze,new T.Vector3(x,y,SUMMER_FLOOR+2.6));
+      add(new T.CylinderGeometry(.17,.28,roofZ-footZ,12).rotateX(Math.PI/2),bronze,new T.Vector3(x,y,(roofZ+footZ)/2));
+      add(new T.CylinderGeometry(.36,.24,.22,12).rotateX(Math.PI/2),bronze,new T.Vector3(x,y,roofZ-.1));
       add(new T.CylinderGeometry(.45,.5,.22,16).rotateX(Math.PI/2),stone,new T.Vector3(x,y,SUMMER_FLOOR+.45));
+    }
+    const beam=new T.BoxGeometry(outer-inner,.22,.26);add(beam,bronze,new T.Vector3(Math.cos(a)*(inner+outer)/2,Math.sin(a)*(inner+outer)/2,roofZ),a);
+    for(const r of[inner,outer]){
+      const from=new T.Vector3(Math.cos(a)*r,Math.sin(a)*r,roofZ-.9),to=new T.Vector3(Math.cos(a)*(r+(r===inner?.8:-.8)),Math.sin(a)*(r+(r===inner?.8:-.8)),roofZ);
+      const brace=new T.CylinderGeometry(.07,.07,from.distanceTo(to),8);brace.applyQuaternion(new T.Quaternion().setFromUnitVectors(new T.Vector3(0,1,0),to.clone().sub(from).normalize()));
+      add(brace,bronze,from.add(to).multiplyScalar(.5));
     }
     // Individual planted courts sit between the outer lotus canopies and the pool.
     const x=Math.cos(a)*10.1,y=Math.sin(a)*10.1;

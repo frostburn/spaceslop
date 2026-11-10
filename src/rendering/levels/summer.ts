@@ -11,7 +11,7 @@ import {createHydraAssets,createRiverHydra} from '../../summer/hydra';
 import {createSummerTerrain} from '../../summer/terrain';
 import {createSummerIce} from '../../summer/ice';
 import {createLotusPalace} from '../../summer/palace';
-import {batchAircraft} from '../../summer/aircraft';
+import {batchAircraft,weatherAircraft} from '../../summer/aircraft';
 import {createSummerClouds} from '../../summer/clouds';
 import {createLowWisps} from '../../summer/wisps';
 import {createVortexDrone} from '../../summer/vortex-rig';
@@ -29,7 +29,7 @@ export const createLevel:LevelFactory=({plane,signal})=>{
   const clouds=createSummerClouds(),wisps=createLowWisps(),terrain=createSummerTerrain(clouds.state),ice=createSummerIce(),palace=createLotusPalace(clouds.state),mammothAssets=createMammothAssets(),hydraAssets=createHydraAssets();
   world.add(terrain.root,ice.root,palace.root,clouds.root,wisps.root);
   const herd=mammothSites.map((site,i)=>{const rig=createMammoth(mammothAssets);rig.root.position.set(site.x,site.y,-17.1);rig.root.rotation.z=site.angle;rig.root.scale.set(site.size*(i%2?-1:1),site.size,site.size);world.add(rig.root);return{rig,site};});
-  const scout=batchAircraft(createScoutRig()),probe=batchAircraft(drone());
+  const scout=weatherAircraft(batchAircraft(createScoutRig())),probe=weatherAircraft(batchAircraft(drone()));
   const air=Array.from({length:SUMMER_AIR_POOL},(_,i)=>{const root=(i<SUMMER_AIR_POOL/2?scout:probe).clone(true);root.visible=false;const burners=shipBurners(root);return{root,burners};});
   const hydras=Array.from({length:SUMMER_HYDRA_POOL},()=>createRiverHydra(hydraAssets));
   const vortices=Array.from({length:VORTEX_POOL},()=>createVortexDrone());
