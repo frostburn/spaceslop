@@ -24,6 +24,7 @@ assert(pack.required.includes(pack.entry));
  for(const other of ids)assert(!serviceWorker.includes(`url:"${packs.levels[other].entry}`),'The service worker precaches level code.');
  assert(!serviceWorker.includes('encounters/'),'The service worker eagerly downloads level media.');
 }
-for(const file of ['workshop.html','vent-study.html','io-study.html','heliostat-study.html'])await assert.rejects(stat(join(root,file)));
-for(const file of files.filter(f=>f.endsWith('.js'))){const text=await readFile(join(root,'assets',file),'utf8');assert(!text.includes('__qa'),'QA hooks leaked into production.');assert(!/(workshop|vent-study|io-study|heliostat-study)\.html/.test(text),'Development links leaked into production.');assert(!/Play study|Orbit view|inspect-backdrop/.test(text),'Study UI leaked into production code.');}
+for(const file of ['workshop.html','vent-study.html','io-study.html','heliostat-study.html','biolume-study.html'])await assert.rejects(stat(join(root,file)));
+for(const file of files.filter(f=>f.endsWith('.js'))){const text=await readFile(join(root,'assets',file),'utf8');assert(!text.includes('__qa'),'QA hooks leaked into production.');assert(!/(workshop|vent-study|io-study|heliostat-study|biolume-study)\.html/.test(text),'Development links leaked into production.');assert(!/Play study|Orbit view|inspect-backdrop|Relief shading/.test(text),'Study UI leaked into production code.');}
+for(const pack of Object.values(packs.levels))assert(!pack.media.some(path=>path.includes('biolume-study')),'DEV raster entered an offline level package.');
 console.log('Menu size, nine isolated level packages, selective precaching and production dev-page exclusions passed.');

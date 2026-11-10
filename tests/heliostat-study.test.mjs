@@ -4,7 +4,7 @@ import * as T from 'three';
 import { createServer } from 'vite';
 
 const server = await createServer({ root: new URL('..', import.meta.url).pathname, configFile: false,
-  define: { __STUDY_TEXTURES__: JSON.stringify({heliostatMetal:'metal.png',heliostatCeramic:'ceramic.png',heliostatBackdrop:'backdrop.png'}) },
+  define: { __STUDY_TEXTURES__: JSON.stringify({heliostatMetal:'metal.png',heliostatCeramic:'ceramic.png',heliostatBackdrop:'backdrop.png',biolumeAtlas:'biolume-study-atlas.png'}) },
   server: { middlewareMode: true, hmr: false, ws: false }, optimizeDeps: { noDiscovery: true, entries: [] }, appType: 'custom' });
 after(() => server.close());
 const layout = await server.ssrLoadModule('/src/heliostat/layout.ts');
@@ -142,7 +142,7 @@ test('failed maps fall back and abort releases an already-loaded sibling', async
   T.TextureLoader.prototype.load=function(url,success,progress,failure){callbacks.push({url,success,failure});return new T.Texture();};
   try{
     const scope=new AbortController(),missing=loadStudyTexture('/missing.png',scope.signal);callbacks.pop().failure(new Error('missing'));assert.equal(await missing,undefined);
-    const pending=loadStudyArt(scope.signal);assert.equal(callbacks.length,3);const image=new T.Texture();let disposed=0;image.addEventListener('dispose',()=>disposed++);
+    const pending=loadStudyArt(scope.signal);assert.equal(callbacks.length,3);assert(!callbacks.some(c=>c.url.includes('biolume')),'Uranus study fetched unrelated grove art');const image=new T.Texture();let disposed=0;image.addEventListener('dispose',()=>disposed++);
     callbacks[0].success(image);await Promise.resolve();scope.abort();assert.deepEqual(await pending,{});assert.equal(disposed,1);
   }finally{T.TextureLoader.prototype.load=originalLoad;globalThis.window=previousWindow;}
 });

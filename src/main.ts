@@ -106,7 +106,7 @@ document.querySelector('#clear-offline')!.addEventListener('click', async () => 
 if (import.meta.env.DEV) {
   const links=document.createElement('nav');
   links.id='menu-dev-tools';links.className='dev-links';links.setAttribute('aria-label','Development tools');
-  for(const [path,label]of [['workshop.html','Asset workshop'],['vent-study.html','Abyss camera study'],['io-study.html','Io camera study'],['heliostat-study.html','Uranus corridor study']]){
+  for(const [path,label]of [['workshop.html','Asset workshop'],['vent-study.html','Abyss camera study'],['io-study.html','Io camera study'],['heliostat-study.html','Uranus corridor study'],['biolume-study.html','Bioluminescence lighting study']]){
     const link=document.createElement('a');link.href=import.meta.env.BASE_URL+path;link.textContent=label;links.append(link);
   }
   menu.querySelector('.menu-actions')!.append(links);

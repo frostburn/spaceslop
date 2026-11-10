@@ -38,6 +38,7 @@ export type EncounterTexture = keyof typeof textureFiles;
 
 // Study aliases share the catalog's media paths; only the study loader is DEV.
 export const studyTextureFiles = {
+  biolumeAtlas:'encounters/biolume-study-atlas.png',
   heliostatMetal: textureFiles.armor,
   heliostatCeramic: textureFiles.ioCeramic,
   heliostatBackdrop: textureFiles.heliostatBackdrop,

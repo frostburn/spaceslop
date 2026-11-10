@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#070b0b"><title>Bioluminescence · Lighting study</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#070b0b;color:#d7e3df;font:14px system-ui,sans-serif}main{display:flex;justify-content:center;align-items:flex-start;gap:32px;padding:24px}.stage{width:min(47vw,430px);position:sticky;top:24px;flex-shrink:0}canvas{display:block;width:100%;aspect-ratio:9/16;background:black;border:1px solid #273e39;touch-action:none}.bar{display:flex;justify-content:space-between;margin:0 0 12px;font-size:12px;color:#9bb4a9}a{color:#9adfd0;text-underline-offset:4px}aside{width:min(100%,345px);padding-top:24px}h1{font-size:31px;letter-spacing:-.035em;margin:0 0 12px;font-weight:550}h1 small{display:block;text-transform:uppercase;letter-spacing:.16em;color:#d8a364;font-size:11px;margin-bottom:10px}p{color:#a6bbb3;line-height:1.65}fieldset{border:0;border-top:1px solid #2c4039;padding:18px 0;margin:20px 0}legend{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#c0d1c8;padding-right:12px}label{display:block;line-height:1.6;margin:10px 0}input{accent-color:#83d8bf}input[type=range]{width:100%}.buttons{display:flex;flex-wrap:wrap;gap:8px}button{font:inherit;background:#14211d;border:1px solid #40574c;color:#d7e7dd;border-radius:4px;padding:9px 12px;cursor:pointer}button:hover{border-color:#91bcaa}a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid #ffbc75;outline-offset:4px}#play{min-width:100px}#asset-status,#stats{font-size:12px}output{font-variant-numeric:tabular-nums}#error{color:#ffbb9b}footer{border-top:1px solid #2c4039;padding-top:16px;margin-top:24px;font-size:12px}footer a{display:block;line-height:2}
+@media(max-width:720px){main{display:block;padding:14px 12px}.stage{width:min(100%,420px,calc((100svh - 70px)*.5625));position:relative;top:auto;margin:auto}aside{width:100%;max-width:430px;margin:auto;padding-top:26px}h1{font-size:27px}.checks{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}fieldset{margin:18px 0}}
+</style></head>
+<body><main>
+<div class="stage"><div class="bar"><a href="./">← Main menu</a><span>Single screen · zero ambient</span></div><canvas id="preview" aria-label="Bioluminescent grove lighting proof; drag to move the ship"></canvas></div>
+<aside><h1><small>Lantern Grove / development study</small>Light in the dark.</h1>
+<p>Raster roots below the ship. A translucent raster leaf above it. Six local lights illuminate both scenery and actors.</p>
+<div class="buttons"><button id="play" aria-pressed="true" disabled>Pause</button><button id="follow">Auto flight</button></div>
+<label for="time">Scene time <output id="clock">0.0 s</output></label><input id="time" type="range" min="0" max="24" step=".05" value="0" aria-label="Scene time">
+<p>Drag or touch the scene to move the ship. Arrow keys / WASD work while the scene is focused. Scrub time to compare identical poses.</p>
+<fieldset><legend>Compare illumination</legend><div class="buttons">
+<button data-preset="both">Both</button><button data-preset="environment">Scenery only</button><button data-preset="actors">Actors only</button><button data-preset="emission">Emission only</button><button data-preset="blackout">Blackout</button>
+</div><div class="checks">
+<label><input id="environment" type="checkbox" checked> Scenery lights</label><label><input id="actors" type="checkbox" checked> Actor lights</label>
+<label><input id="emission" type="checkbox" checked> Visible emission</label><label><input id="relief" type="checkbox" checked> Relief shading</label>
+<label><input id="transmission" type="checkbox" checked> Leaf backlighting</label><label><input id="occlusion" type="checkbox" checked> Root occlusion</label>
+<label><input id="artwork" type="checkbox" checked> Raster artwork</label>
+</div><p>Emission-only keeps glowing tissue and engines visible but removes their illumination of neighboring surfaces. Blackout also switches those glowing pixels off.</p></fieldset>
+<p id="asset-status" role="status">Preparing procedural surfaces…</p><p id="stats"></p><p id="error" role="alert" hidden></p>
+<footer><p>Vite development only. Relief and root occlusion are broad approximations; this screen tests mutual lighting, not a finished level or full shadow solution.</p><a href="./workshop.html">Asset workshop</a></footer>
+</aside></main><script type="module" src="/src/biolume-study.ts"></script></body></html>
