@@ -1,6 +1,7 @@
 import {summerRiver,summerScroll,smooth} from './layout';
 export type SummerCourse={kind:'scout'|'drone'|'hydra';formation:'vee'|'weave'|'loop'|'cross';slot:number;mirror:number;at:number};
 export const SUMMER_AIR_POOL=24,SUMMER_HYDRA_POOL=2;
+export const HYDRA_BODY_Y=3.9;
 export function summerMotion(age:number,lane:number,c:SummerCourse,time:number){
   if(c.kind==='hydra'){const world=c.at*2.8+7;return{x:summerRiver(world),y:world-summerScroll(time),heading:0,bank:0};}
   const t=age-c.slot*.2;

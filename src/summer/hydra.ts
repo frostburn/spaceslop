@@ -1,7 +1,7 @@
 import * as T from 'three';
 import {atlasRectangles,createRasterMaterial,rasterPart,type Crop} from './atlas';
 import {SUMMER_DISTANCE} from './layout';
-import {hydraHead} from './combat';
+import {hydraHead,HYDRA_BODY_Y} from './combat';
 
 export function createHydraAssets(){
   // Measured whole-sheet bounds; preserve these UVs when resizing the entire atlas.
@@ -17,8 +17,8 @@ export function createRiverHydra(a:ReturnType<typeof createHydraAssets>,boss=fal
   const root=new T.Group();root.name=boss?'lotus-hydra':'river-hydra';
   const size=boss?1.85:1,depth=boss?-3.8:-16.2;
   const raster=new T.Group(),fallback=new T.Group();root.add(raster,fallback);a.rigs.add({raster,fallback});
-  rasterPart(raster,a.geometries[0],a.material,3.5*size,3.05*size,0,3.9*size,depth);
-  const body=new T.Mesh(a.round,a.hide);body.position.set(0,3.9*size,depth);body.scale.set(1.4*size,1.45*size,.5*size);fallback.add(body);
+  const torso=rasterPart(raster,a.geometries[0],a.material,3.5*size,3.05*size,0,HYDRA_BODY_Y*size,depth);torso.name='hydra-riverbed-body';
+  const body=new T.Mesh(a.round,a.hide);body.position.set(0,HYDRA_BODY_Y*size,depth);body.scale.set(1.4*size,1.45*size,.5*size);fallback.add(body);
   const eyeGeometry=new T.SphereGeometry(.065,8,6),eyeMaterial=new T.MeshBasicMaterial({color:0xebc664});
   const necks=[-1,0,1].map(side=>{
     const segments=Array.from({length:5},(_,i)=>rasterPart(raster,a.geometries[i+2],a.material,1.05*size,.7*size));
@@ -32,11 +32,12 @@ export function createRiverHydra(a:ReturnType<typeof createHydraAssets>,boss=fal
   for(const label of['L','C','R']){const anchor=new T.Object3D();anchor.name='laser_contact_'+label;anchor.position.set(0,-.25,.35);root.add(anchor);}
   const origin=new T.Vector3(),top=new T.Vector3(),bottom=new T.Vector3();
   raster.visible=!!a.material.map;fallback.visible=!raster.visible;
-  return{root,necks,pose(time:number,charge=0){
+  return{root,necks,pose(time:number,charge=0,bodyX=0){
+    torso.position.x=body.position.x=bodyX;
     root.getWorldPosition(origin);
     for(const neck of necks){
       const s=neck.side,phase=time*.85+s*1.7,{x:headX,y:headY}=hydraHead(time,s,size);
-      const point=(u:number,p:T.Vector3)=>p.set((s*.9+.11)*size*(1-u)+headX*u+Math.sin(u*Math.PI)*(s*.35+.14*Math.sin(phase+u*2))*size,2.9*size*(1-u)+(headY+.62*size)*u,depth*(1-u)+.14*u);
+      const point=(u:number,p:T.Vector3)=>p.set(((s*.9+.11)*size+bodyX)*(1-u)+headX*u+Math.sin(u*Math.PI)*(s*.35+.14*Math.sin(phase+u*2))*size,2.9*size*(1-u)+(headY+.62*size)*u,depth*(1-u)+.14*u);
       for(let i=0;i<5;i++){
         point(i/5,top);point((i+1)/5,bottom);
         const z=(top.z+bottom.z)/2,midDistance=SUMMER_DISTANCE-origin.z-z;

@@ -4,8 +4,8 @@ import {createBossLaserContact} from '../../laser-contact';
 import {loadEncounterTexture} from '../../encounter-texture';
 import {createScoutRig} from '../../ship-rigs';
 import {shipBurners,poseBurners} from '../../burners';
-import {SUMMER_DISTANCE,SUMMER_END,summerScroll,mammothSites} from '../../summer/layout';
-import {SUMMER_AIR_POOL,SUMMER_HYDRA_POOL,summerMotion} from '../../summer/combat';
+import {SUMMER_DISTANCE,SUMMER_END,summerScroll,summerRiver,mammothSites} from '../../summer/layout';
+import {SUMMER_AIR_POOL,SUMMER_HYDRA_POOL,HYDRA_BODY_Y,summerMotion} from '../../summer/combat';
 import {createMammothAssets,createMammoth} from '../../summer/mammoths';
 import {createHydraAssets,createRiverHydra} from '../../summer/hydra';
 import {createSummerTerrain} from '../../summer/terrain';
@@ -33,7 +33,7 @@ export const createLevel:LevelFactory=({plane,signal})=>{
   const boss=createRiverHydra(hydraAssets,true);boss.root.position.set(0,SUMMER_END+4.2,-12);world.add(boss.root);
   const contact=createBossLaserContact(plane,boss.root),models:(T.Object3D|undefined)[]=[];
   let restores:(()=>void)[]=[],disposed=false;const flags=new Map<T.Mesh,boolean>();
-  const ready=Promise.all([loadEncounterTexture('summerMammoth',mammothAssets.setAtlas,undefined,signal),loadEncounterTexture('summerIce',ice.setAtlas,undefined,signal),loadEncounterTexture('summerHydra',hydraAssets.setAtlas,undefined,signal)]);
+  const ready=Promise.all([loadEncounterTexture('summerMammoth',mammothAssets.setAtlas,undefined,signal),loadEncounterTexture('summerIce',ice.setAtlas,undefined,signal),loadEncounterTexture('summerHydra',hydraAssets.setAtlas,undefined,signal),loadEncounterTexture('summerLotusFlanks',palace.lotuses.setFlanks,undefined,signal),loadEncounterTexture('summerLotusWall',palace.lotuses.setWall,undefined,signal)]);
   return{root,boss:boss.root,models,ready,stageDistance:SUMMER_DISTANCE,farDistance:440,fixedCamera:true,
     background:0xb5cfc9,key:0xffedd0,keyIntensity:2.1,sky:0xd5e9ec,ground:0x728153,skyIntensity:1.6,friendlyGlow:1.4,
     orientation:()=>({pitch:0,bank:0,viewPitch:0}),
@@ -50,7 +50,7 @@ export const createLevel:LevelFactory=({plane,signal})=>{
       let scoutIndex=0,droneIndex=SUMMER_AIR_POOL/2,hi=0;
       for(const[i,enemy]of flight.enemies.entries()){
         if(!enemy.summer)continue;
-        if(enemy.summer.kind==='hydra'){const rig=hydras[hi++];if(!rig)continue;rig.root.visible=enemy.hp>0;rig.root.position.set(enemy.x,enemy.y,0);rig.pose(time,Math.max(0,1-(enemy.fire-enemy.age)/.7));models[i]=rig.root;continue;}
+        if(enemy.summer.kind==='hydra'){const rig=hydras[hi++];if(!rig)continue;rig.root.visible=enemy.hp>0;rig.root.position.set(enemy.x,enemy.y,0);rig.pose(time,Math.max(0,1-(enemy.fire-enemy.age)/.7),summerRiver(enemy.y+scroll+HYDRA_BODY_Y)-enemy.x);models[i]=rig.root;continue;}
         const rig=air[enemy.summer.kind==='scout'?scoutIndex++:droneIndex++];if(!rig)continue;rig.root.visible=enemy.hp>0;rig.root.position.set(enemy.x,enemy.y,0);rig.root.rotation.set(0,0,enemy.summer.kind==='scout'?Math.PI:0);
         rig.root.rotation.y=summerMotion(enemy.age,enemy.lane,enemy.summer,time).bank;poseBurners(rig.burners,animationTime,.6);models[i]=rig.root;
       }

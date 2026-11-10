@@ -2,19 +2,17 @@ import * as T from 'three';
 import {SUMMER_END,SUMMER_FLOOR,summerRiver,summerShoreDistance} from './layout';
 import {grassTuft,meadowFlower} from './botany';
 import {createSummerSkyState,summerWaterVertex,summerWaterReflection,type SummerSkyState} from './clouds';
+import {summerChannel,summerRiverShader} from './river';
 export function createSummerTerrain(sharedSky?:SummerSkyState){
   const root=new T.Group();root.name='summer-steppe';const clock={value:0};
   const sky=sharedSky??createSummerSkyState();
   const ground=new T.Mesh(new T.PlaneGeometry(44,SUMMER_END+90,12,96),new T.ShaderMaterial({uniforms:{clock,...sky.uniforms},
     vertexShader:summerWaterVertex,
-    fragmentShader:`uniform float clock;varying vec2 p;${summerWaterReflection}
+    fragmentShader:`uniform float clock;varying vec2 p;${summerWaterReflection}${summerRiverShader()}
       void main(){vec2 q=p+vec2(0.,${((SUMMER_END+90)/2-30).toFixed(3)});
-        float river=1.4*sin(q.y*.036)+.65*sin(q.y*.087+1.);
-        float width=1.15+.4*sin(q.y*.05+1.)+.18*sin(q.y*.13);
-        float d=abs(q.x-river),shore=n(q*2.3)*.17+n(q*7.)*.05;
-        float braid=abs(q.x-river-2.1-sin(q.y*.15)*1.6);
-        float branch=smoothstep(30.,44.,q.y)*(1.-smoothstep(153.,170.,q.y));
-        d=min(d,mix(20.,braid+width-.3,branch));
+        vec4 channel=summerChannel(q.y);
+        float width=channel.y,side=(q.x-channel.x)/sqrt(1.+channel.z*channel.z);
+        float d=abs(side),shore=(n(q*2.3)-.5)*.16+(n(q*7.)-.5)*.05;
         float coarse=n(q*.37),grain=n(q*15.)*.7+n(q*41.)*.3,dry=smoothstep(.4,.82,n(q*.11+9.));
         vec3 grass=mix(vec3(.035,.085,.014),vec3(.22,.28,.055),coarse*.6+dry*.4)*(.7+grain*.55);
         grass=mix(grass,vec3(.22,.16,.07),smoothstep(.65,.86,n(q*.28+14.))*.64);
@@ -24,6 +22,9 @@ export function createSummerTerrain(sharedSky?:SummerSkyState){
         water+=vec3(.012,.022,.018)*smoothstep(.72,.96,flow);
         float bank=smoothstep(width+shore-.07,width+shore+.1,d),mud=1.-smoothstep(width+.1,width+.6,d);
         if(bank<1.)water=summerReflectClouds(water);
+        float inner=clamp(side*channel.w*18.,0.,1.);
+        float bar=smoothstep(.35,.96,d/width)*inner*(.5+.5*n(q*.7));
+        water=mix(water,vec3(.24,.205,.13)*(.78+grain*.35),bar*.88);
         grass=mix(grass,vec3(.18,.15,.085)*(.7+grain*.4),mud*.85);
         gl_FragColor=vec4(mix(water,grass,bank),1.);
         #include <tonemapping_fragment>
@@ -48,7 +49,7 @@ export function createSummerTerrain(sharedSky?:SummerSkyState){
       color.setHex([0xc5b951,0x9b8bb7,0xdccfa9,0x817ca5,0xcebb69][cluster]);flowers.setColorAt(j,color);
     }
     for(let j=0;j<rocks.count;j++){
-      const y=random()*28-9,x=summerRiver(origin+y)+(j%2?1:-1)*(2+random()*1.4),s=.12+random()*.35;
+      const y=random()*28-9,channel=summerChannel(origin+y),x=summerRiver(origin+y)+(j%2?1:-1)*(channel.width*Math.sqrt(1+channel.slope**2)+.2+random()*.7),s=.12+random()*.35;
       dummy.position.set(x,y,SUMMER_FLOOR+.05);dummy.rotation.set(random(),random(),random()*6.28);dummy.scale.set(s,s*(.7+random()),s*.5);dummy.updateMatrix();rocks.setMatrixAt(j,dummy.matrix);
     }
     return{node,origin};
