@@ -74,3 +74,10 @@ test('Grove rounds retain native straight trajectories through the boss boundary
  assert(f.shots.includes(shot));assert.equal(f.bossHealth,ray.RAY_HP);
  const g=quiet('primary');g.player={x:0,y:-4};for(let i=0;i<50;i++)g.step(STEP);assert(g.bossHealth<ray.RAY_HP);
 });
+
+test('the direct phase boundary retains existing shots, threats and firing cooldowns',()=>{
+ const f=new Flight('sentry',[],'vex','biolume');f.time=f.stageDuration-.001;f.invulnerable=100;
+ f.cooldown=f.droneCooldown=10;f.fire({x:3,y:-4});const s=f.shots[0];const threat={x:3,y:4,z:0,vx:0,vy:-2,vz:0};f.threats.push(threat);
+ f.step(STEP);assert.equal(f.phase,'boss');assert(f.shots.includes(s));assert(f.threats.includes(threat));assert(f.cooldown>9);assert(f.droneCooldown>9);
+ f.step(STEP);assert(f.shots.includes(s));assert(f.threats.includes(threat));assert.equal(s.x,3);assert.equal(s.z,0);
+});

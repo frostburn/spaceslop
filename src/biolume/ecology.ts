@@ -46,7 +46,7 @@ export function createGroveEcology(){
     if(target>=0){const t=tipAt(target);if(Math.hypot(t.x-f.x,t.y-f.y)<.15){f.trap=target;plants[Math.floor(target/10)].leaves[target%10].caught=time;captures++;}}
     if(f.y < -10)f.y=10;if(f.y>11)f.y=-9;f.x=Math.max(-4.2,Math.min(4.2,f.x));
    }
-   const z=f.trap>=0?-2.8:-1.35,k=(22-z)/22;dummy.position.set(f.x*k,f.y*k,z);dummy.scale.setScalar(.7+.3*Math.sin(time*4+i));dummy.updateMatrix();flies.setMatrixAt(i,dummy.matrix);dummy.scale.multiplyScalar(3);dummy.updateMatrix();halos.setMatrixAt(i,dummy.matrix);
+   const z=f.trap>=0?-2.8:-1.35,k=(22-z)/22;dummy.position.set(f.x*k,f.y*k,z);const fade=f.trap<0?1:Math.max(0,Math.min(1,(4.4-(time-plants[Math.floor(f.trap/10)].leaves[f.trap%10].caught))/2));dummy.scale.setScalar((.7+.3*Math.sin(time*4+i))*fade);dummy.updateMatrix();flies.setMatrixAt(i,dummy.matrix);dummy.scale.multiplyScalar(3);dummy.updateMatrix();halos.setMatrixAt(i,dummy.matrix);
   }flies.instanceMatrix.needsUpdate=true;halos.instanceMatrix.needsUpdate=true;
  }
  return{root,update,state,plants,get captures(){return captures;}};

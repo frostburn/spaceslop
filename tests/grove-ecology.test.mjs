@@ -10,3 +10,9 @@ test('bounded fireflies catch, avoid actors, and freeze with the presentation cl
  assert.equal(a.state.length,64);assert(a.captures>0);assert.deepEqual(a.state,b.state);
  const before=structuredClone(a.state);a.update(40,2399/60);assert.deepEqual(a.state,before);
 });
+
+test('atlas bark crop is normalized and fern roots stay attached while swaying',async()=>{
+ const {createGroveBranch,BRANCH_CROP,FERN_SITES}=await server.ssrLoadModule('/src/biolume/branch.ts');
+ const T=await import('three'),b=createGroveBranch();assert(BRANCH_CROP.every(n=>n>=0&&n<=1));assert.equal(FERN_SITES.length,3);
+ b.setArt(new T.Texture());b.update(12,1);const roots=b.crowns.map(c=>c.position.toArray());b.update(13,2);assert.deepEqual(b.crowns.map(c=>c.position.toArray()),roots);assert(b.crowns.every(c=>c.parent===b.root));b.release();
+});
