@@ -66,3 +66,9 @@ test('pooled seekers share GPU resources and animate without replacing buffers',
  const a=createRaySeekerAssets(),one=createRaySeekerRig(a),two=createRaySeekerRig(a),e=orb();one.pose(e);e.age=2;one.pose(e);two.pose(e);assert.equal(one.root.children[0].geometry,two.root.children[0].geometry);assert.equal(one.root.children[0].material,two.root.children[0].material);assert.equal(a.body.attributes.position.version,0);
  for(const [key,v]of Object.entries(a))if(v.dispose)v.dispose();
 });
+
+
+test('friendly boss rounds stay above the raster with identical projected paths and velocities',()=>{
+ for(const z of[0,-3.6,-8,-12]){const s={x:1,y:2,z,vx:3,vy:12,vz:-30},copy={...s},v=ray.rayVisibleShot(s),p=ray.rayShotPoint(s);assert.equal(v.x,p.x);assert.equal(v.y,p.y);assert(v.z>0);assert.equal(v.vz,0);assert.deepEqual(s,copy);
+ const dt=1e-6,next=ray.rayShotPoint({x:s.x+s.vx*dt,y:s.y+s.vy*dt,z:z+s.vz*dt});assert(Math.abs((next.x-p.x)/dt-v.vx)<1e-4);assert(Math.abs((next.y-p.y)/dt-v.vy)<1e-4);}
+});

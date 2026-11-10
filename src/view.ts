@@ -1,3 +1,4 @@
+import {rayVisibleShot} from './biolume/lantern-ray';
 import * as T from 'three';
 import { poseBurners, shipBurners } from './burners';
 import { createDroneRig, createFighterRig } from './ship-rigs';
@@ -450,10 +451,11 @@ export class FlightView {
     }
   }
   private drawProjectiles(flight: Flight) {
-    this.projectiles.ship.draw(flight.shots.filter((shot) => !shot.drone && !shot.wing), this.animationTime);
-    this.projectiles.drone.draw(flight.shots.filter((shot) => shot.drone), this.animationTime);
+    const shots=flight.level==='biolume'&&flight.phase==='boss'?flight.shots.map(rayVisibleShot):flight.shots;
+    this.projectiles.ship.draw(shots.filter((shot) => !shot.drone && !shot.wing), this.animationTime);
+    this.projectiles.drone.draw(shots.filter((shot) => shot.drone), this.animationTime);
     for (const weapon of ['homing', 'cannon', 'omega'] as const) {
-      this.projectiles[weapon].draw(flight.shots.filter((shot) => shot.wing === weapon), this.animationTime);
+      this.projectiles[weapon].draw(shots.filter((shot) => shot.wing === weapon), this.animationTime);
     }
     this.projectiles.hostile.draw(flight.level !== 'ice' && flight.level !== 'broodlock' ? flight.threats : [], this.animationTime);
     this.projectiles.brine.draw(flight.level === 'ice' ? flight.threats : [], this.animationTime);

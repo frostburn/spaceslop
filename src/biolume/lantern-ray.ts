@@ -39,3 +39,9 @@ export function raySeekerBurst(point:Point,heading:number){return Array.from({le
  const a=heading+i*Math.PI/4,dx=Math.sin(a),dy=-Math.cos(a);
  return{x:point.x+dx*.16,y:point.y+dy*.16,z:0,vx:dx*3.6,vy:dy*3.6,vz:0,planar:true};
 });}
+
+// Keep depth-based combat trajectories visible above the opaque raster floor.
+export function rayVisibleShot<S extends {x:number;y:number;z:number;vx:number;vy:number;vz:number}>(shot:S):S{
+ const k=22/(22-shot.z),dk=22*shot.vz/(22-shot.z)**2;
+ return{...shot,x:shot.x*k,y:shot.y*k,z:.12,vx:shot.vx*k+shot.x*dk,vy:shot.vy*k+shot.y*dk,vz:0};
+}
