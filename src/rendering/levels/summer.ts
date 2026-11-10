@@ -50,12 +50,12 @@ export const createLevel:LevelFactory=({plane,signal})=>{
     update({flight,time,animationTime}){
       const scroll=summerScroll(time);world.position.y=-scroll;clouds.update(scroll,animationTime);wisps.update(scroll,animationTime);terrain.update(scroll,animationTime);ice.update(scroll,animationTime);palace.update(animationTime);
       for(const {rig,site}of herd){rig.root.visible=Math.abs(site.y-scroll)<29;rig.pose(animationTime,site.y*.13);}
-      boss.root.visible=flight.bossHealth>0;boss.pose(time,flight.cannonWindup);
+      boss.root.visible=flight.bossHealth>0;boss.pose(time,flight.cannonWindup,0,flight.summerHydra,flight.summerBossTime);
       for(const r of enemies)r.root.visible=false;models.length=flight.enemies.length;models.fill(undefined);
       let scoutIndex=0,droneIndex=SUMMER_AIR_POOL/2,hi=0,vi=0;
       for(const[i,enemy]of flight.enemies.entries()){
         if(!enemy.summer)continue;
-        if(enemy.summer.kind==='hydra'){const rig=hydras[hi++];if(!rig)continue;rig.root.visible=enemy.hp>0;rig.root.position.set(enemy.x,enemy.y,0);rig.pose(time,Math.max(0,1-(enemy.fire-enemy.age)/.7),summerRiver(enemy.y+scroll+HYDRA_BODY_Y)-enemy.x);models[i]=rig.root;continue;}
+        if(enemy.summer.kind==='hydra'){const rig=hydras[hi++];if(!rig)continue;rig.root.visible=enemy.hp>0;rig.root.position.set(enemy.x,enemy.y,0);rig.pose(time,Math.max(0,1-(enemy.fire-enemy.age)/.7),summerRiver(enemy.y+scroll+HYDRA_BODY_Y)-enemy.x,enemy.hydra,time);models[i]=rig.root;continue;}
         if(enemy.summer.kind==='vortex'){const rig=vortices[vi++];if(!rig)continue;rig.root.visible=enemy.hp>0;rig.root.position.set(enemy.x,enemy.y,0);rig.pose(enemy.age,enemy.summer.mirror);models[i]=rig.root;continue;}
         const rig=air[enemy.summer.kind==='scout'?scoutIndex++:droneIndex++];if(!rig)continue;rig.root.visible=enemy.hp>0;rig.root.position.set(enemy.x,enemy.y,0);rig.root.rotation.set(0,0,enemy.summer.kind==='scout'?Math.PI:0);
         rig.root.rotation.y=summerMotion(enemy.age,enemy.lane,enemy.summer,time).bank;poseBurners(rig.burners,animationTime,.6);models[i]=rig.root;

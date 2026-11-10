@@ -438,9 +438,11 @@ export class FlightView {
           const index = flight.enemies.indexOf(target);
           if (index >= 0)
             model = this.level.models[index];
+          if(target.summer?.kind==='hydra'&&wing.laserHead!==undefined)model=model?.getObjectByName('hydra-head-'+wing.laserHead);
         }
+        const shieldModel=flight.level==='summer'&&flight.phase==='boss'&&target===undefined?this.level.boss:undefined;
         const end = typeof target === 'number' ? this.level.contact(target, distance ?? BOSS_CAMERA_DISTANCE, flight)
-          : model ? this.laserContact(origin, wing.beamEnd, model, distance, this.viewPitch) : wing.beamEnd;
+          : model ? this.laserContact(origin, wing.beamEnd, model, distance, this.viewPitch) : shieldModel?this.laserContact(origin,wing.beamEnd,shieldModel,distance,this.viewPitch):wing.beamEnd;
         laser.draw(origin, end, wing.laserHold, this.animationTime, typeof target === 'number' || Boolean(model), flight.phase === 'boss' && target === undefined);
       }
     }
@@ -476,7 +478,7 @@ export class FlightView {
     for (const [enemy, previous] of this.enemyVitals) {
       const laserDamage = (enemy.laserDamage ?? 0) - previous.laserDamage;
       if (previous.hp - enemy.hp - laserDamage > 1e-6 && (enemy.hp === 0 || this.animationTime - previous.at > 0.07)) {
-        this.combat.emit(enemy.hp === 0 ? 'kill' : 'hit', enemy.ambusher ? ambusherFeedback(enemy.ambusher,flight.time) : enemy.ventWorm ? faunaMuzzle(enemy) : enemy, enemy.hp === 0 ? orange : teal);
+        this.combat.emit(enemy.hp === 0 ? 'kill' : 'hit', enemy.hitPoint??(enemy.ambusher ? ambusherFeedback(enemy.ambusher,flight.time) : enemy.ventWorm ? faunaMuzzle(enemy) : enemy), enemy.hp === 0 ? orange : teal);
         previous.at = this.animationTime;
         emitted = true;
       }
@@ -494,7 +496,7 @@ export class FlightView {
         });
     const bossLaserDamage = flight.bossLaserDamage - this.previousBossLaserDamage;
     if (this.previousBossHealth - flight.bossHealth - bossLaserDamage > 1e-6 && this.animationTime - this.bossHitAt > 0.07) {
-      this.combat.emit(flight.bossHealth === 0 ? 'kill' : 'hit', {
+      this.combat.emit(flight.bossHealth === 0 ? 'kill' : 'hit', flight.level==='summer'&&flight.summerLastHit?flight.summerLastHit:{
         x: flight.exposedCannonX,
         y: flight.bossAimY,
         z: BOSS_DEPTH + BOSS_MUZZLE_Z

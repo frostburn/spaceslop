@@ -1,5 +1,6 @@
 import {summerRiver,summerScroll,smooth} from './layout';
 import {vortexMotion,vortexWaveIndices} from './vortex';
+export {hydraHead,hydraHit,hydraBeamEntry} from './hydra-targets';
 export type SummerCourse={kind:'scout'|'drone'|'hydra'|'vortex';formation:'vee'|'weave'|'loop'|'cross';slot:number;mirror:number;at:number};
 export const SUMMER_AIR_POOL=24,SUMMER_HYDRA_POOL=2;
 export const HYDRA_BODY_Y=3.9;
@@ -14,30 +15,6 @@ export function summerMotion(age:number,lane:number,c:SummerCourse,time:number){
   return{x,y,heading:Math.PI,bank:.12*Math.sin(t*1.2+c.slot)};
 }
 const weapons=['cannon','homing','laser','omega'] as const;
-export function hydraHead(time:number,side:number,size=1){
-  const phase=time*.85+side*1.7;
-  return{x:(side*1.22+(side?Math.sin(phase)*.13:0))*size,y:side?-.15*size+.12*Math.cos(phase):0};
-}
-type Point={x:number;y:number};
-export function hydraHit(enemy:Point,time:number,start:Point,end:Point,padding=.05){
-  for(const side of[-1,0,1]){
-    const h=hydraHead(time,side),rx=.43+padding,ry=.7+padding;
-    const x=(start.x-enemy.x-h.x)/rx,y=(start.y-enemy.y-h.y)/ry,dx=(end.x-start.x)/rx,dy=(end.y-start.y)/ry;
-    const u=Math.max(0,Math.min(1,-(x*dx+y*dy)/(dx*dx+dy*dy||1)));
-    if((x+u*dx)**2+(y+u*dy)**2<=1)return true;
-  }
-  return false;
-}
-export function hydraBeamEntry(enemy:Point,time:number,origin:Point){
-  let entry=Infinity;
-  for(const side of[-1,0,1]){
-    const h=hydraHead(time,side),dx=(origin.x-enemy.x-h.x)/.48;
-    if(Math.abs(dx)>1)continue;
-    const reach=.75*Math.sqrt(1-dx*dx),center=enemy.y+h.y;
-    if(center+reach>=origin.y)entry=Math.min(entry,Math.max(origin.y,center-reach));
-  }
-  return entry;
-}
 export const summerWaves=Array.from({length:22},(_,i)=>{
   const hydra=i===5||i===12||i===18,vortexIndex=vortexWaveIndices.findIndex(index=>index===i),vortex=vortexIndex>=0,at=2+i*4.25;
   return{time:at,lanes:hydra?[0]:vortex?[vortexIndex%2?-1.55:1.55]:[-2,0,2],carrier:hydra||vortex?0:1,drop:weapons[i%4],summer:{kind:hydra?'hydra' as const:vortex?'vortex' as const:i%3===0?'drone' as const:'scout' as const,

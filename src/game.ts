@@ -1,7 +1,9 @@
 import { HELIOSTAT_HP,HELIOSTAT_APPROACH,HELIOSTAT_INTERVAL,HELIOSTAT_WINDUP,HELIOSTAT_FIRE,HELIOSTAT_CHANNEL,HELIOSTAT_FADE,HELIOSTAT_GUARD_FIRE,HELIOSTAT_SPAWN_LEAD,heliostatWaves,heliostatMotion,heliostatCanAttack,heliostatPlasmaHits,electricSites,electricHits,type HeliostatCourse } from './heliostat/combat';
 import {SUMMER_HP,SUMMER_APPROACH} from './summer/layout';
+import {createHydraAttack,stepHydraAttack} from './summer/hydra-attack';
 import {VORTEX_HP,VORTEX_RADIUS,VORTEX_FIRE,vortexEmission} from './summer/vortex';
-import {summerWaves,summerMotion,hydraHead,hydraHit,hydraBeamEntry,type SummerCourse} from './summer/combat';
+import {summerWaves,summerMotion,hydraHead,hydraBeamEntry,type SummerCourse} from './summer/combat';
+import {HYDRA_SIDES,HYDRA_HEAD_HP,HYDRA_BOSS_HEAD_HP,HYDRA_BOSS_SIZE,createHydraState,hydraAlive,damageHydraHead,damageRiverHydra,closestRiverHead,nearestHydraHead,hydraContact,hydraBeamContact,hydraBossHead,hydraBossContact,type HydraState,type HydraSide} from './summer/hydra-targets';
 import {heliostatLockTargets} from './heliostat/combat';
 import {crawlerSites,crawlerPose,stepCrawler,crawlerHits,CRAWLER_HP,type CrawlerState} from './heliostat/crawler';
 import {mineSites,minePose,triggerMine,mineBurst,MINE_WINDUP,MINE_JUMP,MINE_BURST_TIME,type BoulevardMine} from './boulevard-mines';
@@ -54,10 +56,12 @@ type Point = { x: number; y: number };
 type Shot = Point & {
   z: number; vx: number; vy: number; vz: number;
   drone?: boolean; targetsBoss?: boolean; bossSupport?: boolean; crabTarget?:number; wing?: WingProjectile; pierced?: Set<Enemy>; damage?: number;
+  hydraTarget?:HydraSide;hydraPierced?:Map<Enemy,Set<HydraSide>>;
 };
 type Threat = Shot & { graze?: 'near' | 'counted' };
 type Enemy = Point & {
   summer?:SummerCourse;
+  hydra?:HydraState;hitPoint?:Point&{z?:number};
   crawler?:CrawlerState;
   heliostat?: HeliostatCourse;
   boulevard?: BoulevardCourse;
@@ -72,6 +76,7 @@ type Drop = Point & { weapon: WingWeapon };
 type Wing = {
   side: WingSide; weapon?: WingWeapon; cooldown: number; flash: number;
   beamEnd?: Point; laserTarget?: Enemy | number; laserHold: number;
+  laserHead?:HydraSide;
 };
 
 const MAX_HULL = 4;
@@ -177,6 +182,10 @@ export class Flight {
   charges = 2;
   score = 0;
   bossHealth = BOSS_HP;
+  summerHydra=createHydraState(HYDRA_BOSS_HEAD_HP);
+  summerLastHit?:Point&{z:number};
+  private summerAttack=createHydraAttack();
+  private summerFinalTime=0;
   groundskeeperAim = { x: 0, y: -5.3 };
   groundskeeperCancelledAt = -100;
   private groundskeeperAimCycle = -1;
@@ -228,6 +237,8 @@ export class Flight {
   private ioCollapseAge = -1;
   private towlineEnemies = new Set<Enemy>();
   private towlineHitCannon = false;
+  private towlineHydraHits=new Map<Enemy,Set<HydraSide>>();
+  private towlineBossHeads=new Set<HydraSide>();
 
   readonly droneWeapon: DroneWeapon;
   readonly pilot: PilotId;
@@ -265,7 +276,10 @@ export class Flight {
   get transitionDuration() { if(this.level==='summer')return SUMMER_APPROACH;if(this.level==='heliostat')return HELIOSTAT_APPROACH;if(this.level==='boulevard')return BOULEVARD_APPROACH;return this.level === 'preserve' ? PRESERVE_APPROACH : this.level === 'vents' ? VENT_APPROACH : this.level === 'io' ? IO_APPROACH : this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
 
   get bossMaxHealth() { if(this.level==='summer')return SUMMER_HP;if(this.level==='heliostat')return HELIOSTAT_HP;if(this.level==='boulevard')return BOULEVARD_HP;return this.level === 'preserve' ? GROUNDSKEEPER_HP : this.level === 'vents' ? CRAB_HP : this.level === 'io' ? IO_HP : this.level === 'titan' ? CICADA_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
-  get bossTargetRadius() { if(this.level==='boulevard'||this.level==='heliostat'||this.level==='summer')return 1.25;return this.level === 'preserve' ? GROUNDSKEEPER_RADIUS : BOSS_CANNON_RADIUS; }
+  get bossTargetRadius() { if(this.level==='summer')return .48*HYDRA_BOSS_SIZE;if(this.level==='boulevard'||this.level==='heliostat')return 1.25;return this.level === 'preserve' ? GROUNDSKEEPER_RADIUS : BOSS_CANNON_RADIUS; }
+  get summerTargetHead(){return nearestHydraHead(this.summerHydra,this.player.x/BOSS_PROJECTION,true);}
+  get summerHeadsAlive(){return this.summerHydra.hp.filter(hp=>hp>0).length;}
+  get summerBossTime(){return this.phase==='boss'?this.time:this.summerFinalTime;}
   get groundskeeperTime() {
     // Negative time is a quiet idle, continuous through the camera approach.
     if (this.phase === 'stage') return this.time - this.stageDuration - this.transitionDuration;
@@ -282,6 +296,7 @@ export class Flight {
   get ioLegBroken() { return this.ioCollapseAge >= 0; }
   get ioCollapse() { return this.ioLegBroken ? smooth01(this.ioCollapseAge / 1.2) : 0; }
   get bossAimY() {
+    if(this.level==='summer')return hydraBossHead(this.time,this.summerTargetHead).y;
     if (this.level === 'preserve') { const p = groundskeeperContact(this.groundskeeperTime, this.groundskeeperAim, this.groundskeeperCancelledAt); return p.y * 34 / (22 - p.z); }
     return this.level === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).y : BOSS_Y;
   }
@@ -321,7 +336,8 @@ export class Flight {
   }
 
   get exposedCannonX() {
-    if (this.level === 'preserve'||this.level==='boulevard'||this.level==='heliostat'||this.level==='summer') return 0;
+    if(this.level==='summer')return hydraBossHead(this.time,this.summerTargetHead).x;
+    if (this.level === 'preserve'||this.level==='boulevard'||this.level==='heliostat') return 0;
     return this.level==='vents'?this.crabTargetX+this.crabOffsetX:this.level === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).x : this.level === 'ice' ? 0 : this.volley % 2 === 0 ? -BOSS_CANNON_X : BOSS_CANNON_X;
   }
 
@@ -395,7 +411,8 @@ export class Flight {
     } else {
       if (this.level === 'preserve') this.groundskeeperCancelledAt = this.time;
       if(this.level==='heliostat'){this.heliostatCancelledCycle=Math.floor(this.time/HELIOSTAT_INTERVAL);this.markers=[];}
-      this.damageBoss(6);
+      if(this.level==='summer'){for(const side of HYDRA_SIDES)this.damageBoss(6,false,side);}
+      else this.damageBoss(6);
     }
   }
 
@@ -454,6 +471,11 @@ export class Flight {
         if (shot.z > BOSS_DEPTH) return true;
         const untilImpact = (BOSS_DEPTH - shot.z) / shot.vz;
         const impact = { x: shot.x + shot.vx * untilImpact, y: shot.y + shot.vy * untilImpact };
+        if(this.level==='summer'){
+          const hit=hydraBossContact(this.summerHydra,this.time,impact);
+          if(hit&&(shot.hydraTarget===undefined||shot.hydraTarget===hit.side))this.damageBoss(shot.damage??1,false,hit.side);
+          return false;
+        }
         const lockedTarget = shot.targetsBoss && (this.level !== 'io' || shot.bossSupport === !this.ioLegBroken) && (this.level!=='vents'||shot.crabTarget===this.crabTargetX);
         if (lockedTarget ||
           ((shot.drone || shot.wing) && near(impact, { x: this.exposedCannonX, y: this.bossAimY }, this.bossTargetRadius))) {
@@ -462,8 +484,14 @@ export class Flight {
         return false;
       }
       for (const enemy of this.enemies) {
-        if (enemy.hp <= 0 || enemy.mine || shot.pierced?.has(enemy)) continue;
-        const hit = enemy.summer?.kind==='hydra' ? hydraHit(enemy,this.time,previous,shot) : enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},previous,shot) : enemy.ambusher ? ambusherBodyHit(enemy.ambusher,this.time,previous,shot) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,previous,shot) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, previous, shot) : shot.wing === 'homing'
+        if (enemy.hp <= 0 || enemy.mine || (shot.pierced?.has(enemy)&&enemy.summer?.kind!=='hydra')) continue;
+        if(enemy.summer?.kind==='hydra'){
+          const hit=hydraContact(enemy,this.time,previous,shot,.05,shot.hydraPierced?.get(enemy));if(!hit)continue;
+          this.damageEnemy(enemy,shot.damage??1,false,hit.side);
+          if(!shot.pierced)return false;
+          const hits=shot.hydraPierced??=new Map(),heads=hits.get(enemy)??new Set<HydraSide>();heads.add(hit.side);hits.set(enemy,heads);continue;
+        }
+        const hit = enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},previous,shot) : enemy.ambusher ? ambusherBodyHit(enemy.ambusher,this.time,previous,shot) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,previous,shot) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, previous, shot) : shot.wing === 'homing'
           ? nearSegment(enemy, previous, shot, enemyRadius(enemy))
           : Math.abs(shot.x - enemy.x) < enemyRadius(enemy) &&
             shot.y >= enemy.y - enemyRadius(enemy,.46) && previous.y <= enemy.y + enemyRadius(enemy,.46);
@@ -474,7 +502,7 @@ export class Flight {
       }
       return shot.y < 9 && Math.abs(shot.x) < 5;
     });
-    this.enemies = this.enemies.filter((enemy) => (enemy.hp > 0 || enemy.mine?.burstAt!==undefined&&this.time-enemy.mine.burstAt<MINE_BURST_TIME || enemy.ambusher?.defeatedAt!==undefined && this.time-enemy.ambusher.defeatedAt<AMBUSHER_CORPSE_TIME) && (enemy.ambusher ? ambusherHome(enemy.ambusher.site,this.time).y > -12 : enemy.y > (enemy.heliostat?.kind==='guard'?-10.6:-9)) && (!enemy.centipede || Math.abs(enemy.x) < 5.8) && (!(enemy.crucible || enemy.slag) || Math.abs(enemy.x)<6.8) && (!enemy.slag || (enemy.y<10 && enemy.age<10)));
+    this.enemies = this.enemies.filter((enemy) => (enemy.hp > 0 || enemy.mine?.burstAt!==undefined&&this.time-enemy.mine.burstAt<MINE_BURST_TIME || enemy.ambusher?.defeatedAt!==undefined && this.time-enemy.ambusher.defeatedAt<AMBUSHER_CORPSE_TIME) && (enemy.ambusher ? ambusherHome(enemy.ambusher.site,this.time).y > -12 : enemy.y > (enemy.heliostat?.kind==='guard'?-10.6:enemy.summer?.kind==='hydra'?-10:-9)) && (!enemy.centipede || Math.abs(enemy.x) < 5.8) && (!(enemy.crucible || enemy.slag) || Math.abs(enemy.x)<6.8) && (!enemy.slag || (enemy.y<10 && enemy.age<10)));
 
     this.threats = this.threats.filter((shot) => {
       this.advance(shot, dt);
@@ -580,14 +608,20 @@ export class Flight {
       vy: boss ? (this.bossAimY - origin.y) / duration : spec.speed,
       vz: boss ? BOSS_DEPTH / duration : 0,
       pierced: wing.weapon === 'omega' ? new Set<Enemy>() : undefined,
+      hydraTarget:boss&&this.level==='summer'&&wing.weapon==='homing'?nearestHydraHead(this.summerHydra,origin.x/BOSS_PROJECTION,true):undefined,
     });
   }
 
   private stepLaser(wing: Wing, origin: Point, boss: boolean, dt: number) {
     let enemy: Enemy | undefined;
     let target: Enemy | number | undefined;
+    let head:HydraSide|undefined;
     let endY = 8;
-    if (boss) {
+    if(boss&&this.level==='summer'){
+      const native={x:origin.x/BOSS_PROJECTION,y:origin.y/BOSS_PROJECTION};
+      const hit=hydraBossContact(this.summerHydra,this.time,native,{x:native.x,y:15});
+      head=hit?.side;target=head;endY=hit?hydraBossHead(this.time,hit.side).y*BOSS_PROJECTION:8;
+    }else if (boss) {
       endY = this.bossAimY * BOSS_PROJECTION;
       if (Math.abs(origin.x - this.exposedCannonX * BOSS_PROJECTION) < this.bossTargetRadius * BOSS_PROJECTION) {
         target = this.exposedCannonX;
@@ -603,27 +637,36 @@ export class Flight {
         }
       }
       target = enemy;
+      if(enemy?.summer?.kind==='hydra')head=hydraBeamContact(enemy,this.time,origin)?.side;
       if (enemy) endY = enemy.summer?.kind==='hydra' || enemy.ambusher || enemy.ventWorm || enemy.flyer ? 9 : enemy.y + (enemy.shrimp ? 1.4 : enemy.marine ? marineSpecs[enemy.marine].halfLength : 0);
     }
     wing.beamEnd = { x: origin.x, y: endY };
-    wing.laserHold = target !== undefined && target === wing.laserTarget ? wing.laserHold + dt : 0;
+    wing.laserHold = target !== undefined && target === wing.laserTarget && head===wing.laserHead ? wing.laserHold + dt : 0;
     wing.laserTarget = target;
+    wing.laserHead=head;
     const damage = (1 + 2.5 * Math.min(wing.laserHold / 0.85, 1)) * dt;
-    if (enemy) this.damageEnemy(enemy, damage, true);
-    if (boss && target !== undefined) this.damageBoss(damage, true);
+    if (enemy) this.damageEnemy(enemy, damage, true,head);
+    if (boss && target !== undefined) this.damageBoss(damage, true,head);
   }
 
   private guideMissile(shot: Shot, boss: boolean, dt: number) {
     if (boss) {
       const remaining = Math.max(dt, (BOSS_DEPTH - shot.z) / shot.vz);
       const steer = Math.min(1, 10 * dt);
-      shot.vx += ((this.exposedCannonX - shot.x) / remaining - shot.vx) * steer;
+      if(this.level==='summer'&&(shot.hydraTarget===undefined||!hydraAlive(this.summerHydra,shot.hydraTarget)))shot.hydraTarget=nearestHydraHead(this.summerHydra,shot.x,true);
+      const x=this.level==='summer'?hydraBossHead(this.time,shot.hydraTarget!).x:this.exposedCannonX;
+      shot.vx += ((x - shot.x) / remaining - shot.vx) * steer;
       return;
     }
 
-    let closest: Enemy | undefined;
+    let closest: Point | undefined;
     let distance = 36;
     for (const enemy of this.enemies) {
+      if(enemy.hp<=0||enemy.mine)continue;
+      if(enemy.summer?.kind==='hydra'){
+        const head=closestRiverHead(enemy,this.time,shot,distance);if(head){closest=head.point;distance=head.distance;}
+        continue;
+      }
       if (enemy.hp <= 0 || enemy.mine || enemy.y <= shot.y || (enemy.ambusher && !ambusherHulls(enemy.ambusher,this.time).length)) continue;
       const squared = (enemy.x - shot.x) ** 2 + (enemy.y - shot.y) ** 2;
       if (squared < distance) {
@@ -659,11 +702,17 @@ export class Flight {
       this.towlineFlash = TOWLINE_DURATION;
       this.towlineDamage = this.droneDamage(TOWLINE_DAMAGE);
       this.towlineEnemies.clear();
+      this.towlineHydraHits.clear();this.towlineBossHeads.clear();
       this.towlineHitCannon = false;
     }
     if (this.towlineFlash === 0) return;
 
     if (this.phase === 'boss') {
+      if(this.level==='summer'){
+        const start={x:this.player.x/BOSS_PROJECTION,y:this.player.y/BOSS_PROJECTION},end={x:this.drone.x/BOSS_PROJECTION,y:this.drone.y/BOSS_PROJECTION};
+        let hit;while((hit=hydraBossContact(this.summerHydra,this.time,start,end,0,this.towlineBossHeads))){this.towlineBossHeads.add(hit.side);this.damageBoss(this.towlineDamage,false,hit.side);}
+        return;
+      }
       const cannon = { x: this.exposedCannonX * BOSS_PROJECTION, y: this.bossAimY * BOSS_PROJECTION };
       if (!this.towlineHitCannon &&
         nearSegment(cannon, this.player, this.drone, this.bossTargetRadius * BOSS_PROJECTION)) {
@@ -673,8 +722,13 @@ export class Flight {
       return;
     }
     for (const enemy of this.enemies) {
+      if(enemy.hp>0&&enemy.summer?.kind==='hydra'){
+        const heads=this.towlineHydraHits.get(enemy)??new Set<HydraSide>();this.towlineHydraHits.set(enemy,heads);
+        let hit;while((hit=hydraContact(enemy,this.time,this.player,this.drone,.05,heads))){heads.add(hit.side);this.damageEnemy(enemy,this.towlineDamage,false,hit.side);}
+        continue;
+      }
       if (enemy.hp > 0 && !enemy.mine && !this.towlineEnemies.has(enemy) &&
-        (enemy.summer?.kind==='hydra' ? hydraHit(enemy,this.time,this.player,this.drone) : enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},this.player,this.drone) : enemy.ambusher ? ambusherBodyHit(enemy.ambusher,this.time,this.player,this.drone) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,this.player,this.drone) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, this.player, this.drone) : nearSegment(enemy, this.player, this.drone, enemyRadius(enemy)))) {
+        (enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},this.player,this.drone) : enemy.ambusher ? ambusherBodyHit(enemy.ambusher,this.time,this.player,this.drone) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,this.player,this.drone) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, this.player, this.drone) : nearSegment(enemy, this.player, this.drone, enemyRadius(enemy)))) {
         this.towlineEnemies.add(enemy);
         this.damageEnemy(enemy, this.towlineDamage);
       }
@@ -718,9 +772,9 @@ export class Flight {
         const courseAge=boulevard||heliostat||summer?this.time-wave.time-dt:0;
         const start = summer?summerMotion(courseAge,lane,summer,this.time):heliostat?heliostatMotion(courseAge,lane,heliostat):boulevard?boulevardMotion(courseAge,lane,boulevard):flyer ? flyerMotion(0,lane,flyer) : shrimp ? shrimpMotion(0,lane,shrimp) : wave.ventAnchor!==undefined ? ventAnchorPoint(wave.ventAnchor,this.time) : wave.crucible ? crucibleMotion(0,lane) : wave.skipper ? skipperMotion(0,lane,index) : course ? cicadaMotion(0, lane, course) : wave.marine ? marineMotion(wave.marine, 0, lane, school) : {x: lane, y: 8.6};
         return {
-          x: start.x, y: start.y, lane, age: boulevard||heliostat||summer?courseAge:wave.ventAnchor!==undefined?-VENT_SPAWN_LEAD:0, summer,heliostat,boulevard,flyer, school, cicada: course, skipper: wave.skipper, crucible: wave.crucible, ventAnchor:wave.ventAnchor, ventWorm:wave.ventWorm, shrimp, slot: index,
+          x: start.x, y: start.y, lane, hydra:summer?.kind==='hydra'?createHydraState():undefined, age: boulevard||heliostat||summer?courseAge:wave.ventAnchor!==undefined?-VENT_SPAWN_LEAD:0, summer,heliostat,boulevard,flyer, school, cicada: course, skipper: wave.skipper, crucible: wave.crucible, ventAnchor:wave.ventAnchor, ventWorm:wave.ventWorm, shrimp, slot: index,
           fire: summer?(summer.kind==='vortex'?VORTEX_FIRE:summer.kind==='hydra'?2.7:1.8+index*.25):heliostat?(heliostat.kind==='guard'?HELIOSTAT_GUARD_FIRE+index*.35:1.85+index*.25):boulevard?1.7+index*.22:flyer ? Infinity : shrimp ? SHRIMP_FIRST_FIRE+index*.25 : wave.ventWorm ? WORM_FIRST_ATTACK : wave.ventAnchor!==undefined ? MORTAR_FIRST_FIRE : wave.crucible ? CRUCIBLE_FIRST_POUR : schoolDelay(school) + (wave.marine === 'plesiosaur' ? 1.8 : wave.ant === 'soldier' ? 1.6 : 1.1) + index * 0.28,
-          hp: summer?(summer.kind==='vortex'?VORTEX_HP:summer.kind==='hydra'?10:summer.kind==='drone'?4:2):heliostat?(heliostat.kind==='guard'?8:3):boulevard?(boulevard.formation==='intercept'?5:boulevard.heavy?6:3):flyer ? FLYER_HP : shrimp ? SHRIMP_HP : wave.ventWorm ? WORM_HP : wave.ventAnchor!==undefined ? MORTAR_HP : wave.crucible ? CRUCIBLE_HP : wave.marine ? marineSpecs[wave.marine].hp : wave.ant === 'soldier' ? 5 : 2, ant: wave.ant, marine: wave.marine,
+          hp: summer?(summer.kind==='vortex'?VORTEX_HP:summer.kind==='hydra'?HYDRA_HEAD_HP*3:summer.kind==='drone'?4:2):heliostat?(heliostat.kind==='guard'?8:3):boulevard?(boulevard.formation==='intercept'?5:boulevard.heavy?6:3):flyer ? FLYER_HP : shrimp ? SHRIMP_HP : wave.ventWorm ? WORM_HP : wave.ventAnchor!==undefined ? MORTAR_HP : wave.crucible ? CRUCIBLE_HP : wave.marine ? marineSpecs[wave.marine].hp : wave.ant === 'soldier' ? 5 : 2, ant: wave.ant, marine: wave.marine,
           drop: index === wave.carrier ? wave.drop : undefined,
           raptor: index === wave.raptor,
         };
@@ -819,15 +873,21 @@ export class Flight {
         for (const offset of spread) {
           const muzzle = enemy.heliostat?.kind === 'guard' ? .85 : enemy.marine ? marineSpecs[enemy.marine].halfLength : 0;
           const head=enemy.summer?.kind==='hydra'?hydraHead(this.time,Math.sign(offset)):undefined;
+          if(head&&!hydraAlive(enemy.hydra,Math.sign(offset) as HydraSide))continue;
           this.threats.push({ x: enemy.x + (head?.x??Math.sin(enemy.heading ?? 0)*muzzle), y: enemy.y + (head?head.y-.65:-Math.cos(enemy.heading ?? 0)*muzzle), z: 0,
             vx: Math.sin(angle + offset) * speed, vy: Math.cos(angle + offset) * speed, vz: 0 });
         }
         enemy.interceptorAim=undefined;
       }
       if(enemy.mine)continue;
+      if(enemy.summer?.kind==='hydra'){
+        const head=hydraContact(enemy,this.time,this.player,this.player,.16);
+        if(head){this.damageEnemy(enemy,(enemy.hydra?.hp[head.side+1]??enemy.hp/3),false,head.side);this.hit();}
+        continue;
+      }
       if(enemy.ambusher){
         if(ambusherHits(enemy.ambusher,this.time,this.time-dt,this.player))this.hit();
-      } else if (enemy.summer?.kind==='hydra' ? hydraHit(enemy,this.time,this.player,this.player,.16) : enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},this.player,this.player,.16) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,this.player,this.player,.16) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind},this.player,this.player,.2-marineSpecs[enemy.marine].radius*.2) : near(enemy, this.player, enemyRadius(enemy)+.16)) {
+      } else if (enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},this.player,this.player,.16) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,this.player,this.player,.16) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind},this.player,this.player,.2-marineSpecs[enemy.marine].radius*.2) : near(enemy, this.player, enemyRadius(enemy)+.16)) {
         if(!enemy.ventWorm)enemy.hp = 0;
         if (enemy.centipede) severCentipede(enemy);
         this.hit();
@@ -836,6 +896,7 @@ export class Flight {
   }
 
   private stepBoss(dt: number) {
+    if(this.level==='summer'){this.stepSummerHydra();return;}
     if(this.level==='heliostat'){this.stepHeliostat();return;}
     if (this.level === 'preserve') {
       const attack = groundskeeperAttack(this.time);
@@ -872,6 +933,12 @@ export class Flight {
       this.volley++;
     }
     if (elapsed >= BOSS_FIRE_AT + BOSS_IMPACT_TRAVEL + 0.02) this.markers = [];
+  }
+
+  private stepSummerHydra(){
+    stepHydraAttack(this.summerAttack,this.time,this.player,this.summerHydra,BOSS_DEPTH,BOSS_IMPACT_TRAVEL);
+    this.volley=this.summerAttack.volley;this.markers=this.summerAttack.markers;this.threats.push(...this.summerAttack.shots);
+    if(this.summerAttack.fired)this.bossRecoil=BOSS_RECOIL_TIME;
   }
 
   private stepHeliostat(){
@@ -963,10 +1030,10 @@ export class Flight {
     const targetsBoss = !drone && Math.abs(x) < 1.65;
     // Preserve horizontal drone placement while advancing visibly toward boss depth.
     const expansion = 1 / BOSS_PROJECTION - 1;
-    const dx = drone ? x * expansion : (targetsBoss ? (this.level === 'io'||this.level==='vents' ? this.exposedCannonX : 0) - x : 0);
+    const dx = drone ? x * expansion : (targetsBoss ? (this.level === 'io'||this.level==='vents'||this.level==='summer' ? this.exposedCannonX : 0) - x : 0);
     const dy = drone || targetsBoss ? this.bossAimY - y : 0;
     this.shots.push({ x, y, z: 0, vx: dx / duration, vy: dy / duration,
-      vz: BOSS_DEPTH / duration, targetsBoss, bossSupport: this.level === 'io' ? !this.ioLegBroken : undefined, crabTarget:this.level==='vents'?this.crabTargetX:undefined, drone, damage });
+      vz: BOSS_DEPTH / duration, targetsBoss, bossSupport: this.level === 'io' ? !this.ioLegBroken : undefined, crabTarget:this.level==='vents'?this.crabTargetX:undefined,hydraTarget:this.level==='summer'&&targetsBoss?this.summerTargetHead:undefined, drone, damage });
   }
 
   private advance(shot: Shot, dt: number) {
@@ -975,10 +1042,11 @@ export class Flight {
     shot.z += shot.vz * dt;
   }
 
-  private damageEnemy(enemy: Enemy, damage: number, laser = false) {
+  private damageEnemy(enemy: Enemy, damage: number, laser = false,head?:HydraSide) {
     if (enemy.hp <= 0 || enemy.mine) return;
     const before = enemy.hp;
-    enemy.hp = Math.max(0, enemy.hp - damage);
+    if(enemy.summer?.kind==='hydra')damageRiverHydra(enemy,this.time,damage,head,laser);
+    else enemy.hp = Math.max(0, enemy.hp - damage);
     if (laser) enemy.laserDamage = (enemy.laserDamage ?? 0) + before - enemy.hp;
     if (enemy.hp === 0) {
       if(enemy.ambusher)defeatAmbusher(enemy.ambusher,this.time);
@@ -989,10 +1057,19 @@ export class Flight {
     }
   }
 
-  private damageBoss(damage: number, laser = false) {
+  private damageBoss(damage: number, laser = false,head:HydraSide=this.summerTargetHead) {
     if (this.phase !== 'boss') return;
     const before = this.bossHealth;
-    if(this.level==='vents'&&!this.crabCoreOpen){
+    if(this.level==='summer'){
+      if(!hydraAlive(this.summerHydra,head))return;
+      damageHydraHead(this.summerHydra,head,damage,this.time);this.bossHealth=this.summerHydra.hp.reduce((sum,hp)=>sum+hp,0);
+      if(!laser){const point=hydraBossHead(this.time,head);this.summerLastHit={...point,z:BOSS_DEPTH+1.1};}
+      if(!hydraAlive(this.summerHydra,head)){
+        const index=this.summerAttack.heads.indexOf(head);if(index>=0){this.summerAttack.heads.splice(index,1);this.markers.splice(index,1);}
+        this.pickupMessage=(head===0?'Central':head<0?'Left':'Right')+' head destroyed';this.pickupTime=2;
+        for(const wing of this.wings)if(wing.laserHead===head){wing.laserHold=0;wing.laserTarget=undefined;}
+      }
+    }else if(this.level==='vents'&&!this.crabCoreOpen){
       const index=this.crabTargetX<0?0:1;this.crabClawHealth[index]=Math.max(0,this.crabClawHealth[index]-damage);
       this.bossHealth=CRAB_CORE_HP+this.crabClawHealth[0]+this.crabClawHealth[1];
       if(this.crabClawHealth[index]===0){this.crabBreakTimes[index]=this.time;this.pickupMessage=this.crabCoreOpen?'Claws disabled · Gill chamber exposed':index===0?'Crusher joint broken':'Cutter joint broken';this.pickupTime=2.4;for(const wing of this.wings){wing.laserHold=0;wing.laserTarget=undefined;}}
@@ -1018,6 +1095,7 @@ export class Flight {
   }
 
   private enter(phase: Phase) {
+    if(this.level==='summer'&&this.phase==='boss'&&(phase==='won'||phase==='lost'))this.summerFinalTime=this.time;
     if(this.level==='heliostat'&&this.phase==='boss'&&(phase==='won'||phase==='lost'))this.heliostatFinalTime=this.time;
     if (this.level === 'preserve' && this.phase === 'boss' && (phase === 'won' || phase === 'lost')) this.groundskeeperFinalTime = this.time;
     this.phase = phase;

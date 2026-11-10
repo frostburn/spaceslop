@@ -117,7 +117,7 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     bossHud.hidden = flight.phase !== 'boss';
     bossHealth.max = flight.bossMaxHealth;
     bossHealth.value = flight.bossHealth;
-    bossName.textContent = levels[flight.level].boss;
+    bossName.textContent = levels[flight.level].boss+(flight.level==='summer'?' · '+flight.summerHeadsAlive+(flight.summerHeadsAlive===1?' HEAD':' HEADS'):'');
     pulse.disabled = !active || !fighting || flight.charges === 0;
     pause.hidden = !active;
     panel.hidden = active;
@@ -148,7 +148,7 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     else if (flight.phase === 'boss' && flight.level === 'preserve')
       tip = 'Dodge the claw windups. Pulse interrupts an attack. Fire into the belly.';
     else if (flight.phase === 'boss')
-      tip = flight.level === 'ice' ? 'Tap the mouth marker. Dodge amber rings.' : flight.level === 'io' ? (flight.ioLegBroken ? 'Machinery exposed · Dodge the wheel shots.' : 'Break the cyan front support.') : flight.level === 'titan' ? 'Tap the glowing thorax vent. Dodge amber rings.' : flight.level === 'vents' ? (flight.crabCoreOpen ? 'Tap the gill chamber. Dodge amber rings.' : 'Tap the glowing joint. Break both claws.') : flight.level==='summer'?'Target the central hydra crown. Dodge amber rings.':'Tap the green cannon. Dodge amber rings.';
+      tip = flight.level === 'ice' ? 'Tap the mouth marker. Dodge amber rings.' : flight.level === 'io' ? (flight.ioLegBroken ? 'Machinery exposed · Dodge the wheel shots.' : 'Break the cyan front support.') : flight.level === 'titan' ? 'Tap the glowing thorax vent. Dodge amber rings.' : flight.level === 'vents' ? (flight.crabCoreOpen ? 'Tap the gill chamber. Dodge amber rings.' : 'Tap the glowing joint. Break both claws.') : flight.level==='summer'?'Destroy all three hydra heads. Dodge amber rings.':'Tap the green cannon. Dodge amber rings.';
     if (active && flight.perkTime > 0) {
       tip = flight.perkMessage;
     }

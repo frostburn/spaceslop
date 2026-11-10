@@ -205,7 +205,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   void loadEncounterTexture('armor',texture=>{helioArt.heliostatMetal=texture;helioMaterials.setArt(helioArt,true);},1);
   void loadEncounterTexture('ioCeramic',texture=>{helioArt.heliostatCeramic=texture;helioMaterials.setArt(helioArt,true);},1);
   const assets = {
-    ...createSummerStudies(),
+    ...createSummerStudies(camera),
     heliostat_manowar:{root:helioGuard,duration:4,pose(time:number){helioGuardPose(time,0,T.MathUtils.smoothstep(time,2.4,3.3));return 'raster float / ruffled sail / rigid harness / swaying tendrils';}},
     heliostat_drone:{root:helioDrone,duration:3,pose(time:number){helioDrone.rotation.y=.12*Math.sin(time*2);return 'inspection drone';}},
     heliostat_crawler:{root:helioCrawler.root,duration:8,bounds:new T.Box3(new T.Vector3(-4,-7,-5.6),new T.Vector3(1,3,1)),pose(time:number){const p=crawlerPose({site:0,aimY:-4},crawlerSites[0].at-4+time);helioCrawler.pose(p,time);helioCrawler.root.position.y=-p.physicalY;return p.hot?'cutting sweep':p.warning?'locked aim / marked sweep':p.brace>.5?'braced on rail':'rail traversal / telescoping cutter';}},
@@ -423,6 +423,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     }
     previous = now;
     controls.update();
+    if(assetSelect.value==='summer_hydra'||assetSelect.value==='summer_lotus_hydra')updatePose();
     if(iceField.root.visible)iceField.capture(renderer,camera);
     if(sector.value==='boulevard')glow.present(renderer,scene,camera);else renderer.render(scene,camera);
   });
