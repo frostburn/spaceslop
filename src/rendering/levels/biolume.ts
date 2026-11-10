@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {createGroveEcology} from '../../biolume/ecology';
 import type {LevelFactory} from '../level';
 import {loadEncounterTexture} from '../../encounter-texture';
 import {createBossLaserContact} from '../../laser-contact';
@@ -30,13 +31,10 @@ export const createLevel:LevelFactory=({plane,scene,signal})=>{
     loadEncounterTexture('biolumePods',map=>{media.push(map);pods.setArt(map);water.setPods(map);},undefined,signal),
     loadEncounterTexture('biolumeBoss',map=>{media.push(map);boss.setArt(map);},undefined,signal),
   ]).then(results=>[...new Set([...results.flat(),...plates.layers.flat().map(s=>s.fallback),...gliders.map(r=>r.raster.mesh.material.map!),pods.meshes[0].material.map!,water.pods.meshes[0].material.map!,boss.fallback])]);
-  const particleGeometry=new T.BufferGeometry(),positions=new Float32Array(72*3);
-  for(let i=0;i<72;i++){positions[i*3]=(Math.sin(i*127.1)*.5+.5)*8-4;positions[i*3+1]=(i/72-.5)*22;positions[i*3+2]=.8+Math.sin(i)*.4;}
-  particleGeometry.setAttribute('position',new T.BufferAttribute(positions,3));
-  const motes=new T.Points(particleGeometry,new T.PointsMaterial({color:0x83edb6,size:.04,transparent:true,opacity:.5,depthWrite:false,blending:T.AdditiveBlending}));root.add(motes);
+  const ecology=createGroveEcology();root.add(ecology.root);
   return{root,boss:boss.root,models,ready,stageDistance:GROVE_DISTANCE,fixedCamera:true,orientation:()=>({pitch:0,bank:0,viewPitch:0}),
     background:0,keyIntensity:0,skyIntensity:0,toneMapping:T.ACESFilmicToneMapping,exposure:1.1,
-    contacts:[boss.root,...gliders.map(r=>r.root),...seekers.map(r=>r.root)],warmup:[[plates.root,water.root,...pods.meshes,motes],[boss.root,...gliders.map(r=>r.root),...seekers.map(r=>r.root)]],
+    contacts:[boss.root,...gliders.map(r=>r.root),...seekers.map(r=>r.root)],warmup:[[plates.root,water.root,...pods.meshes,ecology.root],[boss.root,...gliders.map(r=>r.root),...seekers.map(r=>r.root)]],
     prepare(){plates.prime(true);water.prime(true);restores=gliders.map(r=>r.prime());},afterWarmup(){plates.prime(false);water.prime(false);restores.forEach(r=>r());restores=[];},
     capture:water.capture,
     contact:createBossLaserContact(plane,boss.root),
@@ -58,7 +56,9 @@ export const createLevel:LevelFactory=({plane,scene,signal})=>{
         gains[gi++].value=1+Math.max(0,1-(enemy.fire-enemy.age)/.65);
         rig.root.visible=true;rig.root.position.set(enemy.x,enemy.y,.1);rig.root.rotation.set(0,groveMotion(enemy.age,enemy.lane,enemy.grove).bank,enemy.heading??0);rig.root.scale.setScalar(groveEnemySize(enemy.grove));rig.pose(enemy.age);models[i]=rig.root;
       }
-      motes.position.set(.1*Math.sin(animationTime*.3),-.5*Math.sin(animationTime*.16),0);
+      const avoid=[f.player,f.drone,...f.enemies.filter(e=>e.hp>0)];
+      if(boss.root.visible)for(const x of[-2,0,2])avoid.push({x,y:boss.root.position.y});
+      ecology.update(time,animationTime,avoid);
       lighting.update(frame,boss.root);
     },
     dispose(){if(disposed)return;disposed=true;water.dispose();plates.dispose();boss.release();gliders.forEach(r=>r.release());pods.release();for(const t of new Set(media))t.dispose();restores.forEach(r=>r());restores=[];},
