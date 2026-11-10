@@ -12,8 +12,8 @@ export function createMammoth(a:ReturnType<typeof createMammothAssets>){
   const shadow=new T.Mesh(new T.CircleGeometry(1,24),new T.MeshBasicMaterial({color:0x25391f,transparent:true,opacity:.17,depthWrite:false}));shadow.scale.set(1.55,2.7,1);shadow.position.set(0,-.7,-.15);root.add(shadow);
   const body=rasterPart(raster,a.geometries[0],a.material,2.6,4.6,0,0,.04);
   const head=new T.Group();head.position.set(0,-1.6,.13);raster.add(head);rasterPart(head,a.geometries[1],a.material,2.1,2.3,0,-.55,.02);
-  const trunk=new T.Group();trunk.position.set(0,-1.02,.04);head.add(trunk);rasterPart(trunk,a.geometries[2],a.material,.65,1.5,0,-.55,.02);
-  const tip=new T.Group();tip.position.set(0,-1.16,.04);trunk.add(tip);rasterPart(tip,a.geometries[3],a.material,.4,1.25,0,-.53,.02);
+  const trunk=new T.Group();trunk.position.set(0,-1.02,.04);head.add(trunk);const basePart=rasterPart(trunk,a.geometries[2],a.material,.65,1.5,0,-.55,.02);basePart.name='mammoth-trunk-base';
+  const tip=new T.Group();tip.position.set(0,-1.16,-.02);trunk.add(tip);const tipPart=rasterPart(tip,a.geometries[3],a.material,.4,1.25,0,-.53,.02);tipPart.name='mammoth-trunk-tip';
   const legs=[[-1.17,-.9,-.08],[1.17,-.9,-.07],[-1.05,1.2,-.06],[1.05,1.2,-.05]].map(([x,y,z],i)=>{
     const pivot=new T.Group();pivot.position.set(x,y,z);raster.add(pivot);rasterPart(pivot,a.geometries[i<2?4:5],a.material,.64,1.2,0,-.45,0);return pivot;
   });

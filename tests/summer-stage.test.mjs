@@ -8,18 +8,21 @@ const {Flight,STEP,BOSS_PROJECTION}=await server.ssrLoadModule('/src/game.ts');
 const c=await server.ssrLoadModule('/src/summer/combat.ts'),layout=await server.ssrLoadModule('/src/summer/layout.ts');
 const {createLevel}=await server.ssrLoadModule('/src/rendering/levels/summer.ts');
 const {WING_FORMATION}=await server.ssrLoadModule('/src/wing.ts');
+const vortex=await server.ssrLoadModule('/src/summer/vortex.ts');
 
 test('full summer route has three hydras, varied aerial formations, repeat drops and bounded prewarmed pools',()=>{
  const f=new Flight('sentry',[],'vex','summer');f.invulnerable=f.cooldown=f.droneCooldown=1e5;
- const roster=new Set(),formations=new Set(),drops=new Set(),hydras=new Set();let maxima={scout:0,drone:0,hydra:0};
+ const roster=new Set(),formations=new Set(),drops=new Set(),hydras=new Set(),spirals=new Set();let maxima={scout:0,drone:0,hydra:0,vortex:0};
  for(let i=0;i<6001&&f.phase==='stage';i++){
-  f.step(STEP);const counts={scout:0,drone:0,hydra:0};
+  f.step(STEP);const counts={scout:0,drone:0,hydra:0,vortex:0};
   for(const e of f.enemies){assert(e.summer,'wrong sector enemy');roster.add(e.summer.kind);formations.add(e.summer.formation);counts[e.summer.kind]++;if(e.drop)drops.add(e.drop);if(e.summer.kind==='hydra')hydras.add(e.summer.at);assert(Number.isFinite(e.x+e.y));}
   for(const kind of Object.keys(counts))maxima[kind]=Math.max(maxima[kind],counts[kind]);
+  for(const e of f.enemies)if(e.summer.kind==='vortex')spirals.add(e.summer.at);
  }
  assert.equal(f.phase,'approach');assert.equal(f.nextWave,22);assert.equal(f.transitionDuration,6);assert.equal(f.stageDuration,100);
- assert.deepEqual([...roster].sort(),['drone','hydra','scout']);assert.equal(hydras.size,3);assert.equal(formations.size,4);assert.equal(drops.size,4);
+ assert.deepEqual([...roster].sort(),['drone','hydra','scout','vortex']);assert.equal(hydras.size,3);assert.equal(spirals.size,4);assert.equal(formations.size,4);assert.equal(drops.size,4);
  assert(maxima.scout<=c.SUMMER_AIR_POOL/2&&maxima.drone<=c.SUMMER_AIR_POOL/2&&maxima.hydra<=c.SUMMER_HYDRA_POOL);
+ assert(maxima.vortex<=vortex.VORTEX_POOL);
  for(let i=0;i<361;i++)f.step(STEP);assert.equal(f.phase,'boss');assert.equal(f.bossHealth,layout.SUMMER_HP);
 });
 
