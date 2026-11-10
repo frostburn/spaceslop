@@ -46,7 +46,8 @@ export function wingPoint(x:number,y:number,time:number,out={x:0,y:0,z:0}){
   out.z=.14*Math.exp(-x*x/.035)+span*span*(.6*Math.sin(phase)+.12*Math.sin(phase-span*.6));return out;
 }
 export function createWingGeometry(){
-  const g=moduleGeometry(WING_WIDTH,WING_HEIGHT,48,24);g.boundingSphere=new T.Sphere(new T.Vector3(),3);return g;
+  const g=moduleGeometry(WING_WIDTH,WING_HEIGHT,48,24);g.boundingSphere=new T.Sphere(new T.Vector3(),3);
+  g.boundingBox=new T.Box3(new T.Vector3(-WING_WIDTH/2,-WING_HEIGHT/2,-.8),new T.Vector3(WING_WIDTH/2,WING_HEIGHT/2,.8)).expandByScalar(.001);return g;
 }
 const deformed={x:0,y:0,z:0};
 export function poseWingGeometry(g:T.BufferGeometry,time:number){
@@ -63,13 +64,13 @@ export function createRasterGlider(emission:{value:number}){
     pose(time:number){if(time!==last){poseWingGeometry(geometry,time);last=time;}},release(){material.map=null;fallback.dispose();}};
 }
 
-export function createSeedPods(emission:{value:number}){
+export function createSeedPods(emission:{value:number},count=3){
   const fallback=podFallback(),material=rasterMaterial(fallback,emission,true),geometry=moduleGeometry(1.2,2.35);
-  const meshes=Array.from({length:3},(_,i)=>{const m=new T.Mesh(geometry,material);m.name='biolume-seed-pod-'+i;return m;});
+  const meshes=Array.from({length:count},(_,i)=>{const m=new T.Mesh(geometry,material);m.name='biolume-seed-pod-'+i;return m;});
   const uvSites=[[.175,.84],[.87,.59],[.12,.16]]as const;
   const z=.3,height=2*Math.tan(39*Math.PI/360)*(22-z),bulbOffset=(.5-.29)*2.35;
   const anchors=meshes.map(()=>new T.Vector3());
-  function fit(aspect:number){for(let i=0;i<3;i++){meshes[i].position.set((uvSites[i][0]-.5)*height*aspect,(uvSites[i][1]-.5)*height+bulbOffset,z);anchors[i].copy(meshes[i].position).add(new T.Vector3(0,-bulbOffset,.5));}}
+  function fit(aspect:number){for(let i=0;i<count;i++){const site=uvSites[i%3];meshes[i].position.set((site[0]-.5)*height*aspect,(site[1]-.5)*height+bulbOffset,z);anchors[i].copy(meshes[i].position).add(new T.Vector3(0,-bulbOffset,.5));}}
   fit(9/16);
   return{meshes,anchors,fit,setArt(t:T.Texture|undefined){material.map=t??fallback;setCrop(geometry,t?POD_CROP:[0,0,1,1]);},release(){material.map=null;fallback.dispose();}};
 }

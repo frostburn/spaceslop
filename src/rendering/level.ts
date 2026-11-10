@@ -27,6 +27,8 @@ export interface LevelScene {
   friendlyGlow?: number;
   keyIntensity?: number;
   skyIntensity?: number;
+  toneMapping?: T.ToneMapping;
+  exposure?: number;
   surfaces?: T.Group[];
   applyArmor?: (texture: T.Texture) => void;
   reveal?: (time: number, normal: number) => number;

@@ -140,6 +140,8 @@ export class FlightView {
     this.perspective.updateProjectionMatrix();
     this.cannonMarker.renderOrder = 12;
     const p = this.level;
+    this.renderer.toneMapping=p.toneMapping??T.NoToneMapping;
+    this.renderer.toneMappingExposure=p.exposure??1;
     this.scene.background = new T.Color(p.background ?? sceneColor);
     this.keyLight = new T.DirectionalLight(p.key ?? 0xb9e8ff, p.keyIntensity ?? 2.7);
     this.keyLight.position.set(3, 5, 6);

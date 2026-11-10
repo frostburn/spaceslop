@@ -168,3 +168,19 @@ The former façade atlas is retired in favor of modeled architecture. The unused
 Vite dev exposes **Launch at transition**. The **Synthwave boulevard** workshop sector includes **Boulevard · Full route**, **Pursuit cruiser** and **Hovercar patrol**, with camera presets, scrubbing and play/pause. **Chrome / vector arch** isolates the complete gate, and **Central fountain** exposes the basin, jets and spray for close inspection. The route timeline covers all three districts, the transition and eighteen seconds of pursuit. Controls and actor/weapon targets stay in the stable flight plane throughout the camera move.
 
 The river has rounded, unevenly spaced bends, changing channel width and gravel point bars on the inside banks. Shader banks, planted foliage, grazing footprints and hydra bodies share the same channel profile. It meanders beneath the straight flight path; the camera never follows it. The overhead mammoth replacement retains the existing filename. The paired side-lotus atlas and separate far-wall cutout are delivered through chat and loaded only for Summer; missing files use modeled flowers. The former opaque roof petals have been removed so they cannot conceal the far-wall bloom.
+
+
+## Lantern Grove · Bioluminescence
+
+Select **Lantern Grove · Bioluminescence** (`?level=biolume`) for a 100-second, ten-screen route: Lantern Grove, Root Bridges, Blackwater Basin, Lantern Nursery and Dark Crown. The ship flies straight beneath a translucent canopy while pod banks, leaf veins, engines, projectiles and glider glands provide local light. There is no ambient fill. The foreground has a small additional scroll parallax; both layers finish aligned on the final clearing. The last four seconds coast smoothly to rest.
+
+Twenty waves mix weaving lantern gliders, looping single-file trains, quick basin skimmers and larger hovering sentries with three-shot fans. Enemies enter from outside the viewport and cannot fire until fully in view. Drop carriers repeatedly offer homing missiles, cannon, laser and Omega attachments. The existing prototype draconian interceptor is the temporary boss. It descends into view during a six-second approach, keeping the camera top-down and the raster scenery stable. Attack the indicated cannon and dodge its locked amber markers. All weapons and Pulse work normally. Vite offers **Launch at transition**.
+
+Owner-uploaded optional media:
+
+- `public/encounters/biolume-backdrop.webp` — opaque, full ten-screen ground plate.
+- `public/encounters/biolume-foreground.webp` — RGBA, full ten-screen canopy plate. Keep its whole frame and alpha; use the study’s translucent membrane / nearly opaque vein material.
+- `public/encounters/biolume-glider.png` — neutral head-down glider cutout, bending in-engine.
+- `public/encounters/biolume-study-atlas.png` — original whole four-part atlas, UV-cropped to the seed pod.
+
+Both full plates were delivered at **864×15,360**. Whole-canvas resizing is supported; keep the 9:160 aspect ratio and matching registration. Runtime slicing caps each upload to one screen plus four-row gutters, and waits for a complete layer before applying it. Restart Vite or rebuild after owner uploads. Existing feather, scale and ship-alloy textures dress the prototype boss. Source-drawn ground/canopy/pods and modeled gliders keep the complete route and fight playable without media. Generated art remains outside the code PR.

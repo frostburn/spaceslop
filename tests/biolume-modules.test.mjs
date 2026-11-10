@@ -23,7 +23,7 @@ test('scrubbing reconstructs the same wing mesh and normals without accumulating
   poseWingGeometry(g,.3);assert.deepEqual(p.array,first);assert.deepEqual(n.array,normal);
   assert.equal(g.attributes.position,p);assert.equal(g.attributes.normal,n);assert.equal(g.attributes.uv,uv);
   assert(Array.from(p.array).every(Number.isFinite));assert(Array.from(n.array).every(Number.isFinite));
-  for(let i=0;i<p.count;i++){assert(new T.Vector3().fromBufferAttribute(p,i).length()<g.boundingSphere.radius);assert(Math.abs(new T.Vector3().fromBufferAttribute(n,i).length()-1)<1e-5);}
+  for(let i=0;i<p.count;i++){const point=new T.Vector3().fromBufferAttribute(p,i);assert(point.length()<g.boundingSphere.radius);assert(g.boundingBox.containsPoint(point));assert(Math.abs(new T.Vector3().fromBufferAttribute(n,i).length()-1)<1e-5);}
   g.dispose();
 });
 

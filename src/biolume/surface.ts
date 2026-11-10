@@ -22,10 +22,11 @@ float visibility(vec3 p,vec3 light){
   }return mix(1.,max(.04,result),occlusionGain);
 }`;
 
-export function createSurface(kind:SurfaceKind,w:number,h:number,shared:LightUniforms){
+export function createSurface(kind:SurfaceKind,w:number,h:number,shared:LightUniforms,screen=0){
   const geometry=new T.PlaneGeometry(w,h,32,96),p=geometry.attributes.position,uv=geometry.attributes.uv;
-  for(let i=0;i<p.count;i++)p.setZ(i,relief(kind,uv.getX(i),uv.getY(i)));geometry.computeVertexNormals();
-  const fallback=fallbackTexture(kind);
+  const restUV=uv.clone();
+  for(let i=0;i<p.count;i++)p.setZ(i,relief(kind,uv.getX(i),screen+uv.getY(i)));geometry.computeVertexNormals();
+  const fallback=fallbackTexture(kind,screen);
   const material=new T.ShaderMaterial({uniforms:{...shared,map:{value:fallback},texelSize:{value:new T.Vector2(1/256,1/256)},kind:{value:kind==='foreground'?2:0}},side:T.DoubleSide,transparent:kind==='foreground',depthWrite:kind!=='foreground',
     vertexShader:`varying vec2 vUv;varying vec3 worldP,worldN;
     void main(){
@@ -73,5 +74,7 @@ export function createSurface(kind:SurfaceKind,w:number,h:number,shared:LightUni
       #include <colorspace_fragment>
     }`});
   const mesh=new T.Mesh(geometry,material);mesh.name='biolume-'+kind;
-  return{mesh,fallback,setArt(texture:T.Texture|undefined){const map=texture??fallback;material.uniforms.map.value=map;const image=map.image as {width?:number;height?:number}|undefined;material.uniforms.texelSize.value.set(1/Math.max(1,image?.width??256),1/Math.max(1,image?.height??256));}};
+  return{mesh,fallback,setArt(texture:T.Texture|undefined,cropStart=0,cropEnd=1){const map=texture??fallback;material.uniforms.map.value=map;const image=map.image as {width?:number;height?:number}|undefined;material.uniforms.texelSize.value.set(1/Math.max(1,image?.width??256),1/Math.max(1,image?.height??256));
+    for(let i=0;i<uv.count;i++)uv.setY(i,cropStart+restUV.getY(i)*(cropEnd-cropStart));uv.needsUpdate=true;
+  }};
 }
