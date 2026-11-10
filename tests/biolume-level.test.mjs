@@ -22,6 +22,10 @@ const {createLevel}=await server.ssrLoadModule('/src/rendering/levels/biolume.ts
 const {createInterceptorRig}=await server.ssrLoadModule('/src/encounter-rigs.ts');
 const {createBossLaserContact}=await server.ssrLoadModule('/src/laser-contact.ts');
 const {disposeScene}=await server.ssrLoadModule('/src/rendering/dispose.ts');
+const {basinWetness,basinVisible}=await server.ssrLoadModule('/src/biolume/basin.ts');
+const {lightUniforms}=await server.ssrLoadModule('/src/biolume/surface.ts');
+const {createGrovePlates}=await server.ssrLoadModule('/src/biolume/plates.ts');
+const {createGroveWater}=await server.ssrLoadModule('/src/biolume/water.ts');
 
 test('ten complete screens align across both layers and coast continuously into a fixed clearing',()=>{
  assert.equal(route.groveScroll(0),0);assert(Math.abs(route.groveScroll(100)-9)<1e-12);assert.equal(route.groveScroll(120),route.groveScroll(100));
@@ -93,4 +97,44 @@ for(const weapon of['primary','sentry','towline','homing','cannon','laser','omeg
  }
  assert(f.bossHealth<f.bossMaxHealth,`${weapon} did no damage`);
  if(weapon==='primary')assert.equal(f.phase,'won');
+});
+
+test('pool albedo receives reflections while raised brown roots, bright leaves and other sectors stay dry',()=>{
+ const linear=rgb=>rgb.map(c=>T.ColorManagement.convert(new T.Color(c/255,c/255,c/255),T.SRGBColorSpace,T.LinearSRGBColorSpace).r);
+ const pool=linear([63,63,50]),root=linear([123,107,94]),leaf=linear([113,128,87]);
+ assert(basinWetness(...pool,.5,4.5)>.99);assert.equal(basinWetness(...root,.5,4.5),0);assert.equal(basinWetness(...leaf,.5,4.5),0);
+ for(const at of[0,2.5,6,9])assert.equal(basinWetness(...pool,.5,at),0);
+ assert(basinWetness(...pool,.5,4.5,false)>.99);assert.equal(basinWetness(...pool,.03,4.5,false),0);
+ assert.equal(basinVisible(0),false);assert(basinVisible(45));assert.equal(basinVisible(78),false);
+});
+
+function waterFixture(){
+ const plane=new T.Group(),scene=new T.Scene();scene.add(plane);const plates=createGrovePlates(lightUniforms(),new AbortController().signal),water=createGroveWater(plane,scene,plates);plane.add(plates.root,water.root);
+ const viewport=new T.Vector4(3,4,300,500),scissor=new T.Vector4(6,7,80,90),originalTarget={},state={target:originalTarget,test:true,renders:0};
+ const renderer={toneMapping:T.ACESFilmicToneMapping,xr:{enabled:true},shadowMap:{autoUpdate:true},autoClear:false,
+  getRenderTarget:()=>state.target,setRenderTarget(t){state.target=t;},getViewport:v=>v.copy(viewport),setViewport:v=>viewport.copy(v),getScissor:v=>v.copy(scissor),setScissor:v=>scissor.copy(v),getScissorTest:()=>state.test,setScissorTest:t=>{state.test=t;},
+  state:{buffers:{depth:{setMask(){}}}},clear(){},render(_scene,camera){state.renders++;assert(plates.layers[0].every(s=>!s.mesh.visible));assert.equal(this.toneMapping,T.NoToneMapping);assert(Math.abs(camera.position.z-(2*route.GROVE_GROUND_Z-22))<1e-8);},
+ };
+ const camera=new T.PerspectiveCamera(40,9/16,.1,240);camera.position.z=22;camera.lookAt(0,0,0);
+ return{plane,scene,plates,water,camera,renderer,state,viewport,scissor,originalTarget,dispose(){water.dispose();plates.dispose();disposeScene(scene);}};
+}
+
+test('one bounded mirrored capture includes off-camera pods and sky, primes before water entry and restores GPU state',async()=>{
+ const f=waterFixture();await f.plates.ready;
+ const target=f.water.reflector.getRenderTarget();assert.equal(target.width,384);assert.equal(target.height,684);assert.equal(target.samples,0);assert.equal(target.texture.type,T.HalfFloatType);
+ assert(f.water.pods.meshes.every(m=>m.position.z>22));assert(f.water.moon.position.z>22);assert(f.water.stars.geometry.attributes.position.getZ(0)>22);
+ const before=f.plates.layers[0].map(s=>s.mesh.visible),viewport=f.viewport.clone(),scissor=f.scissor.clone();
+ f.water.capture(f.renderer,f.camera);assert.equal(f.state.renders,0);
+ f.water.prime(true);f.water.capture(f.renderer,f.camera);f.water.prime(false);assert.equal(f.state.renders,1);
+ f.water.update(45,7);f.water.capture(f.renderer,f.camera);assert.equal(f.state.renders,2);
+ assert.deepEqual(f.plates.layers[0].map(s=>s.mesh.visible),before);assert.deepEqual(f.viewport,viewport);assert.deepEqual(f.scissor,scissor);assert.equal(f.state.target,f.originalTarget);assert(f.state.test);assert(f.renderer.xr.enabled);assert(f.renderer.shadowMap.autoUpdate);assert.equal(f.renderer.toneMapping,T.ACESFilmicToneMapping);
+ assert(f.plates.layers[0].every(s=>s.mesh.material.uniforms.groveReflection===f.water.uniforms.groveReflection));
+ const version=f.water.stars.geometry.attributes.position.version,p=f.water.pods.meshes.map(m=>m.position.toArray());f.water.update(45,7);assert.equal(f.water.uniforms.groveWaterClock.value,7);assert.deepEqual(f.water.pods.meshes.map(m=>m.position.toArray()),p);assert.equal(f.water.stars.geometry.attributes.position.version,version);
+ let released=0;target.addEventListener('dispose',()=>released++);f.dispose();f.water.dispose();assert.equal(released,1);assert.equal(f.water.uniforms.groveReflection.value,null);
+});
+
+test('a failed reflection draw restores raster visibility, target, scissor, tone mapping and XR/shadow flags',async()=>{
+ const f=waterFixture();await f.plates.ready;f.water.update(45,8);const before=f.plates.layers[0].map(s=>s.mesh.visible),viewport=f.viewport.clone(),scissor=f.scissor.clone();
+ f.renderer.render=()=>{throw Error('Capture failed');};assert.throws(()=>f.water.capture(f.renderer,f.camera),/Capture failed/);
+ assert.deepEqual(f.plates.layers[0].map(s=>s.mesh.visible),before);assert.equal(f.state.target,f.originalTarget);assert.deepEqual(f.viewport,viewport);assert.deepEqual(f.scissor,scissor);assert(f.state.test);assert(f.renderer.xr.enabled);assert(f.renderer.shadowMap.autoUpdate);assert.equal(f.renderer.toneMapping,T.ACESFilmicToneMapping);f.dispose();
 });

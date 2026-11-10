@@ -27,14 +27,15 @@ export function createSurface(kind:SurfaceKind,w:number,h:number,shared:LightUni
   const restUV=uv.clone();
   for(let i=0;i<p.count;i++)p.setZ(i,relief(kind,uv.getX(i),screen+uv.getY(i)));geometry.computeVertexNormals();
   const fallback=fallbackTexture(kind,screen);
-  const material=new T.ShaderMaterial({uniforms:{...shared,map:{value:fallback},texelSize:{value:new T.Vector2(1/256,1/256)},kind:{value:kind==='foreground'?2:0}},side:T.DoubleSide,transparent:kind==='foreground',depthWrite:kind!=='foreground',
+  const material=new T.ShaderMaterial({uniforms:{...shared,map:{value:fallback},artwork:{value:0},texelSize:{value:new T.Vector2(1/256,1/256)},kind:{value:kind==='foreground'?2:0}},side:T.DoubleSide,transparent:kind==='foreground',depthWrite:kind!=='foreground',
     vertexShader:`varying vec2 vUv;varying vec3 worldP,worldN;
     void main(){
       vUv=uv;
       // Keep the whole painted frame registered; relief must not zoom its edges.
       vec3 flatWorld=(modelMatrix*vec4(position.xy,0.,1.)).xyz;
       worldP=(modelMatrix*vec4(position,1.)).xyz;
-      worldP.xy=cameraPosition.xy+(flatWorld.xy-cameraPosition.xy)*(cameraPosition.z-worldP.z)/max(.01,cameraPosition.z-flatWorld.z);
+      float dz=cameraPosition.z-flatWorld.z;
+      worldP.xy=cameraPosition.xy+(flatWorld.xy-cameraPosition.xy)*(cameraPosition.z-worldP.z)/(abs(dz)<.01?.01:dz);
       vec3 n=normalMatrix*normal;
       worldN=normalize(vec3(dot(viewMatrix[0].xyz,n),dot(viewMatrix[1].xyz,n),dot(viewMatrix[2].xyz,n)));
       gl_Position=projectionMatrix*viewMatrix*vec4(flatWorld,1.);
@@ -74,7 +75,7 @@ export function createSurface(kind:SurfaceKind,w:number,h:number,shared:LightUni
       #include <colorspace_fragment>
     }`});
   const mesh=new T.Mesh(geometry,material);mesh.name='biolume-'+kind;
-  return{mesh,fallback,setArt(texture:T.Texture|undefined,cropStart=0,cropEnd=1){const map=texture??fallback;material.uniforms.map.value=map;const image=map.image as {width?:number;height?:number}|undefined;material.uniforms.texelSize.value.set(1/Math.max(1,image?.width??256),1/Math.max(1,image?.height??256));
+  return{mesh,fallback,setArt(texture:T.Texture|undefined,cropStart=0,cropEnd=1){const map=texture??fallback;material.uniforms.map.value=map;material.uniforms.artwork.value=texture?1:0;const image=map.image as {width?:number;height?:number}|undefined;material.uniforms.texelSize.value.set(1/Math.max(1,image?.width??256),1/Math.max(1,image?.height??256));
     for(let i=0;i<uv.count;i++)uv.setY(i,cropStart+restUV.getY(i)*(cropEnd-cropStart));uv.needsUpdate=true;
   }};
 }

@@ -176,6 +176,8 @@ Select **Lantern Grove · Bioluminescence** (`?level=biolume`) for a 100-second,
 
 Twenty waves mix weaving lantern gliders, looping single-file trains, quick basin skimmers and larger hovering sentries with three-shot fans. Enemies enter from outside the viewport and cannot fire until fully in view. Drop carriers repeatedly offer homing missiles, cannon, laser and Omega attachments. The existing prototype draconian interceptor is the temporary boss. It descends into view during a six-second approach, keeping the camera top-down and the raster scenery stable. Attack the indicated cannon and dodge its locked amber markers. All weapons and Pulse work normally. Vite offers **Launch at transition**.
 
+The root-bridge pools and Blackwater Basin reflect ships, gliders, bullets, sidearms and the translucent canopy. A few extra hanging lantern pods, stars and a crescent moon sit above the camera and appear only in those reflections. Gentle intersecting ripples break up the images while the banks remain registered to the raster. Raised roots and dry sections stay matte. The extra pods reuse the same atlas at its uploaded resolution; stars and moon are procedural. No additional asset upload is needed.
+
 Owner-uploaded optional media:
 
 - `public/encounters/biolume-backdrop.webp` — opaque, full ten-screen ground plate.
