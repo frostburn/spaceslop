@@ -1,6 +1,6 @@
 # Spaceslop
 
-A portrait browser shoot ’em up and installable PWA. Fly through Hadal, Io, Titan, Frostwake, Broodlock or an overgrown orbital preserve, with selectable pilots, an autofiring drone and collectible wing weapons.
+A portrait browser shoot ’em up and installable PWA. Fly through a summer mammoth meadow, Uranus power plant, synthwave boulevard, Hadal, Io, Titan, Frostwake, Broodlock or an overgrown orbital preserve, with selectable pilots, an autofiring drone and collectible wing weapons.
 
 ## Develop
 
@@ -24,7 +24,7 @@ npm run test:build
 npm run preview
 ```
 
-The build includes strict TypeScript checks. Build checks enforce the menu's size limit, six isolated level packages, selective PWA precaching and absent dev pages/QA hooks. CI runs the same commands. For loading, renderer or PWA changes, also exercise selection, switching, cancellation, pause/resume and offline reload in a browser, with and without media.
+The build includes strict TypeScript checks. Build checks enforce the menu's size limit, nine isolated level packages, selective PWA precaching and absent dev pages/QA hooks. CI runs the same commands. For loading, renderer or PWA changes, also exercise selection, switching, cancellation, pause/resume and offline reload in a browser, with and without media.
 
 ## Offline and hosting
 

@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 const root=new URL('../dist/',import.meta.url).pathname;
 const packs=JSON.parse(await readFile(join(root,'level-packages.json'),'utf8'));
 assert.equal(packs.version,1);
-const ids=['preserve','broodlock','ice','titan','io','vents','boulevard','heliostat'];assert.deepEqual(Object.keys(packs.levels).sort(),ids.toSorted());
+const ids=['preserve','broodlock','ice','titan','io','vents','boulevard','heliostat','summer'];assert.deepEqual(Object.keys(packs.levels).sort(),ids.toSorted());
 const files=await readdir(join(root,'assets')),entry=files.find(f=>/^index-.*\.js$/.test(f));assert(entry);
 assert((await stat(join(root,'assets',entry))).size<40000,'The menu bundle grew beyond 40 KB. Check for eager game imports.');
 const serviceWorker=await readFile(join(root,'sw.js'),'utf8');
@@ -26,4 +26,4 @@ assert(pack.required.includes(pack.entry));
 }
 for(const file of ['workshop.html','vent-study.html','io-study.html','heliostat-study.html'])await assert.rejects(stat(join(root,file)));
 for(const file of files.filter(f=>f.endsWith('.js'))){const text=await readFile(join(root,'assets',file),'utf8');assert(!text.includes('__qa'),'QA hooks leaked into production.');assert(!/(workshop|vent-study|io-study|heliostat-study)\.html/.test(text),'Development links leaked into production.');assert(!/Play study|Orbit view|inspect-backdrop/.test(text),'Study UI leaked into production code.');}
-console.log('Menu size, eight isolated level packages, selective precaching and production dev-page exclusions passed.');
+console.log('Menu size, nine isolated level packages, selective precaching and production dev-page exclusions passed.');

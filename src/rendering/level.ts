@@ -18,6 +18,7 @@ export interface LevelScene {
   models: (T.Object3D | undefined)[];
   ready: Promise<TextureResult[]>;
   stageDistance: number;
+  fixedCamera?: boolean; // Keep the flight plane top-down through the boss approach.
   farDistance?: number;
   background?: number;
   key?: number;

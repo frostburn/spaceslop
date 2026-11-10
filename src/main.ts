@@ -12,6 +12,7 @@ let selected = readLevel(new URLSearchParams(location.search).get('level'));
 let session: AbortController | undefined;
 let reloadBeforePreparation = false;
 const descriptions: Record<LevelId, string> = {
+  summer:'Grazing mammoths, flower-rich meadows and thawing glacier gardens. Follow the river into the glass-covered lotus palace.',
   heliostat:'Fly through an artificial-star power plant above Uranus. Dodge capacitor discharges, cyborg man o’wars and inspection drones, then disable the Sunspot Regulator.',
   boulevard:'A rain-polished neon resort, luminous wireframe architecture and a pursuit cruiser beneath an artificial sunset.',
   vents: 'Mineral gardens, black smokers and the abyss. An articulated crab guards the drop.',

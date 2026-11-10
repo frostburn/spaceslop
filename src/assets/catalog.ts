@@ -1,5 +1,10 @@
 import type { LevelId } from '../levels';
 export const textureFiles = {
+  summerMammoth:'encounters/summer-mammoth.png',
+  summerIce:'encounters/summer-ice.png',
+  summerHydra:'encounters/summer-hydra.png',
+  summerLotusFlanks:'encounters/summer-lotus-flanks.png',
+  summerLotusWall:'encounters/summer-lotus-wall.png',
   heliostatBackdrop:'encounters/heliostat-uranus-backdrop.png',
   heliostatGuard:'encounters/heliostat-manowar.png',
   boulevardRoad:'encounters/boulevard-asphalt.png',
@@ -40,6 +45,7 @@ export const studyTextureFiles = {
 export type StudyTexture = keyof typeof studyTextureFiles;
 
 export const levelTextures: Record<LevelId, readonly EncounterTexture[]> = {
+  summer:['armor','summerMammoth','summerIce','summerHydra','summerLotusFlanks','summerLotusWall'],
   heliostat:['armor','ioCeramic','heliostatBackdrop','heliostatGuard'],
   boulevard:['armor','boulevardRoad'],
   preserve: ['armor', 'feathers', 'scales'],

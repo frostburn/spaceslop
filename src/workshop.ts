@@ -1,3 +1,4 @@
+import {createSummerStudies} from './summer/workshop';
 import {createHeliostatMaterials} from './heliostat/materials';
 import {createGuardAssets,createHeliostatGuard} from './heliostat/guard';
 import {createHeliostatDrone,actorPose} from './heliostat/actors';
@@ -204,6 +205,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   void loadEncounterTexture('armor',texture=>{helioArt.heliostatMetal=texture;helioMaterials.setArt(helioArt,true);},1);
   void loadEncounterTexture('ioCeramic',texture=>{helioArt.heliostatCeramic=texture;helioMaterials.setArt(helioArt,true);},1);
   const assets = {
+    ...createSummerStudies(camera),
     heliostat_manowar:{root:helioGuard,duration:4,pose(time:number){helioGuardPose(time,0,T.MathUtils.smoothstep(time,2.4,3.3));return 'raster float / ruffled sail / rigid harness / swaying tendrils';}},
     heliostat_drone:{root:helioDrone,duration:3,pose(time:number){helioDrone.rotation.y=.12*Math.sin(time*2);return 'inspection drone';}},
     heliostat_crawler:{root:helioCrawler.root,duration:8,bounds:new T.Box3(new T.Vector3(-4,-7,-5.6),new T.Vector3(1,3,1)),pose(time:number){const p=crawlerPose({site:0,aimY:-4},crawlerSites[0].at-4+time);helioCrawler.pose(p,time);helioCrawler.root.position.y=-p.physicalY;return p.hot?'cutting sweep':p.warning?'locked aim / marked sweep':p.brace>.5?'braced on rail':'rail traversal / telescoping cutter';}},
@@ -357,12 +359,12 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     const key = assetSelect.value;
     selected = Object.hasOwn(assets, key) ? assets[key as keyof typeof assets] : assets.raptor;
     lastAssets.set(sector.value, key);
-    const habitat = sector.value === 'preserve', scenery = key === 'preserve_section';
-    light.color.setHex(habitat ? preserveLighting.key : 0xb9e8ff);
-    light.intensity = habitat ? (scenery ? preserveLighting.keyIntensity : 2.4) : 2.7;
-    fill.color.setHex(habitat ? preserveLighting.sky : 0xd6e3ff);
-    fill.groundColor.setHex(habitat ? preserveLighting.ground : 0x514873);
-    fill.intensity = habitat ? preserveLighting.skyIntensity : 1.75;
+    const habitat = sector.value === 'preserve', scenery = key === 'preserve_section', summer=sector.value==='summer';
+    light.color.setHex(summer?0xffedd0:habitat ? preserveLighting.key : 0xb9e8ff);
+    light.intensity = summer ? 2.1 : habitat ? (scenery ? preserveLighting.keyIntensity : 2.4) : 2.7;
+    fill.color.setHex(summer?0xd5e9ec:habitat ? preserveLighting.sky : 0xd6e3ff);
+    fill.groundColor.setHex(summer?0x728153:habitat ? preserveLighting.ground : 0x514873);
+    fill.intensity = summer?1.6:habitat ? preserveLighting.skyIntensity : 1.75;
     uv.visible = habitat && !scenery;
     for (const asset of Object.values(assets)) asset.root.visible = asset === selected;
     time = 0;
@@ -421,6 +423,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     }
     previous = now;
     controls.update();
+    if(assetSelect.value==='summer_hydra'||assetSelect.value==='summer_lotus_hydra')updatePose();
     if(iceField.root.visible)iceField.capture(renderer,camera);
     if(sector.value==='boulevard')glow.present(renderer,scene,camera);else renderer.render(scene,camera);
   });
