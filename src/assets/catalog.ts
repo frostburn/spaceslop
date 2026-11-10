@@ -40,6 +40,8 @@ export type EncounterTexture = keyof typeof textureFiles;
 export const studyTextureFiles = {
   biolumeBackdrop:'encounters/biolume-study-backdrop.png',
   biolumeForeground:'encounters/biolume-study-foreground.png',
+  biolumeEnemy:'encounters/biolume-glider.png',
+  biolumePods:'encounters/biolume-study-atlas.png',
   heliostatMetal: textureFiles.armor,
   heliostatCeramic: textureFiles.ioCeramic,
   heliostatBackdrop: textureFiles.heliostatBackdrop,

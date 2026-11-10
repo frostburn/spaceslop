@@ -1,5 +1,5 @@
 export type SurfaceKind='backdrop'|'foreground';
-export const LIGHT_COUNT=6;
+export const LIGHT_COUNT=8;
 export type StudyOptions={environment:boolean;actors:boolean;emission:boolean;relief:boolean;transmission:boolean;occlusion:boolean;artwork:boolean};
 export const defaultOptions:StudyOptions={environment:true,actors:true,emission:true,relief:true,transmission:true,occlusion:true,artwork:true};
 export function actorPose(time:number){return{

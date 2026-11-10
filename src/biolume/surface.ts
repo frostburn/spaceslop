@@ -1,11 +1,11 @@
 import * as T from 'three';
-import {relief,type SurfaceKind} from './layout';
+import {relief,LIGHT_COUNT,type SurfaceKind} from './layout';
 import {fallbackTexture} from './fallback';
 
 export function lightUniforms(){return{
-  lightPosition:{value:Array.from({length:6},()=>new T.Vector3())},
-  lightColor:{value:Array.from({length:6},()=>new T.Vector3())},
-  lightRange:{value:new Float32Array([7,7,6,6,7,4])},
+  lightPosition:{value:Array.from({length:LIGHT_COUNT},()=>new T.Vector3())},
+  lightColor:{value:Array.from({length:LIGHT_COUNT},()=>new T.Vector3())},
+  lightRange:{value:new Float32Array([7,7,6,6,7,4,7,7])},
   blocker:{value:Array.from({length:6},(_,i)=>new T.Vector3(i<3?-3.1:3.8,(i%3-1)*3+(i<3?0:4),-3.1))},
   reliefGain:{value:1},transmissionGain:{value:1},occlusionGain:{value:1},emissionGain:{value:1},
 };}
@@ -39,7 +39,7 @@ export function createSurface(kind:SurfaceKind,w:number,h:number,shared:LightUni
       gl_Position=projectionMatrix*viewMatrix*vec4(flatWorld,1.);
     }`,
     fragmentShader:`uniform sampler2D map;uniform vec2 texelSize;uniform int kind;
-    uniform vec3 lightPosition[6],lightColor[6];uniform float lightRange[6];
+    uniform vec3 lightPosition[${LIGHT_COUNT}],lightColor[${LIGHT_COUNT}];uniform float lightRange[${LIGHT_COUNT}];
     uniform float reliefGain,transmissionGain,emissionGain;
     varying vec2 vUv;varying vec3 worldP,worldN;${occlusionShader}
     void main(){
@@ -53,7 +53,7 @@ export function createSurface(kind:SurfaceKind,w:number,h:number,shared:LightUni
         structure=max(1.-smoothstep(.32,.62,lum),smoothstep(.008,.035,local-lum));
       }
       vec3 N=normalize(mix(vec3(0.,0.,1.),worldN,reliefGain)),V=normalize(cameraPosition-worldP),lit=vec3(0.);
-      for(int i=0;i<6;i++){
+      for(int i=0;i<${LIGHT_COUNT};i++){
         if(dot(lightColor[i],lightColor[i])<.000001)continue;
         vec3 delta=lightPosition[i]-worldP;float d=length(delta);vec3 L=delta/max(d,.001);
         if(d>=lightRange[i])continue;
@@ -67,12 +67,6 @@ export function createSurface(kind:SurfaceKind,w:number,h:number,shared:LightUni
       if(kind==2){
         // Pale veins in the same raster register the emission without repainting it.
         glow=pow(1.-smoothstep(.35,.83,min(surface.r,surface.g)),2.)*.35;glowColor=vec3(.015,.65,.55);
-      }
-      if(kind==0){
-        vec2 q=(vUv-vec2(.175,.84))/vec2(.055,.044);float pods=exp(-dot(q,q)*2.);
-        q=(vUv-vec2(.87,.59))/vec2(.055,.047);pods+=exp(-dot(q,q)*2.);
-        q=(vUv-vec2(.12,.16))/vec2(.055,.044);pods+=exp(-dot(q,q)*2.);
-        glow=pods*.3;glowColor=vec3(1.,.28,.025);
       }
       gl_FragColor=vec4(lit+glowColor*glow*emissionGain,kind==2?mix(surface.a*.35,smoothstep(.1,.85,surface.a)*.98,structure):1.);
       #include <tonemapping_fragment>

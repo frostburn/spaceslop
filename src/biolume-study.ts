@@ -41,17 +41,18 @@ if(import.meta.env.DEV){
     canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();pause();error.hidden=false;error.textContent='Graphics context lost. Reload to recreate the study.';},{signal});
     observer=new ResizeObserver(draw);observer.observe(canvas);
     preparation=(async()=>{
-      const entries=await Promise.all((['backdrop','foreground']as const).map(async key=>{
-        const path=__STUDY_TEXTURES__[key==='backdrop'?'biolumeBackdrop':'biolumeForeground'];
+      const entries=await Promise.all((['backdrop','foreground','enemy','pods']as const).map(async key=>{
+        const path=__STUDY_TEXTURES__[({backdrop:'biolumeBackdrop',foreground:'biolumeForeground',enemy:'biolumeEnemy',pods:'biolumePods'}as const)[key]];
         return [key,path?await loadStudyTexture(import.meta.env.BASE_URL+path,signal):undefined]as const;
       }));
       if(signal.aborted){for(const[,t]of entries)t?.dispose();return;}
       const plates=Object.fromEntries(entries.filter(([,t])=>t));view!.setArt(plates);
-      status.textContent=`${Object.keys(plates).length}/2 full-screen plates loaded · missing plates use source-drawn fallbacks.`;
+      status.textContent=`${Number(!!plates.backdrop)+Number(!!plates.foreground)}/2 full-screen plates · glider ${plates.enemy?'raster':'shape fallback'} · pods ${plates.pods?'atlas':'procedural fallback'}.`;
       // Compile fixed light-count and alpha-cutout materials before animation.
-      view!.draw(0);
-      if(view!.renderer.extensions.has('KHR_parallel_shader_compile'))await view!.renderer.compileAsync(view!.scene,view!.camera);
+      const restore=view!.prime();view!.draw(0);
+      try{if(view!.renderer.extensions.has('KHR_parallel_shader_compile'))await view!.renderer.compileAsync(view!.scene,view!.camera);
       else view!.renderer.compile(view!.scene,view!.camera);
+      }finally{restore();}
       if(signal.aborted)return;
       ready=true;play.disabled=false;draw();
     })().catch(failure);
