@@ -13,8 +13,8 @@ export function createGroveEcology(){
  let last=NaN,scroll=0;
  function update(stage:number,time:number,actors:readonly Actor[]=[]){
   if(time===last)return;
-  const fresh=!Number.isFinite(last)||time<last||Math.abs(time-last)>1;
-  const dt=fresh?0:Math.min(.12,time-last),next=groveScroll(stage)*16,travel=fresh?0:next-scroll;last=time;scroll=next;
+  const next=groveScroll(stage)*16,fresh=!Number.isFinite(last)||time<last||Math.abs(time-last)>1||Math.abs(next-scroll)>3;
+  const dt=fresh?0:Math.min(.12,time-last),travel=fresh?0:next-scroll;last=time;scroll=next;
   for(let i=0;i<COUNT;i++){
    const f=state[i];if(fresh){f.x=(hash(i)-.5)*8;f.y=(hash(i+100)-.5)*18;}
    f.x+=.27*Math.sin(time*1.3+i*7)*dt;f.y+=.2*Math.cos(time*.9+i*4)*dt-travel;

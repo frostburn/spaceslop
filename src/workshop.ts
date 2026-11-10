@@ -1,3 +1,6 @@
+import {createFrogAssets,createFrogRig} from './biolume/frog-rig';
+import {frogSignal} from './biolume/frog';
+import {createGroveBranch} from './biolume/branch';
 import {createSummerStudies} from './summer/workshop';
 import {createLanternRay,createRaySeekerAssets,createRaySeekerRig} from './biolume/lantern-ray-rig';
 import {raySignal} from './biolume/lantern-ray';
@@ -209,7 +212,12 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const lanternRay=createLanternRay(),rayStudy=new T.Group(),rayLight=new T.PointLight(0xffa34f,15,9,2),raySeeker=createRaySeekerRig(createRaySeekerAssets());rayLight.position.set(0,2.9,1.45);rayStudy.add(lanternRay.root,rayLight);
   let rayArt:T.Texture|undefined;void loadEncounterTexture('biolumeBoss',map=>{rayArt=map;lanternRay.setArt(map);});
   window.addEventListener('pagehide',()=>{lanternRay.release();rayArt?.dispose();},{once:true});
+  const frog=createFrogRig(createFrogAssets()),fernBranch=createGroveBranch(),frogStudy=new T.Group(),frogLight=new T.PointLight(0x58ffd0,5,9,2);frogLight.position.set(0,1.8,1.5);frogStudy.add(frog.root,frogLight);
+  let branchArt:T.Texture|undefined;void loadEncounterTexture('biolumePods',map=>{branchArt=map;fernBranch.setArt(map);});
+  window.addEventListener('pagehide',()=>{frog.release();fernBranch.release();branchArt?.dispose();},{once:true});
   const assets = {
+    lantern_frog:{root:frogStudy,duration:5,bounds:new T.Box3(new T.Vector3(-1.4,-4.6,-.5),new T.Vector3(1.4,3.2,1.2)),pose(time:number){const state={nextAt:0,attackAt:.6,angle:0,reach:5.5};frog.pose({x:0,y:2},state,time);const s=frogSignal(state,time);frogLight.intensity=5+7*s.warning;return s.warning>0?'locked aim / throat charge':s.retracting?'retracting bullet tongue':s.active?'extending bullet tongue':'crouch / breathing / glowing dorsal glands';}},
+    grove_fern_branch:{root:fernBranch.root,duration:8,bounds:new T.Box3(new T.Vector3(-4.5,-3.5,1),new T.Vector3(4.5,3.5,4)),pose(time:number){fernBranch.update(12,time);fernBranch.root.position.y=0;return 'study-atlas bark / attached glowing fern crowns';}},
     lantern_ray:{root:rayStudy,duration:12,bounds:new T.Box3(new T.Vector3(-5,-2,-1.5),new T.Vector3(5,8,1.5)),pose(time:number){lanternRay.pose(time);const s=raySignal(time);rayLight.intensity=12+6*Math.max(s.fan,s.seeker);return s.seeker>0?'seeking lantern charge':s.fan>0?'aimed fan charge':'breathing / wing flex / traveling bioluminescence';}},
     lantern_seeker:{root:raySeeker.root,duration:6,pose(time:number){raySeeker.pose({x:0,y:0,age:time,rayOrb:{heading:time*.4,previousX:0,previousY:0}});return 'shootable seeking lantern / rotating shell';}},
     ...createSummerStudies(camera),

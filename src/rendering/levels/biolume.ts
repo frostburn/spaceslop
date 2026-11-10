@@ -1,3 +1,5 @@
+import {createFrogAssets,createFrogRig} from '../../biolume/frog-rig';
+import {FROG_POOL} from '../../biolume/frog';
 import * as T from 'three';
 import {createGroveBranch} from '../../biolume/branch';
 import {createGroveEcology} from '../../biolume/ecology';
@@ -23,8 +25,9 @@ export const createLevel:LevelFactory=({plane,scene,signal})=>{
   const water=createGroveWater(plane,scene,plates);
   const gains=Array.from({length:GROVE_ENEMY_POOL},()=>({value:1})),gliders=gains.map(g=>createGliderRig(g));
   const boss=createLanternRay(),seekerAssets=createRaySeekerAssets(),seekers=Array.from({length:RAY_SEEKER_POOL},()=>createRaySeekerRig(seekerAssets));boss.root.visible=false;
-  const actors=[...gliders,...seekers];
-  root.add(plates.root,lighting.root,water.root,...pods.meshes,...gliders.map(r=>r.root),...seekers.map(r=>r.root),boss.root);
+  const frogAssets=createFrogAssets(),frogs=Array.from({length:FROG_POOL},()=>createFrogRig(frogAssets));
+  const actors=[...gliders,...seekers,...frogs];
+  root.add(plates.root,lighting.root,water.root,...pods.meshes,...gliders.map(r=>r.root),...seekers.map(r=>r.root),...frogs.map(r=>r.root),boss.root);
   const models:(T.Object3D|undefined)[]=[],media:T.Texture[]=[];
   let disposed=false,restores:(()=>void)[]=[];
   const ready=Promise.all([
@@ -36,8 +39,8 @@ export const createLevel:LevelFactory=({plane,scene,signal})=>{
   const ecology=createGroveEcology();root.add(ecology.root);
   return{root,boss:boss.root,models,ready,stageDistance:GROVE_DISTANCE,fixedCamera:true,orientation:()=>({pitch:0,bank:0,viewPitch:0}),
     background:0,keyIntensity:0,skyIntensity:0,toneMapping:T.ACESFilmicToneMapping,exposure:1.1,
-    contacts:[boss.root,...gliders.map(r=>r.root),...seekers.map(r=>r.root)],warmup:[[plates.root,water.root,...pods.meshes,ecology.root,branch.root],[boss.root,...gliders.map(r=>r.root),...seekers.map(r=>r.root)]],
-    prepare(){plates.prime(true);water.prime(true);restores=gliders.map(r=>r.prime());},afterWarmup(){plates.prime(false);water.prime(false);restores.forEach(r=>r());restores=[];},
+    contacts:[boss.root,...frogs.map(r=>r.body),...gliders.map(r=>r.root),...seekers.map(r=>r.root)],warmup:[[plates.root,water.root,...pods.meshes,ecology.root,branch.root],[boss.root,...gliders.map(r=>r.root),...seekers.map(r=>r.root),...frogs.map(r=>r.root)]],
+    prepare(){frogs.forEach(r=>r.prime());plates.prime(true);water.prime(true);restores=gliders.map(r=>r.prime());},afterWarmup(){plates.prime(false);water.prime(false);restores.forEach(r=>r());restores=[];},
     capture:water.capture,
     contact:createBossLaserContact(plane,boss.root),
     update(frame){
@@ -51,9 +54,10 @@ export const createLevel:LevelFactory=({plane,scene,signal})=>{
       const offset=(9-groveScroll(time))*16;
       boss.root.visible=offset<16||reveal>0;
       if(boss.root.visible){boss.pose(f.rayTime,1,f.bossHealth<=0);boss.root.position.y+=offset;}
-      for(const r of actors)r.root.visible=false;models.length=f.enemies.length;models.fill(undefined);let gi=0,si=0;
+      for(const r of actors)r.root.visible=false;models.length=f.enemies.length;models.fill(undefined);let gi=0,si=0,fi=0;
       for(const[i,enemy]of f.enemies.entries()){
         if(enemy.rayOrb&&enemy.hp>0){const rig=seekers[si++];if(rig){rig.root.visible=true;rig.pose(enemy as typeof enemy&{rayOrb:NonNullable<typeof enemy.rayOrb>});models[i]=rig.root;}continue;}
+        if(enemy.frog&&enemy.hp>0){const rig=frogs[fi++];if(rig){rig.root.visible=true;rig.pose(enemy,enemy.frog,enemy.age);models[i]=rig.body;}continue;}
         if(!enemy.grove||enemy.hp<=0)continue;const rig=gliders[gi];if(!rig)break;
         gains[gi++].value=1+Math.max(0,1-(enemy.fire-enemy.age)/.65);
         rig.root.visible=true;rig.root.position.set(enemy.x,enemy.y,.1);rig.root.rotation.set(0,groveMotion(enemy.age,enemy.lane,enemy.grove).bank,enemy.heading??0);rig.root.scale.setScalar(groveEnemySize(enemy.grove));rig.pose(enemy.age);models[i]=rig.root;
@@ -63,6 +67,6 @@ export const createLevel:LevelFactory=({plane,scene,signal})=>{
       ecology.update(time,animationTime,avoid);branch.update(time,animationTime);
       lighting.update(frame,boss.root);
     },
-    dispose(){if(disposed)return;disposed=true;branch.release();water.dispose();plates.dispose();boss.release();gliders.forEach(r=>r.release());pods.release();for(const t of new Set(media))t.dispose();restores.forEach(r=>r());restores=[];},
+    dispose(){if(disposed)return;disposed=true;frogs.forEach(r=>r.release());branch.release();water.dispose();plates.dispose();boss.release();gliders.forEach(r=>r.release());pods.release();for(const t of new Set(media))t.dispose();restores.forEach(r=>r());restores=[];},
   };
 };

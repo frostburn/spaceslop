@@ -1,3 +1,4 @@
+import {FROG_HP,FROG_RADIUS,createFrogState,stepFrog,frogTongueHits,type FrogState} from './biolume/frog';
 import {groveWaves,groveMotion,groveEnemySize,groveCanAttack,GROVE_SPAWN_LEAD,type GroveCourse} from './biolume/combat';
 import {GROVE_APPROACH} from './biolume/route';
 import {RAY_HP,RAY_FAN_AT,RAY_SEEKER_AT,RAY_PROJECTION,RAY_ORGAN_RADIUS,RAY_SEEKER_RADIUS,RAY_SEEKER_HP,RAY_SEEKER_POOL,raySignal,rayOrgan,rayBodyEntry,stepRaySeeker,rayOrbEntry,raySeekerBurst,type RaySeeker} from './biolume/lantern-ray';
@@ -65,7 +66,7 @@ type Shot = Point & {
 type Threat = Shot & { graze?: 'near' | 'counted';planar?:boolean };
 type Enemy = Point & {
   rayOrb?:RaySeeker;
-  grove?:GroveCourse;
+  grove?:GroveCourse;frog?:FrogState;
   summer?:SummerCourse;
   hydra?:HydraState;hitPoint?:Point&{z?:number};
   crawler?:CrawlerState;
@@ -148,7 +149,7 @@ export const iceWaves: Wave[] = [
 export const titanWaves: Wave[] = titanInsectWaves;
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
-const enemyRadius=(enemy:Enemy,ordinary=.52)=>enemy.summer?.kind==='vortex'?VORTEX_RADIUS:enemy.summer?.kind==='hydra'?1.2:enemy.heliostat?.kind === 'guard' ? .8 : enemy.crucible?CRUCIBLE_RADIUS:enemy.slag?SLAG_RADIUS:(enemy.ventAnchor!==undefined?MORTAR_RADIUS:ordinary)*(enemy.ventScale??1)*(enemy.boulevard?.heavy?1.2:1);
+const enemyRadius=(enemy:Enemy,ordinary=.52)=>enemy.frog?FROG_RADIUS:enemy.summer?.kind==='vortex'?VORTEX_RADIUS:enemy.summer?.kind==='hydra'?1.2:enemy.heliostat?.kind === 'guard' ? .8 : enemy.crucible?CRUCIBLE_RADIUS:enemy.slag?SLAG_RADIUS:(enemy.ventAnchor!==undefined?MORTAR_RADIUS:ordinary)*(enemy.ventScale??1)*(enemy.boulevard?.heavy?1.2:1);
 const near = (a: Point, b: Point, radius: number) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 < radius ** 2;
 
 function moveWithinField(point: Point, dx: number, dy: number) {
@@ -821,9 +822,9 @@ export class Flight {
         const courseAge=grove||boulevard||heliostat||summer?this.time-wave.time-dt:0;
         const start = grove?groveMotion(courseAge,lane,grove):summer?summerMotion(courseAge,lane,summer,this.time):heliostat?heliostatMotion(courseAge,lane,heliostat):boulevard?boulevardMotion(courseAge,lane,boulevard):flyer ? flyerMotion(0,lane,flyer) : shrimp ? shrimpMotion(0,lane,shrimp) : wave.ventAnchor!==undefined ? ventAnchorPoint(wave.ventAnchor,this.time) : wave.crucible ? crucibleMotion(0,lane) : wave.skipper ? skipperMotion(0,lane,index) : course ? cicadaMotion(0, lane, course) : wave.marine ? marineMotion(wave.marine, 0, lane, school) : {x: lane, y: 8.6};
         return {
-          x: start.x, y: start.y, lane, hydra:summer?.kind==='hydra'?createHydraState():undefined, age: grove||boulevard||heliostat||summer?courseAge:wave.ventAnchor!==undefined?-VENT_SPAWN_LEAD:0, grove,summer,heliostat,boulevard,flyer, school, cicada: course, skipper: wave.skipper, crucible: wave.crucible, ventAnchor:wave.ventAnchor, ventWorm:wave.ventWorm, shrimp, slot: index,
+          x: start.x, y: start.y, lane, hydra:summer?.kind==='hydra'?createHydraState():undefined, age: grove||boulevard||heliostat||summer?courseAge:wave.ventAnchor!==undefined?-VENT_SPAWN_LEAD:0, grove,frog:grove?.kind==='frog'?createFrogState(lane):undefined,summer,heliostat,boulevard,flyer, school, cicada: course, skipper: wave.skipper, crucible: wave.crucible, ventAnchor:wave.ventAnchor, ventWorm:wave.ventWorm, shrimp, slot: index,
           fire: grove?2.15+index*.3:summer?(summer.kind==='vortex'?VORTEX_FIRE:summer.kind==='hydra'?2.7:1.8+index*.25):heliostat?(heliostat.kind==='guard'?HELIOSTAT_GUARD_FIRE+index*.35:1.85+index*.25):boulevard?1.7+index*.22:flyer ? Infinity : shrimp ? SHRIMP_FIRST_FIRE+index*.25 : wave.ventWorm ? WORM_FIRST_ATTACK : wave.ventAnchor!==undefined ? MORTAR_FIRST_FIRE : wave.crucible ? CRUCIBLE_FIRST_POUR : schoolDelay(school) + (wave.marine === 'plesiosaur' ? 1.8 : wave.ant === 'soldier' ? 1.6 : 1.1) + index * 0.28,
-          hp: grove?(grove.kind==='sentry'?6:grove.kind==='skimmer'?2:3):summer?(summer.kind==='vortex'?VORTEX_HP:summer.kind==='hydra'?HYDRA_HEAD_HP*3:summer.kind==='drone'?4:2):heliostat?(heliostat.kind==='guard'?8:3):boulevard?(boulevard.formation==='intercept'?5:boulevard.heavy?6:3):flyer ? FLYER_HP : shrimp ? SHRIMP_HP : wave.ventWorm ? WORM_HP : wave.ventAnchor!==undefined ? MORTAR_HP : wave.crucible ? CRUCIBLE_HP : wave.marine ? marineSpecs[wave.marine].hp : wave.ant === 'soldier' ? 5 : 2, ant: wave.ant, marine: wave.marine,
+          hp: grove?(grove.kind==='frog'?FROG_HP:grove.kind==='sentry'?6:grove.kind==='skimmer'?2:3):summer?(summer.kind==='vortex'?VORTEX_HP:summer.kind==='hydra'?HYDRA_HEAD_HP*3:summer.kind==='drone'?4:2):heliostat?(heliostat.kind==='guard'?8:3):boulevard?(boulevard.formation==='intercept'?5:boulevard.heavy?6:3):flyer ? FLYER_HP : shrimp ? SHRIMP_HP : wave.ventWorm ? WORM_HP : wave.ventAnchor!==undefined ? MORTAR_HP : wave.crucible ? CRUCIBLE_HP : wave.marine ? marineSpecs[wave.marine].hp : wave.ant === 'soldier' ? 5 : 2, ant: wave.ant, marine: wave.marine,
           drop: index === wave.carrier ? wave.drop : undefined,
           raptor: index === wave.raptor,
         };
@@ -846,6 +847,7 @@ export class Flight {
         const p=ambusherPose(enemy.ambusher,this.time);enemy.x=p.head.x;enemy.y=p.head.y;
       } else if(enemy.grove){
         const p=groveMotion(enemy.age,enemy.lane,enemy.grove);enemy.x=p.x;enemy.y=p.y;enemy.heading=p.heading;
+        if(enemy.frog){stepFrog(enemy.frog,enemy,this.player,enemy.age,groveCanAttack(enemy.age,enemy.lane,enemy.grove));enemy.heading=enemy.frog.angle;if(frogTongueHits(enemy.frog,enemy,enemy.age,this.player))this.hit();}
       } else if(enemy.heliostat){
         const p=heliostatMotion(enemy.age,enemy.lane,enemy.heliostat);enemy.x=p.x;enemy.y=p.y;enemy.heading=p.heading;
       } else if(enemy.summer){
@@ -914,7 +916,7 @@ export class Flight {
         const hull = enemy.marine ? [{x:0,y:0,radius:marineSpecs[enemy.marine].radius}] : enemy.raptor ? [{ x: 0, y: 0, radius: 1.05 }] : DRONE_HULL;
         this.obstacles.move(enemy, 0, 0, hull, { minX: -2.4, maxX: 2.4, minY: -10, maxY: 10 });
       }
-      if (enemy.summer?.kind!=='vortex' && !enemy.mine && !enemy.flyer && !enemy.ambusher && !enemy.shrimp && enemy.ventAnchor===undefined && !enemy.crucible && !enemy.slag && !motion && (!enemy.centipede || (enemy.centipede.slot === 0 && !enemy.centipede.chain.escape)) && enemy.age >= enemy.fire && enemy.y < 8 && (!enemy.grove||groveCanAttack(enemy.age,enemy.lane,enemy.grove)) && (!enemy.heliostat||heliostatCanAttack(enemy.age,enemy.lane,enemy.heliostat))) {
+      if (!enemy.frog && enemy.summer?.kind!=='vortex' && !enemy.mine && !enemy.flyer && !enemy.ambusher && !enemy.shrimp && enemy.ventAnchor===undefined && !enemy.crucible && !enemy.slag && !motion && (!enemy.centipede || (enemy.centipede.slot === 0 && !enemy.centipede.chain.escape)) && enemy.age >= enemy.fire && enemy.y < 8 && (!enemy.grove||groveCanAttack(enemy.age,enemy.lane,enemy.grove)) && (!enemy.heliostat||heliostatCanAttack(enemy.age,enemy.lane,enemy.heliostat))) {
         enemy.fire += enemy.grove?(enemy.grove.kind==='sentry'?3.1:2.8):enemy.heliostat?.kind==='guard'?3.2:enemy.boulevard?.formation==='intercept'?2.8:enemy.boulevard?3.4:enemy.centipede ? 3.5 : enemy.cicada ? 3 : enemy.marine === 'plesiosaur' ? 3.2 : enemy.ant === 'soldier' ? 3.1 : 2.4;
         const dx = this.player.x - enemy.x;
         const dy = this.player.y - enemy.y;

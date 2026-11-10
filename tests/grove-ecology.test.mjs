@@ -16,3 +16,7 @@ test('atlas bark crop is normalized and fern roots stay attached while swaying',
  const T=await import('three'),b=createGroveBranch();assert(BRANCH_CROP.every(n=>n>=0&&n<=1));assert.equal(FERN_SITES.length,3);
  b.setArt(new T.Texture());b.update(12,1);const roots=b.crowns.map(c=>c.position.toArray());b.update(13,2);assert.deepEqual(b.crowns.map(c=>c.position.toArray()),roots);assert(b.crowns.every(c=>c.parent===b.root));b.release();
 });
+
+test('jumping to a later stage resets the flock without collecting insects into a row',()=>{
+ const e=createGroveEcology();e.update(12,0);e.update(70,.1);const ys=e.state.map(f=>f.y);assert(Math.max(...ys)-Math.min(...ys)>15);
+});

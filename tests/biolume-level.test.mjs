@@ -46,7 +46,7 @@ test('the full quiet-to-nursery patrol fits the warmed pool and waits until visi
   for(const enemy of f.enemies){assert(enemy.grove,'Another sector enemy leaked into the grove');kinds.add(enemy.grove.kind);if(enemy.drop)drops.add(enemy.drop);assert(Number.isFinite(enemy.x+enemy.y+enemy.heading));}
   for(const shot of f.threats)if(!prior.has(shot)){shots++;assert(shot.y<6.6&&shot.y>-6.9&&Math.abs(shot.x)<4.3,'A hidden glider fired');}
  }
- assert(maximum<=combat.GROVE_ENEMY_POOL,`Pool needs ${maximum} rigs`);assert(shots>30);assert.equal(kinds.size,3);assert.equal(drops.size,4);
+ assert(maximum<=combat.GROVE_ENEMY_POOL,`Pool needs ${maximum} rigs`);assert(shots>30);assert.equal(kinds.size,4);assert.equal(drops.size,4);
  assert.equal(f.phase,'boss');assert.equal(f.transitionDuration,0);
  for(let i=0;i<370;i++)f.step(STEP);assert.equal(f.phase,'boss');
 });
@@ -135,4 +135,15 @@ test('a failed reflection draw restores raster visibility, target, scissor, tone
  const f=waterFixture();await f.plates.ready;f.water.update(45,8);const before=f.plates.layers[0].map(s=>s.mesh.visible),viewport=f.viewport.clone(),scissor=f.scissor.clone();
  f.renderer.render=()=>{throw Error('Capture failed');};assert.throws(()=>f.water.capture(f.renderer,f.camera),/Capture failed/);
  assert.deepEqual(f.plates.layers[0].map(s=>s.mesh.visible),before);assert.equal(f.state.target,f.originalTarget);assert.deepEqual(f.viewport,viewport);assert.deepEqual(f.scissor,scissor);assert(f.state.test);assert(f.renderer.xr.enabled);assert(f.renderer.shadowMap.autoUpdate);assert.equal(f.renderer.toneMapping,T.ACESFilmicToneMapping);f.dispose();
+});
+
+test('frog rigs warm in a bounded pool, expose the body to lasers, and hide the tongue on defeat',async()=>{
+ const l=createLevel({plane:new T.Group(),scene:new T.Scene(),signal:new AbortController().signal});await l.ready;l.prepare();l.afterWarmup();
+ const f=new Flight('sentry',[],'vex','biolume'),wave=combat.groveWaves.find(w=>w.grove.kind==='frog'),course={...wave.grove,slot:0},age=2.5;
+ f.time=wave.time+age;const p=combat.groveMotion(age,wave.lanes[0],course);const enemy={...p,grove:course,frog:{nextAt:0,attackAt:1.1,angle:-.45,reach:6},lane:wave.lanes[0],age,fire:1e5,hp:8};f.enemies=[enemy];
+ const frame={flight:f,time:f.time,reveal:0,animationTime:2,elapsed:1/60,newFlight:false,distance:22,fighterSpeed:0,droneSpeed:0};l.update(frame);
+ const roots=l.root.getObjectsByProperty('name','biolume-lantern-frog');assert.equal(roots.length,2);const active=roots.find(r=>r.visible);assert(active);assert.equal(l.models[0].name,'frog-body');assert.equal(l.models[0].parent,active);assert(active.children[1].count>0);
+ const version=active.children[1].instanceMatrix.version;l.update(frame);assert.equal(active.children[1].instanceMatrix.version,version);
+ enemy.hp=0;l.update(frame);assert(roots.every(r=>!r.visible));assert.equal(l.models[0],undefined);
+ let disposed=0;for(const r of roots)r.children[1].addEventListener('dispose',()=>disposed++);l.dispose();l.dispose();assert.equal(disposed,2);const scene=new T.Scene();scene.add(l.root);disposeScene(scene);
 });
