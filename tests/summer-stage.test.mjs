@@ -9,6 +9,7 @@ const c=await server.ssrLoadModule('/src/summer/combat.ts'),layout=await server.
 const {createLevel}=await server.ssrLoadModule('/src/rendering/levels/summer.ts');
 const {WING_FORMATION}=await server.ssrLoadModule('/src/wing.ts');
 const vortex=await server.ssrLoadModule('/src/summer/vortex.ts');
+const {riverHydraHead}=await server.ssrLoadModule('/src/summer/hydra-targets.ts');
 
 test('full summer route has three hydras, varied aerial formations, repeat drops and bounded prewarmed pools',()=>{
  const f=new Flight('sentry',[],'vex','summer');f.invulnerable=f.cooldown=f.droneCooldown=1e5;
@@ -36,8 +37,8 @@ test('river hydras stay rooted to the same meltwater while every visible head ac
  for(const weapon of['cannon','homing','omega','laser','towline']){
   const f=new Flight(weapon==='towline'?'towline':'sentry',weapon==='towline'?[]:[weapon],'vex','summer');f.nextWave=22;f.time=23;f.cooldown=f.droneCooldown=1e5;f.invulnerable=100;
   const p=c.summerMotion(0,0,course,f.time),enemy={...p,lane:0,age:0,fire:1e5,hp:20,summer:course};f.enemies=[enemy];
-  const h=c.hydraHead(f.time,-1);f.player={x:enemy.x+h.x+WING_FORMATION.x,y:-5.3};
-  if(weapon==='towline'){f.player={x:-3,y:enemy.y};f.drone={x:3,y:enemy.y};f.droneCooldown=0;}
+  const h=riverHydraHead(enemy,f.time,-1);f.player={x:enemy.x+h.x+WING_FORMATION.x,y:-5.3};
+  if(weapon==='towline'){f.player={x:-3,y:enemy.y+h.y};f.drone={x:3,y:enemy.y+h.y};f.droneCooldown=0;}
   for(let i=0;i<180;i++)f.step(STEP);assert(enemy.hp<20,weapon+' missed a visible head');
  }
 });

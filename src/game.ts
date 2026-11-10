@@ -2,8 +2,8 @@ import { HELIOSTAT_HP,HELIOSTAT_APPROACH,HELIOSTAT_INTERVAL,HELIOSTAT_WINDUP,HEL
 import {SUMMER_HP,SUMMER_APPROACH} from './summer/layout';
 import {createHydraAttack,stepHydraAttack} from './summer/hydra-attack';
 import {VORTEX_HP,VORTEX_RADIUS,VORTEX_FIRE,vortexEmission} from './summer/vortex';
-import {summerWaves,summerMotion,hydraHead,hydraBeamEntry,type SummerCourse} from './summer/combat';
-import {HYDRA_SIDES,HYDRA_HEAD_HP,HYDRA_BOSS_HEAD_HP,HYDRA_BOSS_SIZE,createHydraState,hydraAlive,damageHydraHead,damageRiverHydra,closestRiverHead,nearestHydraHead,hydraContact,hydraBeamContact,hydraBossHead,hydraBossContact,type HydraState,type HydraSide} from './summer/hydra-targets';
+import {summerWaves,summerMotion,hydraBeamEntry,type SummerCourse} from './summer/combat';
+import {HYDRA_SIDES,HYDRA_HEAD_HP,HYDRA_BOSS_HEAD_HP,HYDRA_BOSS_SIZE,createHydraState,hydraAlive,damageHydraHead,damageRiverHydra,closestRiverHead,nearestHydraHead,hydraContact,hydraBeamContact,hydraBossHead,hydraBossContact,riverHydraHead,type HydraState,type HydraSide} from './summer/hydra-targets';
 import {heliostatLockTargets} from './heliostat/combat';
 import {crawlerSites,crawlerPose,stepCrawler,crawlerHits,CRAWLER_HP,type CrawlerState} from './heliostat/crawler';
 import {mineSites,minePose,triggerMine,mineBurst,MINE_WINDUP,MINE_JUMP,MINE_BURST_TIME,type BoulevardMine} from './boulevard-mines';
@@ -502,7 +502,7 @@ export class Flight {
       }
       return shot.y < 9 && Math.abs(shot.x) < 5;
     });
-    this.enemies = this.enemies.filter((enemy) => (enemy.hp > 0 || enemy.mine?.burstAt!==undefined&&this.time-enemy.mine.burstAt<MINE_BURST_TIME || enemy.ambusher?.defeatedAt!==undefined && this.time-enemy.ambusher.defeatedAt<AMBUSHER_CORPSE_TIME) && (enemy.ambusher ? ambusherHome(enemy.ambusher.site,this.time).y > -12 : enemy.y > (enemy.heliostat?.kind==='guard'?-10.6:enemy.summer?.kind==='hydra'?-10:-9)) && (!enemy.centipede || Math.abs(enemy.x) < 5.8) && (!(enemy.crucible || enemy.slag) || Math.abs(enemy.x)<6.8) && (!enemy.slag || (enemy.y<10 && enemy.age<10)));
+    this.enemies = this.enemies.filter((enemy) => (enemy.hp > 0 || enemy.mine?.burstAt!==undefined&&this.time-enemy.mine.burstAt<MINE_BURST_TIME || enemy.ambusher?.defeatedAt!==undefined && this.time-enemy.ambusher.defeatedAt<AMBUSHER_CORPSE_TIME) && (enemy.ambusher ? ambusherHome(enemy.ambusher.site,this.time).y > -12 : enemy.y > (enemy.heliostat?.kind==='guard'?-10.6:-9)) && (!enemy.centipede || Math.abs(enemy.x) < 5.8) && (!(enemy.crucible || enemy.slag) || Math.abs(enemy.x)<6.8) && (!enemy.slag || (enemy.y<10 && enemy.age<10)));
 
     this.threats = this.threats.filter((shot) => {
       this.advance(shot, dt);
@@ -872,7 +872,7 @@ export class Flight {
         const spread = enemy.summer?.kind==='hydra'?[-.25,0,.25]:enemy.heliostat?.kind==='guard'?[-.19,0,.19]:enemy.boulevard?.formation==='intercept'?[-.12,0,.12]:enemy.boulevard?.heavy?[-.18,0,.18]:enemy.marine === 'plesiosaur' ? [-.3,-.15,0,.15,.3] : enemy.ant === 'soldier' ? [-0.24, 0, 0.24] : [0];
         for (const offset of spread) {
           const muzzle = enemy.heliostat?.kind === 'guard' ? .85 : enemy.marine ? marineSpecs[enemy.marine].halfLength : 0;
-          const head=enemy.summer?.kind==='hydra'?hydraHead(this.time,Math.sign(offset)):undefined;
+          const head=enemy.summer?.kind==='hydra'?riverHydraHead(enemy,this.time,Math.sign(offset)):undefined;
           if(head&&!hydraAlive(enemy.hydra,Math.sign(offset) as HydraSide))continue;
           this.threats.push({ x: enemy.x + (head?.x??Math.sin(enemy.heading ?? 0)*muzzle), y: enemy.y + (head?head.y-.65:-Math.cos(enemy.heading ?? 0)*muzzle), z: 0,
             vx: Math.sin(angle + offset) * speed, vy: Math.cos(angle + offset) * speed, vz: 0 });

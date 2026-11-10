@@ -1,9 +1,8 @@
 import {summerRiver,summerScroll,smooth} from './layout';
 import {vortexMotion,vortexWaveIndices} from './vortex';
-export {hydraHead,hydraHit,hydraBeamEntry} from './hydra-targets';
+export {hydraHead,hydraHit,hydraBeamEntry,HYDRA_BODY_Y} from './hydra-targets';
 export type SummerCourse={kind:'scout'|'drone'|'hydra'|'vortex';formation:'vee'|'weave'|'loop'|'cross';slot:number;mirror:number;at:number};
 export const SUMMER_AIR_POOL=24,SUMMER_HYDRA_POOL=2;
-export const HYDRA_BODY_Y=3.9;
 export function summerMotion(age:number,lane:number,c:SummerCourse,time:number){
   if(c.kind==='hydra'){const world=c.at*2.8+7;return{x:summerRiver(world),y:world-summerScroll(time),heading:0,bank:0};}
   if(c.kind==='vortex')return vortexMotion(age,lane);

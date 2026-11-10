@@ -1,22 +1,21 @@
 import * as T from 'three';
 import {atlasRectangles,createRasterMaterial,rasterPart,type Crop} from './atlas';
 import {SUMMER_DISTANCE} from './layout';
-import {HYDRA_BODY_Y} from './combat';
-import {hydraHead,HYDRA_SIDES,HYDRA_HEAD_HP,HYDRA_BOSS_HEAD_HP,HYDRA_BOSS_SIZE,type HydraState} from './hydra-targets';
+import {hydraHead,hydraEntryHead,HYDRA_BODY_Y,HYDRA_BODY_DEPTH,HYDRA_ROOT_Y,HYDRA_HEAD_Z,HYDRA_SIDES,HYDRA_HEAD_HP,HYDRA_BOSS_HEAD_HP,HYDRA_BOSS_SIZE,type HydraState} from './hydra-targets';
 
 export function createHydraAssets(){
   // Measured whole-sheet bounds; preserve these UVs when resizing the entire atlas.
   const rectangles:Crop[]=[[21/1246,13/1263,622/1246,539/1263],[781/1246,16/1263,1082/1246,528/1263]];
   for(let i=0;i<5;i++)rectangles.push([203/1246,(570+i*672/5)/1263,477/1246,(570+(i+1)*672/5)/1263]);
   const material=createRasterMaterial(),geometries=atlasRectangles(rectangles);
-  const hide=new T.MeshStandardMaterial({color:0x426c52,roughness:.77}),pale=new T.MeshStandardMaterial({color:0xabb883,roughness:.86}),stump=new T.MeshStandardMaterial({color:0x304e3b,roughness:.9});
+  const hide=new T.MeshStandardMaterial({color:0x426c52,roughness:.77}),pale=new T.MeshStandardMaterial({color:0xabb883,roughness:.86});
   const round=new T.SphereGeometry(1,16,10),rigs=new Set<{raster:T.Group;fallback:T.Group}>();
-  return{material,geometries,hide,pale,stump,round,rigs,setAtlas(texture:T.Texture){material.map=texture;material.needsUpdate=true;for(const r of rigs){r.raster.visible=true;r.fallback.visible=false;}}};
+  return{material,geometries,hide,pale,round,rigs,setAtlas(texture:T.Texture){material.map=texture;material.needsUpdate=true;for(const r of rigs){r.raster.visible=true;r.fallback.visible=false;}}};
 }
 
 export function createRiverHydra(a:ReturnType<typeof createHydraAssets>,boss=false){
   const root=new T.Group();root.name=boss?'lotus-hydra':'river-hydra';
-  const size=boss?HYDRA_BOSS_SIZE:1,depth=boss?-3.8:-16.2;
+  const size=boss?HYDRA_BOSS_SIZE:1,depth=boss?-3.8:HYDRA_BODY_DEPTH;
   const raster=new T.Group(),fallback=new T.Group();root.add(raster,fallback);a.rigs.add({raster,fallback});
   const torso=rasterPart(raster,a.geometries[0],a.material,3.5*size,3.05*size,0,HYDRA_BODY_Y*size,depth);torso.name='hydra-riverbed-body';
   const body=new T.Mesh(a.round,a.hide);body.position.set(0,HYDRA_BODY_Y*size,depth);body.scale.set(1.4*size,1.45*size,.5*size);fallback.add(body);
@@ -29,11 +28,10 @@ export function createRiverHydra(a:ReturnType<typeof createHydraAssets>,boss=fal
     const fallbackSegments=Array.from({length:5},()=>{const m=new T.Mesh(a.round,a.hide);fallback.add(m);return m;});
     const fallbackHead=new T.Mesh(a.round,a.pale);fallbackHead.scale.set(.39*size,.7*size,.3*size);fallback.add(fallbackHead);
     for(const eyeX of[-.5,.5]){const eye=new T.Mesh(eyeGeometry,eyeMaterial);eye.position.set(eyeX,-.12,.9);fallbackHead.add(eye);}
-    const collar=new T.Mesh(a.round,a.hide);collar.scale.set(.47*size,.48*size,.18*size);root.add(collar);
     const crown=new T.Mesh(crownGeometry,new T.MeshBasicMaterial({color:0x91eee1,transparent:true,depthWrite:false}));root.add(crown);
     const anchor=new T.Object3D();anchor.name='laser_contact_'+(side<0?'L':side>0?'R':'C');root.add(anchor);
     const bar=boss?new T.Mesh(barGeometry,new T.MeshBasicMaterial({color:0x91eee1,depthWrite:false})):undefined;if(bar)root.add(bar);
-    return{side,segments,head,fallbackSegments,fallbackHead,collar,crown,anchor,bar};
+    return{side,segments,head,fallbackSegments,fallbackHead,crown,anchor,bar};
   });
   const origin=new T.Vector3(),eye=new T.Vector3(),top=new T.Vector3(),bottom=new T.Vector3();
   raster.visible=!!a.material.map;fallback.visible=!raster.visible;
@@ -42,11 +40,10 @@ export function createRiverHydra(a:ReturnType<typeof createHydraAssets>,boss=fal
     root.getWorldPosition(origin);
     if(camera){camera.getWorldPosition(eye);root.worldToLocal(eye);}else eye.set(-origin.x,-origin.y,SUMMER_DISTANCE-origin.z);
     for(const neck of necks){
-      const s=neck.side,phase=time*.85+s*1.7,live=hydraHead(time,s,size,boss?0:undefined),alive=!state||state.hp[s+1]>0;
+      const s=neck.side,phase=time*.85+s*1.7,rest=hydraHead(time,s,size),live=boss?rest:hydraEntryHead(rest,origin,bodyX),alive=!state||state.hp[s+1]>0;
       const age=alive?0:Math.max(0,stateTime-state!.brokenAt[s+1]),t=Math.min(1,age/.75),sink=t*t*(3-2*t),visible=alive||sink<.999;
-      const rootX=(s*.82+.08)*size+bodyX,rootY=(HYDRA_BODY_Y-.35)*size;
-      const headX=live.x*(1-sink)+rootX*sink,headY=live.y*(1-sink)+rootY*sink,headZ=.2+(depth-.2)*sink;
-      neck.collar.position.set(rootX,rootY,depth+.08);neck.collar.material=alive?a.hide:a.stump;
+      const rootX=(s*.9+.11)*size+bodyX,rootY=HYDRA_ROOT_Y*size;
+      const headX=live.x*(1-sink)+rootX*sink,headY=live.y*(1-sink)+rootY*sink,headZ=HYDRA_HEAD_Z+(depth-HYDRA_HEAD_Z)*sink;
       const point=(u:number,p:T.Vector3)=>p.set(rootX*(1-u)+headX*u+Math.sin(u*Math.PI)*(s*.35+.14*Math.sin(phase+u*2))*size*(1-sink),rootY*(1-u)+(headY+.62*size)*u,depth*(1-u)+(headZ-.06)*u);
       for(let i=0;i<5;i++){
         point(i/5,top);point((i+1)/5,bottom);

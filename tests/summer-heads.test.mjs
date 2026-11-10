@@ -5,6 +5,7 @@ import {createServer} from 'vite';
 const server=await createServer({root:new URL('..',import.meta.url).pathname,configFile:false,define:{__ENCOUNTER_TEXTURES__:'{}'},server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true,entries:[]},appType:'custom'});after(()=>server.close());
 const {Flight,STEP,BOSS_PROJECTION}=await server.ssrLoadModule('/src/game.ts'),h=await server.ssrLoadModule('/src/summer/hydra-targets.ts');
 const {createHydraAssets,createRiverHydra}=await server.ssrLoadModule('/src/summer/hydra.ts'),{WING_FORMATION}=await server.ssrLoadModule('/src/wing.ts');
+const layout=await server.ssrLoadModule('/src/summer/layout.ts');
 function fixture(boss=false,weapon='primary'){
  const wing=['homing','cannon','laser','omega'].includes(weapon),f=new Flight(weapon==='towline'?'towline':'sentry',wing?[undefined,weapon]:[],'vex','summer');
  f.nextWave=22;f.invulnerable=100;f.cooldown=f.droneCooldown=1e5;
@@ -73,15 +74,47 @@ test('Pulse damages heads separately and laser buildup resets on changing heads'
  l.f.damageEnemy(l.enemy,100,false,0);const left=h.hydraHead(0,-1);l.f.stepLaser(wing,{x:left.x,y:-3},false,STEP);assert.equal(wing.laserHead,-1);assert.equal(wing.laserHold,0);
 });
 
-test('shorter regular reach and buried collars cover roots; defeated heads collapse in both render paths',()=>{
+test('original front roots and settled reach are preserved without socket-cover balls',()=>{
  const assets=createHydraAssets(),rig=createRiverHydra(assets),state=h.createHydraState();rig.pose(0,0,0,state);rig.root.updateMatrixWorld(true);
- const torso=new T.Box3().setFromObject(rig.root.getObjectByName('hydra-riverbed-body'));
+ const camera=new T.PerspectiveCamera(39,1,.05,600);camera.position.z=22;camera.updateMatrixWorld(true);
  const geometries=new Set();rig.root.traverse(o=>{if(o.geometry)geometries.add(o.geometry);});
- for(const n of rig.necks){assert(n.head.position.y>.6);const p=n.collar.position;assert(p.x>torso.min.x&&p.x<torso.max.x&&p.y>torso.min.y&&p.y<torso.max.y,'socket root lies outside torso');assert(p.z>torso.max.z,'collar cannot cover painted socket');assert(n.anchor.position.z>n.fallbackHead.position.z+n.fallbackHead.scale.z,'laser anchor is buried in the fallback head');}
+ assert(!('stump' in assets));assert(!rig.root.children.some(o=>o.geometry===assets.round),'added socket-cover ball');
+ for(const n of rig.necks){
+  const head=h.hydraHead(0,n.side);assert.equal(n.head.position.x,head.x);assert.equal(n.head.position.y,head.y);
+  const strip=n.segments[0],p=new T.Vector3(0,.5-.11/strip.scale.y,0).applyMatrix4(strip.matrixWorld).project(camera),q=new T.Vector3(n.side*.9+.11,2.9,-16.2).project(camera);
+  assert(Math.hypot(p.x-q.x,p.y-q.y)<1e-7,'original attachment moved');
+  assert(n.anchor.position.z>n.fallbackHead.position.z+n.fallbackHead.scale.z,'laser anchor is buried in the fallback head');
+ }
  h.damageHydraHead(state,-1,4,1);rig.pose(1.2,0,0,state);assert(rig.necks[0].head.visible&&rig.necks[0].head.position.z<.2);
  rig.pose(2,0,0,state);assert(!rig.necks[0].head.visible&&!rig.necks[0].fallbackHead.visible);assert(rig.necks[1].head.visible&&rig.necks[2].head.visible);
  assets.setAtlas(new T.Texture());rig.pose(3,0,0,state);assert(rig.necks[0].segments.every(s=>!s.visible));rig.root.traverse(o=>{if(o.geometry)assert(geometries.has(o.geometry));});
  rig.pose(0,0,0,h.createHydraState());assert(rig.necks.every(n=>n.head.visible&&n.fallbackHead.visible));
+});
+
+test('river heads spawn at the projected front sockets and blend into the unchanged combat pose',()=>{
+ const kHead=22/21.8,kBody=22/38.2;
+ for(const x of[-2,0,2])for(const y of[15.4,13,11,10]){
+  const p=h.hydraEntryHead(h.hydraHead(0,0),{x,y},1.2);
+  assert(Math.abs((y+p.y+.62)*kHead-(y+2.9)*kBody)<1e-8,'head spawns beyond its socket');
+  assert(Math.abs((x+p.x)*kHead-(x+1.2)*kBody)<1e-8);
+ }
+ for(const side of h.HYDRA_SIDES){const rest=h.hydraHead(12,side);assert.deepEqual(h.hydraEntryHead(rest,{x:2,y:2},-1),rest);}
+ let previous;
+ for(let y=15.4;y>=-2;y-=.02){
+  const p=h.hydraEntryHead(h.hydraHead(0,0),{x:1,y},.8),screen=new T.Vector2((1+p.x)*kHead,(y+p.y)*kHead);
+  if(previous)assert(screen.distanceTo(previous)<.04,'entry jumps');previous=screen;
+ }
+});
+
+test('entry rendering and all head hitboxes use the same spawn placement',()=>{
+ const rig=createRiverHydra(createHydraAssets()),time=21,enemy={x:1.5,y:12,hydra:h.createHydraState()};
+ const bodyX=layout.summerRiver(enemy.y+layout.summerScroll(time)+3.9)-enemy.x;
+ rig.root.position.set(enemy.x,enemy.y,0);rig.pose(time,0,bodyX,enemy.hydra);
+ for(const side of h.HYDRA_SIDES){
+  const p=h.riverHydraHead(enemy,time,side),head=rig.necks[side+1].head.position;
+  assert(Math.hypot(head.x-p.x,head.y-p.y)<1e-9,'visible head and hitbox disagree at spawn');
+  const hit=h.hydraContact(enemy,time,{x:enemy.x+p.x,y:enemy.y+p.y-2},{x:enemy.x+p.x,y:enemy.y+p.y+2});assert.equal(hit?.side,side);
+ }
 });
 
 test('neck strip joints stay registered to the actual workshop camera at different zooms and angles',()=>{
