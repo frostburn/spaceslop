@@ -36,7 +36,7 @@ export function createBiolumeView(canvas:HTMLCanvasElement){
   }
   function draw(time:number){
     if(disposed)return;
-    const rect=canvas.getBoundingClientRect(),width=Math.max(1,Math.round(rect.width)),height=Math.max(1,Math.round(rect.height));
+    const width=Math.max(1,canvas.clientWidth),height=Math.max(1,canvas.clientHeight);
     renderer.getSize(size);if(size.x!==width||size.y!==height){renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();for(const s of surfaces)s.mesh.scale.x=camera.aspect/(9/16);}
     const pose=actorPose(time),p=manual??pose.player;actors.player.position.set(p.x,p.y,0);actors.player.rotation.z=.06*Math.sin(time*.5);
     actors.enemy.position.set(pose.enemy.x,pose.enemy.y,.1);actors.enemy.rotation.z=.15*Math.sin(time*.4);actors.enemy.rotation.y=.15*Math.sin(time*1.3);
@@ -55,7 +55,7 @@ export function createBiolumeView(canvas:HTMLCanvasElement){
     renderer.render(scene,camera);
   }
   function movePlayer(x:number,y:number){manual=new T.Vector2(T.MathUtils.clamp(x,-3.2,3.2),T.MathUtils.clamp(y,-5.5,5.5));}
-  function pointer(clientX:number,clientY:number){const r=canvas.getBoundingClientRect(),v=new T.Vector3((clientX-r.left)/r.width*2-1,1-(clientY-r.top)/r.height*2,.5).unproject(camera);v.sub(camera.position);const t=-camera.position.z/v.z;movePlayer(camera.position.x+v.x*t,camera.position.y+v.y*t);}
+  function pointer(clientX:number,clientY:number){const r=canvas.getBoundingClientRect(),v=new T.Vector3((clientX-r.left-canvas.clientLeft)/canvas.clientWidth*2-1,1-(clientY-r.top-canvas.clientTop)/canvas.clientHeight*2,.5).unproject(camera);v.sub(camera.position);const t=-camera.position.z/v.z;movePlayer(camera.position.x+v.x*t,camera.position.y+v.y*t);}
   function dispose(){if(disposed)return;disposed=true;for(const s of surfaces)s.mesh.material.uniforms.map.value=null;disposeScene(scene);for(const s of surfaces)s.fallback.dispose();for(const t of Object.values(art))t.dispose();art={};renderer.dispose();renderer.forceContextLoss();}
   return{scene,camera,renderer,options,uniforms,actors,surfaces,lights,draw,setOptions,setArt,movePlayer,pointer,follow(){manual=undefined;},
     stats(){return{draws:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length??0,lights:6,ambient:0,artwork:!!(art.backdrop||art.foreground)};},dispose};

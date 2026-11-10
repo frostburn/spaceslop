@@ -26,14 +26,32 @@ export function createSurface(kind:SurfaceKind,w:number,h:number,shared:LightUni
   const geometry=new T.PlaneGeometry(w,h,32,96),p=geometry.attributes.position,uv=geometry.attributes.uv;
   for(let i=0;i<p.count;i++)p.setZ(i,relief(kind,uv.getX(i),uv.getY(i)));geometry.computeVertexNormals();
   const fallback=fallbackTexture(kind);
-  const material=new T.ShaderMaterial({uniforms:{...shared,map:{value:fallback},kind:{value:kind==='foreground'?2:0}},side:T.DoubleSide,transparent:kind==='foreground',depthWrite:kind!=='foreground',
-    vertexShader:`varying vec2 vUv;varying vec3 worldP,worldN;void main(){vUv=uv;worldP=(modelMatrix*vec4(position,1.)).xyz;vec3 n=normalMatrix*normal;worldN=normalize(vec3(dot(viewMatrix[0].xyz,n),dot(viewMatrix[1].xyz,n),dot(viewMatrix[2].xyz,n)));gl_Position=projectionMatrix*viewMatrix*vec4(worldP,1.);}`,
-    fragmentShader:`uniform sampler2D map;uniform int kind;
+  const material=new T.ShaderMaterial({uniforms:{...shared,map:{value:fallback},texelSize:{value:new T.Vector2(1/256,1/256)},kind:{value:kind==='foreground'?2:0}},side:T.DoubleSide,transparent:kind==='foreground',depthWrite:kind!=='foreground',
+    vertexShader:`varying vec2 vUv;varying vec3 worldP,worldN;
+    void main(){
+      vUv=uv;
+      // Keep the whole painted frame registered; relief must not zoom its edges.
+      vec3 flatWorld=(modelMatrix*vec4(position.xy,0.,1.)).xyz;
+      worldP=(modelMatrix*vec4(position,1.)).xyz;
+      worldP.xy=cameraPosition.xy+(flatWorld.xy-cameraPosition.xy)*(cameraPosition.z-worldP.z)/max(.01,cameraPosition.z-flatWorld.z);
+      vec3 n=normalMatrix*normal;
+      worldN=normalize(vec3(dot(viewMatrix[0].xyz,n),dot(viewMatrix[1].xyz,n),dot(viewMatrix[2].xyz,n)));
+      gl_Position=projectionMatrix*viewMatrix*vec4(flatWorld,1.);
+    }`,
+    fragmentShader:`uniform sampler2D map;uniform vec2 texelSize;uniform int kind;
     uniform vec3 lightPosition[6],lightColor[6];uniform float lightRange[6];
     uniform float reliefGain,transmissionGain,emissionGain;
     varying vec2 vUv;varying vec3 worldP,worldN;${occlusionShader}
     void main(){
       vec4 surface=texture2D(map,clamp(vUv,vec2(.0001),vec2(.9999)));if(kind==2&&surface.a<.01)discard;
+      float structure=0.;
+      if(kind==2){
+        vec4 a=texture2D(map,vUv+vec2(texelSize.x*2.,0.)),b=texture2D(map,vUv-vec2(texelSize.x*2.,0.));
+        vec4 c=texture2D(map,vUv+vec2(0.,texelSize.y*2.)),d=texture2D(map,vUv-vec2(0.,texelSize.y*2.));
+        vec3 neighborhood=(a.rgb*a.a+b.rgb*b.a+c.rgb*c.a+d.rgb*d.a)/max(.001,a.a+b.a+c.a+d.a);
+        float lum=dot(surface.rgb,vec3(.2126,.7152,.0722)),local=dot(neighborhood,vec3(.2126,.7152,.0722));
+        structure=max(1.-smoothstep(.32,.62,lum),smoothstep(.008,.035,local-lum));
+      }
       vec3 N=normalize(mix(vec3(0.,0.,1.),worldN,reliefGain)),V=normalize(cameraPosition-worldP),lit=vec3(0.);
       for(int i=0;i<6;i++){
         if(dot(lightColor[i],lightColor[i])<.000001)continue;
@@ -56,10 +74,10 @@ export function createSurface(kind:SurfaceKind,w:number,h:number,shared:LightUni
         q=(vUv-vec2(.12,.16))/vec2(.055,.044);pods+=exp(-dot(q,q)*2.);
         glow=pods*.3;glowColor=vec3(1.,.28,.025);
       }
-      gl_FragColor=vec4(lit+glowColor*glow*emissionGain,kind==2?surface.a*.35:1.);
+      gl_FragColor=vec4(lit+glowColor*glow*emissionGain,kind==2?mix(surface.a*.35,smoothstep(.1,.85,surface.a)*.98,structure):1.);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }`});
   const mesh=new T.Mesh(geometry,material);mesh.name='biolume-'+kind;
-  return{mesh,fallback,setArt(texture:T.Texture|undefined){material.uniforms.map.value=texture??fallback;}};
+  return{mesh,fallback,setArt(texture:T.Texture|undefined){const map=texture??fallback;material.uniforms.map.value=map;const image=map.image as {width?:number;height?:number}|undefined;material.uniforms.texelSize.value.set(1/Math.max(1,image?.width??256),1/Math.max(1,image?.height??256));}};
 }
