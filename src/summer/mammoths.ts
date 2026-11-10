@@ -1,12 +1,12 @@
 import * as T from 'three';
 import {atlasRectangles,createRasterMaterial,rasterPart} from './atlas';
 export function createMammothAssets(){
-  // Padded whole-sheet bounds for the straight, untwisted trunk replacement.
+  // Padded whole-sheet bounds for the freshly generated top-down sheet.
   // Both trunk cuts share a centered axis; grazing supplies the bend in-engine.
   const material=createRasterMaterial(),geometries=atlasRectangles([
-    [93/1536,11/1024,393/1536,507/1024],[517/1536,20/1024,991/1536,504/1024],
-    [1164/1536,28/1024,1401/1536,498/1024],[183/1536,559/1024,315/1536,994/1024],
-    [618/1536,534/1024,876/1536,1001/1024],[1128/1536,527/1024,1409/1536,1002/1024],
+    [119/1536,9/1024,439/1536,573/1024],[608/1536,38/1024,996/1536,534/1024],
+    [1192/1536,46/1024,1386/1536,528/1024],[219/1536,601/1024,342/1536,995/1024],
+    [673/1536,599/1024,873/1536,982/1024],[1178/1536,593/1024,1381/1536,991/1024],
   ]);
   const fur=new T.MeshStandardMaterial({color:0x65432a,roughness:1}),ivory=new T.MeshStandardMaterial({color:0xdccbaa,roughness:.72});
   const round=new T.SphereGeometry(1,16,10),rigs=new Set<{raster:T.Group;fallback:T.Group}>();
@@ -17,10 +17,10 @@ export function createMammoth(a:ReturnType<typeof createMammothAssets>){
   const raster=new T.Group(),fallback=new T.Group();root.add(raster,fallback);a.rigs.add({raster,fallback});
   const shadow=new T.Mesh(new T.CircleGeometry(1,24),new T.MeshBasicMaterial({color:0x25391f,transparent:true,opacity:.17,depthWrite:false}));shadow.scale.set(1.55,2.7,1);shadow.position.set(0,-.7,-.15);root.add(shadow);
   const body=rasterPart(raster,a.geometries[0],a.material,2.6,4.6,0,0,.04);
-  const head=new T.Group();head.position.set(0,-1.6,.13);raster.add(head);rasterPart(head,a.geometries[1],a.material,2.1,2.3,0,-.55,.02);
-  const trunk=new T.Group();trunk.position.set(0,-1.02,.04);head.add(trunk);const basePart=rasterPart(trunk,a.geometries[2],a.material,.74,1.5,0,-.55,.02);basePart.name='mammoth-trunk-base';
-  const tip=new T.Group();tip.position.set(0,-1.16,-.02);trunk.add(tip);const tipPart=rasterPart(tip,a.geometries[3],a.material,.34,1.25,0,-.53,.02);tipPart.name='mammoth-trunk-tip';
-  const legs=[[-1.17,-.9,-.08],[1.17,-.9,-.07],[-1.05,1.2,-.06],[1.05,1.2,-.05]].map(([x,y,z],i)=>{
+  const head=new T.Group();head.position.set(0,-1.6,.13);raster.add(head);rasterPart(head,a.geometries[1],a.material,1.8,2.3,0,-.55,.02);
+  const trunk=new T.Group();trunk.position.set(0,-.75,-.015);head.add(trunk);const basePart=rasterPart(trunk,a.geometries[2],a.material,.65,1.5,0,-.55,.02);basePart.name='mammoth-trunk-base';
+  const tip=new T.Group();tip.position.set(0,-1.16,-.02);trunk.add(tip);const tipPart=rasterPart(tip,a.geometries[3],a.material,.30,1.25,0,-.53,.02);tipPart.name='mammoth-trunk-tip';
+  const legs=[[-1.08,-1,-.08],[1.08,-1,-.07],[-.98,1.2,-.06],[.98,1.2,-.05]].map(([x,y,z],i)=>{
     const pivot=new T.Group();pivot.position.set(x,y,z);raster.add(pivot);rasterPart(pivot,a.geometries[i<2?4:5],a.material,.64,1.2,0,-.45,0);return pivot;
   });
   function blob(parent:T.Object3D,x:number,y:number,z:number,sx:number,sy:number,sz:number,material:T.Material=a.fur){const m=new T.Mesh(a.round,material);m.position.set(x,y,z);m.scale.set(sx,sy,sz);parent.add(m);return m;}
