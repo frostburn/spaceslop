@@ -40,8 +40,14 @@ export function raySeekerBurst(point:Point,heading:number){return Array.from({le
  return{x:point.x+dx*.16,y:point.y+dy*.16,z:0,vx:dx*3.6,vy:dy*3.6,vz:0,planar:true};
 });}
 
-// Keep depth-based combat trajectories visible above the opaque raster floor.
-export function rayVisibleShot<S extends {x:number;y:number;z:number;vx:number;vy:number;vz:number}>(shot:S):S{
- const k=22/(22-shot.z),dk=22*shot.vz/(22-shot.z)**2;
- return{...shot,x:shot.x*k,y:shot.y*k,z:.12,vx:shot.vx*k+shot.x*dk,vy:shot.vy*k+shot.y*dk,vz:0};
+// First contact with the animated body, in the top-down flight plane.
+export function rayBodyEntry(time:number,a:Point,b:Point){
+ let first=Infinity;const root=rayRoot(time);
+ for(const [x,y,rx,ry]of[[0,-.35,1.17,2],[0,-2.35,.35,.33],[-2.05,-.85,1.25,.8],[2.05,-.85,1.25,.8]]){
+  const p=rayVertex(x,y,time),c=Math.cos(root.angle),s=Math.sin(root.angle),k=22/(22-p.z);
+  const cx=(root.x+p.x*root.sx*c-p.y*root.sy*s)*k,cy=(root.y+p.x*root.sx*s+p.y*root.sy*c)*k;
+  const ax=(a.x-cx)/rx,ay=(a.y-cy)/ry,dx=(b.x-a.x)/rx,dy=(b.y-a.y)/ry;
+  const cc=ax*ax+ay*ay-1,aa=dx*dx+dy*dy,bb=ax*dx+ay*dy,disc=bb*bb-aa*cc;
+  if(cc<=0)first=0;else if(aa>1e-12&&disc>=0){const t=(-bb-Math.sqrt(disc))/aa;if(t>=0&&t<=1)first=Math.min(first,t);}
+ }return first;
 }

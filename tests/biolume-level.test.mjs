@@ -47,7 +47,7 @@ test('the full quiet-to-nursery patrol fits the warmed pool and waits until visi
   for(const shot of f.threats)if(!prior.has(shot)){shots++;assert(shot.y<6.6&&shot.y>-6.9&&Math.abs(shot.x)<4.3,'A hidden glider fired');}
  }
  assert(maximum<=combat.GROVE_ENEMY_POOL,`Pool needs ${maximum} rigs`);assert(shots>30);assert.equal(kinds.size,3);assert.equal(drops.size,4);
- assert.equal(f.phase,'approach');assert.equal(f.enemies.length,0);assert.equal(f.transitionDuration,6);
+ assert.equal(f.phase,'boss');assert.equal(f.transitionDuration,0);
  for(let i=0;i<370;i++)f.step(STEP);assert.equal(f.phase,'boss');
 });
 

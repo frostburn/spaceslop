@@ -1,6 +1,6 @@
 import {groveWaves,groveMotion,groveEnemySize,groveCanAttack,GROVE_SPAWN_LEAD,type GroveCourse} from './biolume/combat';
 import {GROVE_APPROACH} from './biolume/route';
-import {RAY_HP,RAY_FAN_AT,RAY_SEEKER_AT,RAY_PROJECTION,RAY_ORGAN_RADIUS,RAY_SEEKER_RADIUS,RAY_SEEKER_HP,RAY_SEEKER_POOL,raySignal,rayOrgan,rayShotPoint,stepRaySeeker,rayOrbEntry,raySeekerBurst,type RaySeeker} from './biolume/lantern-ray';
+import {RAY_HP,RAY_FAN_AT,RAY_SEEKER_AT,RAY_PROJECTION,RAY_ORGAN_RADIUS,RAY_SEEKER_RADIUS,RAY_SEEKER_HP,RAY_SEEKER_POOL,raySignal,rayOrgan,rayBodyEntry,stepRaySeeker,rayOrbEntry,raySeekerBurst,type RaySeeker} from './biolume/lantern-ray';
 import { HELIOSTAT_HP,HELIOSTAT_APPROACH,HELIOSTAT_INTERVAL,HELIOSTAT_WINDUP,HELIOSTAT_FIRE,HELIOSTAT_CHANNEL,HELIOSTAT_FADE,HELIOSTAT_GUARD_FIRE,HELIOSTAT_SPAWN_LEAD,heliostatWaves,heliostatMotion,heliostatCanAttack,heliostatPlasmaHits,electricSites,electricHits,type HeliostatCourse } from './heliostat/combat';
 import {SUMMER_HP,SUMMER_APPROACH} from './summer/layout';
 import {createHydraAttack,stepHydraAttack} from './summer/hydra-attack';
@@ -60,7 +60,7 @@ type Shot = Point & {
   z: number; vx: number; vy: number; vz: number;
   drone?: boolean; targetsBoss?: boolean; bossSupport?: boolean; crabTarget?:number; wing?: WingProjectile; pierced?: Set<Enemy>; damage?: number;
   hydraTarget?:HydraSide;hydraPierced?:Map<Enemy,Set<HydraSide>>;
-  rayTargeted?:boolean;
+  rayHit?:boolean;
 };
 type Threat = Shot & { graze?: 'near' | 'counted';planar?:boolean };
 type Enemy = Point & {
@@ -485,11 +485,15 @@ export class Flight {
       if (shot.wing === 'homing') this.guideMissile(shot, boss, dt);
       this.advance(shot, dt);
       if(boss&&this.level==='biolume'){
-        const a=rayShotPoint(previous),b=rayShotPoint(shot);
+        const a=previous,b=shot;
         for(;;){let enemy:Enemy|undefined,first=Infinity;
           for(const candidate of this.enemies){if(!candidate.rayOrb||candidate.hp<=0||shot.pierced?.has(candidate))continue;const t=rayOrbEntry(candidate as Enemy&{rayOrb:RaySeeker},a,b);if(t<first){first=t;enemy=candidate;}}
           if(!enemy)break;this.damageEnemy(enemy,shot.damage??1);if(!shot.pierced)return false;shot.pierced.add(enemy);
         }
+      }
+      if(boss&&this.level==='biolume'){
+        if(!shot.rayHit&&Number.isFinite(rayBodyEntry(this.rayTime,previous,shot))){this.damageBoss(shot.damage??1);shot.rayHit=true;if(!shot.pierced)return false;}
+        return shot.y<10&&Math.abs(shot.x)<5;
       }
       if (boss) {
         if (shot.z > BOSS_DEPTH) return true;
@@ -530,7 +534,7 @@ export class Flight {
 
     this.threats = this.threats.filter((shot) => {
       this.advance(shot, dt);
-      if (boss&&!shot.planar) {
+      if (boss&&this.level!=='biolume'&&!shot.planar) {
         if (shot.z < 0) return true;
         if (near(shot, this.player, 0.58)) this.hit();
         else if (near(shot, this.player, 1.05)) this.recordGraze();
@@ -547,7 +551,7 @@ export class Flight {
 
     if (this.phase === 'stage') {
       this.collectDrops(dt);
-      if (this.time >= this.stageDuration) this.enter('approach');
+      if (this.time >= this.stageDuration) this.enter(this.level==='biolume'?'boss':'approach');
     }
   }
 
@@ -625,6 +629,7 @@ export class Flight {
     const spec = wingShots[wing.weapon];
     wing.cooldown = spec.interval;
     wing.flash = WING_FLASH_TIME;
+    boss &&= this.level!=='biolume';
     const duration = spec.bossTravel;
     this.shots.push({
       ...origin, z: 0, wing: wing.weapon, damage: spec.damage,
@@ -645,6 +650,9 @@ export class Flight {
       const native={x:origin.x/BOSS_PROJECTION,y:origin.y/BOSS_PROJECTION};
       const hit=hydraBossContact(this.summerHydra,this.time,native,{x:native.x,y:15});
       head=hit?.side;target=head;endY=hit?hydraBossHead(this.time,hit.side).y*BOSS_PROJECTION:8;
+    }else if(boss&&this.level==='biolume'){
+      const t=rayBodyEntry(this.rayTime,origin,{x:origin.x,y:10});
+      if(Number.isFinite(t)){target=0;endY=origin.y+(10-origin.y)*t;}
     }else if (boss) {
       endY = this.bossAimY * BOSS_PROJECTION;
       if (Math.abs(origin.x - this.exposedCannonX * BOSS_PROJECTION) < this.bossTargetRadius * BOSS_PROJECTION) {
@@ -681,17 +689,10 @@ export class Flight {
   }
 
   private guideMissile(shot: Shot, boss: boolean, dt: number) {
+    boss &&=this.level!=='biolume';
     if (boss) {
       const remaining = Math.max(dt, (BOSS_DEPTH - shot.z) / shot.vz);
       const steer = Math.min(1, 10 * dt);
-      if(this.level==='biolume'){
-        const p=rayShotPoint(shot);let orb:Enemy|undefined,distance=25;
-        for(const enemy of this.enemies){if(!enemy.rayOrb||enemy.hp<=0||enemy.y<p.y-.2)continue;const d=(enemy.x-p.x)**2+(enemy.y-p.y)**2;if(d<distance){orb=enemy;distance=d;}}
-        if(orb){const travel=Math.min(.13,remaining),expand=(22-shot.z-shot.vz*travel)/22;
-          shot.vx+=((orb.x*expand-shot.x)/travel-shot.vx)*steer;shot.vy+=((orb.y*expand-shot.y)/travel-shot.vy)*steer;shot.rayTargeted=true;return;
-        }
-        if(shot.rayTargeted){shot.vy+=( (this.bossAimY-shot.y)/remaining-shot.vy)*steer;shot.rayTargeted=false;}
-      }
       if(this.level==='summer'&&(shot.hydraTarget===undefined||!hydraAlive(this.summerHydra,shot.hydraTarget)))shot.hydraTarget=nearestHydraHead(this.summerHydra,shot.x,true);
       const x=this.level==='summer'?hydraBossHead(this.time,shot.hydraTarget!).x:this.exposedCannonX;
       shot.vx += ((x - shot.x) / remaining - shot.vx) * steer;
@@ -713,6 +714,7 @@ export class Flight {
         distance = squared;
       }
     }
+    if(!closest&&this.level==='biolume'&&this.phase==='boss')closest=rayOrgan(this.rayTime,raySignal(this.rayTime).side);
     const heading = Math.atan2(shot.vx, shot.vy);
     const target = closest ? Math.atan2(closest.x - shot.x, closest.y - shot.y) : 0;
     const angle = heading + clamp(target - heading, -4.8 * dt, 4.8 * dt);
@@ -753,6 +755,7 @@ export class Flight {
     }
 
     if (this.phase === 'boss') {
+      if(this.level==='biolume'){if(!this.towlineHitCannon&&Number.isFinite(rayBodyEntry(this.rayTime,this.player,this.drone))){this.towlineHitCannon=true;this.damageBoss(this.towlineDamage);}return;}
       if(this.level==='summer'){
         const start={x:this.player.x/BOSS_PROJECTION,y:this.player.y/BOSS_PROJECTION},end={x:this.drone.x/BOSS_PROJECTION,y:this.drone.y/BOSS_PROJECTION};
         let hit;while((hit=hydraBossContact(this.summerHydra,this.time,start,end,0,this.towlineBossHeads))){this.towlineBossHeads.add(hit.side);this.damageBoss(this.towlineDamage,false,hit.side);}
@@ -1092,7 +1095,7 @@ export class Flight {
   }
 
   private fire({ x, y }: Point, drone = false, damage = 1) {
-    if (this.phase === 'stage') {
+    if (this.phase === 'stage'||this.level==='biolume') {
       this.shots.push({ x, y: y + (drone ? 0.3 : 0.45), z: 0, vx: 0, vy: 15, vz: 0, drone, damage });
       return;
     }
@@ -1101,7 +1104,7 @@ export class Flight {
     const targetsBoss = !drone && Math.abs(x) < 1.65;
     // Preserve horizontal drone placement while advancing visibly toward boss depth.
     const expansion = 1 / BOSS_PROJECTION - 1;
-    const dx = drone ? x * expansion : (targetsBoss ? (this.level === 'io'||this.level==='vents'||this.level==='summer'||this.level==='biolume' ? this.exposedCannonX : 0) - x : 0);
+    const dx = drone ? x * expansion : (targetsBoss ? (this.level === 'io'||this.level==='vents'||this.level==='summer' ? this.exposedCannonX : 0) - x : 0);
     const dy = drone || targetsBoss ? this.bossAimY - y : 0;
     this.shots.push({ x, y, z: 0, vx: dx / duration, vy: dy / duration,
       vz: BOSS_DEPTH / duration, targetsBoss, bossSupport: this.level === 'io' ? !this.ioLegBroken : undefined, crabTarget:this.level==='vents'?this.crabTargetX:undefined,hydraTarget:this.level==='summer'&&targetsBoss?this.summerTargetHead:undefined, drone, damage });
@@ -1185,7 +1188,7 @@ export class Flight {
         wing.laserHold = 0;
       }
     }
-    if (phase === 'boss') {
+    if (phase === 'boss'&&this.level!=='biolume') {
       this.cooldown = 0;
       this.droneCooldown = this.droneWeapon === 'towline' ? TOWLINE_INTERVAL : 0;
     }

@@ -1,4 +1,3 @@
-import {rayVisibleShot} from './biolume/lantern-ray';
 import * as T from 'three';
 import { poseBurners, shipBurners } from './burners';
 import { createDroneRig, createFighterRig } from './ship-rigs';
@@ -379,7 +378,7 @@ export class FlightView {
       droneSpeed
     };
     this.level.update(levelFrame);
-    this.cannonMarker.visible = flight.phase === 'boss';
+    this.cannonMarker.visible = flight.phase === 'boss'&&flight.level!=='biolume';
     if (this.cannonMarker.visible) {
       const p = this.level.contact(flight.exposedCannonX, distance, flight);
       this.cannonMarker.position.set(p.x, p.y, 0);
@@ -444,14 +443,14 @@ export class FlightView {
           if(target.summer?.kind==='hydra'&&wing.laserHead!==undefined)model=model?.getObjectByName('hydra-head-'+wing.laserHead);
         }
         const shieldModel=flight.level==='summer'&&flight.phase==='boss'&&target===undefined?this.level.boss:undefined;
-        const end = typeof target === 'number' ? this.level.contact(target, distance ?? BOSS_CAMERA_DISTANCE, flight)
+        const end = typeof target === 'number' && flight.level==='biolume' ? wing.beamEnd : typeof target === 'number' ? this.level.contact(target, distance ?? BOSS_CAMERA_DISTANCE, flight)
           : model ? this.laserContact(origin, wing.beamEnd, model, distance, this.viewPitch) : shieldModel?this.laserContact(origin,wing.beamEnd,shieldModel,distance,this.viewPitch):wing.beamEnd;
         laser.draw(origin, end, wing.laserHold, this.animationTime, typeof target === 'number' || Boolean(model), flight.phase === 'boss' && target === undefined);
       }
     }
   }
   private drawProjectiles(flight: Flight) {
-    const shots=flight.level==='biolume'&&flight.phase==='boss'?flight.shots.map(rayVisibleShot):flight.shots;
+    const shots=flight.level==='biolume'?flight.shots.map(s=>({...s,x:s.x*(22-.85)/22,y:s.y*(22-.85)/22,z:.85})):flight.shots;
     this.projectiles.ship.draw(shots.filter((shot) => !shot.drone && !shot.wing), this.animationTime);
     this.projectiles.drone.draw(shots.filter((shot) => shot.drone), this.animationTime);
     for (const weapon of ['homing', 'cannon', 'omega'] as const) {

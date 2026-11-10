@@ -1,6 +1,6 @@
 import {levels} from '../levels';
 
-export const GROVE_DURATION=levels.biolume.duration,GROVE_APPROACH=6,GROVE_SCREENS=10;
+export const GROVE_DURATION=levels.biolume.duration,GROVE_APPROACH=0,GROVE_SCREENS=10;
 export const GROVE_DISTANCE=22,GROVE_GROUND_Z=-3.6,GROVE_LEAF_Z=2.2;
 export const GROVE_POD_POOL=8;
 const clamp=(v:number)=>Math.max(0,Math.min(1,v));

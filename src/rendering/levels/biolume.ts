@@ -11,7 +11,7 @@ import {createSeedPods} from '../../biolume/modules';
 import {createLanternRay,createRaySeekerAssets,createRaySeekerRig} from '../../biolume/lantern-ray-rig';
 import {RAY_SEEKER_POOL} from '../../biolume/lantern-ray';
 import {GROVE_ENEMY_POOL,groveEnemySize,groveMotion} from '../../biolume/combat';
-import {GROVE_DISTANCE,GROVE_POD_POOL,grovePods,groveSitePoint} from '../../biolume/route';
+import {groveScroll,GROVE_DISTANCE,GROVE_POD_POOL,grovePods,groveSitePoint} from '../../biolume/route';
 
 export const createLevel:LevelFactory=({plane,scene,signal})=>{
   const root=new T.Group();root.name='lantern-grove-level';
@@ -48,8 +48,9 @@ export const createLevel:LevelFactory=({plane,scene,signal})=>{
         const mesh=pods.meshes[pi++];if(!mesh)break;mesh.visible=true;mesh.scale.setScalar(site.size);mesh.position.set(p.x,p.y+.49*site.size,p.z);
         mesh.rotation.z=.025*Math.sin(animationTime*.8+site.at);
       }
-      boss.root.visible=reveal>0;
-      if(boss.root.visible)boss.pose(f.rayTime,reveal,f.bossHealth<=0);
+      const offset=(9-groveScroll(time))*16;
+      boss.root.visible=offset<16||reveal>0;
+      if(boss.root.visible){boss.pose(f.rayTime,1,f.bossHealth<=0);boss.root.position.y+=offset;}
       for(const r of actors)r.root.visible=false;models.length=f.enemies.length;models.fill(undefined);let gi=0,si=0;
       for(const[i,enemy]of f.enemies.entries()){
         if(enemy.rayOrb&&enemy.hp>0){const rig=seekers[si++];if(rig){rig.root.visible=true;rig.pose(enemy as typeof enemy&{rayOrb:NonNullable<typeof enemy.rayOrb>});models[i]=rig.root;}continue;}

@@ -68,7 +68,9 @@ test('pooled seekers share GPU resources and animate without replacing buffers',
 });
 
 
-test('friendly boss rounds stay above the raster with identical projected paths and velocities',()=>{
- for(const z of[0,-3.6,-8,-12]){const s={x:1,y:2,z,vx:3,vy:12,vz:-30},copy={...s},v=ray.rayVisibleShot(s),p=ray.rayShotPoint(s);assert.equal(v.x,p.x);assert.equal(v.y,p.y);assert(v.z>0);assert.equal(v.vz,0);assert.deepEqual(s,copy);
- const dt=1e-6,next=ray.rayShotPoint({x:s.x+s.vx*dt,y:s.y+s.vy*dt,z:z+s.vz*dt});assert(Math.abs((next.x-p.x)/dt-v.vx)<1e-4);assert(Math.abs((next.y-p.y)/dt-v.vy)<1e-4);}
+test('Grove rounds retain native straight trajectories through the boss boundary',()=>{
+ const f=quiet('primary');f.player={x:3.9,y:-4};f.fire(f.player);const shot=f.shots[0];
+ for(let i=0;i<35;i++){f.step(STEP);assert.equal(shot.x,3.9);assert.equal(shot.z,0);assert.equal(shot.vz,0);assert.equal(shot.vx,0);}
+ assert(f.shots.includes(shot));assert.equal(f.bossHealth,ray.RAY_HP);
+ const g=quiet('primary');g.player={x:0,y:-4};for(let i=0;i<50;i++)g.step(STEP);assert(g.bossHealth<ray.RAY_HP);
 });
