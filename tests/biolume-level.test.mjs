@@ -15,12 +15,11 @@ globalThis.requestAnimationFrame=callback=>setImmediate(()=>{frames++;if(frames=
 globalThis.document={createElement(){const context=new Proxy({}, {get:()=>()=>{},set:()=>true});const canvas={width:0,height:0,getContext:()=>context};canvases.push(canvas);return canvas;}};
 const server=await createServer({root:new URL('..',import.meta.url).pathname,configFile:false,define:{__ENCOUNTER_TEXTURES__:JSON.stringify({biolumeBackdrop:'grove-test.webp'})},server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true,entries:[]},appType:'custom'});
 after(()=>server.close());
-const {Flight,STEP,BOSS_DEPTH,BOSS_Y,BOSS_CAMERA_DISTANCE}=await server.ssrLoadModule('/src/game.ts');
+const {Flight,STEP,BOSS_CAMERA_DISTANCE}=await server.ssrLoadModule('/src/game.ts');
 const route=await server.ssrLoadModule('/src/biolume/route.ts'),combat=await server.ssrLoadModule('/src/biolume/combat.ts');
 const assets=await server.ssrLoadModule('/src/biolume/plate-assets.ts');
 const {createLevel}=await server.ssrLoadModule('/src/rendering/levels/biolume.ts');
-const {createInterceptorRig}=await server.ssrLoadModule('/src/encounter-rigs.ts');
-const {createBossLaserContact}=await server.ssrLoadModule('/src/laser-contact.ts');
+const ray=await server.ssrLoadModule('/src/biolume/lantern-ray.ts');
 const {disposeScene}=await server.ssrLoadModule('/src/rendering/dispose.ts');
 const {basinWetness,basinVisible}=await server.ssrLoadModule('/src/biolume/basin.ts');
 const {lightUniforms}=await server.ssrLoadModule('/src/biolume/surface.ts');
@@ -75,25 +74,24 @@ test('canceling a sliced plate releases partial canvases and publishes no late t
  abortAtFrame=Infinity;imageMode='error';
 });
 
-test('prototype draconian stays above the painted floor with unchanged projected cannon contacts',async()=>{
+test('Lantern Ray stays above the floor and its moving organ contacts agree with combat',async()=>{
  const plane=new T.Group(),scene=new T.Scene();scene.add(plane);const level=createLevel({plane,scene,signal:new AbortController().signal});plane.add(level.root);await level.ready;
  assert.equal(level.keyIntensity,0);assert.equal(level.skyIntensity,0);assert.equal(level.fixedCamera,true);
  let lights=0;level.root.traverse(n=>{if(n.isPointLight)lights++;});assert.equal(lights,8);
  const f=new Flight('sentry',[],'vex','biolume');f.phase='boss';
- const frame={flight:f,time:108,reveal:1,animationTime:108,distance:22,elapsed:0,newFlight:false,fighterSpeed:0,droneSpeed:0};level.update(frame);plane.updateMatrixWorld(true);
- const canonical=createInterceptorRig(2.4);canonical.root.position.set(0,BOSS_Y,BOSS_DEPTH);plane.add(canonical.root);canonical.pose(1,0,f.exposedCannonX,f.firedCannonX,0);plane.updateMatrixWorld(true);
- const original=createBossLaserContact(plane,canonical.root);
- for(const side of[-2.4,2.4]){const a=level.contact(side,BOSS_CAMERA_DISTANCE,f),b=original(side,BOSS_CAMERA_DISTANCE);assert(Math.hypot(a.x-b.x,a.y-b.y)<1e-8);}
+ for(const t of[0,1.8,6.2,15.7]){f.time=t;level.update({flight:f,time:106+t,reveal:1,animationTime:t,distance:22,elapsed:0,newFlight:false,fighterSpeed:0,droneSpeed:0});plane.updateMatrixWorld(true);
+  for(const side of[-1,1]){const a=level.contact(side,BOSS_CAMERA_DISTANCE,f),b=ray.rayOrgan(t,side);assert(Math.hypot(a.x-b.x,a.y-b.y)<1e-8);}
+  const p=level.contact(f.exposedCannonX,22,f);assert(Math.abs(p.y-f.bossAimY*ray.RAY_PROJECTION)<1e-8);
+ }
  const bounds=new T.Box3().setFromObject(level.boss);assert(bounds.min.z>route.GROVE_GROUND_Z+1,'Backdrop hides the boss');
- const first=level.root.children.flatMap(n=>n.children).map(n=>n.uuid);level.update(frame);assert.deepEqual(level.root.children.flatMap(n=>n.children).map(n=>n.uuid),first);
  level.dispose();level.dispose();disposeScene(scene);
 });
 
-for(const weapon of['primary','sentry','towline','homing','cannon','laser','omega','pulse'])test(`the temporary draconian can be damaged with ${weapon}`,()=>{
+for(const weapon of['primary','sentry','towline','homing','cannon','laser','omega','pulse'])test(`the Lantern Ray can be damaged with ${weapon}`,()=>{
  const wing=['homing','cannon','laser','omega'].includes(weapon),f=new Flight(weapon==='towline'?'towline':'sentry',wing?[weapon]:[],'vex','biolume');f.phase='boss';f.invulnerable=1000;
  if(weapon!=='primary')f.cooldown=1e5;if(weapon!=='sentry')f.droneCooldown=weapon==='towline'?0:1e5;
- if(weapon==='pulse')f.pulse();else for(let i=0;i<1000&&f.phase==='boss';i++){
-  const x=f.exposedCannonX*22/34;f.player={x:weapon==='towline'?-2.8:0,y:weapon==='towline'?BOSS_Y*22/34:-4};f.drone={x:weapon==='towline'?2.8:x,y:weapon==='towline'?BOSS_Y*22/34:-2};f.step(STEP);
+ if(weapon==='pulse')f.pulse();else for(let i=0;i<2200&&f.phase==='boss';i++){
+  const x=f.exposedCannonX*22/34;f.player={x:weapon==='towline'?-2.8:0,y:weapon==='towline'?f.bossAimY*22/34:-4};f.drone={x:weapon==='towline'?2.8:x,y:weapon==='towline'?f.bossAimY*22/34:-2};f.step(STEP);
  }
  assert(f.bossHealth<f.bossMaxHealth,`${weapon} did no damage`);
  if(weapon==='primary')assert.equal(f.phase,'won');

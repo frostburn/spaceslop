@@ -35,7 +35,7 @@ export function createGroveLighting(shared:LightUniforms){
     lights[4].position.set(f.drone.x,f.drone.y,.75);lights[4].intensity=f.hull>0?1.8:0;
     lights[5].position.set(f.player.x,f.player.y-.85,-.25);lights[5].intensity=f.hull>0?4.2+.6*Math.sin(time*11):0;
     lights[6].intensity=0;
-    if(boss.visible){lights[6].position.copy(boss.position);lights[6].position.z=1.45;lights[6].intensity=12+6*f.cannonWindup;}
+    if(boss.visible){lights[6].position.copy(boss.position);lights[6].position.z=1.45;lights[6].intensity=f.bossHealth>0?12+6*f.cannonWindup:.6;}
     else{
       let best=Infinity;
       for(const enemy of f.enemies){if(!enemy.grove||enemy.hp<=0||Math.abs(enemy.x)>4||Math.abs(enemy.y)>7)continue;
@@ -46,6 +46,8 @@ export function createGroveLighting(shared:LightUniforms){
     const source=f.shots.find(s=>Math.abs(s.x)<4&&s.y>-7&&s.y<8);
     lights[7].intensity=source?2.2:0;
     if(source){const k=22/(22-source.z);lights[7].position.set(source.x*k,source.y*k,.5);}
+    const seeker=f.enemies.find(e=>e.rayOrb&&e.hp>0);
+    if(seeker){lights[7].position.set(seeker.x,seeker.y,.7);lights[7].intensity=4.5;lights[7].color.setHex(0xffaa42);}else lights[7].color.setHex(0x83eeff);
     for(const wing of f.wings)if(wing.weapon==='laser'&&wing.beamEnd){lights[7].position.set(wing.beamEnd.x,wing.beamEnd.y,.65);lights[7].intensity=4;}
     if(f.pulseFlash>0){lights[7].position.set(f.player.x,f.player.y,1.2);lights[7].intensity=24*f.pulseFlash/.3;}
     for(let i=0;i<8;i++){

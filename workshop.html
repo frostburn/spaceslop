@@ -18,6 +18,7 @@
       <aside class="tools" aria-label="Asset inspection controls">
         <label for="sector">Sector</label>
         <select id="sector">
+          <option value="biolume">Lantern Grove · Bioluminescence</option>
           <option value="summer">Summer Ice Age · Thaw</option>
           <option value="heliostat">Uranus · Heliostat</option>
           <option value="boulevard">Synthwave boulevard</option>
@@ -32,6 +33,10 @@
         </select>
         <label for="asset">Asset</label>
         <select id="asset">
+          <optgroup label="Lantern Grove · Bioluminescence" data-sector="biolume">
+            <option value="lantern_ray">Lantern Ray · Glow and wing motion</option>
+            <option value="lantern_seeker">Seeking lantern projectile</option>
+          </optgroup>
           <optgroup label="Summer Ice Age · Thaw" data-sector="summer">
             <option value="summer_mammoth">Grazing mammoth</option>
             <option value="summer_hydra">River hydra · head collapse</option>

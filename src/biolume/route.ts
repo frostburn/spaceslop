@@ -32,8 +32,3 @@ export function groveSitePoint(site:GroveSite,time:number,z=.3){
   const k=(GROVE_DISTANCE-z)/GROVE_DISTANCE;
   return{x:(site.u-.5)*9*k,y:(site.at-.5-groveScroll(time))*16*k,z};
 }
-
-// A camera-centered uniform dilation brings the prototype boss above the
-// painted floor while preserving every projected point of its canonical rig.
-export const GROVE_BOSS_SCALE=22/34;
-export function groveBossPoint(reveal:number){return{x:0,y:(4.2+20*(1-clamp(reveal)))*GROVE_BOSS_SCALE,z:0};}

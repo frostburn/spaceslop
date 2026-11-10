@@ -28,6 +28,6 @@ for(const file of ['workshop.html','vent-study.html','io-study.html','heliostat-
 for(const file of files.filter(f=>f.endsWith('.js'))){const text=await readFile(join(root,'assets',file),'utf8');assert(!text.includes('__qa'),'QA hooks leaked into production.');assert(!/(workshop|vent-study|io-study|heliostat-study|biolume-study)\.html/.test(text),'Development links leaked into production.');assert(!/Play study|Orbit view|inspect-backdrop|Relief shading/.test(text),'Study UI leaked into production code.');}
 for(const [id,pack] of Object.entries(packs.levels)){
  assert(!pack.media.some(path=>/biolume-study-(backdrop|foreground)/.test(path)),'DEV plate entered an offline level package.');
- if(id!=='biolume')assert(!pack.media.some(path=>/biolume-(backdrop|foreground|glider|study-atlas)/.test(path)),'Lantern Grove art leaked into another level.');
+ if(id!=='biolume')assert(!pack.media.some(path=>/biolume-(backdrop|foreground|glider|study-atlas|lantern-ray)/.test(path)),'Lantern Grove art leaked into another level.');
 }
 console.log('Menu size, ten isolated level packages, selective precaching and production dev-page exclusions passed.');

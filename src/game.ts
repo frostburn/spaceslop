@@ -1,5 +1,6 @@
 import {groveWaves,groveMotion,groveEnemySize,groveCanAttack,GROVE_SPAWN_LEAD,type GroveCourse} from './biolume/combat';
 import {GROVE_APPROACH} from './biolume/route';
+import {RAY_HP,RAY_FAN_AT,RAY_SEEKER_AT,RAY_PROJECTION,RAY_ORGAN_RADIUS,RAY_SEEKER_RADIUS,RAY_SEEKER_HP,RAY_SEEKER_POOL,raySignal,rayOrgan,rayShotPoint,stepRaySeeker,rayOrbEntry,raySeekerBurst,type RaySeeker} from './biolume/lantern-ray';
 import { HELIOSTAT_HP,HELIOSTAT_APPROACH,HELIOSTAT_INTERVAL,HELIOSTAT_WINDUP,HELIOSTAT_FIRE,HELIOSTAT_CHANNEL,HELIOSTAT_FADE,HELIOSTAT_GUARD_FIRE,HELIOSTAT_SPAWN_LEAD,heliostatWaves,heliostatMotion,heliostatCanAttack,heliostatPlasmaHits,electricSites,electricHits,type HeliostatCourse } from './heliostat/combat';
 import {SUMMER_HP,SUMMER_APPROACH} from './summer/layout';
 import {createHydraAttack,stepHydraAttack} from './summer/hydra-attack';
@@ -59,9 +60,11 @@ type Shot = Point & {
   z: number; vx: number; vy: number; vz: number;
   drone?: boolean; targetsBoss?: boolean; bossSupport?: boolean; crabTarget?:number; wing?: WingProjectile; pierced?: Set<Enemy>; damage?: number;
   hydraTarget?:HydraSide;hydraPierced?:Map<Enemy,Set<HydraSide>>;
+  rayTargeted?:boolean;
 };
-type Threat = Shot & { graze?: 'near' | 'counted' };
+type Threat = Shot & { graze?: 'near' | 'counted';planar?:boolean };
 type Enemy = Point & {
+  rayOrb?:RaySeeker;
   grove?:GroveCourse;
   summer?:SummerCourse;
   hydra?:HydraState;hitPoint?:Point&{z?:number};
@@ -235,6 +238,9 @@ export class Flight {
   private heliostatCancelledCycle = -1;
   private heliostatFinalTime = 0;
   private nextCrawler=0;
+  private rayFanCycle=-1;
+  private raySeekerCycle=-1;
+  private rayFinalTime=0;
   private heliostatEscalationAt=Infinity;
   private heliostatEscalationCycle=Infinity;
   private heliostatLockedPattern=0;
@@ -255,6 +261,7 @@ export class Flight {
   ) {
     this.droneWeapon = droneWeapon;
     this.pilot = pilot;
+    if(level==='biolume')this.bossHealth=RAY_HP;
     if(level==='summer')this.bossHealth=SUMMER_HP;
     if (level === 'heliostat')this.bossHealth=HELIOSTAT_HP;
     if (level === 'boulevard')this.bossHealth=BOULEVARD_HP;
@@ -279,8 +286,8 @@ export class Flight {
 
   get transitionDuration() { if(this.level==='biolume')return GROVE_APPROACH; if(this.level==='summer')return SUMMER_APPROACH;if(this.level==='heliostat')return HELIOSTAT_APPROACH;if(this.level==='boulevard')return BOULEVARD_APPROACH;return this.level === 'preserve' ? PRESERVE_APPROACH : this.level === 'vents' ? VENT_APPROACH : this.level === 'io' ? IO_APPROACH : this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
 
-  get bossMaxHealth() { if(this.level==='summer')return SUMMER_HP;if(this.level==='heliostat')return HELIOSTAT_HP;if(this.level==='boulevard')return BOULEVARD_HP;return this.level === 'preserve' ? GROUNDSKEEPER_HP : this.level === 'vents' ? CRAB_HP : this.level === 'io' ? IO_HP : this.level === 'titan' ? CICADA_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
-  get bossTargetRadius() { if(this.level==='summer')return .48*HYDRA_BOSS_SIZE;if(this.level==='boulevard'||this.level==='heliostat')return 1.25;return this.level === 'preserve' ? GROUNDSKEEPER_RADIUS : BOSS_CANNON_RADIUS; }
+  get bossMaxHealth() { if(this.level==='biolume')return RAY_HP;if(this.level==='summer')return SUMMER_HP;if(this.level==='heliostat')return HELIOSTAT_HP;if(this.level==='boulevard')return BOULEVARD_HP;return this.level === 'preserve' ? GROUNDSKEEPER_HP : this.level === 'vents' ? CRAB_HP : this.level === 'io' ? IO_HP : this.level === 'titan' ? CICADA_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
+  get bossTargetRadius() { if(this.level==='biolume')return RAY_ORGAN_RADIUS/RAY_PROJECTION;if(this.level==='summer')return .48*HYDRA_BOSS_SIZE;if(this.level==='boulevard'||this.level==='heliostat')return 1.25;return this.level === 'preserve' ? GROUNDSKEEPER_RADIUS : BOSS_CANNON_RADIUS; }
   get summerTargetHead(){return nearestHydraHead(this.summerHydra,this.player.x/BOSS_PROJECTION,true);}
   get summerHeadsAlive(){return this.summerHydra.hp.filter(hp=>hp>0).length;}
   get summerBossTime(){return this.phase==='boss'?this.time:this.summerFinalTime;}
@@ -300,10 +307,13 @@ export class Flight {
   get ioLegBroken() { return this.ioCollapseAge >= 0; }
   get ioCollapse() { return this.ioLegBroken ? smooth01(this.ioCollapseAge / 1.2) : 0; }
   get bossAimY() {
+    if(this.level==='biolume')return rayOrgan(this.rayTime,raySignal(this.rayTime).side).y/RAY_PROJECTION;
     if(this.level==='summer')return hydraBossHead(this.time,this.summerTargetHead).y;
     if (this.level === 'preserve') { const p = groundskeeperContact(this.groundskeeperTime, this.groundskeeperAim, this.groundskeeperCancelledAt); return p.y * 34 / (22 - p.z); }
     return this.level === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).y : BOSS_Y;
   }
+
+  get rayTime(){return this.phase==='stage'?this.time-this.stageDuration-this.transitionDuration:this.phase==='approach'?this.time-this.transitionDuration:this.phase==='boss'?this.time:this.rayFinalTime;}
 
   get stageDuration() { return levels[this.level].duration; }
 
@@ -340,6 +350,7 @@ export class Flight {
   }
 
   get exposedCannonX() {
+    if(this.level==='biolume')return rayOrgan(this.rayTime,raySignal(this.rayTime).side).x/RAY_PROJECTION;
     if(this.level==='summer')return hydraBossHead(this.time,this.summerTargetHead).x;
     if (this.level === 'preserve'||this.level==='boulevard'||this.level==='heliostat') return 0;
     return this.level==='vents'?this.crabTargetX+this.crabOffsetX:this.level === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).x : this.level === 'ice' ? 0 : this.volley % 2 === 0 ? -BOSS_CANNON_X : BOSS_CANNON_X;
@@ -355,6 +366,7 @@ export class Flight {
   }
 
   get cannonWindup() {
+    if(this.level==='biolume'){const s=raySignal(this.rayTime);return this.phase==='boss'?Math.max(s.fan,s.seeker):0;}
     if(this.level==='heliostat'){if(this.heliostatCancelledCycle===Math.floor(this.time/HELIOSTAT_INTERVAL))return 0;const t=this.time%HELIOSTAT_INTERVAL;return this.phase==='boss'&&t<HELIOSTAT_FIRE?clamp((t-HELIOSTAT_WINDUP)/(HELIOSTAT_FIRE-HELIOSTAT_WINDUP),0,1):0;}
     if(this.level==='boulevard'){const t=this.time%BOULEVARD_INTERVAL;return this.phase==='boss'&&t<BOULEVARD_FIRE?clamp((t-BOULEVARD_WINDUP)/(BOULEVARD_FIRE-BOULEVARD_WINDUP),0,1):0;}
     if (this.phase !== 'boss' || this.volley !== Math.floor(this.time / (this.level === 'io' ? IO_INTERVAL : this.level === 'titan' ? CICADA_INTERVAL : this.level === 'ice' ? LEVIATHAN_INTERVAL : BOSS_VOLLEY_INTERVAL))) return 0;
@@ -407,6 +419,7 @@ export class Flight {
     this.charges--;
     this.pulseFlash = 0.3;
     this.threats = [];
+    if(this.level==='biolume'&&this.phase==='boss')for(const enemy of this.enemies)if(enemy.rayOrb)enemy.hp=0;
     if (this.phase === 'stage') {
       for (const enemy of this.enemies) {
         if (enemy.hp > 0 && !enemy.mine) this.damageEnemy(enemy, enemy.hp);
@@ -468,9 +481,16 @@ export class Flight {
     for (const wing of this.wings) this.stepWing(wing, boss, dt);
 
     this.shots = this.shots.filter((shot) => {
-      const previous = { x: shot.x, y: shot.y };
+      const previous = { x: shot.x, y: shot.y,z:shot.z };
       if (shot.wing === 'homing') this.guideMissile(shot, boss, dt);
       this.advance(shot, dt);
+      if(boss&&this.level==='biolume'){
+        const a=rayShotPoint(previous),b=rayShotPoint(shot);
+        for(;;){let enemy:Enemy|undefined,first=Infinity;
+          for(const candidate of this.enemies){if(!candidate.rayOrb||candidate.hp<=0||shot.pierced?.has(candidate))continue;const t=rayOrbEntry(candidate as Enemy&{rayOrb:RaySeeker},a,b);if(t<first){first=t;enemy=candidate;}}
+          if(!enemy)break;this.damageEnemy(enemy,shot.damage??1);if(!shot.pierced)return false;shot.pierced.add(enemy);
+        }
+      }
       if (boss) {
         if (shot.z > BOSS_DEPTH) return true;
         const untilImpact = (BOSS_DEPTH - shot.z) / shot.vz;
@@ -510,7 +530,7 @@ export class Flight {
 
     this.threats = this.threats.filter((shot) => {
       this.advance(shot, dt);
-      if (boss) {
+      if (boss&&!shot.planar) {
         if (shot.z < 0) return true;
         if (near(shot, this.player, 0.58)) this.hit();
         else if (near(shot, this.player, 1.05)) this.recordGraze();
@@ -644,19 +664,34 @@ export class Flight {
       if(enemy?.summer?.kind==='hydra')head=hydraBeamContact(enemy,this.time,origin)?.side;
       if (enemy) endY = enemy.summer?.kind==='hydra' || enemy.ambusher || enemy.ventWorm || enemy.flyer ? 9 : enemy.y + (enemy.shrimp ? 1.4 : enemy.marine ? marineSpecs[enemy.marine].halfLength : 0);
     }
+    if(boss&&this.level==='biolume')for(const candidate of this.enemies){
+      if(!candidate.rayOrb||candidate.hp<=0)continue;const dx=candidate.x-origin.x;
+      if(Math.abs(dx)>RAY_SEEKER_RADIUS)continue;
+      const entry=candidate.y-Math.sqrt(RAY_SEEKER_RADIUS**2-dx*dx);
+      if(candidate.y+RAY_SEEKER_RADIUS<origin.y||entry>endY)continue;
+      enemy=candidate;target=candidate;endY=Math.max(origin.y,entry);
+    }
     wing.beamEnd = { x: origin.x, y: endY };
     wing.laserHold = target !== undefined && target === wing.laserTarget && head===wing.laserHead ? wing.laserHold + dt : 0;
     wing.laserTarget = target;
     wing.laserHead=head;
     const damage = (1 + 2.5 * Math.min(wing.laserHold / 0.85, 1)) * dt;
     if (enemy) this.damageEnemy(enemy, damage, true,head);
-    if (boss && target !== undefined) this.damageBoss(damage, true,head);
+    if (boss && typeof target==='number') this.damageBoss(damage, true,head);
   }
 
   private guideMissile(shot: Shot, boss: boolean, dt: number) {
     if (boss) {
       const remaining = Math.max(dt, (BOSS_DEPTH - shot.z) / shot.vz);
       const steer = Math.min(1, 10 * dt);
+      if(this.level==='biolume'){
+        const p=rayShotPoint(shot);let orb:Enemy|undefined,distance=25;
+        for(const enemy of this.enemies){if(!enemy.rayOrb||enemy.hp<=0||enemy.y<p.y-.2)continue;const d=(enemy.x-p.x)**2+(enemy.y-p.y)**2;if(d<distance){orb=enemy;distance=d;}}
+        if(orb){const travel=Math.min(.13,remaining),expand=(22-shot.z-shot.vz*travel)/22;
+          shot.vx+=((orb.x*expand-shot.x)/travel-shot.vx)*steer;shot.vy+=((orb.y*expand-shot.y)/travel-shot.vy)*steer;shot.rayTargeted=true;return;
+        }
+        if(shot.rayTargeted){shot.vy+=( (this.bossAimY-shot.y)/remaining-shot.vy)*steer;shot.rayTargeted=false;}
+      }
       if(this.level==='summer'&&(shot.hydraTarget===undefined||!hydraAlive(this.summerHydra,shot.hydraTarget)))shot.hydraTarget=nearestHydraHead(this.summerHydra,shot.x,true);
       const x=this.level==='summer'?hydraBossHead(this.time,shot.hydraTarget!).x:this.exposedCannonX;
       shot.vx += ((x - shot.x) / remaining - shot.vx) * steer;
@@ -710,6 +745,12 @@ export class Flight {
       this.towlineHitCannon = false;
     }
     if (this.towlineFlash === 0) return;
+
+    if(this.level==='biolume'&&this.phase==='boss')for(const enemy of this.enemies){
+      if(enemy.rayOrb&&enemy.hp>0&&!this.towlineEnemies.has(enemy)&&nearSegment(enemy,this.player,this.drone,RAY_SEEKER_RADIUS)){
+        this.towlineEnemies.add(enemy);this.damageEnemy(enemy,this.towlineDamage);
+      }
+    }
 
     if (this.phase === 'boss') {
       if(this.level==='summer'){
@@ -903,6 +944,7 @@ export class Flight {
   }
 
   private stepBoss(dt: number) {
+    if(this.level==='biolume'){this.stepLanternRay(dt);return;}
     if(this.level==='summer'){this.stepSummerHydra();return;}
     if(this.level==='heliostat'){this.stepHeliostat();return;}
     if (this.level === 'preserve') {
@@ -940,6 +982,28 @@ export class Flight {
       this.volley++;
     }
     if (elapsed >= BOSS_FIRE_AT + BOSS_IMPACT_TRAVEL + 0.02) this.markers = [];
+  }
+
+  private stepLanternRay(dt:number){
+    const s=raySignal(this.time),origin=rayOrgan(this.time,s.side);
+    if(s.phase>=.65&&s.phase<RAY_FAN_AT&&this.rayFanCycle!==s.cycle&&!this.markers.length)this.markers=[{x:this.player.x,y:this.player.y}];
+    if(s.phase>=RAY_FAN_AT&&this.rayFanCycle!==s.cycle){
+      const target=this.markers[0]??this.player,angle=Math.atan2(target.x-origin.x,origin.y-target.y);
+      for(const spread of[-.36,-.18,0,.18,.36])this.threats.push({...origin,z:0,vx:Math.sin(angle+spread)*4.6,vy:-Math.cos(angle+spread)*4.6,vz:0,planar:true});
+      this.rayFanCycle=s.cycle;this.volley=s.cycle+1;this.firedCannonX=this.exposedCannonX;this.bossRecoil=BOSS_RECOIL_TIME;this.markers=[];
+    }
+    if(s.phase>=RAY_SEEKER_AT&&this.raySeekerCycle!==s.cycle){
+      const sides=this.bossHealth<RAY_HP/2?[-s.side,s.side]:[-s.side];
+      for(const side of sides){if(this.enemies.filter(e=>e.rayOrb&&e.hp>0).length>=RAY_SEEKER_POOL)break;
+        const p=rayOrgan(this.time,side);this.enemies.push({...p,lane:p.x,age:0,fire:Infinity,hp:RAY_SEEKER_HP,rayOrb:{heading:Math.atan2(this.player.x-p.x,p.y-this.player.y),previousX:p.x,previousY:p.y}});
+      }
+      this.raySeekerCycle=s.cycle;this.bossRecoil=BOSS_RECOIL_TIME;
+    }
+    for(const enemy of this.enemies){if(!enemy.rayOrb||enemy.hp<=0)continue;
+      enemy.age+=dt;stepRaySeeker(enemy as Enemy&{rayOrb:RaySeeker},this.player,dt);
+      if(enemy.age>8||Math.abs(enemy.x)>5.2||Math.abs(enemy.y)>9.5)enemy.hp=0;
+      else if(enemy.age>.35&&near(enemy,this.player,RAY_SEEKER_RADIUS+.16)){enemy.hp=0;this.hit();}
+    }
   }
 
   private stepSummerHydra(){
@@ -1037,7 +1101,7 @@ export class Flight {
     const targetsBoss = !drone && Math.abs(x) < 1.65;
     // Preserve horizontal drone placement while advancing visibly toward boss depth.
     const expansion = 1 / BOSS_PROJECTION - 1;
-    const dx = drone ? x * expansion : (targetsBoss ? (this.level === 'io'||this.level==='vents'||this.level==='summer' ? this.exposedCannonX : 0) - x : 0);
+    const dx = drone ? x * expansion : (targetsBoss ? (this.level === 'io'||this.level==='vents'||this.level==='summer'||this.level==='biolume' ? this.exposedCannonX : 0) - x : 0);
     const dy = drone || targetsBoss ? this.bossAimY - y : 0;
     this.shots.push({ x, y, z: 0, vx: dx / duration, vy: dy / duration,
       vz: BOSS_DEPTH / duration, targetsBoss, bossSupport: this.level === 'io' ? !this.ioLegBroken : undefined, crabTarget:this.level==='vents'?this.crabTargetX:undefined,hydraTarget:this.level==='summer'&&targetsBoss?this.summerTargetHead:undefined, drone, damage });
@@ -1056,6 +1120,7 @@ export class Flight {
     else enemy.hp = Math.max(0, enemy.hp - damage);
     if (laser) enemy.laserDamage = (enemy.laserDamage ?? 0) + before - enemy.hp;
     if (enemy.hp === 0) {
+      if(enemy.rayOrb){this.threats.push(...raySeekerBurst(enemy,enemy.rayOrb.heading));this.score+=25;return;}
       if(enemy.ambusher)defeatAmbusher(enemy.ambusher,this.time);
       if(enemy.ventWorm&&enemy.ventAnchor!==undefined)this.defeatedVentWorms.add(enemy.ventAnchor);
       if (enemy.centipede) severCentipede(enemy);
@@ -1102,6 +1167,7 @@ export class Flight {
   }
 
   private enter(phase: Phase) {
+    if(this.level==='biolume'&&this.phase==='boss'&&(phase==='won'||phase==='lost'))this.rayFinalTime=this.time;
     if(this.level==='summer'&&this.phase==='boss'&&(phase==='won'||phase==='lost'))this.summerFinalTime=this.time;
     if(this.level==='heliostat'&&this.phase==='boss'&&(phase==='won'||phase==='lost'))this.heliostatFinalTime=this.time;
     if (this.level === 'preserve' && this.phase === 'boss' && (phase === 'won' || phase === 'lost')) this.groundskeeperFinalTime = this.time;
