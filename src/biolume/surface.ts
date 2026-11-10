@@ -1,5 +1,5 @@
 import * as T from 'three';
-import {atlasCrops,relief,type SurfaceKind} from './layout';
+import {relief,type SurfaceKind} from './layout';
 import {fallbackTexture} from './fallback';
 
 export function lightUniforms(){return{
@@ -15,6 +15,7 @@ float visibility(vec3 p,vec3 light){
   if(occlusionGain<.01)return 1.;
   vec3 ray=light-p;float result=1.;
   for(int j=0;j<6;j++){
+    if(distance(p,blocker[j])<.96)continue;
     float t=clamp(dot(blocker[j]-p,ray)/max(dot(ray,ray),.001),.015,.985);
     float d=length(p+ray*t-blocker[j]);
     result*=mix(1.,smoothstep(.62,.95,d),step(.02,t)*step(t,.98));
@@ -24,18 +25,15 @@ float visibility(vec3 p,vec3 light){
 export function createSurface(kind:SurfaceKind,w:number,h:number,shared:LightUniforms){
   const geometry=new T.PlaneGeometry(w,h,32,96),p=geometry.attributes.position,uv=geometry.attributes.uv;
   for(let i=0;i<p.count;i++)p.setZ(i,relief(kind,uv.getX(i),uv.getY(i)));geometry.computeVertexNormals();
-  const fallback=fallbackTexture(kind),crop=new T.Vector4(0,0,1,1);
-  const material=new T.ShaderMaterial({uniforms:{...shared,map:{value:fallback},crop:{value:crop},kind:{value:['ground','root','leaf','pod'].indexOf(kind)},
-    repeatUV:{value:kind==='ground'?new T.Vector2(2,3):new T.Vector2(1,1)}},side:T.DoubleSide,
-    vertexShader:`varying vec2 vUv;varying vec3 worldP,worldN;void main(){vUv=uv;worldP=(modelMatrix*vec4(position,1.)).xyz;worldN=normalize(mat3(modelMatrix)*normal);gl_Position=projectionMatrix*viewMatrix*vec4(worldP,1.);}`,
-    fragmentShader:`uniform sampler2D map;uniform vec4 crop;uniform vec2 repeatUV;uniform int kind;
+  const fallback=fallbackTexture(kind);
+  const material=new T.ShaderMaterial({uniforms:{...shared,map:{value:fallback},kind:{value:kind==='foreground'?2:0}},side:T.DoubleSide,transparent:kind==='foreground',depthWrite:kind!=='foreground',
+    vertexShader:`varying vec2 vUv;varying vec3 worldP,worldN;void main(){vUv=uv;worldP=(modelMatrix*vec4(position,1.)).xyz;vec3 n=normalMatrix*normal;worldN=normalize(vec3(dot(viewMatrix[0].xyz,n),dot(viewMatrix[1].xyz,n),dot(viewMatrix[2].xyz,n)));gl_Position=projectionMatrix*viewMatrix*vec4(worldP,1.);}`,
+    fragmentShader:`uniform sampler2D map;uniform int kind;
     uniform vec3 lightPosition[6],lightColor[6];uniform float lightRange[6];
     uniform float reliefGain,transmissionGain,emissionGain;
     varying vec2 vUv;varying vec3 worldP,worldN;${occlusionShader}
     void main(){
-      vec2 uv=clamp(fract(vUv*repeatUV),vec2(.002),vec2(.998));
-      vec2 texUV=vec2(mix(crop.x,crop.z,uv.x),1.-mix(crop.w,crop.y,uv.y));
-      vec4 surface=texture2D(map,texUV);if(surface.a<.35)discard;
+      vec4 surface=texture2D(map,clamp(vUv,vec2(.0001),vec2(.9999)));if(kind==2&&surface.a<.01)discard;
       vec3 N=normalize(mix(vec3(0.,0.,1.),worldN,reliefGain)),V=normalize(cameraPosition-worldP),lit=vec3(0.);
       for(int i=0;i<6;i++){
         if(dot(lightColor[i],lightColor[i])<.000001)continue;
@@ -50,13 +48,18 @@ export function createSurface(kind:SurfaceKind,w:number,h:number,shared:LightUni
       float glow=0.;vec3 glowColor=vec3(0.);
       if(kind==2){
         // Pale veins in the same raster register the emission without repainting it.
-        glow=pow(smoothstep(.20,.43,min(surface.r,surface.g)),1.8)*.75;glowColor=vec3(.015,.65,.55);
+        glow=pow(1.-smoothstep(.35,.83,min(surface.r,surface.g)),2.)*.35;glowColor=vec3(.015,.65,.55);
       }
-      if(kind==3){glow=sin(vUv.y*3.14159)*.28;glowColor=vec3(1.,.28,.025);}
-      gl_FragColor=vec4(lit+glowColor*glow*emissionGain,1.);
+      if(kind==0){
+        vec2 q=(vUv-vec2(.175,.84))/vec2(.055,.044);float pods=exp(-dot(q,q)*2.);
+        q=(vUv-vec2(.87,.59))/vec2(.055,.047);pods+=exp(-dot(q,q)*2.);
+        q=(vUv-vec2(.12,.16))/vec2(.055,.044);pods+=exp(-dot(q,q)*2.);
+        glow=pods*.3;glowColor=vec3(1.,.28,.025);
+      }
+      gl_FragColor=vec4(lit+glowColor*glow*emissionGain,kind==2?surface.a*.35:1.);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }`});
   const mesh=new T.Mesh(geometry,material);mesh.name='biolume-'+kind;
-  return{mesh,fallback,setArt(texture:T.Texture|undefined){material.uniforms.map.value=texture??fallback;if(texture){crop.set(...atlasCrops[kind]);}else crop.set(0,0,1,1);}};
+  return{mesh,fallback,setArt(texture:T.Texture|undefined){material.uniforms.map.value=texture??fallback;}};
 }

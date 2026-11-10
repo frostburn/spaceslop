@@ -41,11 +41,13 @@ if(import.meta.env.DEV){
     canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();pause();error.hidden=false;error.textContent='Graphics context lost. Reload to recreate the study.';},{signal});
     observer=new ResizeObserver(draw);observer.observe(canvas);
     preparation=(async()=>{
-      const path=__STUDY_TEXTURES__.biolumeAtlas;
-      const texture=path?await loadStudyTexture(import.meta.env.BASE_URL+path,signal):undefined;
-      if(signal.aborted)return;
-      if(texture)view!.setArt(texture);
-      status.textContent=texture?'Raster atlas loaded · source image is unchanged.':'Procedural fallback · upload encounters/biolume-study-atlas.png to review the raster.';
+      const entries=await Promise.all((['backdrop','foreground']as const).map(async key=>{
+        const path=__STUDY_TEXTURES__[key==='backdrop'?'biolumeBackdrop':'biolumeForeground'];
+        return [key,path?await loadStudyTexture(import.meta.env.BASE_URL+path,signal):undefined]as const;
+      }));
+      if(signal.aborted){for(const[,t]of entries)t?.dispose();return;}
+      const plates=Object.fromEntries(entries.filter(([,t])=>t));view!.setArt(plates);
+      status.textContent=`${Object.keys(plates).length}/2 full-screen plates loaded · missing plates use source-drawn fallbacks.`;
       // Compile fixed light-count and alpha-cutout materials before animation.
       view!.draw(0);
       if(view!.renderer.extensions.has('KHR_parallel_shader_compile'))await view!.renderer.compileAsync(view!.scene,view!.camera);

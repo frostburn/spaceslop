@@ -8,7 +8,7 @@
 <body><main>
 <div class="stage"><div class="bar"><a href="./">← Main menu</a><span>Single screen · zero ambient</span></div><canvas id="preview" aria-label="Bioluminescent grove lighting proof; drag to move the ship"></canvas></div>
 <aside><h1><small>Lantern Grove / development study</small>Light in the dark.</h1>
-<p>Raster roots below the ship. A translucent raster leaf above it. Six local lights illuminate both scenery and actors.</p>
+<p>A full-screen backdrop below the ship. A translucent full-screen canopy above it. Six local lights illuminate both scenery and actors.</p>
 <div class="buttons"><button id="play" aria-pressed="true" disabled>Pause</button><button id="follow">Auto flight</button></div>
 <label for="time">Scene time <output id="clock">0.0 s</output></label><input id="time" type="range" min="0" max="24" step=".05" value="0" aria-label="Scene time">
 <p>Drag or touch the scene to move the ship. Arrow keys / WASD work while the scene is focused. Scrub time to compare identical poses.</p>
@@ -18,8 +18,8 @@
 <label><input id="environment" type="checkbox" checked> Scenery lights</label><label><input id="actors" type="checkbox" checked> Actor lights</label>
 <label><input id="emission" type="checkbox" checked> Visible emission</label><label><input id="relief" type="checkbox" checked> Relief shading</label>
 <label><input id="transmission" type="checkbox" checked> Leaf backlighting</label><label><input id="occlusion" type="checkbox" checked> Root occlusion</label>
-<label><input id="artwork" type="checkbox" checked> Raster artwork</label>
+<label><input id="artwork" type="checkbox" checked> Full-screen rasters</label>
 </div><p>Emission-only keeps glowing tissue and engines visible but removes their illumination of neighboring surfaces. Blackout also switches those glowing pixels off.</p></fieldset>
 <p id="asset-status" role="status">Preparing procedural surfaces…</p><p id="stats"></p><p id="error" role="alert" hidden></p>
-<footer><p>Vite development only. Relief and root occlusion are broad approximations; this screen tests mutual lighting, not a finished level or full shadow solution.</p><a href="./workshop.html">Asset workshop</a></footer>
+<footer><p>Vite development only. Both plates use their whole canvas. Relief and root occlusion are broad approximations; this screen tests mutual lighting, not a finished level or full shadow solution.</p><a href="./workshop.html">Asset workshop</a></footer>
 </aside></main><script type="module" src="/src/biolume-study.ts"></script></body></html>

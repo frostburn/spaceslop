@@ -22,22 +22,27 @@ Drag/touch the canvas to position the ship; arrow keys/WASD also work with the c
 
 ## Asset handoff
 
-Upload the chat-delivered neutral-material atlas to **`public/encounters/biolume-study-atlas.png`**. It is a **1254×1254 RGBA PNG**, with root / leaf / pod / soil in the four quadrants. Restart Vite after adding the file so the optional catalog URL is discovered and content-versioned. Keep the whole square canvas, alpha and relative placement. Whole-sheet resizing, including 627×627, preserves the normalized crops. Use sRGB, clamp-to-edge and ordinary mipmaps. No generated binary belongs in the code PR.
+Upload the two chat-delivered full-screen images:
 
-The raster pixels are not repainted. Materials multiply their neutral colors by the calculated incident light; pale leaf veins provide a registered emission mask. Broad relief is procedural. The optional image is loaded only by this DEV study. The Uranus study explicitly selects its own three maps. Missing, failed or canceled media retain the source-drawn fallback; late image arrivals are disposed by the shared bounded loader.
+- `public/encounters/biolume-study-backdrop.png`: opaque background below the actors.
+- `public/encounters/biolume-study-foreground.png`: **latest foreground** with transparent gaps and leaf membranes above the actors.
+
+Both native canvases are **948×1659**. Keep the whole frame, alpha and aspect ratio when resizing. Use sRGB, clamp-to-edge and mipmaps. Restart Vite after adding files so the content-versioned URLs are discovered. No generated binary belongs in the code PR. The earlier four-part atlas is no longer used.
+
+The foreground shader multiplies the image alpha by **0.35**, uses alpha blending and disables depth writes. Underlying actors and terrain remain visible through the leaves. This is separate from thin-leaf backlighting, which adds light transmitted from sources below the membrane. The opaque background always covers the screen. Each plate samples its complete UV rectangle once; there are no atlas crops, repeated soil tiles, or separate root/pod/leaf cards. Each plane is sized for its depth so both cover the same viewport. Resize preserves this registration.
+
+Both plates are relit without repainting their pixels. Backdrop pods have approximate registered emission regions; foreground vein emission is extracted from its darker vein detail. Two independent source-drawn full-frame fallbacks cover missing or failed images, including partial uploads. Cancellation disposes successful siblings and late arrivals. Only this DEV study requests the pair; the Uranus study selects its own maps. Normal flight packages do not contain these study media.
 
 ## Ownership and approximations
 
-`src/biolume/layout.ts` owns crops, broad height fields and repeatable actor paths. `surface.ts` owns alpha-cutout raster materials, raised geometry/normals, thin-leaf transmission, shared six-source illumination and coarse root blockers. `actors.ts` uses the existing player rig and a small modeled glider. `view.ts` owns their common scene, six fixed point lights, materials, fallback maps and cleanup. `biolume-study.ts` owns inputs, preparation, timeline and page lifetime.
+`src/biolume/layout.ts` owns broad plate relief and repeatable actor paths. `surface.ts` owns the two full-frame raster materials, alpha blending, normals, leaf transmission, shared illumination and coarse root blockers. `actors.ts` uses the existing player rig and a small modeled glider. `view.ts` owns the scene, six fixed local lights, both fallback maps and both optional image maps. `biolume-study.ts` owns preparation, inputs, timeline and page lifetime.
 
-Ground is at z≈−4.5; roots rise from −3.6; actors fly at zero; the leaf sits at +2.2. The source positions/colors/ranges used by the raster shader agree with the six actual point lights illuminating modeled actors. Their count stays fixed while intensity changes, avoiding shader variants on toggles. Navigation, exhaust, gland and averaged bullet-stream pools approximate the corresponding luminous regions. Surface/glow changes use uniforms and transforms, not new geometry or per-frame image uploads. Pixel ratio is capped at 1.5. There are no reflection captures, shadow maps, render targets or runtime GPU readbacks.
+The backdrop is at z≈−3.6 with broad root relief; actors fly at zero; the foreground is at +2.2. Raster shaders and modeled actors use the same source positions, colors and ranges. Navigation, exhaust, gland and averaged bullet-stream pools approximate luminous regions. Count and materials remain fixed; changes use uniforms/transforms. Pixel ratio is capped at 1.5. No shadow maps, reflection targets or runtime framebuffer readbacks are used.
 
-This proves direct mutual lighting, not global illumination. Relief follows broad root/leaf shapes rather than an artist-authored per-pixel normal/depth map. Root blockers are a few soft analytic volumes, not exact branch silhouettes or full actor shadows. Leaf transmission is approximate. The single-screen cutouts represent the proposed below/above-flight raster layers; a full glued panorama still needs registered relief/emission/depth information and seam work. Camera swings and production-phone frame rate are not established by this study.
-
-The scene primes both raster and procedural materials and fallback textures. Materials, geometry, the optional atlas and all five fallback maps have a scoped owner; cleanup is idempotent, including canceled preparation and context loss. Nothing from this study enters a normal flight session.
+This proves direct mutual lighting on two glued full-screen plates, not global illumination. Relief and pod masks are broad authored approximations, not exact recovered depth. Blockers approximate root occlusion, not every branch or actor shadow. Leaf transmission is approximate. Camera swings and actual phone frame rate remain untested. Cleanup owns both image maps and both fallback maps, is idempotent and handles canceled preparation; the study stays outside normal flights.
 
 ## Validation
 
-`npm test`, `npm run build` and `npm run test:build` enforce existing engine behavior, isolated packages and DEV-page exclusions. The Uranus asset-loader regression includes an unrelated biolume atlas and verifies it is not requested.
+`npm test`, `npm run build` and `npm run test:build` enforce existing engine behavior, isolated packages and DEV-page exclusions. The Uranus asset-loader regression includes unrelated biolume plates and verifies it is not requested.
 
 Browser review should isolate renderable actors while enabling only scenery lights, then isolate the raster surfaces while enabling only actor lights. Compare actual framebuffer pixels at fixed poses; both unlit baselines and blackout must be black. Separately compare relief, transmission and occlusion. Exercise portrait touch, paused dragging/keyboard movement, auto-flight reset, missing art, frozen pause and repeated updates without GPU-resource growth. Test-only framebuffer readbacks can produce a browser GPU-stall warning; the study itself performs no readback.

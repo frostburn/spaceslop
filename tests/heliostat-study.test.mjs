@@ -4,7 +4,7 @@ import * as T from 'three';
 import { createServer } from 'vite';
 
 const server = await createServer({ root: new URL('..', import.meta.url).pathname, configFile: false,
-  define: { __STUDY_TEXTURES__: JSON.stringify({heliostatMetal:'metal.png',heliostatCeramic:'ceramic.png',heliostatBackdrop:'backdrop.png',biolumeAtlas:'biolume-study-atlas.png'}) },
+  define: { __STUDY_TEXTURES__: JSON.stringify({heliostatMetal:'metal.png',heliostatCeramic:'ceramic.png',heliostatBackdrop:'backdrop.png',biolumeBackdrop:'biolume-study-backdrop.png',biolumeForeground:'biolume-study-foreground.png'}) },
   server: { middlewareMode: true, hmr: false, ws: false }, optimizeDeps: { noDiscovery: true, entries: [] }, appType: 'custom' });
 after(() => server.close());
 const layout = await server.ssrLoadModule('/src/heliostat/layout.ts');

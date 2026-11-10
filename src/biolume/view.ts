@@ -11,12 +11,10 @@ export function createBiolumeView(canvas:HTMLCanvasElement){
   const scene=new T.Scene();scene.background=new T.Color(0);scene.environment=null;
   const camera=new T.PerspectiveCamera(39,9/16,.05,80);camera.position.z=22;
   const uniforms=lightUniforms(),options={...defaultOptions};
-  const ground=createSurface('ground',13,23,uniforms);ground.mesh.position.z=-4.5;
-  const root=createSurface('root',2.8,16,uniforms);root.mesh.position.set(-3.1,0,-3.6);
-  const other=createSurface('root',2.6,13,uniforms);other.mesh.position.set(3.8,4,-3.6);other.mesh.rotation.z=-.15;
-  const leaf=createSurface('leaf',4.2,6.1,uniforms);leaf.mesh.position.set(2.8,-.5,2.2);leaf.mesh.rotation.z=-.35;
-  const pod=createSurface('pod',1.2,2.4,uniforms);pod.mesh.position.set(-2.5,4.5,.2);
-  const surfaces=[ground,root,other,leaf,pod];scene.add(...surfaces.map(s=>s.mesh));
+  const heightAt=(z:number)=>2*Math.tan(39*Math.PI/360)*(22-z);
+  const ground=createSurface('backdrop',heightAt(-3.6)*9/16,heightAt(-3.6),uniforms);ground.mesh.position.z=-3.6;
+  const leaf=createSurface('foreground',heightAt(2.2)*9/16,heightAt(2.2),uniforms);leaf.mesh.position.z=2.2;leaf.mesh.renderOrder=10;
+  const surfaces=[ground,leaf];scene.add(...surfaces.map(s=>s.mesh));
   for(const s of surfaces)renderer.initTexture(s.fallback);
   const actors=createStudyActors(),burners=shipBurners(actors.player);scene.add(actors.player,actors.enemy,actors.shots);
   const lights=Array.from({length:6},(_,i)=>{const light=new T.PointLight(i===0?0xffad47:i===1?0x43ffe0:i===4?0xff5319:0x6eefff,0,uniforms.lightRange.value[i],2);scene.add(light);return light;});
@@ -28,19 +26,23 @@ export function createBiolumeView(canvas:HTMLCanvasElement){
       fragmentShader:`varying vec2 p;uniform vec3 color;uniform float strength,emissionGain;void main(){float a=pow(max(0.,1.-length(p)),4.)*strength*emissionGain;gl_FragColor=vec4(color,a);#include <tonemapping_fragment>\n#include <colorspace_fragment>}`.replace(';#include',';\n#include')});
     const mesh=new T.Mesh(haloGeometry,material);mesh.scale.setScalar(i<2?4:1.3);scene.add(mesh);return mesh;
   });
-  let art:T.Texture|undefined,disposed=false,manual:T.Vector2|undefined;
+  let art:Partial<Record<'backdrop'|'foreground',T.Texture>>={},disposed=false,manual:T.Vector2|undefined;
   const positions=Array.from({length:6},()=>new T.Vector3()),size=new T.Vector2();
-  function setOptions(next:Partial<StudyOptions>){Object.assign(options,next);for(const s of surfaces)s.setArt(options.artwork?art:undefined);}
-  function setArt(texture:T.Texture){if(disposed){texture.dispose();return;}if(art===texture)return;art?.dispose();art=texture;art.wrapS=art.wrapT=T.ClampToEdgeWrapping;art.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());renderer.initTexture(art);setOptions({});}
+  function setOptions(next:Partial<StudyOptions>){Object.assign(options,next);surfaces[0].setArt(options.artwork?art.backdrop:undefined);surfaces[1].setArt(options.artwork?art.foreground:undefined);}
+  function setArt(next:typeof art){
+    if(disposed){for(const t of Object.values(next))t.dispose();return;}
+    for(const key of ['backdrop','foreground']as const){const t=next[key];if(t&&t!==art[key]){art[key]?.dispose();art[key]=t;t.wrapS=t.wrapT=T.ClampToEdgeWrapping;t.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());renderer.initTexture(t);}}
+    setOptions({});
+  }
   function draw(time:number){
     if(disposed)return;
     const rect=canvas.getBoundingClientRect(),width=Math.max(1,Math.round(rect.width)),height=Math.max(1,Math.round(rect.height));
-    renderer.getSize(size);if(size.x!==width||size.y!==height){renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();}
+    renderer.getSize(size);if(size.x!==width||size.y!==height){renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();for(const s of surfaces)s.mesh.scale.x=camera.aspect/(9/16);}
     const pose=actorPose(time),p=manual??pose.player;actors.player.position.set(p.x,p.y,0);actors.player.rotation.z=.06*Math.sin(time*.5);
     actors.enemy.position.set(pose.enemy.x,pose.enemy.y,.1);actors.enemy.rotation.z=.15*Math.sin(time*.4);actors.enemy.rotation.y=.15*Math.sin(time*1.3);
     actors.setEmission(options.emission);poseBurners(burners,time,.7);
     for(const[i,bullet]of actors.bullets.entries()){const phase=(time*2+i*1.3)%12;bullet.position.set(p.x+.055*Math.sin(i),p.y+1+phase,.1);}
-    positions[0].set(-2.5,3.95,.9);positions[1].set(2.5,-.5,1.8);
+    positions[0].set(-2.9,5.3,.9);positions[1].set(2.6,.1,1.8);
     positions[2].set(p.x,p.y+.25,.8);positions[3].set(p.x,p.y-.8,-.3);
     positions[4].copy(actors.enemy.position);positions[4].y-=.2;positions[4].z+=.7;positions[5].set(p.x,p.y+3,.4);
     for(let i=0;i<6;i++){
@@ -54,7 +56,7 @@ export function createBiolumeView(canvas:HTMLCanvasElement){
   }
   function movePlayer(x:number,y:number){manual=new T.Vector2(T.MathUtils.clamp(x,-3.2,3.2),T.MathUtils.clamp(y,-5.5,5.5));}
   function pointer(clientX:number,clientY:number){const r=canvas.getBoundingClientRect(),v=new T.Vector3((clientX-r.left)/r.width*2-1,1-(clientY-r.top)/r.height*2,.5).unproject(camera);v.sub(camera.position);const t=-camera.position.z/v.z;movePlayer(camera.position.x+v.x*t,camera.position.y+v.y*t);}
-  function dispose(){if(disposed)return;disposed=true;for(const s of surfaces)s.mesh.material.uniforms.map.value=null;disposeScene(scene);for(const s of surfaces)s.fallback.dispose();art?.dispose();renderer.dispose();renderer.forceContextLoss();}
+  function dispose(){if(disposed)return;disposed=true;for(const s of surfaces)s.mesh.material.uniforms.map.value=null;disposeScene(scene);for(const s of surfaces)s.fallback.dispose();for(const t of Object.values(art))t.dispose();art={};renderer.dispose();renderer.forceContextLoss();}
   return{scene,camera,renderer,options,uniforms,actors,surfaces,lights,draw,setOptions,setArt,movePlayer,pointer,follow(){manual=undefined;},
-    stats(){return{draws:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length??0,lights:6,ambient:0,artwork:!!art};},dispose};
+    stats(){return{draws:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,programs:renderer.info.programs?.length??0,lights:6,ambient:0,artwork:!!(art.backdrop||art.foreground)};},dispose};
 }
