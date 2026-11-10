@@ -2,7 +2,7 @@ import * as T from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {SUMMER_END,SUMMER_FLOOR} from './layout';
 import {lotusLeaf,meadowFlower} from './botany';
-import {summerNoise} from './terrain';
+import {createSummerSkyState,summerWaterVertex,summerWaterReflection,type SummerSkyState} from './clouds';
 
 function petal(){
   const p:number[]=[],uv:number[]=[],indices:number[]=[];
@@ -10,9 +10,10 @@ function petal(){
   for(let j=0;j<20;j++)for(let i=0;i<2;i++){const a=j*3+i;indices.push(a,a+1,a+3,a+1,a+4,a+3);}
   const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(p,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();return g;
 }
-export function createLotusPalace(){
+export function createLotusPalace(sharedSky?:SummerSkyState){
   const root=new T.Group();root.name='botanical-lotus-palace';root.position.y=SUMMER_END;
   const buckets=new Map<T.Material,T.BufferGeometry[]>(),clock={value:0};
+  const sky=sharedSky??createSummerSkyState();
   const stone=new T.MeshStandardMaterial({color:0xbdb998,roughness:.87}),bronze=new T.MeshStandardMaterial({color:0x8b7752,metalness:.55,roughness:.49});
   stone.onBeforeCompile=s=>{s.vertexShader='varying vec3 stoneP;\n'+s.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nstoneP=position;');s.fragmentShader='varying vec3 stoneP;\n'+s.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
     float ring=abs(sin(length(stoneP.xy)*8.));float spoke=abs(sin(atan(stoneP.y,stoneP.x)*24.));
@@ -24,14 +25,14 @@ export function createLotusPalace(){
   const foliage=new T.MeshStandardMaterial({color:0x46643b,roughness:.9,side:T.DoubleSide}),soil=new T.MeshStandardMaterial({color:0x484638,roughness:1}),bloom=new T.MeshStandardMaterial({color:0xc09bb7,roughness:.75});
   const add=(g:T.BufferGeometry,m:T.Material,at:T.Vector3=new T.Vector3(),angle=0)=>{if(g.index){const source=g;g=g.toNonIndexed();source.dispose();}g.rotateZ(angle);g.translate(at.x,at.y,at.z);const list=buckets.get(m)??[];list.push(g);buckets.set(m,list);};
   add(new T.CircleGeometry(16,80),stone,new T.Vector3(0,0,SUMMER_FLOOR+.2));
-  const waterMaterial=new T.ShaderMaterial({uniforms:{clock},vertexShader:'varying vec2 p;void main(){p=position.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',fragmentShader:`uniform float clock;varying vec2 p;${summerNoise}
+  const waterMaterial=new T.ShaderMaterial({uniforms:{clock,...sky.uniforms},vertexShader:summerWaterVertex,fragmentShader:`uniform float clock;varying vec2 p;${summerWaterReflection}
     void main(){float bed=n(p*.7)*.6+n(p*3.)*.4;vec3 c=mix(vec3(.012,.10,.09),vec3(.045,.22,.18),bed);
     float caustic=sin(p.x*7.+n(p*2.+clock*.05)*9.)*sin(p.y*8.+n(p*2.-clock*.06)*8.);
-    c+=vec3(.05,.08,.055)*smoothstep(.73,.98,caustic);gl_FragColor=vec4(c,1.);
+    c+=vec3(.015,.024,.018)*smoothstep(.73,.98,caustic);gl_FragColor=vec4(summerReflectClouds(c),1.);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
     }`});
-  const water=new T.Mesh(new T.CircleGeometry(8.7,80),waterMaterial);water.scale.y=1.25;water.position.z=SUMMER_FLOOR+.25;root.add(water);
+  const water=new T.Mesh(new T.CircleGeometry(8.7,80),waterMaterial);water.name='lotus-reflecting-pool';water.scale.y=1.25;water.position.z=SUMMER_FLOOR+.25;root.add(water);
   const leaf=lotusLeaf(),flower=meadowFlower();
   for(let i=0;i<8;i++){
     const angle=i*Math.PI/4;add(petal(),i%2?pink:ivory,new T.Vector3(),angle+Math.PI/8);
@@ -71,5 +72,5 @@ export function createLotusPalace(){
     ribs.push(new T.TubeGeometry(new T.CatmullRomCurve3(points),32,.025,6,false));
   }
   const geometry=mergeGeometries(ribs);ribs.forEach(g=>g.dispose());if(geometry){const frame=new T.Mesh(geometry,ribMaterial);frame.name='dome-ribs';frame.renderOrder=81;root.add(frame);}
-  return{root,dome,water,update(time:number){clock.value=time;}};
+  return{root,dome,water,update(time:number){clock.value=time;if(!sharedSky)sky.update(0,time);}};
 }

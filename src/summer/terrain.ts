@@ -1,13 +1,13 @@
 import * as T from 'three';
 import {SUMMER_END,SUMMER_FLOOR,summerRiver,summerShoreDistance} from './layout';
 import {grassTuft,meadowFlower} from './botany';
-export const summerNoise=`float hash(vec2 p){vec3 q=fract(vec3(p.xyx)*.1031);q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
- float n(vec2 p){vec2 a=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(a),hash(a+vec2(1.,0.)),f.x),mix(hash(a+vec2(0.,1.)),hash(a+1.),f.x),f.y);}`;
-export function createSummerTerrain(){
+import {createSummerSkyState,summerWaterVertex,summerWaterReflection,type SummerSkyState} from './clouds';
+export function createSummerTerrain(sharedSky?:SummerSkyState){
   const root=new T.Group();root.name='summer-steppe';const clock={value:0};
-  const ground=new T.Mesh(new T.PlaneGeometry(44,SUMMER_END+90,12,96),new T.ShaderMaterial({uniforms:{clock},
-    vertexShader:'varying vec2 p;void main(){p=position.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
-    fragmentShader:`uniform float clock;varying vec2 p;${summerNoise}
+  const sky=sharedSky??createSummerSkyState();
+  const ground=new T.Mesh(new T.PlaneGeometry(44,SUMMER_END+90,12,96),new T.ShaderMaterial({uniforms:{clock,...sky.uniforms},
+    vertexShader:summerWaterVertex,
+    fragmentShader:`uniform float clock;varying vec2 p;${summerWaterReflection}
       void main(){vec2 q=p+vec2(0.,${((SUMMER_END+90)/2-30).toFixed(3)});
         float river=1.4*sin(q.y*.036)+.65*sin(q.y*.087+1.);
         float width=1.15+.4*sin(q.y*.05+1.)+.18*sin(q.y*.13);
@@ -21,15 +21,15 @@ export function createSummerTerrain(){
         grass+=vec3(.028,.037,.01)*smoothstep(.4,.7,n(q*vec2(25.,6.)));
         vec3 water=mix(vec3(.012,.12,.145),vec3(.065,.30,.265),coarse);
         float flow=n(vec2(q.x*9.+sin(q.y*.5),q.y*1.8-clock*.35));
-        float wave=sin(q.y*12.-clock*2.5+flow*9.+q.x*2.);
-        water+=vec3(.06,.11,.09)*smoothstep(.88,.99,wave)*smoothstep(.52,.8,flow);
+        water+=vec3(.012,.022,.018)*smoothstep(.72,.96,flow);
         float bank=smoothstep(width+shore-.07,width+shore+.1,d),mud=1.-smoothstep(width+.1,width+.6,d);
+        if(bank<1.)water=summerReflectClouds(water);
         grass=mix(grass,vec3(.18,.15,.085)*(.7+grain*.4),mud*.85);
         gl_FragColor=vec4(mix(water,grass,bank),1.);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`}));
-  ground.position.set(0,(SUMMER_END+90)/2-30,SUMMER_FLOOR);root.add(ground);
+  ground.name='summer-meltwater-meadow';ground.position.set(0,(SUMMER_END+90)/2-30,SUMMER_FLOOR);root.add(ground);
   const leaf=grassTuft(),flowerGeometry=meadowFlower(),rockGeometry=new T.IcosahedronGeometry(1,1);
   const leafMaterial=new T.MeshStandardMaterial({color:0xffffff,roughness:.96,side:T.DoubleSide}),flowerMaterial=new T.MeshStandardMaterial({color:0xffffff,roughness:.85}),rockMaterial=new T.MeshStandardMaterial({color:0x727362,roughness:1});
   const dummy=new T.Object3D(),color=new T.Color();let seed=7913;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
@@ -53,6 +53,6 @@ export function createSummerTerrain(){
     }
     return{node,origin};
   });
-  return{root,ground,patches,update(scroll:number,time:number){clock.value=time;for(const p of patches)p.node.visible=Math.abs(p.origin-scroll)<43;},
+  return{root,ground,patches,update(scroll:number,time:number){clock.value=time;if(!sharedSky)sky.update(scroll,time);for(const p of patches)p.node.visible=Math.abs(p.origin-scroll)<43;},
     prime(){const before=patches.map(p=>[p.node.visible,p.node.position.y] as const);patches.forEach(p=>{p.node.visible=true;p.node.position.y=0;});return()=>patches.forEach((p,i)=>{p.node.visible=before[i][0];p.node.position.y=before[i][1];});}};
 }

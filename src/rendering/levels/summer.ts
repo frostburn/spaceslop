@@ -12,6 +12,7 @@ import {createSummerTerrain} from '../../summer/terrain';
 import {createSummerIce} from '../../summer/ice';
 import {createLotusPalace} from '../../summer/palace';
 import {batchAircraft} from '../../summer/aircraft';
+import {createSummerClouds} from '../../summer/clouds';
 
 function drone(){
   const root=new T.Group(),hull=new T.MeshStandardMaterial({color:0x676a85,metalness:.45,roughness:.48}),lamp=new T.MeshBasicMaterial({color:0xff814e});
@@ -22,8 +23,8 @@ function drone(){
 }
 export const createLevel:LevelFactory=({plane,signal})=>{
   const root=new T.Group(),world=new T.Group();root.name='summer-thaw-level';root.add(world);
-  const terrain=createSummerTerrain(),ice=createSummerIce(),palace=createLotusPalace(),mammothAssets=createMammothAssets(),hydraAssets=createHydraAssets();
-  world.add(terrain.root,ice.root,palace.root);
+  const clouds=createSummerClouds(),terrain=createSummerTerrain(clouds.state),ice=createSummerIce(),palace=createLotusPalace(clouds.state),mammothAssets=createMammothAssets(),hydraAssets=createHydraAssets();
+  world.add(terrain.root,ice.root,palace.root,clouds.root);
   const herd=mammothSites.map((site,i)=>{const rig=createMammoth(mammothAssets);rig.root.position.set(site.x,site.y,-17.1);rig.root.rotation.z=site.angle;rig.root.scale.set(site.size*(i%2?-1:1),site.size,site.size);world.add(rig.root);return{rig,site};});
   const scout=batchAircraft(createScoutRig()),probe=batchAircraft(drone());
   const air=Array.from({length:SUMMER_AIR_POOL},(_,i)=>{const root=(i<SUMMER_AIR_POOL/2?scout:probe).clone(true);root.visible=false;const burners=shipBurners(root);return{root,burners};});
@@ -42,7 +43,7 @@ export const createLevel:LevelFactory=({plane,signal})=>{
     afterWarmup(){restores.forEach(restore=>restore());restores=[];for(const[m,cull]of flags)m.frustumCulled=cull;flags.clear();},
     contact:(x,d)=>contact(x,d),
     update({flight,time,animationTime}){
-      const scroll=summerScroll(time);world.position.y=-scroll;terrain.update(scroll,animationTime);ice.update(scroll,animationTime);palace.update(animationTime);
+      const scroll=summerScroll(time);world.position.y=-scroll;clouds.update(scroll,animationTime);terrain.update(scroll,animationTime);ice.update(scroll,animationTime);palace.update(animationTime);
       for(const {rig,site}of herd){rig.root.visible=Math.abs(site.y-scroll)<29;rig.pose(animationTime,site.y*.13);}
       boss.root.visible=flight.bossHealth>0;boss.pose(time,flight.cannonWindup);
       for(const r of air)r.root.visible=false;hydras.forEach(r=>r.root.visible=false);models.length=flight.enemies.length;models.fill(undefined);
