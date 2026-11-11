@@ -31,6 +31,7 @@ for(const [id,pack] of Object.entries(packs.levels)){
  if(id!=='den')assert(!pack.media.some(path=>/draconian-(accretion-disk|biker-atlas|galactic-center|gantry|cliffside|patrol-turns|cliff-props|defenses)/.test(path)),'Den art leaked into another level.');
  if(id!=='biolume')assert(!pack.media.some(path=>/biolume-(backdrop|foreground|glider|study-atlas|lantern-ray|frog-atlas)/.test(path)),'Lantern Grove art leaked into another level.');
  if(id!=='fleet')assert(!pack.media.some(path=>path.startsWith('encounters/fleet-')),'Fleet Clash art leaked into another level.');
- if(id==='wormhole')assert(!pack.media.some(path=>path.startsWith('encounters/')&&!/^encounters\/(interceptor-metal|titan-chitin)\.png\?/.test(path)),'Wormhole included unrelated stage media.');
+ if(id==='wormhole')assert(!pack.media.some(path=>path.startsWith('encounters/')&&!/^encounters\/(interceptor-metal|titan-chitin|fons-mane)\.png\?/.test(path)),'Wormhole included unrelated stage media.');
+ else assert(!pack.media.some(path=>path.startsWith('encounters/fons-')),'Fons art leaked into another level.');
 }
 console.log('Menu size, isolated level packages, selective precaching and production dev-page exclusions passed.');

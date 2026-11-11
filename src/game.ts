@@ -51,6 +51,7 @@ import { PRESERVE_APPROACH } from './preserve-layout';
 import { CLOSE_CALLS_REQUIRED, HOT_DOCK_COOLDOWN, HOT_DOCK_DISTANCE, type PilotId } from './pilot-data';
 import { WING_FLASH_TIME, WING_FORMATION, wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
 import { WORMHOLE_APPROACH } from './wormhole/route';
+import { FONS_APPROACH, FONS_HP, fonsBeamHits, fonsBodyEntry, fonsPhase, fonsPose, fonsRockHits, fonsRocks, fonsSheltered, fonsVolleys } from './wormhole/fons/combat';
 
 export { HEIGHT, WIDTH } from './playfield';
 export const STEP = 1 / 60;
@@ -268,6 +269,8 @@ export class Flight {
   private denFinalTime = 0;
   readonly fleetBossAttack = createFleetBossAttack();
   private fleetFinalTime = 0;
+  private fonsAt = -1;
+  private wormholeFinalTime = 0;
   private heliostatEscalationAt=Infinity;
   private heliostatEscalationCycle=Infinity;
   private heliostatLockedPattern=0;
@@ -310,8 +313,9 @@ export class Flight {
 
   get isDen() { return this.level === 'den'; }
   get isFleet() { return this.level === 'fleet'; }
-  get isCicadaFight() { return this.level === 'titan' || this.level === 'wormhole'; }
-  get planarBoss() { return this.level === 'biolume' || this.isDen || this.isFleet; }
+  get isCicadaFight() { return this.level === 'titan' || (this.level === 'wormhole' && !this.isFonsFight); }
+  get isFonsFight() { return this.fonsAt >= 0; }
+  get planarBoss() { return this.level === 'biolume' || this.isDen || this.isFleet || this.isFonsFight; }
   get weaponsActive() { return this.phase === 'stage' || this.phase === 'boss' || ((this.isDen || this.isFleet) && this.phase === 'approach'); }
   get denBossTime() {
     if (this.phase === 'approach') return this.time - DEN_APPROACH;
@@ -321,8 +325,27 @@ export class Flight {
     if (this.phase === 'approach') return this.time - FLEET_APPROACH;
     return this.phase === 'boss' ? this.time : this.fleetFinalTime;
   }
+  get wormholeTime() {
+    if (this.phase === 'won' || this.phase === 'lost') return this.wormholeFinalTime;
+    if (this.phase === 'stage') return this.time;
+    const start = this.isFonsFight ? this.fonsAt : this.stageDuration;
+    return start + this.time + (this.phase === 'boss' ? this.transitionDuration : 0);
+  }
+  get fonsTime() {
+    return this.isFonsFight ? this.wormholeTime - this.fonsAt - FONS_APPROACH : -FONS_APPROACH;
+  }
+
+  startFonsApproach() {
+    if (this.level !== 'wormhole' || this.isFonsFight) return;
+    this.fonsAt = Math.max(this.wormholeTime, this.stageDuration + WORMHOLE_APPROACH);
+    this.bossHealth = FONS_HP;
+    this.bossRecoil = 0;
+    this.markers = [];
+    this.enter('approach');
+  }
 
   private planarBossEntry(a: Point, b: Point) {
+    if (this.isFonsFight) return fonsBodyEntry(this.fonsTime, a, b);
     if (this.isFleet) return fleetBossEntry(this.fleetBossTime, a, b);
     return this.isDen ? denBodyEntry(this.denBossTime, a, b) : rayBodyEntry(this.rayTime, a, b);
   }
@@ -333,9 +356,9 @@ export class Flight {
   get heliostatUnstableAge(){return Math.max(0,this.heliostatAttackTime-this.heliostatEscalationAt);}
   get heliostatTargets(){return this.heliostatAimCycle===Math.floor(this.heliostatAttackTime/HELIOSTAT_INTERVAL)&&this.heliostatCancelledCycle!==this.heliostatAimCycle?this.markers:[];}
 
-  get transitionDuration() { if (this.level === 'wormhole') return WORMHOLE_APPROACH; if (this.isFleet) return FLEET_APPROACH; if (this.isDen) return DEN_APPROACH; if(this.level==='biolume')return GROVE_APPROACH; if(this.level==='summer')return SUMMER_APPROACH;if(this.level==='heliostat')return HELIOSTAT_APPROACH;if(this.level==='boulevard')return BOULEVARD_APPROACH;return this.level === 'preserve' ? PRESERVE_APPROACH : this.level === 'vents' ? VENT_APPROACH : this.level === 'io' ? IO_APPROACH : this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
+  get transitionDuration() { if (this.level === 'wormhole') return this.isFonsFight ? FONS_APPROACH : WORMHOLE_APPROACH; if (this.isFleet) return FLEET_APPROACH; if (this.isDen) return DEN_APPROACH; if(this.level==='biolume')return GROVE_APPROACH; if(this.level==='summer')return SUMMER_APPROACH;if(this.level==='heliostat')return HELIOSTAT_APPROACH;if(this.level==='boulevard')return BOULEVARD_APPROACH;return this.level === 'preserve' ? PRESERVE_APPROACH : this.level === 'vents' ? VENT_APPROACH : this.level === 'io' ? IO_APPROACH : this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
 
-  get bossMaxHealth() { if (this.isCicadaFight) return CICADA_HP; if (this.isFleet) return FLEET_BOSS_HP; if (this.isDen) return DEN_HP; if(this.level==='biolume')return RAY_HP;if(this.level==='summer')return SUMMER_HP;if(this.level==='heliostat')return HELIOSTAT_HP;if(this.level==='boulevard')return BOULEVARD_HP;return this.level === 'preserve' ? GROUNDSKEEPER_HP : this.level === 'vents' ? CRAB_HP : this.level === 'io' ? IO_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
+  get bossMaxHealth() { if (this.isFonsFight) return FONS_HP; if (this.isCicadaFight) return CICADA_HP; if (this.isFleet) return FLEET_BOSS_HP; if (this.isDen) return DEN_HP; if(this.level==='biolume')return RAY_HP;if(this.level==='summer')return SUMMER_HP;if(this.level==='heliostat')return HELIOSTAT_HP;if(this.level==='boulevard')return BOULEVARD_HP;return this.level === 'preserve' ? GROUNDSKEEPER_HP : this.level === 'vents' ? CRAB_HP : this.level === 'io' ? IO_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
   get bossTargetRadius() { if(this.level==='biolume')return RAY_ORGAN_RADIUS/RAY_PROJECTION;if(this.level==='summer')return .48*HYDRA_BOSS_SIZE;if(this.level==='boulevard'||this.level==='heliostat')return 1.25;return this.level === 'preserve' ? GROUNDSKEEPER_RADIUS : BOSS_CANNON_RADIUS; }
   get summerTargetHead(){return nearestHydraHead(this.summerHydra,this.player.x/BOSS_PROJECTION,true);}
   get summerHeadsAlive(){return this.summerHydra.hp.filter(hp=>hp>0).length;}
@@ -356,6 +379,7 @@ export class Flight {
   get ioLegBroken() { return this.ioCollapseAge >= 0; }
   get ioCollapse() { return this.ioLegBroken ? smooth01(this.ioCollapseAge / 1.2) : 0; }
   get bossAimY() {
+    if (this.isFonsFight) return fonsPose(this.fonsTime).y;
     if (this.isFleet) return fleetBossTarget(this.fleetBossTime).y;
     if (this.isDen) return denPose(this.denBossTime).y;
     if(this.level==='biolume')return rayOrgan(this.rayTime,raySignal(this.rayTime).side).y/RAY_PROJECTION;
@@ -401,6 +425,7 @@ export class Flight {
   }
 
   get exposedCannonX() {
+    if (this.isFonsFight) return fonsPose(this.fonsTime).x;
     if (this.isFleet) return fleetBossTarget(this.fleetBossTime).x;
     if (this.isDen) return denPose(this.denBossTime).x;
     if(this.level==='biolume')return rayOrgan(this.rayTime,raySignal(this.rayTime).side).x/RAY_PROJECTION;
@@ -530,11 +555,15 @@ export class Flight {
     const boss = this.phase === 'boss';
     if (boss) this.stepBoss(dt);
     else if (this.phase === 'stage') this.stepStage(dt);
+    const wormholeBoss = boss && this.level === 'wormhole';
+    if (wormholeBoss && this.phase !== 'boss') return;
     this.stepDroneWeapon(dt);
     for (const wing of this.wings) this.stepWing(wing, boss, dt);
+    if (wormholeBoss && this.phase !== 'boss') return;
 
     const tunnelCruise = !boss && this.level === 'wormhole';
     this.shots = this.shots.filter((shot) => {
+      if (wormholeBoss && this.phase !== 'boss') return false;
       if (tunnelCruise) {
         this.advance(shot, dt);
         return shot.z > -140;
@@ -592,6 +621,10 @@ export class Flight {
       }
       return shot.y < 9 && Math.abs(shot.x) < 5;
     });
+    if (wormholeBoss && this.phase !== 'boss') {
+      this.shots = [];
+      return;
+    }
     this.enemies = this.enemies.filter((enemy) => (enemy.hp > 0 || enemy.mine?.burstAt!==undefined&&this.time-enemy.mine.burstAt<MINE_BURST_TIME || enemy.ambusher?.defeatedAt!==undefined && this.time-enemy.ambusher.defeatedAt<AMBUSHER_CORPSE_TIME) && (enemy.ambusher ? ambusherHome(enemy.ambusher.site,this.time).y > -12 : enemy.y > (enemy.heliostat?.kind==='guard'?-10.6:-9)) && (!enemy.centipede || Math.abs(enemy.x) < 5.8) && (!(enemy.crucible || enemy.slag) || Math.abs(enemy.x)<6.8) && (!enemy.slag || (enemy.y<10 && enemy.age<10)));
 
     this.threats = this.threats.filter((shot) => {
@@ -807,6 +840,10 @@ export class Flight {
       }
     }
     if(!closest&&this.level==='biolume'&&this.phase==='boss')closest=rayOrgan(this.rayTime,raySignal(this.rayTime).side);
+    if (!closest && this.isFonsFight && this.phase === 'boss') {
+      const target = fonsPose(this.fonsTime);
+      if (shot.y < target.y) closest = target;
+    }
     if (!closest && this.isDen && this.phase === 'boss') {
       const pose = denPose(this.denBossTime);
       if (shot.y < pose.y) closest = pose;
@@ -1179,6 +1216,13 @@ export class Flight {
   }
 
   private stepBoss(dt: number) {
+    if (this.isFonsFight) {
+      const time = this.fonsTime, rocks = fonsRocks(time);
+      if (fonsRockHits(rocks, this.player) || fonsBeamHits(time, this.player) ||
+          (fonsPhase(time).rain && !fonsSheltered(rocks, this.player))) this.hit();
+      if (this.phase === 'boss') this.threats.push(...fonsVolleys(time, dt, this.player));
+      return;
+    }
     if (this.isFleet) {
       this.threats.push(...stepFleetBoss(this.fleetBossAttack, this.time, dt, this.player, this.bossHealth));
       if (Number.isFinite(this.planarBossEntry(this.player, this.player))) this.hit();
@@ -1422,8 +1466,9 @@ export class Flight {
     }
     if (laser) this.bossLaserDamage += before - this.bossHealth;
     if (this.bossHealth === 0) {
-      this.score += 1000;
-      this.enter('won');
+      this.score += this.isFonsFight ? 2500 : 1000;
+      if (this.level === 'wormhole' && !this.isFonsFight) this.startFonsApproach();
+      else this.enter('won');
     }
   }
 
@@ -1435,6 +1480,7 @@ export class Flight {
   }
 
   private enter(phase: Phase) {
+    if (this.level === 'wormhole' && (phase === 'won' || phase === 'lost')) this.wormholeFinalTime = this.wormholeTime;
     if (this.isFleet && this.phase === 'boss' && (phase === 'won' || phase === 'lost')) this.fleetFinalTime = this.time;
     if (this.isDen && this.phase === 'boss' && (phase === 'won' || phase === 'lost')) this.denFinalTime = this.time;
     if(this.level==='biolume'&&this.phase==='boss'&&(phase==='won'||phase==='lost'))this.rayFinalTime=this.time;

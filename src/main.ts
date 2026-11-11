@@ -12,7 +12,7 @@ let selected = readLevel(new URLSearchParams(location.search).get('level'));
 let session: AbortController | undefined;
 let reloadBeforePreparation = false;
 const descriptions: Record<LevelId, string> = {
-  wormhole: 'Follow an echo of Titan through a twisting spacetime tunnel and face the cicada again.',
+  wormhole: 'Follow Titan’s echo through the wormhole, then face Fons Inversus and shelter from its rain behind falling asteroids.',
   fleet: 'Dodge broadsides through a botched prisoner exchange, enter the Pleiadian flagship through its open stern, and fight the Gray command saucer.',
   den: 'Fly the cliffside docks and rookeries, then face the Gantry Chief above the black hole.',
   biolume:'Fly beneath translucent luminous leaves, over tangled root bridges and blackwater pools. Lantern gliders guard the nursery; the enormous Lantern Ray waits in the Dark Crown.',

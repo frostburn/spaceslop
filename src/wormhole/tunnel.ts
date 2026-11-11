@@ -2,6 +2,7 @@ import * as T from 'three';
 import { HEIGHT, WIDTH } from '../playfield';
 import type { WormholeReflectionPose } from './reflection';
 import type { wormholeFrame } from './route';
+import type { fonsPhase, fonsRocks } from './fons/combat';
 import { titanEcho } from './titan-echo';
 
 export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
@@ -16,6 +17,9 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
     fighterReflection: { value: reflection as T.Texture | null },
     reflectionPlane: { value: new T.Vector4(0, 0, 1, 0) },
     reflectionStrength: { value: 0 },
+    finale: { value: 0 },
+    storm: { value: new T.Vector2() },
+    cover: { value: [new T.Vector4(), new T.Vector4()] },
   };
   const material = new T.ShaderMaterial({
     uniforms,
@@ -35,6 +39,9 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
       uniform sampler2D fighterReflection;
       uniform vec4 reflectionPlane;
       uniform float reflectionStrength;
+      uniform float finale;
+      uniform vec2 storm;
+      uniform vec4 cover[2];
       ${titanEcho}
 
       float lobe(float phase, float tightness) {
@@ -82,6 +89,35 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
         return color * (1.0 - ship.a * amount * .40) + ship.rgb * glaze * amount;
       }
 
+      vec3 corruptedRain(vec3 color) {
+        if (storm.y <= 0.0) return color;
+        float safe = 0.0;
+        for (int i=0; i<2; i++) {
+          vec4 stone = cover[i];
+          float width = 1.0-smoothstep(stone.z-.003, stone.z+.003, abs(screen.x-stone.x));
+          safe = max(safe, stone.w * width * step(screen.y,stone.y));
+        }
+        float x = screen.x + .004 * sin(screen.y * 27.0 + storm.x * 12.0)
+                           + .0025 * sin(screen.y * 61.0 - storm.x * 19.0);
+        float column = x * 30.0;
+        float cell = floor(column);
+        float q = fract(column) - .5;
+        float fall = screen.y * 5.2 + storm.x * 9.1 + cloudHash(vec2(cell, 31.4)) * 5.4;
+        float breakage = cloudNoise(vec2(cell * .73, fall));
+        float splinter = cloudNoise(vec2(cell + 26.0, fall * 3.7));
+        float bend = (breakage - .5) * .27 + (splinter-.5)*.10;
+        float edge = abs(q - bend);
+        float shard = smoothstep(.16,.46,breakage) * (.59+.41*pow(.5+.5*cos(fall*7.5),1.4));
+        float boundary = .17 + .10 * breakage + .047 * splinter;
+        float cut = (1.0 - smoothstep(boundary-.028,boundary+.027,edge)) * shard;
+        float fissure = exp(-abs(edge-boundary)*21.0) * shard;
+        vec3 negative = 1.0 - sqrt(clamp(color * 1.6, 0.0, 1.0));
+        float rip = smoothstep(.73,.92,breakage) * smoothstep(.35,.86,splinter);
+        vec3 torn = mix(vec3(.010,.001,.027), negative * vec3(.36,.13,.52), rip);
+        vec3 hazard = mix(color, torn, cut * .97) + vec3(.50,.043,1.08) * fissure * .94;
+        return mix(color, hazard, (1.0-safe)*storm.y);
+      }
+
       void main() {
         vec2 delta = screen - lensCenter;
         float lensDistance = length(delta);
@@ -111,8 +147,8 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
         float ripple = z * 2.7 + .87 * cos(theta * 2.0) + cloud;
         float wave = lobe(ripple, 12.0) * fine;
         float cold = .5 + .5 * cos(theta + .8 * sin(z * .28));
-        vec3 violet = vec3(.11, .032, .27);
-        vec3 cyan = vec3(.033, .32, .58);
+        vec3 violet = mix(vec3(.11, .032, .27), vec3(.24, .032, .29), finale);
+        vec3 cyan = mix(vec3(.033, .32, .58), vec3(.035, .17, .31), finale);
         vec3 tone = mix(violet, cyan, cold);
         vec3 wall = tone * (.022 + .30 * folded * (.18 + .82 * cloud));
         wall += mix(tone, vec3(.22, .66, .94), .43) * (strands * .27 + threads * .07);
@@ -137,6 +173,17 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
         vec2 nearStars = axis + rotateRay(fromAxis, starTurn) * (1.0 + starStretch);
         vec2 farStars = axis + rotateRay(fromAxis, starTurn * .57) * (1.0 + starStretch * .68);
         color += (stars(nearStars, 31.0, 12.0) + .31 * stars(farStars, 57.0, 73.0)) * mix(.83, .32, distanceFade);
+        // A distant crescent and nebula give the negative mirror recognizable
+        // landmarks as the head-on tunnel opens into the final chamber.
+        vec2 moon = ray - vec2(-.40,.77);
+        float moonEdge = length(moon)-.128;
+        float disc = 1.0-smoothstep(-.003,.003,moonEdge);
+        float crescent = disc * smoothstep(-.007,.008,length(moon+vec2(.050,-.030))-.127);
+        float atmosphere = exp(-abs(moonEdge)*72.0) * smoothstep(-.04,.07,moon.x-moon.y*.5);
+        color = mix(color, color*.11, disc*finale);
+        color += finale * vec3(1.1,.31,.065) * (crescent*.81 + atmosphere*.29);
+        float nebula = smoothstep(.25,.93,cloud) * lobe(theta*2.0-z*.25,3.4);
+        color += finale*vec3(.15,.012,.135)*nebula*distanceFade;
         color = reflectedWall(color, tone, ripple, theta);
 
         float orbit = atan(delta.y, delta.x + .000001);
@@ -155,6 +202,7 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
         // Retain contrast along the flight lane while the walls move around it.
         float lane = (1.0 - smoothstep(.16, .45, abs(screen.x))) * (1.0 - smoothstep(.31, .65, screen.y));
         color *= 1.0 - .34 * lane;
+        color = corruptedRain(color);
         gl_FragColor = vec4(color, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -177,6 +225,15 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
       uniforms.waveStrength.value = frame.waveStrength;
       uniforms.reflectionStrength.value = mirror?.strength ?? 0;
       if (mirror) uniforms.reflectionPlane.value.set(mirror.x, mirror.y, mirror.nx, mirror.ny);
+    },
+    setFons(time: number, amount: number, state?: ReturnType<typeof fonsPhase>, rocks?: ReturnType<typeof fonsRocks>) {
+      uniforms.finale.value = amount;
+      uniforms.storm.value.set(time, state ? state.rain ? 1 : .19 * state.warning : 0);
+      for (const [index, shadow] of uniforms.cover.value.entries()) {
+        const rock = rocks?.[index];
+        if (rock) shadow.set(rock.x / (HEIGHT / 2), rock.y / (HEIGHT / 2), rock.cover / (HEIGHT / 2), Number(rock.falling));
+        else shadow.set(0, 0, 0, 0);
+      }
     },
     clearReflection() { uniforms.fighterReflection.value = null; },
   };

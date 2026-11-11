@@ -15,6 +15,9 @@ const { wormholeFrame, WORMHOLE_APPROACH } = await server.ssrLoadModule('/src/wo
 const { CICADA_FIRE, CICADA_HP, CICADA_WINDUP } = await server.ssrLoadModule('/src/cicada.ts');
 const { wormholeReflectionPose, createWormholeReflection } = await server.ssrLoadModule('/src/wormhole/reflection.ts');
 const { createFighterRig } = await server.ssrLoadModule('/src/ship-rigs.ts');
+const { FONS_APPROACH, FONS_HP, FONS_RAIN_AT, FONS_RAIN_END, fonsPhase, fonsRocks, fonsSheltered, fonsBeamHits, fonsBeams } =
+  await server.ssrLoadModule('/src/wormhole/fons/combat.ts');
+const { createFonsMantle } = await server.ssrLoadModule('/src/wormhole/fons/mantle.ts');
 
 test('the traveling aperture centers and opens before the cicada reaches combat depth', () => {
   const end = levels.wormhole.duration;
@@ -137,4 +140,82 @@ test('reflection capture primes once, restores renderer state, and disposes the 
   assert(clear.equals(originalColor));
   reflection.dispose();
   assert(disposed);
+});
+
+test('defeating the cicada flows into Fons with the same flight and continuous travel', () => {
+  const flight = new Flight('sentry', ['cannon'], 'vex', 'wormhole');
+  flight.time = flight.stageDuration;
+  flight.step(0);
+  while (flight.phase === 'approach') flight.step(STEP);
+  for (let tick = 0; tick < 90; tick++) flight.step(STEP);
+  assert(flight.markers.length > 0);
+  flight.hull = 2;
+  flight.bossHealth = 6;
+  const before = flight.wormholeTime;
+  flight.pulse();
+  assert.equal(flight.phase, 'approach');
+  assert.equal(flight.wormholeTime, before);
+  assert.equal(flight.fonsTime, -FONS_APPROACH);
+  assert.equal(flight.hull, 2);
+  assert.equal(flight.charges, 1);
+  assert.equal(flight.score, 1000);
+  assert.equal(flight.bossHealth, FONS_HP);
+  assert.equal(flight.shots.length + flight.markers.length + flight.threats.length, 0);
+  while (flight.phase === 'approach') flight.step(STEP);
+  assert.equal(flight.phase, 'boss');
+  assert(flight.isFonsFight && flight.planarBoss);
+  assert(Math.abs(flight.fonsTime) < 1e-8);
+  flight.bossHealth = 6;
+  flight.pulse();
+  assert.equal(flight.phase, 'won');
+  assert.equal(flight.score, 3500);
+  const finish = flight.wormholeTime;
+  flight.step(3);
+  assert.equal(flight.wormholeTime, finish);
+});
+
+test('both wall asteroids are drawn in, swallowed, and released before shelter is needed', () => {
+  const wall = fonsRocks(6.9);
+  const draw = fonsRocks(8.6);
+  assert(wall.every(rock => rock.visible && Math.abs(rock.x) > 4 && !rock.falling));
+  assert(draw.every(rock => rock.pull > 0 && Math.abs(rock.x) < 3.8));
+  assert(fonsRocks(10.05).every(rock => !rock.visible));
+  for (const time of [FONS_RAIN_AT, FONS_RAIN_AT + .80, FONS_RAIN_END - STEP]) {
+    const rocks = fonsRocks(time);
+    assert(fonsPhase(time).rain);
+    assert(rocks.every(rock => rock.falling && rock.visible));
+    for (const rock of rocks) {
+      assert(fonsSheltered(rocks, { x: rock.x, y: -5.3 }));
+      assert(!fonsSheltered(rocks, { x: rock.x, y: rock.y + .2 }));
+    }
+    assert(!fonsSheltered(rocks, { x: 0, y: -5.3 }));
+  }
+  const flight = new Flight('sentry', [], 'vex', 'wormhole');
+  flight.startFonsApproach();
+  while (flight.phase === 'approach') flight.step(STEP);
+  flight.time = FONS_RAIN_AT + .15;
+  flight.player.x = fonsRocks(flight.time)[0].x;
+  flight.step(STEP);
+  assert.equal(flight.hull, 4);
+  flight.player.x = 0;
+  flight.step(STEP);
+  assert.equal(flight.hull, 3);
+  const beamTime = 4.6, beam = fonsBeams(beamTime)[0];
+  assert(beam.active);
+  assert(fonsBeamHits(beamTime, { x: (beam.from.x + beam.to.x) / 2, y: (beam.from.y + beam.to.y) / 2 }));
+});
+
+test('the mantle holds its pins while the trailing folds move and freezes at a fixed clock', () => {
+  const cloth = createFonsMantle();
+  const position = cloth.root.children[0].geometry.attributes.position.array;
+  cloth.update(0, true);
+  const first = position.slice();
+  for (let tick = 1; tick <= 180; tick++) cloth.update(tick * STEP, false);
+  assert.deepEqual(position.slice(0, 51), first.slice(0, 51));
+  assert(position.some((value, index) => Math.abs(value - first[index]) > .09));
+  const frozen = position.slice();
+  cloth.update(3, false);
+  assert.deepEqual(position, frozen);
+  for (let tick = 181; tick <= 960; tick++) cloth.update(tick * STEP, false);
+  assert(position.every(value => Number.isFinite(value) && Math.abs(value) < 6));
 });
