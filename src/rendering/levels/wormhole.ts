@@ -9,6 +9,7 @@ import { createWormholeReflection, wormholeReflectionPose, type WormholeReflecti
 import { fonsEase, fonsPhase, FONS_APPROACH } from '../../wormhole/fons/combat';
 import { createFonsEffects } from '../../wormhole/fons/effects';
 import { createFonsEnvironment } from '../../wormhole/fons/environment';
+import { createFonsLightning } from '../../wormhole/fons/lightning';
 import { createFonsRig } from '../../wormhole/fons/rig';
 import { wormholeFrame, WORMHOLE_APPROACH } from '../../wormhole/route';
 import { createWormholeTunnel } from '../../wormhole/tunnel';
@@ -26,15 +27,16 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
   const attacks = createFonsEffects();
   const environment = createFonsEnvironment(tunnel.root, attacks.rocks);
   const fons = createFonsRig(environment.texture);
+  const lightning = createFonsLightning(apertureY * halfHeight);
   let mirror: WormholeReflectionPose;
   const chitin = createTitanChitinSurface();
   const boss = createCicada(chitin.material);
   boss.root.visible = false;
   fons.root.visible = attacks.root.visible = false;
-  const amber = new T.Color(0xff974f), cyan = new T.Color(0x65e5da);
+  const amber = new T.Color(0xff974f), cyan = new T.Color(0x65e5da), violet = new T.Color(0xa563ff);
   const rim = new T.DirectionalLight(amber, .8);
   rim.position.set(-2, 6, -14);
-  root.add(tunnel.root, boss.root, fons.root, attacks.root, rim);
+  root.add(tunnel.root, boss.root, fons.root, attacks.root, lightning.root, rim);
   const ready = Promise.all([
     loadEncounterTexture('titanChitin', chitin.setTexture, 1, signal),
     loadEncounterTexture('fonsMane', fons.setMane, undefined, signal),
@@ -56,12 +58,13 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
     skyIntensity: 1.35,
     friendlyGlow: 1.17,
     contacts: [boss.root, fons.root],
-    warmup: [[tunnel.root, boss.root], [fons.root, attacks.root]],
+    warmup: [[tunnel.root, boss.root], [fons.root, attacks.root, lightning.root]],
     prepare() {
       // Prime the rematch at its settled depth before the entrance animates it.
       boss.root.position.set(0, BOSS_Y, BOSS_DEPTH);
       fons.update(0, BOSS_CAMERA_DISTANCE, true);
       attacks.prime();
+      lightning.update(-1.8, BOSS_CAMERA_DISTANCE);
       environment.prime();
       reflection.prime();
     },
@@ -90,10 +93,12 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
       const storm = attacks.root.visible ? fonsPhase(fonsTime) : undefined;
       const rocks = attacks.root.visible ? attacks.update(fonsTime, distance, flight.threats, flight.phase === 'boss' || flight.phase === 'lost') : undefined;
       tunnel.setFons(fonsTime, finale, storm, rocks);
+      lightning.root.visible = false;
+      const crackle = flight.isFonsFight && fonsTime < 0 ? lightning.update(fonsTime, distance) : 0;
       const shipRadius = Math.hypot(flight.player.x / halfHeight - frame.lensX, flight.player.y / halfHeight - apertureY - frame.lensY);
       const waveLight = frame.waveStrength * Math.exp(-8 * Math.abs(frame.waveRadius - shipRadius));
-      rim.color.copy(amber).lerp(cyan, finale);
-      rim.intensity = .54 + frame.echo * 1.65 + waveLight * 1.8 + finale * 1.4;
+      rim.color.copy(amber).lerp(cyan, finale).lerp(violet, crackle * .68);
+      rim.intensity = .54 + frame.echo * 1.65 + waveLight * 1.8 + finale * 1.4 + crackle * .82;
       rim.position.set(frame.lensX * 19 - 2, 6, -14);
       const retreat = flight.isFonsFight && time > flight.stageDuration + WORMHOLE_APPROACH + .60 &&
         fonsTime < -FONS_APPROACH + .72;

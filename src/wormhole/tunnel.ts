@@ -3,6 +3,7 @@ import { HEIGHT, WIDTH } from '../playfield';
 import type { WormholeReflectionPose } from './reflection';
 import type { wormholeFrame } from './route';
 import type { fonsPhase, fonsRocks } from './fons/combat';
+import { wallRiftShape } from './fons/wall-rift';
 import { titanEcho } from './titan-echo';
 
 export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
@@ -20,6 +21,7 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
     finale: { value: 0 },
     storm: { value: new T.Vector2() },
     cover: { value: [new T.Vector4(), new T.Vector4()] },
+    wallRifts: { value: [new T.Vector4(), new T.Vector4()] },
   };
   const material = new T.ShaderMaterial({
     uniforms,
@@ -42,7 +44,9 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
       uniform float finale;
       uniform vec2 storm;
       uniform vec4 cover[2];
+      uniform vec4 wallRifts[2];
       ${titanEcho}
+      ${wallRiftShape}
 
       float lobe(float phase, float tightness) {
         return pow(max(0.0, .5 + .5 * cos(phase)), tightness);
@@ -89,6 +93,31 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
         return color * (1.0 - ship.a * amount * .40) + ship.rgb * glaze * amount;
       }
 
+      vec2 bendAtRift(vec2 ray, vec4 rift) {
+        if (rift.z < .002) return ray;
+        vec2 p = screen - rift.xy;
+        float radius = fonsRiftRadius(fonsRiftLocal(p, rift.w), storm.x);
+        float wake = exp(-abs(radius - rift.z) * 2.4) * rift.z;
+        vec2 turn = vec2(-p.y, p.x) * rift.w;
+        return ray + (-p * .53 + turn * .39) * wake;
+      }
+
+      vec3 showRift(vec3 color, vec4 rift) {
+        if (rift.z < .002) return color;
+        vec2 p = screen - rift.xy;
+        vec2 local = fonsRiftLocal(p, rift.w);
+        float angle = atan(local.y, local.x + .000001);
+        float edge = fonsRiftRadius(local, storm.x) - rift.z;
+        float inside = 1.0 - smoothstep(-.065, .021, edge);
+        float ribs = .53 + .47 * lobe(angle * 5.0 + storm.x * 7.0, 3.0);
+        float arc = exp(-abs(edge) * 38.0) * ribs;
+        float halo = exp(-abs(edge) * 10.0) * (.46 + .54 * sin(angle * 2.0 + 1.4) * sin(angle * 2.0 + 1.4));
+        vec3 beyond = vec3(.006, .002, .023) + stars(screen * 1.48 + vec2(.18,.08), 31.0, 45.0) * .62;
+        vec3 violet = mix(vec3(.48,.07,1.1), vec3(.21,.61,1.23), lobe(angle * 2.0 + .44, 3.0));
+        color = mix(color, beyond, inside * smoothstep(.0,.24,rift.z) * .96);
+        return color + rift.z * violet * (arc * .81 + halo * .30);
+      }
+
       vec3 corruptedRain(vec3 color) {
         if (storm.y <= 0.0) return color;
         float safe = 0.0;
@@ -127,6 +156,7 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
         // far wall can appear on both sides of the ring without copying a frame.
         float bend = lensStrength * (lensSquared + core) / (dot(delta, delta) + core);
         vec2 ray = screen - delta * bend;
+        for (int i=0; i<2; i++) ray = bendAtRift(ray, wallRifts[i]);
 
         vec2 axis = vec2(0.0, ${apertureY.toFixed(8)});
         vec2 fromAxis = ray - axis;
@@ -202,6 +232,7 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
         // Retain contrast along the flight lane while the walls move around it.
         float lane = (1.0 - smoothstep(.16, .45, abs(screen.x))) * (1.0 - smoothstep(.31, .65, screen.y));
         color *= 1.0 - .34 * lane;
+        for (int i=0; i<2; i++) color = showRift(color, wallRifts[i]);
         color = corruptedRain(color);
         gl_FragColor = vec4(color, 1.0);
         #include <tonemapping_fragment>
@@ -231,8 +262,14 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
       uniforms.storm.value.set(time, state ? state.rain ? 1 : .19 * state.warning : 0);
       for (const [index, shadow] of uniforms.cover.value.entries()) {
         const rock = rocks?.[index];
-        if (rock) shadow.set(rock.x / (HEIGHT / 2), rock.y / (HEIGHT / 2), rock.cover / (HEIGHT / 2), Number(rock.falling));
-        else shadow.set(0, 0, 0, 0);
+        const rift = uniforms.wallRifts.value[index];
+        if (rock) {
+          shadow.set(rock.x / (HEIGHT / 2), rock.y / (HEIGHT / 2), rock.cover / (HEIGHT / 2), Number(rock.covering));
+          rift.set(rock.rift.x / (HEIGHT / 2), rock.rift.y / (HEIGHT / 2), rock.rift.opening, rock.rift.side);
+        } else {
+          shadow.set(0, 0, 0, 0);
+          rift.set(0, 0, 0, 0);
+        }
       }
     },
     clearReflection() { uniforms.fighterReflection.value = null; },

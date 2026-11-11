@@ -1,6 +1,8 @@
 import * as T from 'three';
 import type { Flight } from '../../game';
+import { HEIGHT, WIDTH } from '../../playfield';
 import { fonsBeams, fonsPose, fonsRocks, fonsPhase } from './combat';
+import { wallRiftShape } from './wall-rift';
 
 function asteroid(seed: number) {
   const shape = new T.IcosahedronGeometry(1, 5);
@@ -21,7 +23,40 @@ function asteroid(seed: number) {
   return shape;
 }
 
-function streak(kind: 'beam' | 'pull', plane: T.PlaneGeometry) {
+function breachingRock(seed: number) {
+  const rift = { value: new T.Vector4() };
+  const clock = { value: 0 }, crossing = { value: false };
+  const material = new T.MeshStandardMaterial({ vertexColors: true, roughness: .96 });
+  material.onBeforeCompile = shader => {
+    Object.assign(shader.uniforms, { rockRift: rift, rockClock: clock, rockCrossing: crossing });
+    shader.vertexShader = 'varying vec4 rockScreen;\n' + shader.vertexShader.replace(
+      '#include <project_vertex>', '#include <project_vertex>\nrockScreen = gl_Position;',
+    );
+    shader.fragmentShader = `
+      varying vec4 rockScreen;
+      uniform vec4 rockRift;
+      uniform float rockClock;
+      uniform bool rockCrossing;
+      ${wallRiftShape}
+    ` + shader.fragmentShader.replace('#include <clipping_planes_fragment>', `
+      #include <clipping_planes_fragment>
+      float riftLight = 0.0;
+      if (rockCrossing) {
+        vec2 p = rockScreen.xy / rockScreen.w * vec2(${WIDTH / HEIGHT}, 1.0) - rockRift.xy;
+        vec2 riftPoint = fonsRiftLocal(p, rockRift.w);
+        float radius = fonsRiftRadius(riftPoint, rockClock);
+        if (riftPoint.x * rockRift.w > -.11 && radius > rockRift.z) discard;
+        riftLight = exp(-abs(radius - rockRift.z) * 7.0) * rockRift.z;
+      }
+    `).replace('#include <opaque_fragment>', `
+      outgoingLight += riftLight * vec3(.12, .024, .32);
+      #include <opaque_fragment>
+    `);
+  };
+  return { mesh: new T.Mesh(asteroid(seed), material), rift, clock, crossing };
+}
+
+function streak(plane: T.PlaneGeometry) {
   const draw = new T.ShaderMaterial({
     uniforms: { power: { value: 0 }, clock: { value: 0 }, firing: { value: false } },
     transparent: true,
@@ -34,23 +69,15 @@ function streak(kind: 'beam' | 'pull', plane: T.PlaneGeometry) {
       void main() {
         float d = abs(v.x * 2.0 - 1.0);
         float endFade = smoothstep(0.0,.025,v.y) * (1.0-smoothstep(.986,1.0,v.y));
-        ${kind === 'beam' ? `
-          float edge=exp(-abs(d-.56)*18.0);
-          float center=1.0-smoothstep(.52,.67,d);
-          float pulse=.62+.38*sin(v.y*57.0-clock*16.0);
-          vec3 color=vec3(.009,.002,.018)+edge*vec3(.59,.077,1.06)*(1.0+pulse*.46);
-          float opacity=max(center*.95,edge*.87)*power*endFade;
-          if(!firing){
-            color=vec3(.57,.18,1.0);
-            opacity=exp(-d*20.0)*power*.7*smoothstep(-.1,.5,sin(v.y*146.0-clock*8.0))*endFade;
-          }
-        ` : `
-          float sweep = v.y * 24.0 + clock * 9.0;
-          float arc = sin(v.y * 18.0 + clock * 4.0) * .36;
-          float strand=exp(-abs(v.x*2.0-1.0-arc)*13.0)+.48*exp(-abs(v.x*2.0-1.0+arc)*10.0);
-          vec3 color=mix(vec3(.038,.81,.52),vec3(.14,.88,1.38),.5+.5*sin(sweep));
-          float opacity=power*strand*endFade*(.28+.38*pow(.5+.5*cos(sweep),2.0));
-        `}
+        float edge=exp(-abs(d-.56)*18.0);
+        float center=1.0-smoothstep(.52,.67,d);
+        float pulse=.62+.38*sin(v.y*57.0-clock*16.0);
+        vec3 color=vec3(.009,.002,.018)+edge*vec3(.59,.077,1.06)*(1.0+pulse*.46);
+        float opacity=max(center*.95,edge*.87)*power*endFade;
+        if(!firing){
+          color=vec3(.57,.18,1.0);
+          opacity=exp(-d*20.0)*power*.7*smoothstep(-.1,.5,sin(v.y*146.0-clock*8.0))*endFade;
+        }
         gl_FragColor=vec4(color,opacity);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -76,10 +103,9 @@ export function createFonsEffects() {
   const root = new T.Group();
   root.name = 'fons-attacks';
   const plane = new T.PlaneGeometry(1, 1);
-  const beams = [streak('beam', plane), streak('beam', plane)];
-  const tethers = [streak('pull', plane), streak('pull', plane)];
-  const rockMaterial = new T.MeshStandardMaterial({ vertexColors: true, roughness: .96 });
-  const rocks = [3.2, 8.7].map(seed => new T.Mesh(asteroid(seed), rockMaterial));
+  const beams = [streak(plane), streak(plane)];
+  const asteroids = [breachingRock(3.2), breachingRock(8.7)];
+  const rocks = asteroids.map(asteroid => asteroid.mesh);
   rocks.forEach((rock, index) => { rock.name = 'fons-wall-asteroid-' + index; });
   const impacts = rocks.map(() => new T.Mesh(plane, new T.ShaderMaterial({
     uniforms: { clock: { value: 0 } },
@@ -121,21 +147,23 @@ export function createFonsEffects() {
   bullets.frustumCulled = false;
   bullets.instanceMatrix.setUsage(T.DynamicDrawUsage);
   const matrix = new T.Matrix4();
-  root.add(...rocks, ...tethers, ...beams, ...impacts, bullets);
+  root.add(...rocks, ...beams, ...impacts, bullets);
 
   function update(time: number, distance: number, threats: readonly Flight['threats'][number][], active: boolean) {
     const pose = fonsPose(time), state = fonsPhase(time);
-    const placed = fonsRocks(time, pose);
-    for (const [index, rock] of rocks.entries()) {
+    const placed = fonsRocks(time);
+    for (const [index, { mesh: rock, rift, clock, crossing }] of asteroids.entries()) {
       const p = placed[index];
       const projection = 1 - p.depth / distance;
       rock.visible = p.visible;
       rock.position.set(p.x * projection, p.y * projection, p.depth);
       rock.rotation.set(.16 + .33 * Math.sin(time * .63 + index), .34 * Math.sin(time * 1.05 + index), p.spin);
       rock.scale.set(p.rx * projection, p.ry * projection, p.ry * projection * 1.08);
-      placeStreak(tethers[index], p, { x: pose.x, y: pose.y - .32 }, .35, p.pull, time, false);
+      rift.value.set(p.rift.x / (HEIGHT / 2), p.rift.y / (HEIGHT / 2), p.rift.opening, p.rift.side);
+      clock.value = time;
+      crossing.value = p.rift.clipping;
       const impact = impacts[index];
-      impact.visible = state.rain && p.falling;
+      impact.visible = state.rain && p.covering;
       impact.position.set(p.x, p.y + .62 * p.ry, .62);
       impact.scale.set(p.rx * 2.1, p.ry * 1.24, 1);
       impact.material.uniforms.clock.value = time;
@@ -157,7 +185,7 @@ export function createFonsEffects() {
     root, rocks, update,
     prime() {
       update(12.3, 22, [{ x: 0, y: 0, z: 0, vx: 0, vy: -1, vz: 0 }], true);
-      for (const mesh of [...beams, ...tethers, ...impacts, ...rocks]) mesh.visible = true;
+      for (const mesh of [...beams, ...impacts, ...rocks]) mesh.visible = true;
     },
   };
 }

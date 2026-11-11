@@ -3,6 +3,7 @@ import { fonsPhase, fonsPose } from './combat';
 
 const columns = 17, rows = 20;
 const step = 1 / 90;
+const clothFront = -1.02;
 type Seam = { a: number; b: number; length: number; stiffness: number };
 
 function makePanel(side: number, material: T.ShaderMaterial) {
@@ -15,7 +16,7 @@ function makePanel(side: number, material: T.ShaderMaterial) {
     const x = side * (.50 + width * u + .25 * v * Math.sin(3 * u + side));
     const y = .73 + .54 * Math.sin(u * 2.45) - v * (3.49 + .24 * side) +
       .46 * v ** 4 * Math.cos(u * 14.8 + side) - .31 * u * v;
-    const z = -.53 - .26 * u + crest * (.19 + .15 * v) - .48 * v * u;
+    const z = -1.39 - .26 * u + crest * (.19 + .15 * v) - .48 * v * u;
     rest.push(x, y, z);
     uv.push(u, 1 - v);
     if (row < rows - 1 && column < columns - 1) {
@@ -82,12 +83,9 @@ function makePanel(side: number, material: T.ShaderMaterial) {
           positions[a + 1] += dy * correction * freeA; positions[b + 1] -= dy * correction * freeB;
           positions[a + 2] += dz * correction * freeA; positions[b + 2] -= dz * correction * freeB;
         }
-        for (let i = columns * 3; i < positions.length; i += 3) {
-          const x = positions[i] / 1.11, y = (positions[i + 1] + .08) / 1.46, z = positions[i + 2] / .69;
-          const depth = 1 - x * x - y * y;
-          // Keep the folded collar behind the mirror's body collider.
-          if (depth > 0 && z > -Math.sqrt(depth)) positions[i + 2] = -.69 * Math.sqrt(depth);
-        }
+        // Stop the animated folds behind the deepest tips of the rear mane.
+        for (let i = columns * 3 + 2; i < positions.length; i += 3)
+          positions[i] = Math.min(positions[i], clothFront);
       }
     },
     upload() {
@@ -138,6 +136,7 @@ export function createFonsMantle() {
     `,
   });
   const root = new T.Group();
+  root.name = 'fons-mantle';
   const panels = [-1, 1].map(side => makePanel(side, material));
   root.add(...panels.map(panel => panel.mesh));
   let last = -Infinity;

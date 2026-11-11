@@ -1,4 +1,5 @@
 import { ellipseEntry } from '../../planar-contact';
+import { WIDTH } from '../../playfield';
 
 type Point = { x: number; y: number };
 type Side = -1 | 1;
@@ -8,8 +9,7 @@ export const FONS_APPROACH = 3.25;
 export const FONS_CYCLE = 18.6;
 export const FONS_RAIN_AT = 11.65;
 export const FONS_RAIN_END = 14.65;
-const PULL_AT = 7.05;
-const RELEASE_AT = 10.25;
+const BREACH_AT = 7.12;
 const shotsAt = [1.02, 2.12, 3.22] as const;
 
 const clamp = (n: number, min = 0, max = 1) => Math.min(max, Math.max(min, n));
@@ -26,9 +26,8 @@ export function fonsPhase(time: number) {
   return {
     cycle, age, rain,
     warning: fonsEase(FONS_RAIN_AT - 1.0, FONS_RAIN_AT, age) * (age < FONS_RAIN_AT ? 1 : 0),
-    pull: fonsEase(PULL_AT - .45, PULL_AT + 1.2, age) * (1 - fonsEase(RELEASE_AT - .3, RELEASE_AT + .45, age)),
-    lift: fonsEase(PULL_AT + .2, FONS_RAIN_AT + .25, age) * (1 - fonsEase(FONS_RAIN_END, FONS_RAIN_END + 1.4, age)),
-    recovery: fonsEase(FONS_RAIN_END - .1, FONS_RAIN_END + .42, age) * (1 - fonsEase(FONS_RAIN_END + .9, FONS_RAIN_END + 1.8, age)),
+    openingRifts: age >= BREACH_AT && age < FONS_RAIN_AT - 1.0,
+    lift: fonsEase(BREACH_AT + .13, FONS_RAIN_AT + .25, age) * (1 - fonsEase(FONS_RAIN_END, FONS_RAIN_END + 1.4, age)),
   };
 }
 
@@ -107,45 +106,50 @@ export function fonsVolleys(time: number, dt: number, player: Point) {
 }
 
 const wallSites = [
-  { side: -1, y: 1.28, rx: 1.15, ry: .67, drift: .32, lane: -2.1 },
-  { side: 1, y: .42, rx: 1.03, ry: .76, drift: -.29, lane: 2.18 },
+  { side: -1, y: 3.58, rx: 1.15, ry: .67, drift: .265, lane: -2.19 },
+  { side: 1, y: 2.67, rx: 1.03, ry: .76, drift: -.25, lane: 2.24 },
 ] as const;
 
-export function fonsRocks(time: number, pose = fonsPose(time)) {
+export function fonsRocks(time: number) {
   const { age } = fonsPhase(time);
   return wallSites.map((site, index) => {
-    const start = PULL_AT + index * .32;
-    const swallow = 9.60 + index * .22;
-    const pull = fonsEase(start, swallow, age);
-    const eat = fonsEase(.69, 1, pull);
-    const dropAge = age - RELEASE_AT - index * .21;
-    const ejected = dropAge >= 0;
-    const release = fonsEase(0, .88, dropAge);
-    const fall = Math.max(0, dropAge - .88);
+    const breach = BREACH_AT + index * .49;
+    const emerge = breach + .57;
+    const settled = 10.28 + index * .37;
+    const entry = fonsEase(emerge, settled, age);
+    const fall = Math.max(0, age - settled);
+    const drift = fall + .29 * Math.expm1(-fall / .29);
     const pastRain = Math.max(0, age - FONS_RAIN_END);
-    const anchorX = site.side * 4.49, anchorY = site.y + .16 * Math.sin(time * .78 + index);
-    const x = ejected ? mix(pose.x, site.lane + site.drift * fall, release) : mix(anchorX, pose.x, pull);
-    const fallY = 2.24 - index * .45 - fall * 1.24 - pastRain * pastRain * .45;
-    const y = ejected ? mix(pose.y - .48, fallY, release) : mix(anchorY, pose.y - .20, pull);
-    const scale = ejected ? mix(.16, 1, release) : 1 - .93 * eat;
+    const recession = fonsEase(0, FONS_CYCLE - FONS_RAIN_END, pastRain);
+    const opening = fonsEase(breach, breach + .82, age) * (1 - fonsEase(settled - .62, settled + .14, age));
+    const x = mix(site.side * (WIDTH / 2 + 1.22), site.lane, entry) + site.drift * drift;
+    const y = mix(site.y + .37, 2.51 - index * .41, entry) - drift * 1.20 - .35 * pastRain * pastRain;
+    const scale = mix(.62, 1, entry) / (1 + recession * 2.6);
+    const depth = mix(-17, .22, entry) - recession * 57.2;
+    const visible = age >= emerge && y + site.ry * scale > -8.1;
+    const covering = age >= settled && depth > -1.3 && visible;
     return {
       x, y, rx: site.rx * scale, ry: site.ry * scale,
-      depth: ejected ? mix(-6.5, .22, release) : mix(-4.4, -7.2, pull),
-      spin: .16 * Math.sin(time * .91 + index) + site.side * (pull * .47 + release * .31),
-      pull: !ejected && age >= start && age < swallow ? fonsEase(start, start + .36, age) * (1 - eat) : 0,
-      visible: ejected ? y > -9.6 : age < swallow,
-      falling: ejected && release >= 1 && y > -9.6,
+      depth, visible, covering,
+      spin: .15 * Math.sin(time * .91 + index) + site.side * (entry * .47 + drift * .15),
       cover: site.rx * .78 * scale,
+      rift: {
+        x: site.side * (WIDTH / 2 - .22),
+        y: site.y,
+        opening,
+        side: site.side,
+        clipping: entry < .90,
+      },
     };
   });
 }
 
 type Rocks = ReturnType<typeof fonsRocks>;
 export function fonsSheltered(rocks: Rocks, player: Point) {
-  return rocks.some(rock => rock.falling && player.y < rock.y && Math.abs(player.x - rock.x) < rock.cover);
+  return rocks.some(rock => rock.covering && player.y < rock.y && Math.abs(player.x - rock.x) < rock.cover);
 }
 
 export function fonsRockHits(rocks: Rocks, player: Point) {
-  return rocks.some(rock => rock.falling &&
+  return rocks.some(rock => rock.covering &&
     ((player.x - rock.x) / (rock.cover + .15)) ** 2 + ((player.y - rock.y) / (rock.ry * .82 + .15)) ** 2 < 1);
 }

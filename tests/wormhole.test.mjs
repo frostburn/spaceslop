@@ -18,6 +18,7 @@ const { createFighterRig } = await server.ssrLoadModule('/src/ship-rigs.ts');
 const { FONS_APPROACH, FONS_HP, FONS_RAIN_AT, FONS_RAIN_END, fonsPhase, fonsRocks, fonsSheltered, fonsBeamHits, fonsBeams } =
   await server.ssrLoadModule('/src/wormhole/fons/combat.ts');
 const { createFonsMantle } = await server.ssrLoadModule('/src/wormhole/fons/mantle.ts');
+const { createFonsLightning } = await server.ssrLoadModule('/src/wormhole/fons/lightning.ts');
 
 test('the traveling aperture centers and opens before the cicada reaches combat depth', () => {
   const end = levels.wormhole.duration;
@@ -174,22 +175,31 @@ test('defeating the cicada flows into Fons with the same flight and continuous t
   assert.equal(flight.wormholeTime, finish);
 });
 
-test('both wall asteroids are drawn in, swallowed, and released before shelter is needed', () => {
+test('the wall rifts open before the asteroids cross and both rocks recede after giving cover', () => {
   const wall = fonsRocks(6.9);
-  const draw = fonsRocks(8.6);
-  assert(wall.every(rock => rock.visible && Math.abs(rock.x) > 4 && !rock.falling));
-  assert(draw.every(rock => rock.pull > 0 && Math.abs(rock.x) < 3.8));
-  assert(fonsRocks(10.05).every(rock => !rock.visible));
+  assert(wall.every(rock => !rock.visible && rock.rift.opening === 0 && Math.abs(rock.x) - rock.rx > 4.5));
+  const warning = fonsRocks(7.58)[0];
+  assert(warning.rift.opening > 0 && !warning.visible);
+  const crossing = fonsRocks(8.83);
+  assert(crossing.every(rock => rock.visible && rock.rift.opening > .7 && rock.rift.clipping && !rock.covering));
+  assert(crossing.every((rock, index) => Math.abs(rock.x) < Math.abs(wall[index].x) && rock.y < wall[index].y));
+  assert(fonsRocks(10.95).every(rock => rock.visible && rock.covering && rock.rift.opening === 0));
   for (const time of [FONS_RAIN_AT, FONS_RAIN_AT + .80, FONS_RAIN_END - STEP]) {
     const rocks = fonsRocks(time);
     assert(fonsPhase(time).rain);
-    assert(rocks.every(rock => rock.falling && rock.visible));
+    assert(rocks.every(rock => rock.covering && rock.visible));
     for (const rock of rocks) {
       assert(fonsSheltered(rocks, { x: rock.x, y: -5.3 }));
       assert(!fonsSheltered(rocks, { x: rock.x, y: rock.y + .2 }));
     }
     assert(!fonsSheltered(rocks, { x: 0, y: -5.3 }));
   }
+  const lastCover = fonsRocks(FONS_RAIN_END);
+  for (const [index, rock] of fonsRocks(FONS_RAIN_END + 1.2).entries()) {
+    assert(rock.visible && !rock.covering);
+    assert(rock.y < lastCover[index].y && rock.depth < lastCover[index].depth && rock.rx < lastCover[index].rx);
+  }
+  assert(fonsRocks(18.5).every(rock => !rock.visible && !rock.covering));
   const flight = new Flight('sentry', [], 'vex', 'wormhole');
   flight.startFonsApproach();
   while (flight.phase === 'approach') flight.step(STEP);
@@ -218,4 +228,22 @@ test('the mantle holds its pins while the trailing folds move and freezes at a f
   assert.deepEqual(position, frozen);
   for (let tick = 181; tick <= 960; tick++) cloth.update(tick * STEP, false);
   assert(position.every(value => Number.isFinite(value) && Math.abs(value) < 6));
+  assert(position.every((value, index) => index % 3 !== 2 || value <= -1.019));
+});
+
+test('entry lightning redraws its branches on the presentation clock and clears before combat', () => {
+  const lightning = createFonsLightning(2.7);
+  assert.equal(lightning.update(-FONS_APPROACH, 22), 0);
+  assert(!lightning.root.visible);
+  assert(lightning.update(-1.8, 22) > .5);
+  assert(lightning.root.visible);
+  assert(lightning.root.geometry.drawRange.count > 0);
+  const positions = lightning.root.geometry.attributes.position.array;
+  const snapshot = positions.slice();
+  lightning.update(-1.8, 22);
+  assert.deepEqual(positions, snapshot);
+  lightning.update(-1.6, 22);
+  assert(positions.some((value, index) => value !== snapshot[index]));
+  assert.equal(lightning.update(0, 22), 0);
+  assert(!lightning.root.visible);
 });

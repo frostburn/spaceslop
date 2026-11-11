@@ -10,19 +10,22 @@ function tusk(side: number, small: boolean) {
     [.68, -.56, .40], [1.12, -.86, .68], [1.61, -.70, .91], [1.83, -.17, 1.01], [1.71, .50, .91],
   ];
   const curve = new T.CatmullRomCurve3(points.map(([x, y, z]) => new T.Vector3(side * x, y, z)));
-  const spans = 32, sides = 14;
+  const spans = 42, sides = 18;
+  const rootWidth = small ? .168 : .271;
   const frame = curve.computeFrenetFrames(spans, false);
   const positions: number[] = [], colors: number[] = [], index: number[] = [];
-  const bone = new T.Color(0xb5afa4), patina = new T.Color(0x3b4346), color = new T.Color();
+  const bone = new T.Color(0xe1cca3), root = new T.Color(0x997b58), color = new T.Color();
   for (let i = 0; i <= spans; i++) {
     const t = i / spans, center = curve.getPointAt(t);
-    const width = (small ? .161 : .263) * Math.max(.014, (1 - t) ** .68);
+    const width = rootWidth * Math.max(.010, (1 - t) ** .69);
     for (let j = 0; j < sides; j++) {
       const a = j * Math.PI * 2 / sides;
-      const n = frame.normals[i], b = frame.binormals[i], nx = Math.cos(a) * width, bz = Math.sin(a) * width;
+      const flute = .055 * Math.sin(a * 4.0 + t * 3.0) + .035 * Math.sin(a * 7.0 - t * 5.0);
+      const n = frame.normals[i], b = frame.binormals[i];
+      const nx = Math.cos(a) * width * (1 + flute), bz = Math.sin(a) * width * (.90 + flute);
       positions.push(center.x + n.x * nx + b.x * bz, center.y + n.y * nx + b.y * bz, center.z + n.z * nx + b.z * bz);
-      const striae = .083 * Math.sin(t * 106 + a * 2) + .058 * Math.sin(t * 220 - a * 3);
-      color.copy(patina).lerp(bone, T.MathUtils.clamp(.22 + t * .68 + striae, 0, 1));
+      const grain = .08 * Math.sin(a * 9 + t * 2.2) + .063 * Math.sin(t * 73 + a * 2.7);
+      color.copy(root).lerp(bone, T.MathUtils.clamp(.25 + t * .67 + grain + flute, 0, 1));
       colors.push(color.r, color.g, color.b);
       if (i < spans) {
         const v = i * sides + j, next = i * sides + (j + 1) % sides;
@@ -35,7 +38,9 @@ function tusk(side: number, small: boolean) {
   geometry.setAttribute('color', new T.Float32BufferAttribute(colors, 3));
   geometry.setIndex(index);
   geometry.computeVertexNormals();
-  return geometry;
+  const base = curve.getPointAt(0);
+  const axis = curve.getPointAt(small ? .20 : .13).sub(base).normalize();
+  return { geometry, base, axis, rootWidth };
 }
 
 export function createFonsRig(environment: T.Texture) {
@@ -48,8 +53,9 @@ export function createFonsRig(environment: T.Texture) {
   }));
   collar.scale.set(.96, 1.52, .66);
   collar.position.z = -.13;
+  const surroundings = { value: environment as T.Texture | null };
   const mirrorMaterial = new T.ShaderMaterial({
-    uniforms: { surroundings: { value: environment as T.Texture | null }, storm: { value: 0 } },
+    uniforms: { surroundings, storm: { value: 0 } },
     vertexShader: /* glsl */ `
       varying vec3 surfaceNormal, eye;
       void main() {
@@ -88,12 +94,49 @@ export function createFonsRig(environment: T.Texture) {
   mirror.scale.set(.85, 1.40, .71);
   mirror.position.z = .13;
   const tooth = new T.MeshStandardMaterial({
-    vertexColors: true, roughness: .42, metalness: .13, side: T.DoubleSide,
+    vertexColors: true, roughness: .71, emissive: 0xb4865c, emissiveIntensity: .07,
   });
+  tooth.onBeforeCompile = shader => {
+    shader.vertexShader = 'varying vec3 bonePoint;\n' + shader.vertexShader.replace('#include <begin_vertex>',
+      '#include <begin_vertex>\nbonePoint = position;');
+    shader.fragmentShader = 'varying vec3 bonePoint;\n' + shader.fragmentShader.replace('#include <color_fragment>', `
+      #include <color_fragment>
+      vec3 pore = bonePoint * vec3(57.0, 71.0, 49.0);
+      float seed = fract(sin(dot(floor(pore),vec3(17.43,79.23,43.79)))*43758.5453);
+      float pit = 1.0 - smoothstep(.13, .40, length(fract(pore)-.5));
+      float grain = .5+.5*sin(bonePoint.x*71.0+bonePoint.y*61.0+2.0*sin(bonePoint.z*45.0));
+      diffuseColor.rgb *= 1.0 - pit * seed * .24 - grain * .09;
+    `);
+  };
+  const platinum = new T.MeshPhysicalMaterial({ color: 0xe4e6ec, metalness: .95, roughness: .19, clearcoat: .64 });
+  platinum.onBeforeCompile = shader => {
+    shader.uniforms.platinumSky = surroundings;
+    shader.fragmentShader = 'uniform sampler2D platinumSky;\n' + shader.fragmentShader.replace('#include <opaque_fragment>', `
+      vec3 metalRay = reflect(-normalize(vViewPosition), normal);
+      vec2 metalUV = clamp(vec2(.50,.56) + metalRay.xy * vec2(-.44,.38), .002, .998);
+      vec3 reflectedSky = texture2D(platinumSky,metalUV).rgb;
+      float strip = exp(-abs(dot(metalRay,vec3(.73,.57,-.37))-.34)*18.0);
+      float fill = exp(-abs(dot(metalRay,vec3(-.42,.74,.52))+.31)*7.0);
+      outgoingLight += vec3(.08,.10,.13) + reflectedSky*.63 + vec3(.99,1.02,1.08)*(strip*1.47 + fill*.24);
+      #include <opaque_fragment>
+    `);
+  };
+  const cuff = new T.LatheGeometry([
+    [1.00, -.28], [1.37, -.20], [1.50, -.04], [1.51, .16], [1.38, .34],
+    [1.24, .50], [1.23, .62], [1.37, .72], [1.34, .90], [1.22, 1.0], [.94, 1.0],
+  ].map(([r, y]) => new T.Vector2(r, y)), 36);
+  const up = new T.Vector3(0, 1, 0);
   for (const side of [-1, 1]) for (const small of [false, true]) {
-    const mesh = new T.Mesh(tusk(side, small), tooth);
-    mesh.name = 'fons-tusk-' + (side < 0 ? 'left-' : 'right-') + (small ? 'inner' : 'outer');
-    root.add(mesh);
+    const { geometry, base, axis, rootWidth } = tusk(side, small);
+    const name = (side < 0 ? 'left-' : 'right-') + (small ? 'inner' : 'outer');
+    const mesh = new T.Mesh(geometry, tooth);
+    mesh.name = 'fons-tusk-' + name;
+    const mount = new T.Mesh(cuff, platinum);
+    mount.name = 'fons-platinum-mount-' + name;
+    mount.position.copy(base);
+    mount.quaternion.setFromUnitVectors(up, axis);
+    mount.scale.set(rootWidth, small ? .245 : .335, rootWidth);
+    root.add(mesh, mount);
   }
   root.add(mantle.root, collar, mirror, mane.root);
   return {
@@ -109,6 +152,6 @@ export function createFonsRig(environment: T.Texture) {
       mane.update(time);
       mirrorMaterial.uniforms.storm.value = fonsPhase(time).lift;
     },
-    clearEnvironment() { mirrorMaterial.uniforms.surroundings.value = null; },
+    clearEnvironment() { surroundings.value = null; },
   };
 }
