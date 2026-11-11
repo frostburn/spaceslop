@@ -6,7 +6,6 @@ export const textureFiles = {
   denGantry: 'encounters/draconian-gantry.png',
   denSky: 'encounters/draconian-galactic-center.png',
   denPatrol: 'encounters/draconian-patrol-turns.png',
-  denNest: 'encounters/draconian-egg-nest.png',
   biolumeBackdrop:'encounters/biolume-backdrop.webp',
   biolumeForeground:'encounters/biolume-foreground.webp',
   biolumeEnemy:'encounters/biolume-glider.png',
@@ -63,7 +62,7 @@ export const studyTextureFiles = {
 export type StudyTexture = keyof typeof studyTextureFiles;
 
 export const levelTextures: Record<LevelId, readonly EncounterTexture[]> = {
-  den: ['armor', 'denCliff', 'denDisk', 'denBiker', 'denGantry', 'denSky', 'denPatrol', 'denNest'],
+  den: ['armor', 'denCliff', 'denDisk', 'denBiker', 'denGantry', 'denSky', 'denPatrol'],
   biolume:['armor','biolumeBackdrop','biolumeForeground','biolumeEnemy','biolumePods','biolumeBoss','biolumeFrog'],
   summer:['armor','summerMammoth','summerIce','summerHydra','summerLotusFlanks','summerLotusWall'],
   heliostat:['armor','ioCeramic','heliostatBackdrop','heliostatGuard'],

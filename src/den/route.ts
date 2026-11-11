@@ -1,5 +1,4 @@
 import { levels } from '../levels';
-import { HEIGHT, WIDTH } from '../playfield';
 
 export const DEN_DURATION = levels.den.duration;
 export const DEN_SCREENS = 10;
@@ -19,16 +18,4 @@ export function denScroll(time: number) {
 export function denSection(time: number) {
   const names = ['Outer Docks', 'Workshops', 'Rookery', 'Bastion', 'Gantry Approach'];
   return names[Math.min(names.length - 1, Math.floor(Math.max(0, time) / (DEN_DURATION / names.length)))];
-}
-
-// Set back from the railings on the workshop floor and rookery ledges.
-export const denNests = [
-  [132, 7584, .58, .28],
-  [425, 5107, .48, -.20],
-  [319, 4736, .63, .13],
-].map(([x, y, width, angle]) => ({ u: x / 576, at: DEN_SCREENS - y / 1024, width, angle }));
-
-export function denNestPoint(site: typeof denNests[number], scroll: number, distance: number, z: number) {
-  const scale = (distance - z) / distance;
-  return { x: (site.u - .5) * WIDTH * scale, y: (site.at - .5 - scroll) * HEIGHT * scale, scale };
 }

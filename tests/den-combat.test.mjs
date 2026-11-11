@@ -12,7 +12,6 @@ const { denWaves, denPatrolPose, denPatrolCanFire, denPatrolWarp } = await serve
 const { turn16Hardpoints } = await server.ssrLoadModule('/src/den/patrol-atlas-16.ts');
 const { createDenPatrols } = await server.ssrLoadModule('/src/den/patrol-rig.ts');
 const { createPatrolWarpCard } = await server.ssrLoadModule('/src/den/patrol-warp.ts');
-const { createDenPlateMotion } = await server.ssrLoadModule('/src/den/plate-motion.ts');
 
 test('the gantry sweep alternates from the settled bike position and carries its hit area', () => {
   const a = denPose(DEN_CYCLE - .0001), b = denPose(DEN_CYCLE);
@@ -156,26 +155,6 @@ test('patrol exhaust sits on the engine pixels through both directions of a warp
     });
   }
   texture.dispose();
-});
-
-test('passing actors disturb a visible flag, and a paused frame holds the wake', () => {
-  const motion = createDenPlateMotion(), scroll = .55;
-  const sample = (elapsed, actors = [], newFlight = false) => {
-    motion.update(0, scroll, 2, { elapsed, actors, newFlight });
-    assert.equal(motion.uniforms.flagCount.value, 1);
-    return motion.uniforms.flagTips.value[0].w;
-  };
-  motion.useCliff(true);
-  assert.equal(sample(0), 0);
-  const rod = motion.uniforms.flagRods.value[0], tip = motion.uniforms.flagTips.value[0];
-  const near = { x: ((rod.x + rod.z + 2 * tip.x) * .25 - .5) * 9,
-    y: ((Math.max(rod.y, rod.w) + tip.y) * .5 - scroll - .5) * 16, speed: 6 };
-  const wake = sample(.12, [near]);
-  assert(wake > .8);
-  assert.equal(sample(0), wake);
-  const tail = sample(.23);
-  assert(tail > 0 && tail < wake);
-  assert.equal(sample(0, [], true), 0);
 });
 
 test('the gantry encounter is winnable with the ordinary ship and planar shots', () => {

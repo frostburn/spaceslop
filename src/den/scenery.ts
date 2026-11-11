@@ -2,7 +2,6 @@ import * as T from 'three';
 import { HEIGHT, WIDTH } from '../playfield';
 import { createBlackHoleMaterial } from '../studies/black-hole-material';
 import { createDenCliffside } from './cliffside';
-import type { DenWakeFrame } from './plate-motion';
 
 function surface(width: number, height: number) {
   const canvas = document.createElement('canvas');
@@ -122,8 +121,8 @@ export function createDenScenery() {
     },
     setPlate: cliff.setArena,
     setCliff: cliff.setCliff,
-    update(scroll: number, reveal: number, time: number, wake?: DenWakeFrame) {
-      cliff.update(scroll, time, wake);
+    update(scroll: number, reveal: number, time: number) {
+      cliff.update(scroll);
       lensUniforms.lensCenter.value.set(T.MathUtils.lerp(1.04, .035, reveal), T.MathUtils.lerp(.45, .56, reveal));
       lensUniforms.lensExtent.value = T.MathUtils.lerp(14.2, 11.7, reveal);
       lensUniforms.diskRoll.value = .24 * (1 - reveal);

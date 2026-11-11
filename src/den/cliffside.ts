@@ -2,7 +2,6 @@ import * as T from 'three';
 import { HEIGHT, WIDTH } from '../playfield';
 import { cutPlateTile, disposePlateTiles, PLATE_GUTTER } from '../rendering/scroll-plate';
 import { DEN_SCREENS } from './route';
-import { createDenPlateMotion, denPlateMotionShader, type DenWakeFrame } from './plate-motion';
 
 function fallbackCliff(arena: T.Texture) {
   const canvas = document.createElement('canvas');
@@ -83,9 +82,7 @@ function setCrop(crop: T.Vector2, texture: T.Texture, isArena: boolean) {
 export function createDenCliffside(fallback: T.Texture) {
   let arena = fallback;
   let tiles: T.CanvasTexture[] = [];
-  const motion = createDenPlateMotion();
   const uniforms = {
-    ...motion.uniforms,
     lowerPlate: { value: arena },
     upperPlate: { value: arena },
     lowerCrop: { value: new T.Vector2(1, 1) },
@@ -106,17 +103,13 @@ export function createDenCliffside(fallback: T.Texture) {
       uniform sampler2D lowerPlate, upperPlate;
       uniform vec2 lowerCrop, upperCrop;
       uniform float scrollFraction;
-      ${denPlateMotionShader}
       void main() {
-        vec2 p = vec2(screenUV.x, screenUV.y + scrollFraction);
-        vec2 source = p + vec2(clothBend(p), 0.0);
-        float steam = risingSteam(p, source);
+        vec2 source = vec2(screenUV.x, screenUV.y + scrollFraction);
         vec4 plate;
         if (source.y < 1.0) plate = texture2D(lowerPlate, (source - .5) * lowerCrop + .5);
         else plate = texture2D(upperPlate, (source - vec2(.5, 1.5)) * upperCrop + .5);
         if (plate.a < .15) discard;
-        vec3 color = mix(plate.rgb, vec3(.28, .245, .223), steam);
-        gl_FragColor = vec4(color * .76, smoothstep(.15, .7, plate.a));
+        gl_FragColor = vec4(plate.rgb * .76, smoothstep(.15, .7, plate.a));
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
@@ -132,15 +125,11 @@ export function createDenCliffside(fallback: T.Texture) {
       arena = texture;
       arena.minFilter = T.LinearFilter;
       arena.generateMipmaps = false;
-      const crop = new T.Vector2();
-      setCrop(crop, arena, true);
-      motion.useArena(crop.x);
     },
     setCliff(maps: T.CanvasTexture[]) {
       tiles = maps.length ? maps : fallbackCliff(arena);
-      motion.useCliff(maps.length > 0);
     },
-    update(scroll: number, time: number, wake?: DenWakeFrame) {
+    update(scroll: number) {
       const index = Math.min(DEN_SCREENS, Math.floor(scroll + 1e-9));
       uniforms.scrollFraction.value = Math.max(0, scroll - index);
       const lower = tiles[index] ?? arena;
@@ -149,7 +138,6 @@ export function createDenCliffside(fallback: T.Texture) {
       uniforms.upperPlate.value = upper;
       setCrop(uniforms.lowerCrop.value, lower, lower === arena);
       setCrop(uniforms.upperCrop.value, upper, upper === arena);
-      motion.update(index, scroll, time, wake);
     },
     dispose() { disposePlateTiles(tiles); arena.dispose(); },
   };
