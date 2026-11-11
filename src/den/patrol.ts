@@ -78,8 +78,9 @@ export function denPatrolWarp(heading: number, poseCount: number) {
   const position = Math.abs(angle) / (Math.PI / 2) * last;
   const first = Math.floor(position), second = Math.min(last, first + 1);
   const fraction = position - first;
-  // Blend over the central 40% of the interval between registered views.
-  const t = Math.max(0, Math.min(1, (fraction - .3) / .4));
+  // Give the denser atlas enough time to blend even during a fast crossing.
+  const edge = poseCount > 7 ? .16 : .3;
+  const t = Math.max(0, Math.min(1, (fraction - edge) / (1 - 2 * edge)));
   return { angle, first, second, fraction, blend: t * t * (3 - 2 * t), mirror: angle > 0 };
 }
 

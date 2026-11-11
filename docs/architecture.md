@@ -37,7 +37,7 @@ Heliostat's `weathering.ts` layers fixed dirt, dust, streaks and sparse corrosio
 
 `den/patrol.ts` owns launches, lane crossings and weaving patrols. Attack windup starts once a rider is inside the visible field. The patrol rig supports sixteen views in the square atlas and seven views in the original 3:2 atlas. Both cover a quarter turn and mirror for the other direction. The swept hit ellipse uses the same heading. The cliff, gantry, patrols and nests have procedural fallbacks. The Den owns its stage textures and GPU resources and loads them only when selected.
 
-`den/patrol-warp.ts` deforms each patrol's mesh between measured rows through the crest, controls, engine and nose. At each atlas handoff, the two views briefly crossfade on that shared shape above the exhaust. `den/plate-motion.ts` registers flag rods, cloth tips and the workshop steam vent to the existing plates. The scrolling shader bends the cloth below its rod and carries wisps up from the vent. Actor proximity adds a short wake that decays on the presentation clock.
+`den/patrol-warp.ts` deforms the square atlas along measured bands through the snout, grip, intake and nose. Vertex velocities carry through each of the sixteen views. At each handoff, the two textures briefly crossfade on the shared mesh. Each exhaust mount follows its source triangle through the same deformation and blend, and both plumes draw below the bike. `den/plate-motion.ts` registers flag rods, cloth tips and the workshop steam vent to the existing plates. The scrolling shader bends the cloth below its rod and carries wisps up from the vent. Actor proximity adds a short wake that decays on the presentation clock.
 
 ## Lantern Grove
 

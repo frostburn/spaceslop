@@ -40,7 +40,9 @@ export function createDenPatrols(count: number) {
     const root = new T.Group(), effects = new T.Group(), fallback = model.clone();
     root.name = 'draconian-patrol';
     const warp = createPatrolWarpCard(), card = warp.root;
-    for (const x of [-.36, .36]) addBurner(effects, jets, x, .42, -.13, .14, .87).rotation.z = Math.PI;
+    const nozzleOffsets = [-.36, .36];
+    const nozzles = nozzleOffsets.map(x => addBurner(effects, jets, x, .42, -.13, .14, .87));
+    for (const nozzle of nozzles) nozzle.rotation.z = Math.PI;
     const plumes = shipBurners(effects);
     for (const plume of plumes) plume.renderOrder = -2;
     const warning = new T.Mesh(warningShape, warningMaterial);
@@ -56,9 +58,28 @@ export function createDenPatrols(count: number) {
         root.visible = true;
         root.position.set(x, y, .12);
         root.scale.setScalar(size);
-        if (card.visible) warp.pose(heading);
+        const mounts = card.visible ? warp.pose(heading) : undefined;
         effects.rotation.z = fallback.rotation.z = heading;
         poseBurners(plumes, time, throttle);
+        let angle = Math.PI;
+        if (mounts) {
+          const [left, right, nose] = mounts;
+          const dx = (left.x + right.x) * .5 - nose.x;
+          const dy = (left.y + right.y) * .5 - nose.y;
+          angle -= Math.atan2(dx, dy);
+        }
+        for (const [i, nozzle] of nozzles.entries()) {
+          const mount = mounts?.[i];
+          nozzle.position.x = mount?.x ?? nozzleOffsets[i];
+          nozzle.position.y = mount?.y ?? .42;
+          nozzle.rotation.z = angle;
+          if (mount) {
+            const plume = plumes[i];
+            plume.scale.x *= .82;
+            plume.scale.z *= .82;
+            plume.scale.y *= .64 + .36 * Math.abs(Math.sin(heading));
+          }
+        }
         warning.visible = charge > 0;
         warning.scale.setScalar(.55 + 1.3 * charge);
       },

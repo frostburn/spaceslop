@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { Texture } from 'three';
+import { Texture, Triangle, Vector2, Vector3 } from 'three';
 import { createServer } from 'vite';
 
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom' });
@@ -9,6 +9,8 @@ const { DEN_CYCLE, denBodyEntry, denPose } = await server.ssrLoadModule('/src/de
 const { Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
 const { DEN_APPROACH, DEN_DURATION, DEN_SCREENS, denScroll } = await server.ssrLoadModule('/src/den/route.ts');
 const { denWaves, denPatrolPose, denPatrolCanFire, denPatrolWarp } = await server.ssrLoadModule('/src/den/patrol.ts');
+const { turn16Hardpoints } = await server.ssrLoadModule('/src/den/patrol-atlas-16.ts');
+const { createDenPatrols } = await server.ssrLoadModule('/src/den/patrol-rig.ts');
 const { createPatrolWarpCard } = await server.ssrLoadModule('/src/den/patrol-warp.ts');
 const { createDenPlateMotion } = await server.ssrLoadModule('/src/den/plate-motion.ts');
 
@@ -75,11 +77,13 @@ test('patrol mesh stays continuous through atlas handoffs and straight ahead', (
     const texture = new Texture({ width, height });
     card.setArt(texture);
     const step = Math.PI / (2 * (count - 1));
+    const edge = count === 16 ? .16 : .3;
     const straight = sample(0);
     assert.deepEqual(sample(-epsilon).uv, sample(epsilon).uv);
     assert.notDeepEqual(straight.uv, sample(Math.PI / 2).uv);
-    assert.equal(sample(.29 * step).blend, 0);
-    assert.equal(sample(.71 * step).blend, 1);
+    assert.equal(sample((edge - .01) * step).blend, 0);
+    assert(sample((edge + .01) * step).blend > 0);
+    assert.equal(sample((1 - edge + .01) * step).blend, 1);
     for (const side of [-1, 1]) for (let i = 0; i < count - 1; i++) {
       const angle = side * (i + .5) * step;
       const a = sample(angle - epsilon), b = sample(angle + epsilon);
@@ -88,10 +92,13 @@ test('patrol mesh stays continuous through atlas handoffs and straight ahead', (
       assert.notDeepEqual(a.uv, a.nextUV);
       assert(Math.abs(a.blend - .5) < .001 && Math.abs(b.blend - .5) < .001);
       assert(a.shape.every((coordinate, j) => Math.abs(coordinate - b.shape[j]) < .001));
-      for (let j = 0; j < geometry.index.count; j += 3) {
-        const [a, b, c] = [0, 1, 2].map(k => geometry.index.getX(j + k));
-        assert((position.getX(b) - position.getX(a)) * (position.getY(c) - position.getY(a))
-          - (position.getY(b) - position.getY(a)) * (position.getX(c) - position.getX(a)) > 0);
+      for (let eighth = 0; eighth < 8; eighth++) {
+        card.pose(side * (i + eighth / 8) * step);
+        for (let j = 0; j < geometry.index.count; j += 3) {
+          const a = geometry.index.getX(j), b = geometry.index.getX(j + 1), c = geometry.index.getX(j + 2);
+          assert((position.getX(b) - position.getX(a)) * (position.getY(c) - position.getY(a))
+            - (position.getY(b) - position.getY(a)) * (position.getX(c) - position.getX(a)) > 0);
+        }
       }
       const key = (i + 1) * step;
       const before = sample(side * (key - epsilon)), after = sample(side * (key + epsilon));
@@ -99,10 +106,56 @@ test('patrol mesh stays continuous through atlas handoffs and straight ahead', (
       assert.equal(after.blend, 0);
       assert.deepEqual(before.nextUV, after.uv);
     }
+    if (count === 16) for (let i = -(count - 2); i < count - 1; i++) {
+      const angle = i * step, h = 1e-4;
+      const before = sample(angle - h).shape, at = sample(angle).shape, after = sample(angle + h).shape;
+      assert(at.every((x, j) => Math.abs((after[j] - x) - (x - before[j])) / h < .12));
+    }
     texture.dispose();
   }
   geometry.dispose();
   card.root.material.dispose();
+});
+
+test('patrol exhaust sits on the engine pixels through both directions of a warped handoff', () => {
+  const patrols = createDenPatrols(1), rig = patrols.rigs[0];
+  const texture = new Texture({ width: 627, height: 627 });
+  patrols.setArt(texture);
+  const card = rig.root.getObjectByName('patrol-heading');
+  const nozzles = rig.root.getObjectsByProperty('name', 'burner_nozzle');
+  const { geometry } = card, positions = geometry.getAttribute('position');
+  assert.equal(nozzles.length, 2);
+  assert(nozzles.every(nozzle => nozzle.position.z < card.position.z && nozzle.children[0].renderOrder < card.renderOrder));
+  const triangle = new Triangle(), weights = new Vector3();
+  const mapPixel = (attr, frame, mount, mirror) => {
+    const [x, y] = turn16Hardpoints[frame][mirror && frame !== 0 && mount < 2 ? 1 - mount : mount];
+    const uv = geometry.getAttribute(attr), point = new Vector3(x / 1254, 1 - y / 1254, 0);
+    for (let i = 0; i < geometry.index.count; i += 3) {
+      const a = geometry.index.getX(i), b = geometry.index.getX(i + 1), c = geometry.index.getX(i + 2);
+      triangle.a.set(uv.getX(a), uv.getY(a), 0);
+      triangle.b.set(uv.getX(b), uv.getY(b), 0);
+      triangle.c.set(uv.getX(c), uv.getY(c), 0);
+      if (!triangle.getBarycoord(point, weights) || Math.min(weights.x, weights.y, weights.z) < -1e-5) continue;
+      return new Vector2(
+        weights.x * positions.getX(a) + weights.y * positions.getX(b) + weights.z * positions.getX(c),
+        weights.x * positions.getY(a) + weights.y * positions.getY(b) + weights.z * positions.getY(c),
+      );
+    }
+    assert.fail('Engine or nose pixel escaped the warp');
+  };
+  for (let degrees = -90; degrees <= 90; degrees += 1.5) {
+    const heading = degrees * Math.PI / 180;
+    const turn = denPatrolWarp(heading, 16);
+    rig.pose(0, 0, heading, 1, .6, 0, 2);
+    const mounts = [0, 1, 2].map(i => mapPixel('uv', turn.first, i, turn.mirror)
+      .lerp(mapPixel('nextUV', turn.second, i, turn.mirror), turn.blend));
+    const aft = mounts[0].clone().add(mounts[1]).multiplyScalar(.5).sub(mounts[2]).normalize();
+    nozzles.forEach((nozzle, i) => {
+      assert(Math.hypot(nozzle.position.x - mounts[i].x, nozzle.position.y - mounts[i].y) < .001);
+      assert(Math.hypot(Math.sin(nozzle.rotation.z) - aft.x, -Math.cos(nozzle.rotation.z) - aft.y) < .001);
+    });
+  }
+  texture.dispose();
 });
 
 test('passing actors disturb a visible flag, and a paused frame holds the wake', () => {

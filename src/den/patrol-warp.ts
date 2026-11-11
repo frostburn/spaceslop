@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { denPatrolWarp } from './patrol';
-import { turn16Crops, turn16Rows } from './patrol-atlas-16';
+import { turn16Crops, turn16Hardpoints, turn16Rows } from './patrol-atlas-16';
 
 const COLUMNS = 5;
 
@@ -71,38 +71,88 @@ const rows = [
   ],
 ] as const;
 
+const vertexCount = rows[0].length * COLUMNS;
+const indices: number[] = [];
+for (let row = 0; row < rows[0].length - 1; row++) for (let column = 0; column < COLUMNS - 1; column++) {
+  const i = row * COLUMNS + column;
+  indices.push(i, i + COLUMNS, i + 1, i + 1, i + COLUMNS, i + COLUMNS + 1);
+}
+
+type PixelPoint = readonly [number, number];
+type MeshAnchor = { vertices: [number, number, number]; weights: [number, number, number] };
+type Band = readonly [height: number, left: number, center: number, right: number, innerLeft?: number, innerRight?: number];
+
 type AtlasRegistration = {
   width: number;
   height: number;
   pixel: number;
   gutter: number;
   crops: readonly (readonly [number, number, number, number, number, number])[];
-  rows: readonly (readonly (readonly [number, number, number, number])[])[];
+  rows: readonly (readonly Band[])[];
+  bandYaw?: number;
+  hardpoints?: readonly (readonly [PixelPoint, PixelPoint, PixelPoint])[];
 };
 
-function registerPoses({ width, height, pixel, gutter, crops, rows }: AtlasRegistration) {
-  return rows.map((points, i) => {
+// An anchor inherits the same triangle deformation as its pixel in the artwork.
+function bindAnchor(xy: number[], x: number, y: number, mirror: boolean): MeshAnchor {
+  for (let i = 0; i < indices.length; i += 3) {
+    const a = indices[i], b = indices[i + 1], c = indices[i + 2];
+    const va = 2 * (mirror ? mirrorColumn(a) : a);
+    const vb = 2 * (mirror ? mirrorColumn(b) : b);
+    const vc = 2 * (mirror ? mirrorColumn(c) : c);
+    const ax = xy[va], ay = xy[va + 1];
+    const bx = xy[vb] - ax, by = xy[vb + 1] - ay;
+    const cx = xy[vc] - ax, cy = xy[vc + 1] - ay;
+    const area = bx * cy - by * cx;
+    const v = ((x - ax) * cy - (y - ay) * cx) / area;
+    const w = (bx * (y - ay) - by * (x - ax)) / area;
+    const u = 1 - v - w;
+    if (Math.min(u, v, w) >= -1e-6) return { vertices: [a, b, c], weights: [u, v, w] };
+  }
+  throw new Error('Patrol hardpoint lies outside its atlas mesh');
+}
+
+function registerPoses({ width, height, pixel, gutter, crops, rows, bandYaw = 1, hardpoints }: AtlasRegistration) {
+  const poses = rows.map((points, i) => {
     const [left, top, right, bottom, pivotX, pivotY] = crops[i];
-    const angle = (Math.PI / 2) * i / (rows.length - 1), c = Math.cos(angle), s = Math.sin(angle);
+    const angle = (Math.PI / 2) * i / (rows.length - 1);
+    const band = bandYaw * angle, c = Math.cos(band), s = Math.sin(band);
+    const turn = band - angle, cos = Math.cos(turn), sin = Math.sin(turn);
     const xy: number[] = [], uv: number[] = [];
-    for (const [y, l, mid, r] of points) for (const x of [l - gutter, l, mid, r, r + gutter]) {
-      xy.push(x * pixel, -y * pixel);
+    for (const [y, l, mid, r, innerL = l, innerR = r] of points) for (const x of [l - gutter, innerL, mid, innerR, r + gutter]) {
+      xy.push((cos * x - sin * y) * pixel, -(sin * x + cos * y) * pixel);
       uv.push((pivotX + c * x - s * y) / width, 1 - (pivotY + s * x + c * y) / height);
     }
-    return { xy, uv, crop: new T.Vector4(left / width, 1 - bottom / height, right / width, 1 - top / height) };
+    const yawCos = Math.cos(angle), yawSin = Math.sin(angle);
+    const mounts = hardpoints?.[i].map(([x, y]) => {
+      const dx = (x - pivotX) * pixel, dy = (y - pivotY) * pixel;
+      const localX = yawCos * dx + yawSin * dy, localY = yawSin * dx - yawCos * dy;
+      // The mirrored columns change the diagonal across a quad. Bind the
+      // point to the triangle the shader actually draws for each direction.
+      return { forward: bindAnchor(xy, localX, localY, false), mirrored: bindAnchor(xy, localX, localY, true) };
+    });
+    return { xy, uv, mounts, crop: new T.Vector4(left / width, 1 - bottom / height, right / width, 1 - top / height) };
   });
+  return poses.map((pose, i) => ({
+    ...pose,
+    // A shared tangent carries vertex velocity through each key. Limit it to
+    // monotone motion so a crest or hull edge cannot overshoot its source views.
+    tangent: pose.xy.map((x, j) => {
+      if (!hardpoints || i === 0 || i === poses.length - 1) return 0;
+      const a = x - poses[i - 1].xy[j], b = poses[i + 1].xy[j] - x;
+      return a * b > 0 ? 2 * a * b / (a + b) : 0;
+    }),
+  }));
 }
 
 const legacyPoses = registerPoses({ width: 1536, height: 1024, pixel: .00525, gutter: 42, crops, rows });
 const densePoses = registerPoses({
   width: 1254, height: 1254, pixel: .009, gutter: 24, crops: turn16Crops, rows: turn16Rows,
+  bandYaw: .35, hardpoints: turn16Hardpoints,
 });
 
-const vertexCount = rows[0].length * COLUMNS;
-const indices: number[] = [];
-for (let row = 0; row < rows[0].length - 1; row++) for (let column = 0; column < COLUMNS - 1; column++) {
-  const i = row * COLUMNS + column;
-  indices.push(i, i + COLUMNS, i + 1, i + 1, i + COLUMNS, i + COLUMNS + 1);
+function mirrorColumn(i: number) {
+  return i + COLUMNS - 1 - 2 * (i % COLUMNS);
 }
 
 export function createPatrolWarpCard() {
@@ -159,6 +209,17 @@ export function createPatrolWarpCard() {
   root.visible = false;
   root.frustumCulled = false;
   let firstKey = Infinity, secondKey = Infinity;
+  const mounts = [new T.Vector2(), new T.Vector2(), new T.Vector2()] as const;
+  const nextMount = new T.Vector2();
+
+  function placeAnchor(anchor: MeshAnchor, target: T.Vector2) {
+    target.set(0, 0);
+    for (let k = 0; k < 3; k++) {
+      const i = anchor.vertices[k];
+      target.x += anchor.weights[k] * position.getX(i);
+      target.y += anchor.weights[k] * position.getY(i);
+    }
+  }
 
   function pose(heading: number) {
     const turn = denPatrolWarp(heading, poses.length);
@@ -166,11 +227,15 @@ export function createPatrolWarpCard() {
     const sign = turn.mirror ? -1 : 1;
     const keyA = turn.first * sign, keyB = turn.second * sign;
     const updateFirst = keyA !== firstKey, updateSecond = keyB !== secondKey;
+    const t = turn.fraction, dense = poses === densePoses;
+    const w = dense ? t * t * (3 - 2 * t) : t;
+    const tanA = dense ? t * (1 - t) ** 2 : 0;
+    const tanB = dense ? t * t * (t - 1) : 0;
     for (let i = 0; i < vertexCount; i++) {
       // Reverse the columns when mirroring to retain front-face winding.
-      const j = turn.mirror ? i + COLUMNS - 1 - 2 * (i % COLUMNS) : i;
-      position.setXYZ(i, sign * T.MathUtils.lerp(a.xy[j * 2], b.xy[j * 2], turn.fraction),
-        T.MathUtils.lerp(a.xy[j * 2 + 1], b.xy[j * 2 + 1], turn.fraction), 0);
+      const j = turn.mirror ? mirrorColumn(i) : i, x = 2 * j, y = x + 1;
+      position.setXYZ(i, sign * (T.MathUtils.lerp(a.xy[x], b.xy[x], w) + tanA * a.tangent[x] + tanB * b.tangent[x]),
+        T.MathUtils.lerp(a.xy[y], b.xy[y], w) + tanA * a.tangent[y] + tanB * b.tangent[y], 0);
       // Each texture follows the same vertices, with the head-on view shared
       // between both turn directions.
       if (updateFirst) {
@@ -195,6 +260,17 @@ export function createPatrolWarpCard() {
     }
     uniforms.poseBlend.value = turn.blend;
     root.rotation.z = turn.angle;
+    if (a.mounts && b.mounts) {
+      const orientation = turn.mirror ? 'mirrored' : 'forward';
+      for (let i = 0; i < mounts.length; i++) {
+        const source = turn.mirror && i < 2 ? 1 - i : i;
+        const mount = mounts[i];
+        placeAnchor(a.mounts[source][orientation], mount);
+        placeAnchor(b.mounts[source][orientation], nextMount);
+        mount.lerp(nextMount, turn.blend);
+      }
+      return mounts;
+    }
   }
 
   return {
