@@ -1,14 +1,16 @@
 import * as T from 'three';
 import type { Flight } from '../../game';
 import { HEIGHT, WIDTH } from '../../playfield';
+import { applyTriplanar } from '../../rendering/triplanar';
 import { fonsBeams, fonsPose, fonsRocks, fonsPhase } from './combat';
+import { createStoneSurface } from './stone-surface';
 import { wallRiftShape } from './wall-rift';
 
 function asteroid(seed: number) {
   const shape = new T.IcosahedronGeometry(1, 5);
   const p = shape.attributes.position;
   const colors: number[] = [];
-  const slate = new T.Color(0x353641), facets = new T.Color(0x888187), color = new T.Color();
+  const slate = new T.Color(0x777981), facets = new T.Color(0xb2a9a1), color = new T.Color();
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
     const coarse = Math.sin(x * 4.6 + z * 3.2 + seed) * Math.cos(y * 4.3 - z * 3.4);
@@ -23,10 +25,10 @@ function asteroid(seed: number) {
   return shape;
 }
 
-function breachingRock(seed: number) {
+function breachingRock(seed: number, stone: ReturnType<typeof createStoneSurface>) {
   const rift = { value: new T.Vector4() };
   const clock = { value: 0 }, crossing = { value: false };
-  const material = new T.MeshStandardMaterial({ vertexColors: true, roughness: .96 });
+  const material = new T.MeshStandardMaterial({ ...stone, vertexColors: true, roughness: .94, bumpScale: .17 });
   material.onBeforeCompile = shader => {
     Object.assign(shader.uniforms, { rockRift: rift, rockClock: clock, rockCrossing: crossing });
     shader.vertexShader = 'varying vec4 rockScreen;\n' + shader.vertexShader.replace(
@@ -53,6 +55,7 @@ function breachingRock(seed: number) {
       #include <opaque_fragment>
     `);
   };
+  applyTriplanar(material, .71);
   return { mesh: new T.Mesh(asteroid(seed), material), rift, clock, crossing };
 }
 
@@ -104,7 +107,8 @@ export function createFonsEffects() {
   root.name = 'fons-attacks';
   const plane = new T.PlaneGeometry(1, 1);
   const beams = [streak(plane), streak(plane)];
-  const asteroids = [breachingRock(3.2), breachingRock(8.7)];
+  const stone = createStoneSurface();
+  const asteroids = [breachingRock(3.2, stone), breachingRock(8.7, stone)];
   const rocks = asteroids.map(asteroid => asteroid.mesh);
   rocks.forEach((rock, index) => { rock.name = 'fons-wall-asteroid-' + index; });
   const impacts = rocks.map(() => new T.Mesh(plane, new T.ShaderMaterial({
