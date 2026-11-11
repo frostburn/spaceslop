@@ -4,7 +4,7 @@ import { flagshipEngines, hullPoint, type FleetHull } from './route';
 export function createFlagshipEngines(clock: { value: number }) {
   // Coordinates are in bore radii, with the nozzle center at the origin.
   const geometry = new T.PlaneGeometry(7, 10).translate(0, -3.8, 0);
-  return (hull: FleetHull, trench: boolean, ship: number) => {
+  return (hull: FleetHull, trench: boolean, ship: number, intensity = 1) => {
     const { radius, mounts } = trench ? flagshipEngines.trench : flagshipEngines.broadside;
     return mounts.map(([u, v], index) => {
       const nozzle = hullPoint(hull, u, v);
@@ -12,6 +12,7 @@ export function createFlagshipEngines(clock: { value: number }) {
         uniforms: {
           clock, phase: { value: ship * 2.17 + index * 1.68 },
           cant: { value: (index === 0 ? 1 : -1) * (trench ? 2.0 : .12) },
+          intensity: { value: intensity },
         },
         transparent: true, depthWrite: false, blending: T.AdditiveBlending,
         vertexShader: `
@@ -21,7 +22,7 @@ export function createFlagshipEngines(clock: { value: number }) {
             gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
           }`,
         fragmentShader: `
-          uniform float clock, phase, cant;
+          uniform float clock, phase, cant, intensity;
           varying vec2 nozzleXY;
           void main() {
             float t = clock + phase;
@@ -44,7 +45,7 @@ export function createFlagshipEngines(clock: { value: number }) {
             float light = core * .87 + throat * .42;
             float alpha = light + glow * .47 + rim * .17;
             if (alpha < .003) discard;
-            gl_FragColor = vec4(mix(vec3(.045, .29, 1.0), vec3(.75, .98, 1.0), clamp(light, 0.0, 1.0)), min(alpha, 1.0));
+            gl_FragColor = vec4(mix(vec3(.045, .29, 1.0), vec3(.75, .98, 1.0), clamp(light, 0.0, 1.0)), min(alpha, 1.0) * intensity);
             #include <colorspace_fragment>
           }`,
       });

@@ -1,9 +1,10 @@
 import * as T from 'three';
 import { HEIGHT } from '../playfield';
 import { BROADSIDE_BARREL, broadsideGuns, broadsideSignal } from './combat';
+import { pleiadianPaint } from './pleiadian-paint';
 import { fleetViewY, tractorPose, tractorSites } from './route';
 
-function mesh(parent: T.Object3D, geometry: T.BufferGeometry, material: T.Material, x = 0, y = 0, z = 0) {
+function mesh(parent: T.Object3D, geometry: T.BufferGeometry, material: T.Material | T.Material[], x = 0, y = 0, z = 0) {
   const part = new T.Mesh(geometry, material);
   part.position.set(x, y, z);
   parent.add(part);
@@ -113,12 +114,20 @@ export function createTractorTraffic() {
   shape.lineTo(-.20, .22);
   shape.quadraticCurveTo(-.16, .54, 0, .67);
   const shell = new T.ExtrudeGeometry(shape, { depth: .11, bevelThickness: .04, bevelSize: .04, bevelSegments: 2, steps: 1 });
+  const uv = shell.getAttribute('uv');
+  const cap = shell.groups[0];
+  for (let i = cap.start; i < cap.start + cap.count; i++) {
+    uv.setXY(i, .5 + uv.getX(i) / 1.04, (uv.getY(i) + .55) / 1.27);
+  }
   const canopy = new T.SphereGeometry(1, 12, 8).scale(.105, .27, .09);
   const engine = new T.BoxGeometry(.078, .17, .058);
   const marker = new T.SphereGeometry(.036, 10, 8);
   const glass = new T.MeshStandardMaterial({ color: 0x263f57, roughness: .18, metalness: .4 });
-  const silver = new T.MeshStandardMaterial({ color: 0xc9c6b7, roughness: .43, metalness: .43 });
-  const wreck = new T.MeshStandardMaterial({ color: 0x554a48, roughness: .71, metalness: .27 });
+  const maps = [pleiadianPaint(false), pleiadianPaint(true)];
+  const silver = new T.MeshStandardMaterial({ map: maps[0], roughness: .48, metalness: .28, bumpScale: .016 });
+  const wreck = new T.MeshStandardMaterial({ map: maps[1], roughness: .68, metalness: .24, bumpScale: .022 });
+  const rim = new T.MeshStandardMaterial({ color: 0x947958, roughness: .48, metalness: .48 });
+  const wreckRim = new T.MeshStandardMaterial({ color: 0x4d4541, roughness: .66, metalness: .36 });
   const red = new T.MeshBasicMaterial({ color: 0xf75c50 });
   const green = new T.MeshBasicMaterial({ color: 0x79f0b2 });
   const arc = new T.MeshBasicMaterial({ color: 0xffb65a });
@@ -130,7 +139,8 @@ export function createTractorTraffic() {
     const cargo = new T.Group();
     cargo.name = site.wreck ? 'fleet-towed-wreck' : 'fleet-exchange-shuttle';
     root.add(cargo);
-    mesh(cargo, shell, site.wreck ? wreck : silver);
+    const hull = mesh(cargo, shell, site.wreck ? [wreck, wreckRim] : [silver, rim]);
+    hull.name = 'fleet-painted-hull';
     mesh(cargo, canopy, glass, 0, .24, .14);
     mesh(cargo, engine, housing, -.18, -.31, .14);
     mesh(cargo, engine, housing, .18, -.31, .14);
@@ -139,7 +149,13 @@ export function createTractorTraffic() {
     return { site, beam, material, cargo, lamps };
   });
   return {
-    root,
+    root, maps,
+    setAlloy(texture: T.Texture) {
+      for (const material of [silver, wreck]) {
+        material.bumpMap = texture;
+        material.needsUpdate = true;
+      }
+    },
     update(time: number, clock: number) {
       for (const { site, beam, material, cargo, lamps } of rig) {
         const pose = tractorPose(site, time);

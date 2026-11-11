@@ -15,13 +15,15 @@ export function createFleetScenery(signal: AbortSignal) {
   const flagship = new T.MeshBasicMaterial({ map: flankFallback, alphaTest: .38, toneMapped: false });
   const trench = new T.MeshBasicMaterial({ map: trenchFallback, alphaTest: .38, toneMapped: false });
   const distant = new T.MeshBasicMaterial({ map: flankFallback, color: 0x758095, alphaTest: .38, toneMapped: false });
-  const crossing = new T.Mesh(new T.PlaneGeometry(3.7, 7.4), distant);
-  crossing.name = 'fleet-distant-flagship';
-  crossing.rotation.z = Math.atan2(.52, .69);
-  root.add(crossing);
-
   const clock = { value: 0 };
   const engines = createFlagshipEngines(clock);
+  const distantHull = { x: 0, y: 0, width: 3.7 };
+  const crossing = new T.Mesh(new T.PlaneGeometry(distantHull.width, 2 * distantHull.width), distant);
+  crossing.name = 'fleet-distant-flagship';
+  crossing.rotation.z = Math.atan2(.52, .69);
+  crossing.add(...engines(distantHull, false, flankShips.length + 1, .46));
+  root.add(crossing);
+
   const ships = [...flankShips, trenchShip].map((site, index) => {
     const isTrench = site === trenchShip;
     const mesh = new T.Mesh(new T.PlaneGeometry(site.width, 2 * site.width), isTrench ? trench : flagship);

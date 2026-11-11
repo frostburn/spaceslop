@@ -34,11 +34,12 @@ export const createLevel: LevelFactory = ({ signal }) => {
   const ready = Promise.all([
     scenery.maps,
     loadEncounterTexture('fleetSaucer', saucers.setAlloy, 1, signal),
-  ]).then(([maps]) => [...maps.map(map => map ?? undefined), saucers.environment, saucers.metal ?? undefined]);
+  ]).then(([maps]) => [...maps.map(map => map ?? undefined), ...traffic.maps, saucers.environment, saucers.metal ?? undefined]);
   scenery.update(0, 0, FLEET_CAMERA_DISTANCE);
 
   return {
     root, boss: boss.root, models, ready,
+    applyArmor: traffic.setAlloy,
     stageDistance: FLEET_CAMERA_DISTANCE,
     fixedCamera: true,
     shipPitch: 0,
