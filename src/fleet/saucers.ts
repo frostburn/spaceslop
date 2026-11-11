@@ -59,6 +59,13 @@ export function createSaucerFactory() {
     color: 0xe3e6e8, metalness: .58, roughness: .31, map: fallback,
     envMap: environment, envMapIntensity: 2.15, bumpMap: fallback, bumpScale: .004,
   });
+  const distantSilver = silver.clone();
+  distantSilver.color.setHex(0x677080);
+  distantSilver.envMapIntensity = .76;
+  const commandAlloy = silver.clone();
+  commandAlloy.color.setHex(0x737b89);
+  commandAlloy.roughness = .43;
+  commandAlloy.envMapIntensity = 1.6;
   const dark = new T.MeshStandardMaterial({
     color: 0x303745, metalness: .58, roughness: .41, envMap: environment, envMapIntensity: 1.35,
   });
@@ -69,6 +76,7 @@ export function createSaucerFactory() {
     color: 0x263b55, metalness: .42, roughness: .14, envMap: environment, envMapIntensity: 2.1,
   });
   const lenses = new T.MeshBasicMaterial({ color: 0xff4f3f, toneMapped: false });
+  const distantLenses = new T.MeshBasicMaterial({ color: 0x7c3c3b, toneMapped: false });
   const hull = lathe([[.91, -.085], [.973, -.066], [.997, -.04], [1, .014], [.976, .053],
     [.885, .088], [.77, .13], [.63, .173], [.49, .224], [.36, .268], [.30, .282], [.25, .282]]);
   const underbody = lathe([[0, -.294], [.18, -.294], [.235, -.278], [.27, -.245], [.35, -.245],
@@ -91,7 +99,7 @@ export function createSaucerFactory() {
   const tractorCase = new T.CylinderGeometry(.054, .065, .031, 24).rotateX(Math.PI / 2);
   const tractorLens = new T.TorusGeometry(.043, .009, 8, 28).translate(0, 0, .018);
 
-  function create(name: string, kind: 'patrol' | 'capital' | 'tractor' = 'patrol') {
+  function create(name: string, kind: 'patrol' | 'capital' | 'tractor' | 'command' = 'patrol') {
     const root = new T.Group();
     root.name = name;
     const mesh = (geometry: T.BufferGeometry, material: T.Material) => new T.Mesh(geometry, material);
@@ -101,7 +109,7 @@ export function createSaucerFactory() {
     });
     const warning = mesh(flareRing, flare);
     warning.name = 'saucer-windup';
-    root.add(mesh(hull, silver), mesh(underbody, dark), mesh(crown, glass), mesh(crownCollar, alloy),
+    root.add(mesh(hull, silver), mesh(underbody, kind === 'command' ? commandAlloy : dark), mesh(crown, glass), mesh(crownCollar, alloy),
       mesh(rimCasing, dark), mesh(shoulderTrim, alloy), mesh(upperSeams, dark), mesh(vents, alloy),
       mesh(lampHousings, dark), mesh(lamps, lenses),
       mesh(bellyRing, alloy), mesh(bellyCore, charge), mesh(chargeRing, charge), warning);
@@ -130,11 +138,20 @@ export function createSaucerFactory() {
 
   return {
     create,
+    createDistant() {
+      const root = new T.Group();
+      root.name = 'fleet-distant-saucer';
+      root.add(new T.Mesh(hull, distantSilver), new T.Mesh(underbody, dark),
+        new T.Mesh(crown, distantSilver), new T.Mesh(lamps, distantLenses));
+      return root;
+    },
     environment,
     get metal() { return silver.map; },
     setAlloy(texture: T.Texture) {
-      silver.map = silver.bumpMap = texture;
-      silver.needsUpdate = true;
+      for (const material of [silver, distantSilver, commandAlloy]) {
+        material.map = material.bumpMap = texture;
+        material.needsUpdate = true;
+      }
       fallback.dispose();
     },
   };

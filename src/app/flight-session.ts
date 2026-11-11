@@ -24,27 +24,30 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
   const canvas = previousCanvas.cloneNode(false) as HTMLCanvasElement;
   previousCanvas.replaceWith(canvas);
   const panel = element('panel');
-  let devBossLaunch = false;
+  let devLaunch: 'boss' | 'trench' | undefined;
   if (import.meta.env.DEV) {
     panel.querySelector('#dev-tools')?.remove();
     const devTools = document.createElement('div');
     devTools.id = 'dev-tools';
     devTools.className='dev-links';
     panel.append(devTools);
-    const bossStart = document.createElement('button');
-    bossStart.id = 'dev-boss';
-    bossStart.type = 'button';
-    bossStart.textContent = 'Launch at boss';
-    bossStart.style.marginTop = '.75rem';
-    bossStart.disabled = true;
-    bossStart.addEventListener('click', () => {
-      if (screen !== 'title' && screen !== 'results')
-        return;
-      devBossLaunch = true;
-      start.click();
-      devBossLaunch = false;
-    }, { signal });
-    devTools.append(bossStart);
+    function launchShortcut(mode: 'boss' | 'trench') {
+      const button = document.createElement('button');
+      button.id = 'dev-' + mode;
+      button.type = 'button';
+      button.textContent = 'Launch at ' + mode;
+      button.style.marginTop = '.75rem';
+      button.disabled = true;
+      button.addEventListener('click', () => {
+        if (screen !== 'title' && screen !== 'results') return;
+        devLaunch = mode;
+        start.click();
+        devLaunch = undefined;
+      }, { signal });
+      devTools.append(button);
+    }
+    launchShortcut('boss');
+    launchShortcut('trench');
     const workshop = document.createElement('a');
     workshop.href = import.meta.env.BASE_URL + 'workshop.html';
     workshop.textContent = 'Asset workshop';
@@ -103,7 +106,7 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     const fighting = flight.phase === 'stage' || flight.phase === 'boss';
     const label = {
       stage: levels[flight.level].sector,
-      approach: flight.isDen ? 'GANTRY APPROACH' : flight.level==='biolume'?'DARK CROWN':flight.level==='summer'?'LOTUS PALACE':flight.level==='heliostat'?'COLLECTOR APPROACH':flight.level==='boulevard'?'SUNSET PLAZA':flight.level === 'vents' ? 'ABYSSAL DROP' : flight.level === 'io' ? 'CALDERA APPROACH' : flight.level === 'titan' ? 'ASCENT' : 'CONTACT',
+      approach: flight.isFleet ? 'BREACH APPROACH' : flight.isDen ? 'GANTRY APPROACH' : flight.level==='biolume'?'DARK CROWN':flight.level==='summer'?'LOTUS PALACE':flight.level==='heliostat'?'COLLECTOR APPROACH':flight.level==='boulevard'?'SUNSET PLAZA':flight.level === 'vents' ? 'ABYSSAL DROP' : flight.level === 'io' ? 'CALDERA APPROACH' : flight.level === 'titan' ? 'ASCENT' : 'CONTACT',
       boss: 'BOSS',
       won: 'CLEAR',
       lost: 'SIGNAL LOST',
@@ -126,7 +129,7 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     bossHud.hidden = flight.phase !== 'boss';
     bossHealth.max = flight.bossMaxHealth;
     bossHealth.value = flight.bossHealth;
-    bossName.textContent = (levels[flight.level].boss ?? '')+(flight.level==='summer'?' · '+flight.summerHeadsAlive+(flight.summerHeadsAlive===1?' HEAD':' HEADS'):'');
+    bossName.textContent = levels[flight.level].boss+(flight.level==='summer'?' · '+flight.summerHeadsAlive+(flight.summerHeadsAlive===1?' HEAD':' HEADS'):'');
     pulse.disabled = !active || !fighting || flight.charges === 0;
     pause.hidden = !active;
     panel.hidden = active;
@@ -134,10 +137,13 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     if (import.meta.env.DEV) {
       const bossStart = element<HTMLButtonElement>('dev-boss');
       bossStart.hidden = !betweenRuns;
+      const trenchStart = element<HTMLButtonElement>('dev-trench');
+      trenchStart.hidden = !betweenRuns || !flight.isFleet;
+      trenchStart.disabled = start.disabled || !view;
       element('vent-study').hidden = !betweenRuns || flight.level !== 'vents';
       element('io-study').hidden = !betweenRuns || flight.level !== 'io';
       bossStart.textContent = flight.isDen || flight.level === 'summer' || flight.level === 'heliostat' || flight.level === 'boulevard' || flight.level === 'preserve' || flight.level === 'vents' || flight.level === 'titan' || flight.level === 'io' ? 'Launch at transition' : 'Launch at boss';
-      if (flight.level === 'fleet') bossStart.textContent = 'Launch at trench';
+      if (flight.isFleet) bossStart.textContent = 'Launch at breach';
       bossStart.disabled = start.disabled || !view;
     }
     pilotPicker.setVisible(betweenRuns);
@@ -153,6 +159,8 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
       tip = offlineReady ? 'Level ready offline' : 'Ready to launch';
     else if (flight.isDen && flight.phase === 'boss')
       tip = flight.droneWeapon === 'towline' ? 'Sweep the arc across the bike.' : 'Watch the engines · Dodge the sweeping bursts';
+    else if (flight.isFleet && flight.phase === 'boss')
+      tip = flight.droneWeapon === 'towline' ? 'Sweep the arc across the saucer.' : 'Move after the side guns light up · Thread the rings';
     else if (flight.droneWeapon === 'towline') {
       tip = flight.phase === 'boss' ? (flight.level==='biolume'?'Sweep the arc through seekers or the ray.':flight.level==='heliostat'||flight.level==='boulevard'?'Sweep the arc across the cyan core.':flight.level === 'ice' ? 'Sweep the arc across the mouth marker.' : flight.level === 'io' ? 'Sweep the arc across the cyan support, then exposed machinery.' : flight.level === 'titan' ? 'Sweep the arc across the glowing thorax vent.' : flight.level === 'vents' ? (flight.crabCoreOpen ? 'Sweep the arc across the exposed gills.' : 'Sweep the arc across a glowing claw joint.') : 'Sweep the arc across the green cannon.') : 'Park the drone · Sweep the arc';
     }
@@ -227,8 +235,8 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
       return;
     if (screen !== 'paused') {
       flight = new Flight(droneWeapon.value === 'towline' ? 'towline' : 'sentry', testingWings ? wingSelectors.map((select) => readWingWeapon(select.value)) : [], pilotPicker.selectedId, readLevel(levelSelector.value));
-      if (import.meta.env.DEV && devBossLaunch) {
-        flight.time = flight.level === 'fleet' ? FLEET_TRENCH_AT : flight.stageDuration;
+      if (import.meta.env.DEV && devLaunch) {
+        flight.time = devLaunch === 'trench' ? FLEET_TRENCH_AT : flight.stageDuration;
         flight.step(0);
       }
     }

@@ -12,7 +12,7 @@ let selected = readLevel(new URLSearchParams(location.search).get('level'));
 let session: AbortController | undefined;
 let reloadBeforePreparation = false;
 const descriptions: Record<LevelId, string> = {
-  fleet: 'Fly into a botched prisoner exchange, dodge broadsides and Gray saucers, then enter the Pleiadian flagship through its open stern.',
+  fleet: 'Dodge broadsides through a botched prisoner exchange, enter the Pleiadian flagship through its open stern, and fight the Gray command saucer.',
   den: 'Fly the cliffside docks and rookeries, then face the Gantry Chief above the black hole.',
   biolume:'Fly beneath translucent luminous leaves, over tangled root bridges and blackwater pools. Lantern gliders guard the nursery; the enormous Lantern Ray waits in the Dark Crown.',
   summer:'Grazing mammoths, flower-rich meadows and thawing glacier gardens. Follow the river into the glass-covered lotus palace.',
@@ -36,8 +36,7 @@ function select(id: LevelId) {
 }
 function levelDetail(id: LevelId, saved = false) {
   const level = levels[id];
-  const detail = saved ? 'Saved offline' : level.boss;
-  return `${level.duration} second route${detail ? ' · ' + detail : ''}`;
+  return `${level.duration} second route · ${saved ? 'Saved offline' : level.boss}`;
 }
 for (const [id, level] of Object.entries(levels)) {
   const button = document.createElement('button');

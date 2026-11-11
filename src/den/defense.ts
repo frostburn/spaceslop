@@ -1,5 +1,5 @@
 import { HEIGHT, WIDTH } from '../playfield';
-import { ellipseEntry } from './combat';
+import { ellipseEntry } from '../planar-contact';
 import { DEN_PLATE_WIDTH, DEN_SCREEN_HEIGHT, DEN_SCREENS } from './route';
 
 type Point = { x: number; y: number };

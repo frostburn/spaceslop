@@ -2,7 +2,8 @@ import { levels } from '../levels';
 import { HEIGHT } from '../playfield';
 
 export const FLEET_DURATION = levels.fleet.duration;
-export const FLEET_TRENCH_AT = 68;
+export const FLEET_APPROACH = 3.5;
+export const FLEET_TRENCH_AT = 71;
 export const FLEET_SPEED = 10 * HEIGHT / FLEET_DURATION;
 export const FLEET_CAMERA_DISTANCE = 22;
 export const CAPITAL_DEPTH = -8;
@@ -17,7 +18,7 @@ export const flankShips: readonly FleetHull[] = [
   { x: -4.7, y: 98.2, width: 17.4 },
 ];
 
-export const trenchShip: FleetHull = { x: 0, y: 140.5, width: 23.5 };
+export const trenchShip: FleetHull = { x: 0, y: 146.5, width: 23.5 };
 
 // Positions measured from the top left of the full, uncropped plates.
 export const flagshipEngines = {
@@ -40,7 +41,10 @@ export function hullPoint(hull: FleetHull, u: number, v: number) {
 }
 
 export function fleetScroll(time: number) {
-  return FLEET_SPEED * Math.min(FLEET_DURATION, Math.max(0, time));
+  if (time <= FLEET_DURATION) return FLEET_SPEED * Math.max(0, time);
+  const u = Math.min(1, (time - FLEET_DURATION) / FLEET_APPROACH);
+  // Integrate the deceleration so the hull passes continuously into the arena.
+  return FLEET_SPEED * (FLEET_DURATION + FLEET_APPROACH * (u - u ** 3 + .5 * u ** 4));
 }
 
 export function fleetViewY(worldY: number, time: number) {
@@ -80,9 +84,9 @@ export function carrierPose(carrier: Carrier, time: number) {
   };
 }
 
-function projectedTractorMount(carrier: Carrier, time: number) {
-  const pose = carrierPose(carrier, time);
-  const [x, y, z] = TRACTOR_MOUNT;
+type SaucerPose = Point & { pitch: number; bank: number; yaw: number; radius: number; depth: number };
+
+export function projectedSaucerMount(pose: SaucerPose, [x, y, z]: readonly [number, number, number]) {
   // The saucer uses ZXY Euler angles. Project its actual emitter into the flight plane.
   const bx = x * Math.cos(pose.bank) + z * Math.sin(pose.bank);
   const bz = z * Math.cos(pose.bank) - x * Math.sin(pose.bank);
@@ -91,9 +95,9 @@ function projectedTractorMount(carrier: Carrier, time: number) {
   const rx = bx * Math.cos(pose.yaw) - py * Math.sin(pose.yaw);
   const ry = bx * Math.sin(pose.yaw) + py * Math.cos(pose.yaw);
   const distance = FLEET_CAMERA_DISTANCE;
-  const scale = 1 - CAPITAL_DEPTH / distance;
-  const factor = scale * distance / (distance - CAPITAL_DEPTH - pz * scale * carrier.radius);
-  return { x: (pose.x + rx * carrier.radius) * factor, y: (pose.y + ry * carrier.radius) * factor };
+  const scale = 1 - pose.depth / distance;
+  const factor = scale * distance / (distance - pose.depth - pz * scale * pose.radius);
+  return { x: (pose.x + rx * pose.radius) * factor, y: (pose.y + ry * pose.radius) * factor };
 }
 
 export const tractorSites = [
@@ -105,7 +109,8 @@ export const tractorSites = [
 export function tractorPose(site: typeof tractorSites[number], time: number) {
   const age = time - site.at;
   if (age < -1.5 || age > site.duration) return;
-  const source = projectedTractorMount(grayCarriers[site.carrier], time);
+  const carrier = grayCarriers[site.carrier];
+  const source = projectedSaucerMount({ ...carrierPose(carrier, time), radius: carrier.radius, depth: CAPITAL_DEPTH }, TRACTOR_MOUNT);
   const tug = easeFleet((age - .65) / (site.duration - .65));
   const charge = easeFleet(age / .65) * (1 - easeFleet((tug - .92) / .08));
   return {

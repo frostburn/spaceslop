@@ -1,5 +1,5 @@
 export const levels = {
-  fleet: { name: 'Fleet Clash · Pleiadians and Grays', sector: 'FLEET CLASH', boss: null, duration: 100 },
+  fleet: { name: 'Fleet Clash · Pleiadians and Grays', sector: 'FLEET CLASH', boss: 'GRAY COMMAND SAUCER', duration: 100 },
   den: { name: 'Draconian Den · Cliffside', sector: 'DRACONIAN DEN', boss: 'THE GANTRY CHIEF', duration: 100 },
   biolume:{name:'Lantern Grove · Bioluminescence',sector:'LANTERN GROVE',boss:'LANTERN RAY',duration:100},
   summer:{name:'Summer Ice Age · Thaw',sector:'SUMMER THAW',boss:'LOTUS HYDRA',duration:100},

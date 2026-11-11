@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { loadEncounterTexture } from '../encounter-texture';
-import { HEIGHT } from '../playfield';
+import { HEIGHT, WIDTH } from '../playfield';
 import { createFlagshipEngines } from './engines';
 import { fallbackPleiadianHull } from './placeholder';
 import { createFleetSky, placeFleetPlate } from './sky';
@@ -14,6 +14,11 @@ export function createFleetScenery(signal: AbortSignal) {
   const flankFallback = fallbackPleiadianHull(false), trenchFallback = fallbackPleiadianHull(true);
   const flagship = new T.MeshBasicMaterial({ map: flankFallback, alphaTest: .38, toneMapped: false });
   const trench = new T.MeshBasicMaterial({ map: trenchFallback, alphaTest: .38, toneMapped: false });
+  const distant = new T.MeshBasicMaterial({ map: flankFallback, color: 0x758095, alphaTest: .38, toneMapped: false });
+  const crossing = new T.Mesh(new T.PlaneGeometry(3.7, 7.4), distant);
+  crossing.name = 'fleet-distant-flagship';
+  crossing.rotation.z = Math.atan2(.52, .69);
+  root.add(crossing);
 
   const clock = { value: 0 };
   const engines = createFlagshipEngines(clock);
@@ -27,8 +32,8 @@ export function createFleetScenery(signal: AbortSignal) {
   root.add(...ships.map(({ mesh }) => mesh));
   const maps = Promise.all([
     sky.maps,
-    loadEncounterTexture('fleetFlagship', replace(flagship, flankFallback), undefined, signal),
-    loadEncounterTexture('fleetTrench', replace(trench, trenchFallback), undefined, signal),
+    loadEncounterTexture('fleetFlagship', replace([flagship, distant], flankFallback), undefined, signal),
+    loadEncounterTexture('fleetTrench', replace([trench], trenchFallback), undefined, signal),
   ]).then(([skyMaps]) => [...skyMaps, flagship.map, trench.map]);
 
   return {
@@ -36,19 +41,25 @@ export function createFleetScenery(signal: AbortSignal) {
     update(time: number, animationTime: number, distance: number) {
       clock.value = animationTime;
       sky.update(time);
+      const age = time - 13;
+      const x = 6.5 - .52 * age, y = -9.1 + .69 * age;
+      crossing.visible = Math.abs(x) < WIDTH / 2 + 4 && Math.abs(y) < HEIGHT / 2 + 4;
+      placeFleetPlate(distance, -43, crossing, x, y);
       for (const { site, mesh } of ships) {
         const y = fleetViewY(site.y, time);
         mesh.visible = Math.abs(y) < HEIGHT / 2 + site.width + 6;
-        placeFleetPlate(distance, site === trenchShip ? -2.3 : -3.1, mesh, site.x, y);
+        placeFleetPlate(distance, site === trenchShip ? -9.3 : -3.1, mesh, site.x, y);
       }
     },
   };
 }
 
-function replace(material: T.MeshBasicMaterial, fallback: T.CanvasTexture) {
+function replace(materials: readonly T.MeshBasicMaterial[], fallback: T.CanvasTexture) {
   return (texture: T.Texture) => {
-    material.map = texture;
-    material.needsUpdate = true;
+    for (const material of materials) {
+      material.map = texture;
+      material.needsUpdate = true;
+    }
     fallback.dispose();
   };
 }

@@ -1,8 +1,10 @@
 import * as T from 'three';
 import { loadEncounterTexture } from '../../encounter-texture';
+import { createFleetBossRig } from '../../fleet/boss-rig';
 import { FLEET_SAUCER_POOL, FLEET_SAUCER_WINDUP, saucerPose, saucerSize } from '../../fleet/combat';
+import { createDistantSaucers } from '../../fleet/distant';
 import { createBroadsideRigs, createTractorTraffic } from '../../fleet/props';
-import { CAPITAL_DEPTH, carrierPose, FLEET_CAMERA_DISTANCE, grayCarriers, tractorPose, tractorSites } from '../../fleet/route';
+import { CAPITAL_DEPTH, carrierPose, FLEET_CAMERA_DISTANCE, FLEET_DURATION, grayCarriers, tractorPose, tractorSites } from '../../fleet/route';
 import { createSaucerFactory } from '../../fleet/saucers';
 import { createFleetScenery } from '../../fleet/scenery';
 import { HEIGHT } from '../../playfield';
@@ -12,12 +14,12 @@ import type { LevelFactory } from '../level';
 export const createLevel: LevelFactory = ({ signal }) => {
   const root = new T.Group();
   root.name = 'fleet-clash';
-  const boss = new T.Group();
-  boss.visible = false;
-
   const scenery = createFleetScenery(signal);
   const guns = createBroadsideRigs(), traffic = createTractorTraffic();
   const saucers = createSaucerFactory();
+  const boss = createFleetBossRig(saucers);
+  boss.root.visible = false;
+  const distant = createDistantSaucers(saucers);
   const carriers = grayCarriers.map((site, index) => {
     const tractor = tractorSites.find(pass => pass.carrier === index);
     return { site, tractor, rig: saucers.create(`fleet-gray-capital-${index + 1}`, tractor ? 'tractor' : 'capital') };
@@ -26,7 +28,7 @@ export const createLevel: LevelFactory = ({ signal }) => {
   const patrolRoots = patrols.map(rig => rig.root), capitalRoots = carriers.map(({ rig }) => rig.root);
   const bolts = createProjectileBatch('cannon', 0xffae4d);
   bolts.root.name = 'fleet-broadside-bolts';
-  root.add(scenery.root, guns.root, traffic.root, ...capitalRoots, ...patrolRoots, bolts.root, boss);
+  root.add(scenery.root, distant.root, guns.root, traffic.root, ...capitalRoots, ...patrolRoots, bolts.root, boss.root);
   const models: (T.Object3D | undefined)[] = [];
 
   const ready = Promise.all([
@@ -36,9 +38,10 @@ export const createLevel: LevelFactory = ({ signal }) => {
   scenery.update(0, 0, FLEET_CAMERA_DISTANCE);
 
   return {
-    root, boss, models, ready,
+    root, boss: boss.root, models, ready,
     stageDistance: FLEET_CAMERA_DISTANCE,
     fixedCamera: true,
+    shipPitch: 0,
     key: 0xffe6c9,
     sky: 0xc3deff,
     ground: 0x667295,
@@ -47,18 +50,24 @@ export const createLevel: LevelFactory = ({ signal }) => {
     friendlyGlow: 1.26,
     toneMapping: T.ACESFilmicToneMapping,
     exposure: 1.17,
-    contacts: patrolRoots,
-    warmup: [[scenery.root, guns.root, traffic.root, capitalRoots[0], patrolRoots[0], bolts.root]],
+    contacts: [...patrolRoots, boss.root],
+    warmup: [[scenery.root, distant.root, guns.root, traffic.root, capitalRoots[0], patrolRoots[0], bolts.root, boss.root]],
     prepare() {
       // Warm the actual beam, flash and projectile materials before any encounter triggers.
       scenery.root.traverse(object => { object.visible = true; });
+      distant.root.traverse(object => { object.visible = true; });
       guns.root.traverse(object => { object.visible = true; });
       traffic.root.traverse(object => { object.visible = true; });
       patrols[0].prime();
       bolts.prime();
+      boss.pose(0, false, FLEET_CAMERA_DISTANCE);
+      boss.prime();
     },
     update({ flight, time, animationTime, distance }) {
       scenery.update(time, animationTime, distance);
+      distant.update(time, distance);
+      boss.root.visible = time >= FLEET_DURATION && flight.bossHealth > 0;
+      if (boss.root.visible) boss.pose(flight.fleetBossTime, flight.fleetBossAttack.rapid, distance);
       for (const [part, depth] of [[guns.root, -1.42], [traffic.root, -.59]] as const) {
         const factor = 1 - depth / distance;
         part.position.z = depth;
@@ -97,6 +106,6 @@ export const createLevel: LevelFactory = ({ signal }) => {
       }
       bolts.draw(flight.threats.filter(shot => shot.broadside), animationTime);
     },
-    contact: () => ({ x: 0, y: 0 }),
+    contact: (_x, _distance, flight) => ({ x: flight.exposedCannonX, y: flight.bossAimY }),
   };
 };
