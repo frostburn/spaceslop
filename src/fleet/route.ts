@@ -1,10 +1,9 @@
 import { levels } from '../levels';
-import { HEIGHT } from '../playfield';
 
 export const FLEET_DURATION = levels.fleet.duration;
 export const FLEET_APPROACH = 3.5;
 export const FLEET_TRENCH_AT = 71;
-export const FLEET_SPEED = 10 * HEIGHT / FLEET_DURATION;
+export const FLEET_SPEED = 1.6;
 export const FLEET_CAMERA_DISTANCE = 22;
 export const CAPITAL_DEPTH = -8;
 export const TRACTOR_MOUNT = [-.86, -.34, .10] as const;
@@ -18,7 +17,7 @@ export const flankShips: readonly FleetHull[] = [
   { x: -4.7, y: 98.2, width: 17.4 },
 ];
 
-export const trenchShip: FleetHull = { x: 0, y: 146.5, width: 23.5 };
+export const trenchShip: FleetHull = { x: 0, y: 144.5, width: 21.5 };
 
 // Positions measured from the top left of the full, uncropped plates.
 export const flagshipEngines = {

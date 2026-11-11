@@ -3,7 +3,9 @@ import { loadEncounterTexture } from '../../encounter-texture';
 import { createFleetBossRig } from '../../fleet/boss-rig';
 import { FLEET_SAUCER_POOL, FLEET_SAUCER_WINDUP, saucerPose, saucerSize } from '../../fleet/combat';
 import { createDistantSaucers } from '../../fleet/distant';
+import { createPleiadianCraft } from '../../fleet/pleiadian-craft';
 import { createBroadsideRigs, createTractorTraffic } from '../../fleet/props';
+import { createFleetPursuit } from '../../fleet/pursuit';
 import { CAPITAL_DEPTH, carrierPose, FLEET_CAMERA_DISTANCE, FLEET_DURATION, grayCarriers, tractorPose, tractorSites } from '../../fleet/route';
 import { createSaucerFactory } from '../../fleet/saucers';
 import { createFleetScenery } from '../../fleet/scenery';
@@ -15,8 +17,11 @@ export const createLevel: LevelFactory = ({ signal }) => {
   const root = new T.Group();
   root.name = 'fleet-clash';
   const scenery = createFleetScenery(signal);
-  const guns = createBroadsideRigs(), traffic = createTractorTraffic();
+  const guns = createBroadsideRigs();
   const saucers = createSaucerFactory();
+  const pleiadians = createPleiadianCraft(saucers.environment);
+  const traffic = createTractorTraffic(pleiadians);
+  const pursuit = createFleetPursuit(pleiadians, saucers);
   const boss = createFleetBossRig(saucers);
   boss.root.visible = false;
   const distant = createDistantSaucers(saucers);
@@ -28,18 +33,18 @@ export const createLevel: LevelFactory = ({ signal }) => {
   const patrolRoots = patrols.map(rig => rig.root), capitalRoots = carriers.map(({ rig }) => rig.root);
   const bolts = createProjectileBatch('cannon', 0xffae4d);
   bolts.root.name = 'fleet-broadside-bolts';
-  root.add(scenery.root, distant.root, guns.root, traffic.root, ...capitalRoots, ...patrolRoots, bolts.root, boss.root);
+  root.add(scenery.root, distant.root, guns.root, traffic.root, pursuit.root, ...capitalRoots, ...patrolRoots, bolts.root, boss.root);
   const models: (T.Object3D | undefined)[] = [];
 
   const ready = Promise.all([
     scenery.maps,
     loadEncounterTexture('fleetSaucer', saucers.setAlloy, 1, signal),
-  ]).then(([maps]) => [...maps.map(map => map ?? undefined), ...traffic.maps, saucers.environment, saucers.metal ?? undefined]);
+  ]).then(([maps]) => [...maps.map(map => map ?? undefined), ...pleiadians.maps, saucers.environment, saucers.metal ?? undefined]);
   scenery.update(0, 0, FLEET_CAMERA_DISTANCE);
 
   return {
     root, boss: boss.root, models, ready,
-    applyArmor: traffic.setAlloy,
+    applyArmor: pleiadians.setAlloy,
     stageDistance: FLEET_CAMERA_DISTANCE,
     fixedCamera: true,
     shipPitch: 0,
@@ -52,13 +57,14 @@ export const createLevel: LevelFactory = ({ signal }) => {
     toneMapping: T.ACESFilmicToneMapping,
     exposure: 1.17,
     contacts: [...patrolRoots, boss.root],
-    warmup: [[scenery.root, distant.root, guns.root, traffic.root, capitalRoots[0], patrolRoots[0], bolts.root, boss.root]],
+    warmup: [[scenery.root, distant.root, guns.root, traffic.root, pursuit.root, capitalRoots[0], patrolRoots[0], bolts.root, boss.root]],
     prepare() {
       // Warm the actual beam, flash and projectile materials before any encounter triggers.
       scenery.root.traverse(object => { object.visible = true; });
       distant.root.traverse(object => { object.visible = true; });
       guns.root.traverse(object => { object.visible = true; });
       traffic.root.traverse(object => { object.visible = true; });
+      pursuit.prime();
       patrols[0].prime();
       bolts.prime();
       boss.pose(0, false, FLEET_CAMERA_DISTANCE);
@@ -67,6 +73,7 @@ export const createLevel: LevelFactory = ({ signal }) => {
     update({ flight, time, animationTime, distance }) {
       scenery.update(time, animationTime, distance);
       distant.update(time, distance);
+      pursuit.update(time, distance);
       boss.root.visible = time >= FLEET_DURATION && flight.bossHealth > 0;
       if (boss.root.visible) boss.pose(flight.fleetBossTime, flight.fleetBossAttack.rapid, distance);
       for (const [part, depth] of [[guns.root, -1.42], [traffic.root, -.59]] as const) {

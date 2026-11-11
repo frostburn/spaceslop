@@ -9,13 +9,14 @@ const { Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
 const { broadsideGuns, broadsideShots, broadsideSignal, BROADSIDE_BARREL, FLEET_SAUCER_POOL,
   saucerCanFire, saucerPose } = await server.ssrLoadModule('/src/fleet/combat.ts');
 const { fleetViewY, fleetScroll, hullPoint, tractorPose, tractorSites, trenchShip, FLEET_TRENCH_AT,
-  FLEET_APPROACH, FLEET_DURATION, flagshipEngines, flankShips, carrierPose, grayCarriers,
+  FLEET_APPROACH, FLEET_DURATION, FLEET_SPEED, flagshipEngines, flankShips, carrierPose, grayCarriers,
   TRACTOR_MOUNT, FLEET_CAMERA_DISTANCE, CAPITAL_DEPTH, projectedSaucerMount } =
   await server.ssrLoadModule('/src/fleet/route.ts');
 const { FLEET_BOSS_CYCLE, FLEET_BOSS_HP, FLEET_BOSS_MOUNTS, createFleetBossAttack, fleetBossEntry,
   fleetBossPose, fleetBossSignal, stepFleetBoss } = await server.ssrLoadModule('/src/fleet/boss.ts');
 const { createSaucerFactory } = await server.ssrLoadModule('/src/fleet/saucers.ts');
 const { createFleetBossRig } = await server.ssrLoadModule('/src/fleet/boss-rig.ts');
+const { FLEET_PURSUIT_AT, pursuitFighter, pursuitSaucer } = await server.ssrLoadModule('/src/fleet/pursuit.ts');
 
 test('the stern and its exhaust clear the previous bow before a continuous coast to the breach', () => {
   const stern = hullPoint(trenchShip, .5, .984);
@@ -29,12 +30,29 @@ test('the stern and its exhaust clear the previous bow before a continuous coast
   const nozzle = hullPoint(trenchShip, ...flagshipEngines.trench.mounts[0]);
   const exhaustEnd = nozzle.y - 7.62 * flagshipEngines.trench.radius * trenchShip.width;
   assert(exhaustEnd > previous.y + previous.width + 2.5);
-  assert.equal(fleetScroll(100), 160);
+  assert.equal(FLEET_DURATION, 98);
+  assert.equal(fleetScroll(FLEET_DURATION), FLEET_DURATION * FLEET_SPEED);
   const end = FLEET_DURATION + FLEET_APPROACH;
   assert(fleetViewY(breach.y, end) < fleetViewY(breach.y, FLEET_DURATION) - 2.7);
   assert(fleetViewY(breach.y, end) > -5.3);
   assert.equal(fleetScroll(end), fleetScroll(end + 5));
-  assert(Math.abs((fleetScroll(100 + STEP) - fleetScroll(100 - STEP)) / (2 * STEP) - 1.6) < .001);
+  const scrollSpeed = (fleetScroll(FLEET_DURATION + STEP) - fleetScroll(FLEET_DURATION - STEP)) / (2 * STEP);
+  assert(Math.abs(scrollSpeed - FLEET_SPEED) < .001);
+});
+
+test('the pursuit squad enters behind the saucers and leaves before the stern', () => {
+  const finish = FLEET_TRENCH_AT - FLEET_PURSUIT_AT;
+  for (let index = 0; index < 4; index++) {
+    assert(pursuitFighter(0, index).y < -9);
+    assert(pursuitFighter(finish, index).y > 9);
+    for (const age of [2.6, 3.2, 4.4]) {
+      const fighter = pursuitFighter(age, index);
+      const saucer = pursuitSaucer(age, index % 2 === 0 ? -1 : 1);
+      assert(Math.abs(fighter.x) < 4.5 && Math.abs(fighter.y) < 8);
+      assert(fighter.y < saucer.y - 2);
+      assert(Math.abs(fighter.heading) < Math.PI / 2);
+    }
+  }
 });
 
 test('a broadside has a visible windup, leaves its own barrel and only fires once per scheduled shot', () => {

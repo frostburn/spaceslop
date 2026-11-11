@@ -1,10 +1,10 @@
 import * as T from 'three';
 import { HEIGHT } from '../playfield';
 import { BROADSIDE_BARREL, broadsideGuns, broadsideSignal } from './combat';
-import { pleiadianPaint } from './pleiadian-paint';
+import type { createPleiadianCraft } from './pleiadian-craft';
 import { fleetViewY, tractorPose, tractorSites } from './route';
 
-function mesh(parent: T.Object3D, geometry: T.BufferGeometry, material: T.Material | T.Material[], x = 0, y = 0, z = 0) {
+function mesh(parent: T.Object3D, geometry: T.BufferGeometry, material: T.Material, x = 0, y = 0, z = 0) {
   const part = new T.Mesh(geometry, material);
   part.position.set(x, y, z);
   parent.add(part);
@@ -95,39 +95,11 @@ function tractorLight() {
   });
 }
 
-export function createTractorTraffic() {
+export function createTractorTraffic(craft: ReturnType<typeof createPleiadianCraft>) {
   const root = new T.Group();
   root.name = 'fleet-tractor-traffic';
-  const housing = new T.MeshStandardMaterial({ color: 0x454851, roughness: .44, metalness: .6 });
   const cone = new T.PlaneGeometry(1, 1, 3, 18);
-  const shape = new T.Shape();
-  shape.moveTo(0, .67);
-  shape.quadraticCurveTo(.16, .54, .20, .22);
-  shape.lineTo(.46, -.21);
-  shape.lineTo(.31, -.42);
-  shape.lineTo(.15, -.36);
-  shape.lineTo(.11, -.50);
-  shape.lineTo(-.11, -.50);
-  shape.lineTo(-.15, -.36);
-  shape.lineTo(-.31, -.42);
-  shape.lineTo(-.46, -.21);
-  shape.lineTo(-.20, .22);
-  shape.quadraticCurveTo(-.16, .54, 0, .67);
-  const shell = new T.ExtrudeGeometry(shape, { depth: .11, bevelThickness: .04, bevelSize: .04, bevelSegments: 2, steps: 1 });
-  const uv = shell.getAttribute('uv');
-  const cap = shell.groups[0];
-  for (let i = cap.start; i < cap.start + cap.count; i++) {
-    uv.setXY(i, .5 + uv.getX(i) / 1.04, (uv.getY(i) + .55) / 1.27);
-  }
-  const canopy = new T.SphereGeometry(1, 12, 8).scale(.105, .27, .09);
-  const engine = new T.BoxGeometry(.078, .17, .058);
   const marker = new T.SphereGeometry(.036, 10, 8);
-  const glass = new T.MeshStandardMaterial({ color: 0x263f57, roughness: .18, metalness: .4 });
-  const maps = [pleiadianPaint(false), pleiadianPaint(true)];
-  const silver = new T.MeshStandardMaterial({ map: maps[0], roughness: .48, metalness: .28, bumpScale: .016 });
-  const wreck = new T.MeshStandardMaterial({ map: maps[1], roughness: .68, metalness: .24, bumpScale: .022 });
-  const rim = new T.MeshStandardMaterial({ color: 0x947958, roughness: .48, metalness: .48 });
-  const wreckRim = new T.MeshStandardMaterial({ color: 0x4d4541, roughness: .66, metalness: .36 });
   const red = new T.MeshBasicMaterial({ color: 0xf75c50 });
   const green = new T.MeshBasicMaterial({ color: 0x79f0b2 });
   const arc = new T.MeshBasicMaterial({ color: 0xffb65a });
@@ -136,26 +108,15 @@ export function createTractorTraffic() {
     const beam = mesh(root, cone, material);
     beam.name = 'fleet-tractor-beam';
     beam.renderOrder = 3;
-    const cargo = new T.Group();
+    const cargo = craft.create(site.wreck ? 'wreck' : 'shuttle');
     cargo.name = site.wreck ? 'fleet-towed-wreck' : 'fleet-exchange-shuttle';
     root.add(cargo);
-    const hull = mesh(cargo, shell, site.wreck ? [wreck, wreckRim] : [silver, rim]);
-    hull.name = 'fleet-painted-hull';
-    mesh(cargo, canopy, glass, 0, .24, .14);
-    mesh(cargo, engine, housing, -.18, -.31, .14);
-    mesh(cargo, engine, housing, .18, -.31, .14);
     const lamps = [mesh(cargo, marker, red, -.34, -.26, .15),
       mesh(cargo, marker, site.wreck ? arc : green, .34, -.26, .15)];
     return { site, beam, material, cargo, lamps };
   });
   return {
-    root, maps,
-    setAlloy(texture: T.Texture) {
-      for (const material of [silver, wreck]) {
-        material.bumpMap = texture;
-        material.needsUpdate = true;
-      }
-    },
+    root,
     update(time: number, clock: number) {
       for (const { site, beam, material, cargo, lamps } of rig) {
         const pose = tractorPose(site, time);
