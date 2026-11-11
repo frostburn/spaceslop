@@ -2,6 +2,7 @@ import {groveSection} from '../biolume/route';
 import { DEN_SCREENS, denSection } from '../den/route';
 import {boulevardSection} from '../boulevard';
 import {summerSection} from '../summer/layout';
+import { fleetSection, FLEET_TRENCH_AT } from '../fleet/route';
 import { bindFlightInput } from './input';
 import { ventSection } from '../vent-layout';
 import { ioSection, IO_SCREENS } from '../io-layout';
@@ -115,13 +116,17 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     if(flight.level==='biolume'&&flight.phase==='stage')sector.textContent=`LANTERN GROVE · ${Math.min(10,1+Math.floor(flight.time/10))}/10`;
     if (flight.isDen && flight.phase === 'stage') sector.textContent = `${label} · ${Math.min(DEN_SCREENS, 1 + Math.floor(flight.hiveProgress * DEN_SCREENS))}/${DEN_SCREENS}`;
     sector.title = flight.isDen ? denSection(flight.phase === 'stage' ? flight.time : flight.stageDuration) : flight.level==='biolume'?groveSection(flight.phase==='stage'?flight.time:100):flight.level==='summer'?summerSection(flight.time):flight.level==='boulevard'?boulevardSection(flight.time):flight.level === 'vents' && flight.phase === 'stage' ? ventSection(flight.time) : flight.level === 'io' && flight.phase === 'stage' ? ioSection(flight.time) : flight.level === 'titan' ? titanSection(flight.hiveProgress) : flight.level === 'ice' ? iceSection(flight.hiveProgress) : levels[flight.level].name;
+    if (flight.level === 'fleet' && flight.phase === 'stage') {
+      sector.title = fleetSection(flight.time);
+      sector.textContent = sector.title.toUpperCase();
+    }
     score.textContent = String(flight.score).padStart(6, '0');
     hull.textContent = String(flight.hull).padStart(2, '0');
     charges.textContent = String(flight.charges).padStart(2, '0');
     bossHud.hidden = flight.phase !== 'boss';
     bossHealth.max = flight.bossMaxHealth;
     bossHealth.value = flight.bossHealth;
-    bossName.textContent = levels[flight.level].boss+(flight.level==='summer'?' · '+flight.summerHeadsAlive+(flight.summerHeadsAlive===1?' HEAD':' HEADS'):'');
+    bossName.textContent = (levels[flight.level].boss ?? '')+(flight.level==='summer'?' · '+flight.summerHeadsAlive+(flight.summerHeadsAlive===1?' HEAD':' HEADS'):'');
     pulse.disabled = !active || !fighting || flight.charges === 0;
     pause.hidden = !active;
     panel.hidden = active;
@@ -132,6 +137,7 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
       element('vent-study').hidden = !betweenRuns || flight.level !== 'vents';
       element('io-study').hidden = !betweenRuns || flight.level !== 'io';
       bossStart.textContent = flight.isDen || flight.level === 'summer' || flight.level === 'heliostat' || flight.level === 'boulevard' || flight.level === 'preserve' || flight.level === 'vents' || flight.level === 'titan' || flight.level === 'io' ? 'Launch at transition' : 'Launch at boss';
+      if (flight.level === 'fleet') bossStart.textContent = 'Launch at trench';
       bossStart.disabled = start.disabled || !view;
     }
     pilotPicker.setVisible(betweenRuns);
@@ -222,9 +228,7 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     if (screen !== 'paused') {
       flight = new Flight(droneWeapon.value === 'towline' ? 'towline' : 'sentry', testingWings ? wingSelectors.map((select) => readWingWeapon(select.value)) : [], pilotPicker.selectedId, readLevel(levelSelector.value));
       if (import.meta.env.DEV && devBossLaunch) {
-        // Enter the normal approach through the simulation, preserving level
-        // progress, the selected loadout and the full camera transition.
-        flight.time = flight.stageDuration;
+        flight.time = flight.level === 'fleet' ? FLEET_TRENCH_AT : flight.stageDuration;
         flight.step(0);
       }
     }

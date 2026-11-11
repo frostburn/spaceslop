@@ -12,7 +12,7 @@
 | `src/game.ts` | Shared deterministic flight/combat simulation; level math remains in the named layout/combat modules. |
 | `src/view.ts` | Shared camera, ship, weapons, feedback and warm-up. A view belongs to one level. |
 | `src/rendering/level.ts` | Typed level renderer contract: roots, frames, actor models, boss contact, warm-up and disposal. |
-| `src/rendering/loaders.ts` | Selective loading of the eleven level renderers. |
+| `src/rendering/loaders.ts` | Selective loading of level renderers. |
 | `src/rendering/levels/*.ts` | Level-owned scenery, actors, boss posing, texture loading, capture and effects. |
 | `src/assets/catalog.ts` | One media path catalog and an explicit list of textures used by each level. |
 | `src/encounter-texture.ts` | Optional texture loading, bounded deadlines and safe fallbacks. No enemy imports. |
@@ -30,6 +30,12 @@ Existing level geometry, rig and layout modules retain their descriptive prefixe
 Heliostat's `weathering.ts` layers fixed dirt, dust, streaks and sparse corrosion over both uploaded surface maps and procedural fallbacks, increasing roughness and reducing exposed metal where deposits accumulate. It samples object-local geometry, so scrolling and camera turns cannot move the stains. `star.ts` renders seamless three-dimensional convection cells, brighter HDR upwellings, cooler intercellular lanes, limb darkening and a depth-tested halo; only its presentation-clock uniform and slow sphere rotation change. Registered sunspot/feed anchors stay fixed. Organic guard parts cache rest transforms and stretch out of phase around attachment anchors; harnesses, lights, combat bounds and shared geometry remain rigid. The same posing applies to the raster and modeled fallback.
 
 `heliostat/crawler.ts` owns rail sites, traversal/bracing/lift, one-time aim locks, the marked cutting sweep and segment collision. `crawler-rig.ts` shares carriage/head/line geometry across two rigs and poses their physical carriage on the existing rails; the raised cutter is the projected combat and laser-contact target. The crawler does not emit ordinary bullets. Pulse or a weapon kill removes its beam immediately. The last site leaves view before the camera turn. Below half health the regulator latches an unstable-lens state, preserving the current attack and switching patterns only on a new locked cycle. The leading lens alternates, the trailing stream waits 0.55 seconds and locks a different offset target; per-lens phases drive both visible tubes and damage. `stellar-debris.ts` owns forty deterministic, harmless instanced shards confined around the right lens behind flight altitude. Crawler warning/beam materials, fault ring and shards all prime before launch; pause/results freeze them. Workshop entries expose the crawler and unstable regulator separately.
+
+## Fleet Clash
+
+`fleet/route.ts` registers the complete Pleiadian hulls, gun sockets, Gray carriers, and tractor passes in one ten-screen flight lane. The same top-down camera passes the outer broadsides and flies over the trench ship from the open stern to the forward breach. Both hull variants use full 1:2 alpha plates and source-built substitutes in the same coordinates. The fixed starfield and drifting planet pair are independent layers. The five fleet maps are optional and load only for this sector.
+
+`fleet/combat.ts` owns the saucer courses, aim locks, and broadside timing. Guns fire from the measured sockets once visible, and the tractor rig shares the carried wreck positions with collision. Scout and heavy saucers bank on the same course clock that places their combat targets. `rendering/levels/fleet.ts` warms the shared lathed meshes, metal, gun flashes, beam and distinct amber bolt batch before launch. The stage clears at the end of its route. The dev hangar can launch at the trench entrance.
 
 ## Draconian Den
 

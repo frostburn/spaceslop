@@ -7,6 +7,9 @@ import { DEN_TURRET_HP, createDenTurret, denDefensePoint, denMineSites, denTurre
   stepDenMine, stepDenTurret, type DenMine, type DenTurret } from './den/defense';
 import { DEN_APPROACH, denScroll } from './den/route';
 import { DEN_PATROL_STAGGER, DEN_PATROL_WINDUP, denPatrolCanFire, denPatrolEntry, denPatrolPose, denPatrolScale, denWaves, type DenPatrol } from './den/patrol';
+import { broadsideShots, fleetWaves, FLEET_SAUCER_LIFE, FLEET_SAUCER_STAGGER, FLEET_SAUCER_WINDUP,
+  saucerCanFire, saucerPose, saucerSize, saucerVolley, type FleetSaucer } from './fleet/combat';
+import { tractorPose, tractorSites } from './fleet/route';
 import { HELIOSTAT_HP,HELIOSTAT_APPROACH,HELIOSTAT_INTERVAL,HELIOSTAT_WINDUP,HELIOSTAT_FIRE,HELIOSTAT_CHANNEL,HELIOSTAT_FADE,HELIOSTAT_GUARD_FIRE,HELIOSTAT_SPAWN_LEAD,heliostatWaves,heliostatMotion,heliostatCanAttack,heliostatPlasmaHits,electricSites,electricHits,type HeliostatCourse } from './heliostat/combat';
 import {SUMMER_HP,SUMMER_APPROACH} from './summer/layout';
 import {createHydraAttack,stepHydraAttack} from './summer/hydra-attack';
@@ -68,8 +71,9 @@ type Shot = Point & {
   hydraTarget?:HydraSide;hydraPierced?:Map<Enemy,Set<HydraSide>>;
   planarBossHit?: boolean;
 };
-type Threat = Shot & { graze?: 'near' | 'counted';planar?:boolean };
+type Threat = Shot & { graze?: 'near' | 'counted';planar?:boolean; broadside?: true };
 type Enemy = Point & {
+  fleet?: FleetSaucer;
   den?: DenPatrol;
   denTurret?: DenTurret;
   rayOrb?:RaySeeker;
@@ -156,7 +160,7 @@ export const iceWaves: Wave[] = [
 export const titanWaves: Wave[] = titanInsectWaves;
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
-const enemyRadius=(enemy:Enemy,ordinary=.52)=>enemy.frog?FROG_RADIUS:enemy.summer?.kind==='vortex'?VORTEX_RADIUS:enemy.summer?.kind==='hydra'?1.2:enemy.heliostat?.kind === 'guard' ? .8 : enemy.crucible?CRUCIBLE_RADIUS:enemy.slag?SLAG_RADIUS:(enemy.ventAnchor!==undefined?MORTAR_RADIUS:ordinary)*(enemy.ventScale??1)*(enemy.boulevard?.heavy?1.2:1);
+const enemyRadius=(enemy:Enemy,ordinary=.52)=>enemy.fleet ? .91*saucerSize(enemy.fleet) : enemy.frog?FROG_RADIUS:enemy.summer?.kind==='vortex'?VORTEX_RADIUS:enemy.summer?.kind==='hydra'?1.2:enemy.heliostat?.kind === 'guard' ? .8 : enemy.crucible?CRUCIBLE_RADIUS:enemy.slag?SLAG_RADIUS:(enemy.ventAnchor!==undefined?MORTAR_RADIUS:ordinary)*(enemy.ventScale??1)*(enemy.boulevard?.heavy?1.2:1);
 const near = (a: Point, b: Point, radius: number) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 < radius ** 2;
 
 function denTargetEntry(a: Point, b: Point, enemy: Enemy) {
@@ -279,6 +283,7 @@ export class Flight {
     this.droneWeapon = droneWeapon;
     this.pilot = pilot;
     this.denMines = level === 'den' ? denMineSites.map(() => ({})) : [];
+    if (level === 'fleet') this.bossHealth = 0;
     if(level==='biolume')this.bossHealth=RAY_HP;
     if(level==='summer')this.bossHealth=SUMMER_HP;
     if (level === 'heliostat')this.bossHealth=HELIOSTAT_HP;
@@ -556,7 +561,7 @@ export class Flight {
           if(!shot.pierced)return false;
           const hits=shot.hydraPierced??=new Map(),heads=hits.get(enemy)??new Set<HydraSide>();heads.add(hit.side);hits.set(enemy,heads);continue;
         }
-        const hit = enemy.den || enemy.denTurret ? Number.isFinite(denTargetEntry(previous, shot, enemy)) : enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},previous,shot) : enemy.ambusher ? ambusherBodyHit(enemy.ambusher,this.time,previous,shot) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,previous,shot) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, previous, shot) : shot.wing === 'homing'
+        const hit = enemy.den || enemy.denTurret ? Number.isFinite(denTargetEntry(previous, shot, enemy)) : enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},previous,shot) : enemy.ambusher ? ambusherBodyHit(enemy.ambusher,this.time,previous,shot) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,previous,shot) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, previous, shot) : enemy.fleet || shot.wing === 'homing'
           ? nearSegment(enemy, previous, shot, enemyRadius(enemy))
           : Math.abs(shot.x - enemy.x) < enemyRadius(enemy) &&
             shot.y >= enemy.y - enemyRadius(enemy,.46) && previous.y <= enemy.y + enemyRadius(enemy,.46);
@@ -588,7 +593,7 @@ export class Flight {
 
     if (this.phase === 'stage') {
       this.collectDrops(dt);
-      if (this.time >= this.stageDuration) this.enter(this.level==='biolume'?'boss':'approach');
+      if (this.time >= this.stageDuration) this.enter(levels[this.level].boss === null ? 'won' : this.level==='biolume'?'boss':'approach');
     }
   }
 
@@ -695,6 +700,20 @@ export class Flight {
       if (Math.abs(origin.x - this.exposedCannonX * BOSS_PROJECTION) < this.bossTargetRadius * BOSS_PROJECTION) {
         target = this.exposedCannonX;
       }
+    } else if (this.level === 'fleet') {
+      let first = Infinity;
+      for (const candidate of this.enemies) {
+        if (candidate.hp <= 0 || !candidate.fleet) continue;
+        const depthSquared = enemyRadius(candidate) ** 2 - (candidate.x - origin.x) ** 2;
+        if (depthSquared <= 0) continue;
+        const reach = Math.sqrt(depthSquared);
+        const entry = Math.max(origin.y, candidate.y - reach);
+        if (candidate.y + reach >= origin.y && entry < Math.min(8, first)) {
+          enemy = candidate;
+          first = entry;
+        }
+      }
+      if (enemy) { target = enemy; endY = Math.min(8, Math.max(first, enemy.y)); }
     } else if (this.isDen) {
       let first = Infinity;
       for (const candidate of this.enemies) {
@@ -839,6 +858,10 @@ export class Flight {
   }
 
   private stepStage(dt: number) {
+    if (this.level === 'fleet') {
+      this.stepFleet(dt);
+      return;
+    }
     if (this.isDen) {
       if (this.time < this.stageDuration) {
         this.stepDenPatrols(dt);
@@ -1036,6 +1059,52 @@ export class Flight {
       if (!burst) continue;
       for (const shot of mineBurst(burst.x, burst.y, 10, 4, (site % 2) * Math.PI / 10))
         this.threats.push({ ...shot, planar: true });
+    }
+  }
+
+  private stepFleet(dt: number) {
+    while (this.nextWave < fleetWaves.length && this.time >= fleetWaves[this.nextWave].at) {
+      const wave = fleetWaves[this.nextWave++];
+      if (this.time - wave.at > FLEET_SAUCER_LIFE) continue;
+      for (const [slot, lane] of wave.lanes.entries()) {
+        const fleet: FleetSaucer = { course: wave.course, side: wave.side, slot, heavy: slot === wave.guard };
+        const age = this.time - wave.at - slot * FLEET_SAUCER_STAGGER - dt;
+        const pose = saucerPose(age, lane, fleet);
+        this.enemies.push({ x: pose.x, y: pose.y, lane, age, fleet, fire: Infinity,
+          hp: fleet.heavy ? 7 : 3, drop: slot === (wave.guard ?? 0) ? wave.drop : undefined });
+      }
+    }
+
+    for (const enemy of this.enemies) {
+      const saucer = enemy.fleet;
+      if (!saucer || enemy.hp <= 0) continue;
+      enemy.age += dt;
+      const pose = saucerPose(enemy.age, enemy.lane, saucer);
+      enemy.x = pose.x;
+      enemy.y = pose.y;
+      if (near(enemy, this.player, enemyRadius(enemy) + .23)) this.hit();
+      if (this.phase !== 'stage') return;
+      if (!saucerCanFire(enemy, saucer)) {
+        enemy.fire = Infinity;
+        saucer.aim = undefined;
+        continue;
+      }
+      if (saucer.aim === undefined && enemy.age >= enemy.fire - FLEET_SAUCER_WINDUP)
+        saucer.aim = { ...this.player };
+      if (!Number.isFinite(enemy.fire)) {
+        enemy.fire = enemy.age + FLEET_SAUCER_WINDUP;
+        saucer.aim = { ...this.player };
+      }
+      if (enemy.age < enemy.fire || !saucer.aim) continue;
+      this.threats.push(...saucerVolley(enemy, saucer.aim, saucer));
+      enemy.fire = enemy.age + (saucer.heavy ? 2.25 : 2.7);
+      saucer.aim = undefined;
+    }
+
+    this.threats.push(...broadsideShots(this.time - dt, this.time));
+    for (const site of tractorSites) {
+      const cargo = site.wreck && tractorPose(site, this.time);
+      if (cargo && cargo.visibility > .6 && near(cargo, this.player, .68)) this.hit();
     }
   }
 

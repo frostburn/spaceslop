@@ -95,18 +95,18 @@ function trailMaterial(color: number) {
   });
 }
 
-export function createProjectileBatch(kind: ProjectileKind) {
+export function createProjectileBatch(kind: ProjectileKind, color = colors[kind]) {
   const root = new T.Group();
   root.name = `projectiles-${kind}`;
   const danger = kind === 'hostile' || kind === 'spore' || kind === 'brine';
-  const material = kind === 'homing' ? shipAlloy(0xb7c9cc) : energyMaterial(colors[kind], danger);
+  const material = kind === 'homing' ? shipAlloy(0xb7c9cc) : energyMaterial(color, danger);
   if (kind === 'homing') material.side = T.DoubleSide;
   const geometry = kind === 'homing' ? missile : kind === 'hostile' ? orb : (kind === 'spore' || kind === 'brine') ? seed : kind === 'cannon' ? slug : pulse;
   const body = new T.InstancedMesh(geometry, material, 128);
-  const glowMaterial = trailMaterial(colors[kind]);
+  const glowMaterial = trailMaterial(color);
   const trails = new T.InstancedMesh(tail, glowMaterial, 128);
   const trim = kind === 'homing' || kind === 'omega' ? new T.InstancedMesh(kind === 'homing' ? missileBand : omegaRing,
-    new T.MeshBasicMaterial({ color: colors[kind], side: T.DoubleSide }), 128) : undefined;
+    new T.MeshBasicMaterial({ color, side: T.DoubleSide }), 128) : undefined;
   const layers = trim ? [body, trails, trim] : [body, trails];
   for (const mesh of layers) {
     mesh.count = 0;

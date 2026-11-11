@@ -11,7 +11,7 @@ import { createPowerupGraphic } from './powerup-graphics';
 import { createContinuousLaser, createMuzzleFlash, createProjectileBatch, projectileKinds, type ProjectileKind } from './projectile-graphics';
 import { ambusherFeedback } from './preserve-ambusher';
 import { faunaMuzzle } from './vent-fauna';
-import { type LevelId } from './levels';
+import { levels, type LevelId } from './levels';
 import { levelLoaders } from './rendering/loaders';
 import { type LevelFactory, type LevelScene, type LevelFrame } from './rendering/level';
 import { loadCommonTextures } from './rendering/common-textures';
@@ -295,6 +295,8 @@ export class FlightView {
       this.levelTime = flight.stageDuration + flight.time;
     if (flight.phase === 'boss')
       this.levelTime = flight.stageDuration + flight.transitionDuration + flight.time;
+    if (flight.phase === 'won' && levels[flight.level].boss === null)
+      this.levelTime = flight.stageDuration;
     if (flight.phase === 'stage')
       this.swing = 0;
     if (flight.phase === 'approach')
@@ -467,7 +469,8 @@ export class FlightView {
     for (const weapon of ['homing', 'cannon', 'omega'] as const) {
       this.projectiles[weapon].draw(shots.filter((shot) => shot.wing === weapon), this.animationTime);
     }
-    const hostile = flight.isDen ? flight.threats.map(s => ({ ...s, ...planarProjectileLayer(s, .85) })) : flight.threats;
+    const hostile = flight.isDen ? flight.threats.map(s => ({ ...s, ...planarProjectileLayer(s, .85) }))
+      : flight.level === 'fleet' ? flight.threats.filter(s => !s.broadside) : flight.threats;
     this.projectiles.hostile.draw(flight.level !== 'ice' && flight.level !== 'broodlock' ? hostile : [], this.animationTime);
     this.projectiles.brine.draw(flight.level === 'ice' ? flight.threats : [], this.animationTime);
     this.projectiles.spore.draw(flight.level === 'broodlock' ? flight.threats : [], this.animationTime);

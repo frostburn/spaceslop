@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 const root=new URL('../dist/',import.meta.url).pathname;
 const packs=JSON.parse(await readFile(join(root,'level-packages.json'),'utf8'));
 assert.equal(packs.version,1);
-const ids=['den','biolume','preserve','broodlock','ice','titan','io','vents','boulevard','heliostat','summer'];assert.deepEqual(Object.keys(packs.levels).sort(),ids.toSorted());
+const ids=['fleet','den','biolume','preserve','broodlock','ice','titan','io','vents','boulevard','heliostat','summer'];assert.deepEqual(Object.keys(packs.levels).sort(),ids.toSorted());
 const files=await readdir(join(root,'assets')),entry=files.find(f=>/^index-.*\.js$/.test(f));assert(entry);
 assert((await stat(join(root,'assets',entry))).size<40000,'The menu bundle grew beyond 40 KB. Check for eager game imports.');
 const serviceWorker=await readFile(join(root,'sw.js'),'utf8');
@@ -30,5 +30,6 @@ for(const [id,pack] of Object.entries(packs.levels)){
  assert(!pack.media.some(path=>/biolume-study-(backdrop|foreground)/.test(path)),'DEV plate entered an offline level package.');
  if(id!=='den')assert(!pack.media.some(path=>/draconian-(accretion-disk|biker-atlas|galactic-center|gantry|cliffside|patrol-turns|cliff-props|defenses)/.test(path)),'Den art leaked into another level.');
  if(id!=='biolume')assert(!pack.media.some(path=>/biolume-(backdrop|foreground|glider|study-atlas|lantern-ray|frog-atlas)/.test(path)),'Lantern Grove art leaked into another level.');
+ if(id!=='fleet')assert(!pack.media.some(path=>path.startsWith('encounters/fleet-')),'Fleet Clash art leaked into another level.');
 }
-console.log('Menu size, eleven isolated level packages, selective precaching and production dev-page exclusions passed.');
+console.log('Menu size, isolated level packages, selective precaching and production dev-page exclusions passed.');
