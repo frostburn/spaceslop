@@ -16,17 +16,16 @@ const pennant = { crop: [212, 665, 415, 1224], pivot: [314, 668] } as const;
 const standard = { crop: [785, 742, 1089, 1140], pivot: [937, 745] } as const;
 const rod = { crop: [464, 550, 624, 578], pivot: [544, 564] } as const;
 const shadow = { crop: [470, 590, 622, 644], pivot: [546, 617] } as const;
+// Stack feet and door brackets use pixels in the original cliff plate.
 const stacks = [
-  { x: 123, y: 9284, width: 32, sprite: single, mouths: [[313, 151]] },
-  { x: 185, y: 6958, width: 57, sprite: twin, mouths: [[846, 199], [1027, 199]] },
-  { x: 207, y: 7664, width: 34, sprite: single, mouths: [[313, 151]] },
+  { x: 148, y: 7379, width: 40, sprite: twin, mouths: [[846, 199], [1027, 199]] }, // Ribbed workshop roof
+  { x: 113, y: 3457, width: 28, sprite: single, mouths: [[313, 151]] }, // Lower Bastion roof
+  { x: 145, y: 2534, width: 32, sprite: single, mouths: [[313, 151]] }, // Upper Bastion roof
 ] as const;
-const banners = [
-  { x: 358, y: 8867, width: 35, sprite: pennant },
-  { x: 145, y: 7092, width: 40, sprite: standard },
-  { x: 406, y: 7408, width: 36, sprite: pennant },
-  { x: 376, y: 2994, width: 40, sprite: pennant },
-  { x: 403, y: 3254, width: 40, sprite: standard },
+const doorBanners = [
+  { width: 20, sprite: standard, mounts: [[62, 6915], [161, 6850]] }, // Workshop bulkhead
+  { width: 18, sprite: pennant, mounts: [[89, 3553], [235, 3489]] }, // Lower Bastion gate
+  { width: 22, sprite: standard, mounts: [[93, 2640], [233, 2568]] }, // Upper Bastion gate
 ] as const;
 
 function fallbackAtlas() {
@@ -238,14 +237,14 @@ export function createDenCliffProps() {
     root.add(foot, stack);
     return { y, at, foot, stack };
   });
-  const flags = banners.map(({ x, y, width, sprite }) => {
+  const flags = doorBanners.flatMap(({ width, sprite, mounts }) => mounts.map(([x, y]) => {
     const at = new T.Vector2(x / PLATE_WIDTH, 0);
     const cloth = propCard(sprite, width, at, fallback, clock, -988, true);
     const rail = propCard(rod, width * 1.12, at, fallback, clock, -987);
     cloth.name = 'den-banner';
     root.add(cloth, rail);
     return { y, at, cloth, rail, wake: cloth.material.uniforms.wake };
-  });
+  }));
   root.add(smoke);
   return {
     root,

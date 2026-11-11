@@ -155,7 +155,7 @@ export function createDenDefenses() {
         group.position.set(x, y, 0);
         body.visible = trigger.visible = !Number.isFinite(burstAge);
         burst.visible = burstAge < DEN_MINE_BURST;
-        body.rotation.z = time * .26;
+        body.rotation.z = .08 * Math.sin(time * 2.35);
         const blink = .5 + .5 * Math.sin(time * (7 + 17 * charge));
         eye.opacity = .20 + .70 * charge * blink;
         led.scale.setScalar(.88 + charge * blink * .32);
