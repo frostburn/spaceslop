@@ -6,6 +6,8 @@ const BIKE_SCALE = .00845;
 const GRIP_HEIGHT = (300 - 166) * BIKE_SCALE;
 const SHEET_WIDTH = 1536;
 const SHEET_HEIGHT = 1024;
+const RIDER_SCALE = .00565;
+const THROTTLE_X = (611 - 801) * RIDER_SCALE;
 
 // Each card's origin is its attachment point in the full atlas. Normalized
 // UVs keep these registrations when the owner resizes the whole sheet.
@@ -46,6 +48,27 @@ function featherBend(mesh: T.Mesh, side: -1 | 0 | 1, phase: number) {
   };
 }
 
+function throttleHand(mesh: T.Mesh) {
+  const positions = mesh.geometry.getAttribute('position');
+  const vertices: { i: number; x: number; y: number; weight: number }[] = [];
+  // The rider's right fist is on screen left. Twist around the handlebar
+  // and blend through the cuff into the forearm, keeping the grip planted.
+  for (let i = 0; i < positions.count; i++) {
+    const x = positions.getX(i) - THROTTLE_X, y = positions.getY(i);
+    const distance = Math.hypot(x / .5, y / .58);
+    if (distance < 1) vertices.push({ i, x, y, weight: 1 - T.MathUtils.smoothstep(distance, .46, 1) });
+  }
+  return (rev: number) => {
+    const roll = -.96 * rev, curl = -.57 * rev;
+    const c = Math.cos(curl), s = Math.sin(curl), flat = Math.cos(roll), depth = Math.sin(roll);
+    for (const { i, x, y, weight } of vertices) {
+      positions.setXYZ(i, THROTTLE_X + x + weight * (x * (c - 1) - y * flat * s),
+        y + weight * (x * s + y * (flat * c - 1)), y * depth * weight);
+    }
+    positions.needsUpdate = true;
+  };
+}
+
 function createPlaceholder(bike: T.Group, rider: T.Group) {
   const iron = new T.MeshStandardMaterial({ color: 0x465065, metalness: .62, roughness: .44 });
   const enamel = new T.MeshStandardMaterial({ color: 0x903b37, metalness: .36, roughness: .53 });
@@ -74,7 +97,6 @@ function createPlaceholder(bike: T.Group, rider: T.Group) {
     add(bike, box, brass, side * 1.34, -.51, .14, .14, .86, .1).rotation.z = side * .29;
     add(rider, ball, iron, side * .72, 1.16, .11, .34, .46, .2).rotation.z = side * .31;
     add(rider, ball, skin, side * .94, .46, .13, .22, .62, .19).rotation.z = side * .34;
-    add(rider, ball, skin, side * 1.04, -.02, .14, .19, .22, .17);
     add(rider, ball, lamp, side * .2, 1.84, .35, .08, .044, .05).rotation.z = side * .26;
   }
   add(rider, ball, leather, 0, .8, .07, .78, .84, .26);
@@ -87,6 +109,8 @@ function createPlaceholder(bike: T.Group, rider: T.Group) {
         .11, .69, .11).rotation.z = side * (1.02 + .19 * i);
     }
   }
+  add(rider, ball, skin, 1.04, -.02, .14, .19, .22, .17);
+  return add(rider, ball, skin, THROTTLE_X, -.02, .14, .19, .22, .17);
 }
 
 export function createDenBiker() {
@@ -95,13 +119,15 @@ export function createDenBiker() {
   rider.position.set(0, GRIP_HEIGHT, .2);
   root.add(rider);
   const fallbackBike = new T.Group(), fallbackRider = new T.Group();
-  createPlaceholder(fallbackBike, fallbackRider);
+  const grip = createPlaceholder(fallbackBike, fallbackRider);
   root.add(fallbackBike);
   rider.add(fallbackRider);
 
   const material = new T.MeshBasicMaterial({ color: 0xffffff, alphaTest: .32, alphaToCoverage: true });
   const bike = card(material, [4, 10, 510, 505], [259, 300], BIKE_SCALE);
-  const body = card(material, [539, 10, 1063, 482], [801, 413], .00565);
+  const body = card(material, [539, 10, 1063, 482], [801, 413], RIDER_SCALE, 40);
+  body.name = 'gantry-rider';
+  const twistThrottle = throttleHand(body);
   body.position.z = .11;
   const crest = card(material, [1095, 6, 1500, 460], [1318, 439], .00335, 14);
   const left = card(material, [18, 533, 485, 1010], [447, 601], .00338, 14);
@@ -116,7 +142,7 @@ export function createDenBiker() {
   const bend = [featherBend(crest, 0, .6), featherBend(left, -1, 2.3), featherBend(right, 1, 4.7)];
 
   const burner = burnerMaterial(0xff6624);
-  for (const x of [-.89, .89]) addBurner(root, burner, x, -.17, .37, .24, 1.23);
+  for (const x of [-.89, .89]) addBurner(root, burner, x, -.17, .37, .24, 1.7);
   const plumes = shipBurners(root);
   const flashMaterial = new T.MeshBasicMaterial({ color: 0xff9a3c, transparent: true, blending: T.AdditiveBlending, depthWrite: false });
   const flashShape = new T.ConeGeometry(.13, .39, 5).rotateZ(Math.PI).translate(0, -.12, 0);
@@ -140,6 +166,8 @@ export function createDenBiker() {
       root.position.set(pose.x, pose.y, .07);
       root.rotation.z = pose.bank;
       rider.rotation.x = .025 + pose.throttle * .125;
+      if (body.visible) twistThrottle(pose.rev);
+      else grip.rotation.set(-.96 * pose.rev, 0, -.57 * pose.rev);
       for (const deform of bend) deform(time, pose.throttle, pose.bank);
       poseBurners(plumes, time, pose.throttle);
       flashMaterial.opacity = pose.flash;

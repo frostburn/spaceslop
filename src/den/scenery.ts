@@ -34,6 +34,7 @@ function skyFallback() {
     context.fillRect((i * 159.397) % w, (i * 97.417) % h, size, size);
   }
   texture.wrapS = T.RepeatWrapping;
+  texture.anisotropy = 4;
   return texture;
 }
 
@@ -90,7 +91,8 @@ export function createDenScenery() {
   lensUniforms.lensExtent.value = 11.7;
   lensUniforms.skyGain.value = .98;
   lensUniforms.diskGain.value = .78;
-  lensUniforms.skyOffset.value.set(-.012, .027);
+  lensUniforms.skyOffset.value.set(-.012, .085);
+  lensUniforms.skyRoll.value = -.7;
   const sky = new T.Mesh(quad, lens.material);
   sky.name = 'lensed-galactic-center';
   sky.frustumCulled = false;

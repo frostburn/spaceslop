@@ -10,7 +10,9 @@ const { Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
 test('the gantry sweep alternates from the settled bike position and carries its hit area', () => {
   const a = denPose(DEN_CYCLE - .0001), b = denPose(DEN_CYCLE);
   assert(Math.hypot(a.x - b.x, a.y - b.y) < .001);
-  assert(denPose(1.23).throttle > denPose(.2).throttle + .6);
+  assert(denPose(.42).rev > .75 && denPose(.69).rev === 0);
+  assert(denPose(1.23).rev === 1 && denPose(1.23).throttle > denPose(.2).throttle + .6);
+  assert.equal(denPose(1.6).rev, 0);
   for (const time of [.2, 1.92, DEN_CYCLE + 2.6]) {
     const { x, y } = denPose(time);
     assert(Number.isFinite(denBodyEntry(time, { x, y: y - 2 }, { x, y: y + 1 })));
