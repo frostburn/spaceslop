@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { addBurner, burnerMaterial } from '../burners';
 import { part } from '../rig-geometry';
 import { pleiadianPaint } from './pleiadian-paint';
 
@@ -37,6 +38,7 @@ export function createPleiadianCraft(environment: T.Texture) {
     color: 0x263f57, roughness: .21, metalness: .4, envMap: environment, envMapIntensity: 1.55,
   });
   const engine = new T.MeshStandardMaterial({ color: 0x484855, roughness: .49, metalness: .55 });
+  const exhaust = burnerMaterial(0x77baff);
   const trim = new T.MeshStandardMaterial({
     color: 0xd3a563, roughness: .25, metalness: .86, envMap: environment, envMapIntensity: 2.45,
   });
@@ -67,6 +69,7 @@ export function createPleiadianCraft(environment: T.Texture) {
       for (const x of [-.18, .18]) {
         part(root, nacelle, engine, x, -.325, .145);
         part(root, nozzle, wreck ? burntTrim : trim, x, -.422, .145);
+        if (kind === 'fighter') addBurner(root, exhaust, x, -.43, .145, .065, .52);
       }
       return root;
     },

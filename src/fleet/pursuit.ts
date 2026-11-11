@@ -1,12 +1,13 @@
 import * as T from 'three';
-import { addBurner, burnerMaterial, poseBurners, shipBurners } from '../burners';
+import { poseBurners, shipBurners } from '../burners';
 import { HEIGHT, WIDTH } from '../playfield';
 import { createProjectileBatch } from '../projectile-graphics';
 import type { createPleiadianCraft } from './pleiadian-craft';
 import { FLEET_TRENCH_AT } from './route';
 import type { createSaucerFactory } from './saucers';
 
-export const FLEET_PURSUIT_AT = FLEET_TRENCH_AT - 8.4;
+export const FLEET_PURSUIT_AT = FLEET_TRENCH_AT - 7;
+const PURSUIT_DURATION = 8.4;
 const lanes = [-1, 1] as const;
 const formation = [
   { lane: -1, delay: .82, offset: -.51 }, { lane: 1, delay: .97, offset: .42 },
@@ -48,11 +49,9 @@ export function createFleetPursuit(craft: ReturnType<typeof createPleiadianCraft
   const root = new T.Group();
   root.name = 'fleet-pursuit';
   const prey = lanes.map(() => saucers.create('fleet-pursuit-saucer'));
-  const burner = burnerMaterial(0x77baff);
   const fighters = formation.map(() => {
     const ship = craft.create('fighter');
     ship.name = 'fleet-pleiadian-pursuer';
-    for (const x of [-.18, .18]) addBurner(ship, burner, x, -.43, .145, .065, .52);
     return { ship, burners: shipBurners(ship) };
   });
   const tracers = createProjectileBatch('drone', 0x91bff4);
@@ -67,7 +66,7 @@ export function createFleetPursuit(craft: ReturnType<typeof createPleiadianCraft
     },
     update(time: number, distance: number) {
       const age = time - FLEET_PURSUIT_AT;
-      root.visible = age >= 0 && time < FLEET_TRENCH_AT;
+      root.visible = age >= 0 && age < PURSUIT_DURATION;
       if (!root.visible) return;
       const depth = -5.2;
       root.position.z = depth;

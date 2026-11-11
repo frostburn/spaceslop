@@ -41,7 +41,8 @@ test('the stern and its exhaust clear the previous bow before a continuous coast
 });
 
 test('the pursuit squad enters behind the saucers and leaves before the stern', () => {
-  const finish = FLEET_TRENCH_AT - FLEET_PURSUIT_AT;
+  const sternEntry = (hullPoint(trenchShip, .5, .984).y - 8) / FLEET_SPEED;
+  const finish = sternEntry - FLEET_PURSUIT_AT;
   for (let index = 0; index < 4; index++) {
     assert(pursuitFighter(0, index).y < -9);
     assert(pursuitFighter(finish, index).y > 9);

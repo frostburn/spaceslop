@@ -8,7 +8,7 @@ import { createBroadsideRigs, createTractorTraffic } from '../../fleet/props';
 import { createFleetPursuit } from '../../fleet/pursuit';
 import { CAPITAL_DEPTH, carrierPose, FLEET_CAMERA_DISTANCE, FLEET_DURATION, grayCarriers, tractorPose, tractorSites } from '../../fleet/route';
 import { createSaucerFactory } from '../../fleet/saucers';
-import { createFleetScenery } from '../../fleet/scenery';
+import { createFleetScenery, fleetLighting } from '../../fleet/scenery';
 import { HEIGHT } from '../../playfield';
 import { createProjectileBatch } from '../../projectile-graphics';
 import type { LevelFactory } from '../level';
@@ -48,14 +48,8 @@ export const createLevel: LevelFactory = ({ signal }) => {
     stageDistance: FLEET_CAMERA_DISTANCE,
     fixedCamera: true,
     shipPitch: 0,
-    key: 0xffe6c9,
-    sky: 0xc3deff,
-    ground: 0x667295,
-    keyIntensity: 2.32,
-    skyIntensity: 1.22,
+    ...fleetLighting,
     friendlyGlow: 1.26,
-    toneMapping: T.ACESFilmicToneMapping,
-    exposure: 1.17,
     contacts: [...patrolRoots, boss.root],
     warmup: [[scenery.root, distant.root, guns.root, traffic.root, pursuit.root, capitalRoots[0], patrolRoots[0], bolts.root, boss.root]],
     prepare() {

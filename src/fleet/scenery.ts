@@ -6,6 +6,11 @@ import { fallbackPleiadianHull } from './placeholder';
 import { createFleetSky, placeFleetPlate } from './sky';
 import { fleetViewY, flankShips, trenchShip } from './route';
 
+export const fleetLighting = {
+  key: 0xffe6c9, sky: 0xc3deff, ground: 0x667295, keyIntensity: 2.32, skyIntensity: 1.22,
+  toneMapping: T.ACESFilmicToneMapping, exposure: 1.17,
+};
+
 export function createFleetScenery(signal: AbortSignal) {
   const root = new T.Group();
   root.name = 'fleet-scenery';

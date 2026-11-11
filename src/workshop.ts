@@ -66,6 +66,12 @@ import { createPowerupGraphic } from './powerup-graphics';
 import { createContinuousLaser, createProjectileBatch, projectileNames, type ProjectileKind } from './projectile-graphics';
 import { FLEET_CAMERA_DISTANCE, FLEET_DURATION } from './fleet/route';
 import { createFleetSky } from './fleet/sky';
+import { FLEET_BOSS_CYCLE } from './fleet/boss';
+import { createFleetBossRig } from './fleet/boss-rig';
+import { createPleiadianCraft } from './fleet/pleiadian-craft';
+import { pursuitFighter, pursuitSaucer } from './fleet/pursuit';
+import { createSaucerFactory } from './fleet/saucers';
+import { fleetLighting } from './fleet/scenery';
 import { HEIGHT, WIDTH } from './playfield';
 import './workshop.css';
 
@@ -228,6 +234,13 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   window.addEventListener('pagehide',()=>{frogLoad.abort();frog.release();frogAtlas.release();frogArt?.dispose();fernBranch.release();branchArt?.dispose();},{once:true});
   const fleetLoad = new AbortController();
   const fleetSky = createFleetSky(fleetLoad.signal);
+  const fleetSaucers = createSaucerFactory();
+  const fleetCraft = createPleiadianCraft(fleetSaucers.environment);
+  const fleetShuttle = fleetCraft.create('shuttle'), fleetFighter = fleetCraft.create('fighter'), fleetWreck = fleetCraft.create('wreck');
+  const fleetBurners = shipBurners(fleetFighter);
+  const fleetPatrol = fleetSaucers.create('fleet-workshop-patrol');
+  const fleetCommand = createFleetBossRig(fleetSaucers);
+  void loadEncounterTexture('fleetSaucer', fleetSaucers.setAlloy, 1, fleetLoad.signal);
   const fleetCamera = new T.PerspectiveCamera(T.MathUtils.radToDeg(2 * Math.atan(HEIGHT / 2 / FLEET_CAMERA_DISTANCE)), WIDTH / HEIGHT, .05, 240);
   fleetCamera.position.z = FLEET_CAMERA_DISTANCE;
   window.addEventListener('pagehide', () => fleetLoad.abort(), { once: true });
@@ -235,6 +248,29 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     fleet_planets: { root: fleetSky.root, duration: FLEET_DURATION, pose(time: number) {
       fleetSky.update(time);
       return `${time.toFixed(1)} s / ${FLEET_DURATION} s`;
+    } },
+    fleet_shuttle: { root: fleetShuttle, duration: 4, pose(time: number) {
+      fleetShuttle.rotation.set(.14, .24 * Math.sin(time * Math.PI / 2), -.12);
+      return 'Ivory plating and polished gold';
+    } },
+    fleet_fighter: { root: fleetFighter, duration: 5.4, pose(time: number) {
+      const { pitch, bank, heading } = pursuitFighter(time + 1, 0);
+      fleetFighter.rotation.set(pitch, bank, heading, 'ZXY');
+      poseBurners(fleetBurners, time, .69 + .25 * Math.sin(time * 3.5));
+      return 'Pursuit bank and twin exhausts';
+    } },
+    fleet_wreck: { root: fleetWreck, duration: 5, pose(time: number) {
+      fleetWreck.rotation.set(.24 * Math.sin(time * 1.2), .34 * Math.sin(time * .9), -.32 - time * .47);
+      return 'Scorched plating';
+    } },
+    fleet_saucer: { root: fleetPatrol.root, duration: 4, pose(time: number) {
+      fleetPatrol.attitude(pursuitSaucer(time, -1), T.MathUtils.smoothstep(time, 1.4, 2.2), 0);
+      return 'Bank and emitter charge';
+    } },
+    fleet_command: { root: fleetCommand.root, duration: FLEET_BOSS_CYCLE, pose(time: number) {
+      fleetCommand.pose(time, false, FLEET_CAMERA_DISTANCE);
+      fleetCommand.root.position.set(0, 0, 0);
+      return 'Side guns and belly emitter';
     } },
     lantern_frog:{root:frogStudy,duration:5,bounds:new T.Box3(new T.Vector3(-1.4,-4.6,-.5),new T.Vector3(1.4,3.2,1.2)),pose(time:number){const state={nextAt:0,attackAt:.6,turnFrom:-1,angle:0,reach:5.5};frog.pose({x:0,y:2},state,time);const s=frogSignal(state,time);frogLight.intensity=5+7*s.warning;return s.warning>0?'turning into locked aim / throat charge':s.retracting?'retracting bullet tongue':s.active?'extending bullet tongue':'crouch / breathing / glowing dorsal glands';}},
     grove_fern_branch:{root:fernBranch.root,duration:8,bounds:new T.Box3(new T.Vector3(-4.5,-3.5,1),new T.Vector3(4.5,3.5,4)),pose(time:number){fernBranch.update(12,time);fernBranch.root.position.y=0;return 'study-atlas bark / attached glowing fern crowns';}},
@@ -347,7 +383,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   void loadEncounterTexture('marine',setMarineTexture,1);
   void loadEncounterTexture('ioBasalt',setIoRockTexture,1);
   void loadEncounterTexture('ioCeramic',setIoCeramicTexture,1);
-  void loadEncounterTextures(interceptor, raptor, Object.values(assets).map(({ root }) => root));
+  void loadEncounterTextures(interceptor, raptor, Object.values(assets).map(({ root }) => root), fleetCraft.setAlloy);
   for (const asset of Object.values(assets)) scene.add(asset.root);
   const assetSelect = element<HTMLSelectElement>('asset');
   const sector = element<HTMLSelectElement>('sector');
@@ -403,6 +439,15 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     fill.groundColor.setHex(summer?0x728153:habitat ? preserveLighting.ground : 0x514873);
     fill.intensity = summer?1.6:habitat ? preserveLighting.skyIntensity : 1.75;
     if(biolume){light.intensity=fill.intensity=0;}
+    if (sector.value === 'fleet') {
+      renderer.toneMapping = fleetLighting.toneMapping;
+      renderer.toneMappingExposure = fleetLighting.exposure;
+      light.color.setHex(fleetLighting.key);
+      light.intensity = fleetLighting.keyIntensity;
+      fill.color.setHex(fleetLighting.sky);
+      fill.groundColor.setHex(fleetLighting.ground);
+      fill.intensity = fleetLighting.skyIntensity;
+    }
     uv.visible = habitat && !scenery;
     for (const asset of Object.values(assets)) asset.root.visible = asset === selected;
     const fleetPreview = key === 'fleet_planets';
