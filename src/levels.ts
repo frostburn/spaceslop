@@ -1,4 +1,5 @@
 export const levels = {
+  den: { name: 'Draconian Den · Cliffside', sector: 'DRACONIAN DEN', boss: 'THE GANTRY CHIEF', duration: 100 },
   biolume:{name:'Lantern Grove · Bioluminescence',sector:'LANTERN GROVE',boss:'LANTERN RAY',duration:100},
   summer:{name:'Summer Ice Age · Thaw',sector:'SUMMER THAW',boss:'LOTUS HYDRA',duration:100},
   heliostat: {name:'Uranus · Heliostat',sector:'HELIOSTAT',boss:'SUNSPOT REGULATOR',duration:100},

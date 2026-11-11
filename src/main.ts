@@ -12,6 +12,7 @@ let selected = readLevel(new URLSearchParams(location.search).get('level'));
 let session: AbortController | undefined;
 let reloadBeforePreparation = false;
 const descriptions: Record<LevelId, string> = {
+  den: 'Fly the cliffside docks and rookeries, then face the Gantry Chief above the black hole.',
   biolume:'Fly beneath translucent luminous leaves, over tangled root bridges and blackwater pools. Lantern gliders guard the nursery; the enormous Lantern Ray waits in the Dark Crown.',
   summer:'Grazing mammoths, flower-rich meadows and thawing glacier gardens. Follow the river into the glass-covered lotus palace.',
   heliostat:'Fly through an artificial-star power plant above Uranus. Dodge capacitor discharges, cyborg man o’wars and inspection drones, then disable the Sunspot Regulator.',
@@ -32,6 +33,10 @@ function select(id: LevelId) {
   history.replaceState(null, '', url);
   status.textContent = descriptions[id];
 }
+function levelDetail(id: LevelId, saved = false) {
+  const level = levels[id];
+  return `${level.duration} second route · ${saved ? 'Saved offline' : level.boss}`;
+}
 for (const [id, level] of Object.entries(levels)) {
   const button = document.createElement('button');
   button.type = 'button';
@@ -40,7 +45,7 @@ for (const [id, level] of Object.entries(levels)) {
   const title = document.createElement('strong');
   const detail = document.createElement('span');
   title.textContent = level.name;
-  detail.textContent = `${level.duration} second route · ${level.boss}`;
+  detail.textContent = levelDetail(id as LevelId);
   button.append(title, detail);
   button.addEventListener('click', () => select(id as LevelId));
   cards.append(button);
@@ -51,7 +56,7 @@ async function refreshSavedLevels() {
     const id = card.dataset.level as LevelId;
     const saved = ready.includes(id);
     card.classList.toggle('saved-offline', saved);
-    card.querySelector('span')!.textContent = `${levels[id].duration} second route · ${saved ? 'Saved offline' : levels[id].boss}`;
+    card.querySelector('span')!.textContent = levelDetail(id, saved);
   }
 }
 select(selected);
@@ -107,7 +112,7 @@ document.querySelector('#clear-offline')!.addEventListener('click', async () => 
 if (import.meta.env.DEV) {
   const links=document.createElement('nav');
   links.id='menu-dev-tools';links.className='dev-links';links.setAttribute('aria-label','Development tools');
-  for(const [path,label]of [['workshop.html','Asset workshop'],['vent-study.html','Abyss camera study'],['io-study.html','Io camera study'],['heliostat-study.html','Uranus corridor study'],['biolume-study.html','Bioluminescence lighting study']]){
+  for(const [path,label]of [['workshop.html','Asset workshop'],['vent-study.html','Abyss camera study'],['io-study.html','Io camera study'],['heliostat-study.html','Uranus corridor study'],['biolume-study.html','Bioluminescence lighting study'],['black-hole-study.html','Black hole study']]){
     const link=document.createElement('a');link.href=import.meta.env.BASE_URL+path;link.textContent=label;links.append(link);
   }
   menu.querySelector('.menu-actions')!.append(links);

@@ -10,4 +10,9 @@ export function minePose(mine:BoulevardMine,time:number){
 export function triggerMine(mine:BoulevardMine,time:number,player:{x:number;y:number}){
  const p=minePose(mine,time);if(mine.triggeredAt===undefined&&p.y<8&&p.y>-8&&Math.hypot(player.x-p.x,player.y-p.y)<MINE_TRIGGER)mine.triggeredAt=time;return minePose(mine,time);
 }
-export function mineBurst(x:number,y:number){return Array.from({length:12},(_,i)=>{const a=i*Math.PI*2/12;return{x:x+Math.sin(a)*.28,y:y+Math.cos(a)*.28,z:0,vx:Math.sin(a)*3.6,vy:Math.cos(a)*3.6,vz:0};});}
+export function mineBurst(x:number,y:number,count=12,speed=3.6,rotation=0){
+ return Array.from({length:count},(_,i)=>{
+  const a=rotation+i*Math.PI*2/count,dx=Math.sin(a),dy=Math.cos(a);
+  return{x:x+dx*.28,y:y+dy*.28,z:0,vx:dx*speed,vy:dy*speed,vz:0};
+ });
+}

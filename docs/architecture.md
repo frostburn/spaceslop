@@ -12,7 +12,7 @@
 | `src/game.ts` | Shared deterministic flight/combat simulation; level math remains in the named layout/combat modules. |
 | `src/view.ts` | Shared camera, ship, weapons, feedback and warm-up. A view belongs to one level. |
 | `src/rendering/level.ts` | Typed level renderer contract: roots, frames, actor models, boss contact, warm-up and disposal. |
-| `src/rendering/loaders.ts` | The ten dynamic rendering entry points. |
+| `src/rendering/loaders.ts` | Selective loading of the eleven level renderers. |
 | `src/rendering/levels/*.ts` | Level-owned scenery, actors, boss posing, texture loading, capture and effects. |
 | `src/assets/catalog.ts` | One media path catalog and an explicit list of textures used by each level. |
 | `src/encounter-texture.ts` | Optional texture loading, bounded deadlines and safe fallbacks. No enemy imports. |
@@ -30,6 +30,18 @@ Existing level geometry, rig and layout modules retain their descriptive prefixe
 Heliostat's `weathering.ts` layers fixed dirt, dust, streaks and sparse corrosion over both uploaded surface maps and procedural fallbacks, increasing roughness and reducing exposed metal where deposits accumulate. It samples object-local geometry, so scrolling and camera turns cannot move the stains. `star.ts` renders seamless three-dimensional convection cells, brighter HDR upwellings, cooler intercellular lanes, limb darkening and a depth-tested halo; only its presentation-clock uniform and slow sphere rotation change. Registered sunspot/feed anchors stay fixed. Organic guard parts cache rest transforms and stretch out of phase around attachment anchors; harnesses, lights, combat bounds and shared geometry remain rigid. The same posing applies to the raster and modeled fallback.
 
 `heliostat/crawler.ts` owns rail sites, traversal/bracing/lift, one-time aim locks, the marked cutting sweep and segment collision. `crawler-rig.ts` shares carriage/head/line geometry across two rigs and poses their physical carriage on the existing rails; the raised cutter is the projected combat and laser-contact target. The crawler does not emit ordinary bullets. Pulse or a weapon kill removes its beam immediately. The last site leaves view before the camera turn. Below half health the regulator latches an unstable-lens state, preserving the current attack and switching patterns only on a new locked cycle. The leading lens alternates, the trailing stream waits 0.55 seconds and locks a different offset target; per-lens phases drive both visible tubes and damage. `stellar-debris.ts` owns forty deterministic, harmless instanced shards confined around the right lens behind flight altitude. Crawler warning/beam materials, fault ring and shards all prime before launch; pause/results freeze them. Workshop entries expose the crawler and unstable regulator separately.
+
+## Draconian Den
+
+`den/route.ts` owns the ten-screen registration and the continuous coast across the grate into the separate gantry plate. Den and Lantern Grove share `rendering/scroll-plate.ts`, which decodes an optional raster into bounded screen textures with neighboring pixels in the gutters. The Den composites two adjacent plate tiles over its side-on black-hole view. The cliff artwork includes fixed scenery and rookery nests. During the approach, the lensed sky swings toward the chief as the arena enters view. Flight and ordnance stay in the same plane.
+
+`den/patrol.ts` owns launches, lane crossings and weaving patrols. Attack windup starts once a rider is inside the visible field. The patrol rig supports sixteen views in the square atlas and seven views in the original 3:2 atlas. Both cover a quarter turn and mirror for the other direction. The swept hit ellipse uses the same heading. The cliff, gantry and patrols have procedural fallbacks. The Den owns its stage textures and GPU resources and loads them only when selected.
+
+`den/patrol-warp.ts` deforms the square atlas along measured bands through the snout, grip, intake and nose. Vertex velocities carry through each of the sixteen views. At each handoff, the two textures briefly crossfade on the shared mesh. Each exhaust mount follows its source triangle through the same deformation and blend, and both plumes draw below the bike.
+
+`den/cliff-props.ts` registers chimney feet to room roofs and pairs of banner brackets to doorway jambs in cliff plate pixels. Smoke starts at the measured chimney openings and drifts outward in pooled puffs. A subdivided banner mesh bends below a rigid rail and reacts to nearby flight. The presentation clock freezes both effects on pause. The optional atlas has a procedural fallback and loads with the Den package.
+
+`den/defense.ts` registers six turret crews to the ledges and ten hovering mines to the route. Gunners track the ship at a limited speed and lock a three-round burst after their rig is fully visible. Weapon hits use the same angle as the barrel, and the pedestal stays on the ledge after defeat. Mines arm inside their visible radius, then release a single ring of ten shards. `den/defense-rig.ts` reuses the registered points for the sights, recoil, fuse and blast. The mine sprite rocks slightly around its rest angle to keep its baked lighting aligned. The four-part atlas is optional and the game warms either the artwork or the modeled fallback before launch.
 
 ## Lantern Grove
 

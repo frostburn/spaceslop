@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#090b11">
+    <title>Black hole study · Spaceslop</title>
+  </head>
+  <body>
+    <main>
+      <header>
+        <a href="./">← Main menu</a>
+        <h1>Black hole study</h1>
+      </header>
+      <div class="study">
+        <canvas id="preview" aria-label="Accretion disk around a black hole"></canvas>
+        <aside aria-label="Disk view controls">
+          <label for="mode">View</label>
+          <select id="mode">
+            <option value="0">Lensed disk</option>
+            <option value="1">Straight projection</option>
+            <option value="2">Face-on source</option>
+          </select>
+          <label for="inclination">Inclination <output id="angle" for="inclination">84°</output></label>
+          <input id="inclination" type="range" min="0" max="89.5" step="0.5" value="84">
+          <p class="range-caption"><span>Face-on</span><span>Edge-on</span></p>
+          <p id="disk-status" role="status">Procedural disk</p>
+          <p>Thin disk around a non-spinning black hole.</p>
+          <p id="error" role="alert" hidden></p>
+        </aside>
+      </div>
+    </main>
+    <script type="module" src="/src/black-hole-study.ts"></script>
+  </body>
+</html>
