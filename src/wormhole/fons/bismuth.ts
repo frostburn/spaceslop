@@ -76,10 +76,13 @@ export const bismuthCoating = /* glsl */ `
   float grazing = 1.0 - clamp(dot(viewDir, normal), 0.0, 1.0);
   vec3 reflected = reflect(-viewDir, normal);
   vec3 oxide = .53 + .45 * cos(6.2831853 * (oxideBand - grazing * .28 + vec3(0.0, .75, .42)));
-  oxide = mix(vec3(.54,.58,.67), oxide, .88);
-  float sheet = exp(-abs(dot(reflected, vec3(-.61,.70,.37))-.34)*5.7);
-  float glint = exp(-abs(dot(reflected, vec3(.76,.52,-.38))+.27)*17.0);
+  vec2 reflectionUV = clamp(vec2(.50,.56) + reflected.xy * vec2(-.49,.44), .002, .998);
+  vec3 tunnel = texture2D(bismuthSky, reflectionUV).rgb;
+  float sheet = exp(-abs(dot(reflected, vec3(-.61,.70,.37))-.34)*13.0);
+  float glint = exp(-abs(dot(reflected, vec3(.76,.52,-.38))+.27)*34.0);
   float striae = .5 + .5*cos(growthLine * 43.98 + oxideBand * 9.0);
   float grooves = 1.0 - .17 * smoothstep(.77,.97,striae) * (1.0-smoothstep(.045,.15,fwidth(growthLine)));
-  outgoingLight = (outgoingLight*.27 + oxide * (.075 + .46*sheet) + vec3(.71,.80,1.0)*glint*.36) * grooves;
+  vec3 tint = mix(vec3(.62,.68,.76), oxide, .54);
+  vec3 reflectedMetal = (tunnel * (1.65 + 1.15 * grazing) + .94 * sheet) * tint;
+  outgoingLight = (outgoingLight*.16 + reflectedMetal + oxide*.055 + vec3(.79,.89,1.0)*glint*.76) * grooves;
 `;

@@ -13,7 +13,7 @@ import { createFlightView, type FlightView } from '../view';
 import { levels, readLevel, type LevelId } from '../levels';
 import { iceSection } from '../ice-layout';
 import { readWingWeapon, wingWeapons } from '../wing';
-import { FONS_NAME, fonsPhase } from '../wormhole/fons/combat';
+import { FONS_NAME, FONS_RAIN_END, fonsPhase } from '../wormhole/fons/combat';
 export async function openFlightSession(selectedLevel: LevelId, signal: AbortSignal) {
   function element<T extends HTMLElement>(id: string) {
     const node = document.getElementById(id);
@@ -167,6 +167,8 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     else if (flight.isFonsFight && flight.phase === 'boss') {
       const storm = fonsPhase(flight.fonsTime);
       if (storm.rain || storm.warning > 0) tip = 'Stay in the wake of a falling crystal';
+      else if (storm.shielded) tip = storm.age < FONS_RAIN_END ? 'Fons shielded · Find cover' : 'Cloak opening';
+      else if (storm.wrap > 0 && storm.age < FONS_RAIN_END) tip = 'Cloak closing · Find cover';
       else if (storm.openingRifts) tip = 'Wall rifts opening · Watch for falling cover';
       else tip = flight.droneWeapon === 'towline' ? 'Sweep the arc across the mirror' : 'Fire into the mirror · Dodge the sweeps';
     }

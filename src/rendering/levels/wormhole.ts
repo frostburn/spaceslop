@@ -26,6 +26,7 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
   const tunnel = createWormholeTunnel(apertureY, reflection.texture);
   const attacks = createFonsEffects();
   const environment = createFonsEnvironment(tunnel.root, attacks.rocks);
+  attacks.setCrystalEnvironment(environment.crystalTexture);
   const fons = createFonsRig(environment.texture);
   const lightning = createFonsLightning(apertureY * halfHeight);
   let mirror: WormholeReflectionPose;
@@ -76,6 +77,7 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
       tunnel.clearReflection();
       reflection.dispose();
       fons.clearEnvironment();
+      attacks.setCrystalEnvironment(null);
       environment.dispose();
     },
     contact: createBossLaserContact(plane, boss.root),

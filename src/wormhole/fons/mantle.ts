@@ -33,7 +33,7 @@ function makePanel(side: number, material: T.ShaderMaterial) {
   geometry.setAttribute('normal', new T.BufferAttribute(new Float32Array(rest.length), 3).setUsage(T.DynamicDrawUsage));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
-  const positions = position.array, previous = positions.slice();
+  const positions = Float32Array.from(rest), previous = positions.slice();
   const seams: Seam[] = [];
   for (let row = 0; row < rows; row++) for (let column = 0; column < columns; column++) {
     for (const [dx, dy, stiffness] of [[1, 0, .89], [0, 1, .89], [1, 1, .56], [-1, 1, .56], [2, 0, .23], [0, 2, .24]]) {
@@ -88,7 +88,31 @@ function makePanel(side: number, material: T.ShaderMaterial) {
           positions[i] = Math.min(positions[i], clothFront);
       }
     },
-    upload() {
+    upload(wrap: number) {
+      position.array.set(positions);
+      if (wrap > 0) {
+        const swing = .82 * Math.sin(Math.PI * wrap);
+        for (let row = 0; row < rows; row++) for (let column = 0; column < columns; column++) {
+          const i = 3 * (row * columns + column);
+          const u = column / (columns - 1), v = row / (rows - 1);
+          const x = positions[i], y = positions[i + 1], z = positions[i + 2];
+          // Swing around the mane and tusks before overlapping the two hems.
+          // Keep some of the simulated billow even when the panels are closed.
+          const shoulder = .82 + .34 * Math.sin(Math.PI * v * .85);
+          const hem = -.25 + .06 * Math.sin(v * 5 + side);
+          const closedAngle = T.MathUtils.lerp(shoulder, hem, u);
+          const angle = T.MathUtils.lerp(Math.atan2(side * x, z), closedAngle, wrap);
+          const fold = (.038 + .108 * v) * Math.sin(u * 21.5 + v * 3 + side);
+          const closedRadius = 1.92 + .37 * Math.sin(Math.PI * v * .84) + fold + .18 * (z - rest[i + 2]) +
+            (side > 0 ? .22 * u : 0);
+          const radius = T.MathUtils.lerp(Math.hypot(x, z), closedRadius, wrap) + swing;
+          const closedY = 1.53 + .55 * Math.sin(Math.PI * u * .72) - v * (3.17 + 1.27 * u + .12 * side) +
+            v ** 3 * .17 * Math.sin(u * 13 + side) + .22 * (y - rest[i + 1]);
+          position.array[i] = side * radius * Math.sin(angle);
+          position.array[i + 1] = T.MathUtils.lerp(y, closedY, wrap);
+          position.array[i + 2] = radius * Math.cos(angle);
+        }
+      }
       position.needsUpdate = true;
       geometry.computeVertexNormals();
     },
@@ -97,9 +121,10 @@ function makePanel(side: number, material: T.ShaderMaterial) {
 
 export function createFonsMantle() {
   const charge = { value: 0 };
+  const wrapped = { value: 0 };
   const material = new T.ShaderMaterial({
     side: T.DoubleSide,
-    uniforms: { charge },
+    uniforms: { charge, wrapped },
     vertexShader: /* glsl */ `
       varying vec2 cloth;
       varying vec3 surfaceNormal, eye;
@@ -114,7 +139,7 @@ export function createFonsMantle() {
     fragmentShader: /* glsl */ `
       varying vec2 cloth;
       varying vec3 surfaceNormal, eye;
-      uniform float charge;
+      uniform float charge, wrapped;
       void main() {
         vec3 n = normalize(surfaceNormal) * (gl_FrontFacing ? 1.0 : -1.0);
         vec3 v = normalize(eye);
@@ -129,6 +154,8 @@ export function createFonsMantle() {
         color += vec3(.013, .11, .18) * (shine * .52 + rim * .6);
         color += vec3(.003, .16, .061) * lining * (.70 + .52 * charge);
         color += vec3(.012, .30, .45) * (.8 * rim + .3 * shine) * charge * .42;
+        float hem = smoothstep(.966, .993, cloth.x);
+        color += vec3(.26, .04, .50) * wrapped * (hem * .53 + rim * .14);
         gl_FragColor = vec4(color, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -143,8 +170,9 @@ export function createFonsMantle() {
   return {
     root,
     update(time: number, reset: boolean) {
-      const { lift } = fonsPhase(time);
+      const { lift, wrap } = fonsPhase(time);
       charge.value = lift;
+      wrapped.value = wrap;
       if (reset || time < last || time - last > .24) {
         for (const panel of panels) panel.reset();
         last = time - step;
@@ -158,7 +186,7 @@ export function createFonsMantle() {
         const twist = (c.yaw - a.yaw) * 11;
         for (const panel of panels) panel.integrate(last, fonsPhase(last).lift, dx, dy, twist);
       }
-      for (const panel of panels) panel.upload();
+      for (const panel of panels) panel.upload(wrap);
     },
   };
 }

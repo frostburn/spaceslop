@@ -315,6 +315,7 @@ export class Flight {
   get isFleet() { return this.level === 'fleet'; }
   get isCicadaFight() { return this.level === 'titan' || (this.level === 'wormhole' && !this.isFonsFight); }
   get isFonsFight() { return this.fonsAt >= 0; }
+  get fonsShielded() { return this.isFonsFight && fonsPhase(this.fonsTime).shielded; }
   get planarBoss() { return this.level === 'biolume' || this.isDen || this.isFleet || this.isFonsFight; }
   get weaponsActive() { return this.phase === 'stage' || this.phase === 'boss' || ((this.isDen || this.isFleet) && this.phase === 'approach'); }
   get denBossTime() {
@@ -805,7 +806,8 @@ export class Flight {
       enemy=candidate;target=candidate;endY=Math.max(origin.y,entry);
     }
     wing.beamEnd = { x: origin.x, y: endY };
-    wing.laserHold = target !== undefined && target === wing.laserTarget && head===wing.laserHead ? wing.laserHold + dt : 0;
+    const shielded = typeof target === 'number' && this.fonsShielded;
+    wing.laserHold = !shielded && target !== undefined && target === wing.laserTarget && head===wing.laserHead ? wing.laserHold + dt : 0;
     wing.laserTarget = target;
     wing.laserHead=head;
     const damage = (1 + 2.5 * Math.min(wing.laserHold / 0.85, 1)) * dt;
@@ -1442,7 +1444,7 @@ export class Flight {
   }
 
   private damageBoss(damage: number, laser = false,head:HydraSide=this.summerTargetHead) {
-    if (this.phase !== 'boss') return;
+    if (this.phase !== 'boss' || this.fonsShielded) return;
     const before = this.bossHealth;
     if(this.level==='summer'){
       if(!hydraAlive(this.summerHydra,head))return;

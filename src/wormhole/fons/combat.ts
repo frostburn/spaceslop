@@ -23,8 +23,10 @@ export function fonsPhase(time: number) {
   const cycle = Math.floor(Math.max(0, time) / FONS_CYCLE);
   const age = time - cycle * FONS_CYCLE;
   const rain = age >= FONS_RAIN_AT && age < FONS_RAIN_END;
+  const wrap = fonsEase(FONS_RAIN_AT - 2.30, FONS_RAIN_AT - 1.10, age) *
+    (1 - fonsEase(FONS_RAIN_END + .12, FONS_RAIN_END + 1.20, age));
   return {
-    cycle, age, rain,
+    cycle, age, rain, wrap, shielded: wrap >= .93,
     warning: fonsEase(FONS_RAIN_AT - 1.0, FONS_RAIN_AT, age) * (age < FONS_RAIN_AT ? 1 : 0),
     openingRifts: age >= BREACH_AT && age < FONS_RAIN_AT - 1.0,
     lift: fonsEase(BREACH_AT + .13, FONS_RAIN_AT + .25, age) * (1 - fonsEase(FONS_RAIN_END, FONS_RAIN_END + 1.4, age)),
@@ -49,8 +51,8 @@ export function fonsPose(time: number) {
 
 export function fonsBodyEntry(time: number, a: Point, b: Point) {
   const pose = fonsPose(time);
-  // The mirror is solid and the moving cloth is cosmetic. Yaw changes its
-  // projected width and the contact follows the same center as the rig.
+  // Keep contact aligned to the projected mirror as the rig yaws. The
+  // closed cloak intercepts damage to this same target.
   return ellipseEntry(a, b, pose, 0, .85 * Math.cos(pose.yaw), 1.35);
 }
 

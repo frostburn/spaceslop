@@ -5,12 +5,12 @@ import { bismuthCoating, bismuthGeometry, bismuthVaryings } from './bismuth';
 import { fonsBeams, fonsPose, fonsRocks, fonsPhase } from './combat';
 import { wallRiftShape } from './wall-rift';
 
-function breachingCrystal(variant: number) {
+function breachingCrystal(variant: number, sky: { value: T.Texture | null }) {
   const rift = { value: new T.Vector4() };
   const clock = { value: 0 }, crossing = { value: false };
-  const material = new T.MeshStandardMaterial({ color: 0xd5d9e2, metalness: .84, roughness: .25 });
+  const material = new T.MeshStandardMaterial({ color: 0xe3e8f1, metalness: .97, roughness: .15 });
   material.onBeforeCompile = shader => {
-    Object.assign(shader.uniforms, { rockRift: rift, rockClock: clock, rockCrossing: crossing });
+    Object.assign(shader.uniforms, { rockRift: rift, rockClock: clock, rockCrossing: crossing, bismuthSky: sky });
     shader.vertexShader = bismuthVaryings + `
       varying vec4 rockScreen;
       attribute float oxideThickness, terraceGrain;
@@ -25,6 +25,7 @@ function breachingCrystal(variant: number) {
       uniform vec4 rockRift;
       uniform float rockClock;
       uniform bool rockCrossing;
+      uniform sampler2D bismuthSky;
       ${wallRiftShape}
     ` + shader.fragmentShader.replace('#include <clipping_planes_fragment>', `
       #include <clipping_planes_fragment>
@@ -93,7 +94,8 @@ export function createFonsEffects() {
   root.name = 'fons-attacks';
   const plane = new T.PlaneGeometry(1, 1);
   const beams = [streak(plane), streak(plane)];
-  const crystals = [breachingCrystal(0), breachingCrystal(1)];
+  const sky = { value: null as T.Texture | null };
+  const crystals = [breachingCrystal(0, sky), breachingCrystal(1, sky)];
   const rocks = crystals.map(crystal => crystal.mesh);
   rocks.forEach((rock, index) => { rock.name = 'fons-wall-bismuth-' + index; });
   const impacts = rocks.map(() => new T.Mesh(plane, new T.ShaderMaterial({
@@ -172,6 +174,7 @@ export function createFonsEffects() {
   }
   return {
     root, rocks, update,
+    setCrystalEnvironment(texture: T.Texture | null) { sky.value = texture; },
     prime() {
       update(12.3, 22, [{ x: 0, y: 0, z: 0, vx: 0, vy: -1, vz: 0 }], true);
       for (const mesh of [...beams, ...impacts, ...rocks]) mesh.visible = true;

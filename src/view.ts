@@ -460,7 +460,9 @@ export class FlightView {
           laser.root.position.z = z;
           laser.draw(planarProjectileLayer(origin, z), planarProjectileLayer(end, z), wing.laserHold, this.animationTime, contact);
         } else {
-          laser.draw(origin, end, wing.laserHold, this.animationTime, contact, flight.phase === 'boss' && target === undefined);
+          const shielded = typeof target === 'number' && flight.fonsShielded;
+          laser.draw(origin, end, wing.laserHold, this.animationTime, contact && !shielded,
+            shielded || (flight.phase === 'boss' && target === undefined));
         }
       }
     }

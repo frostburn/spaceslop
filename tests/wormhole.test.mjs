@@ -15,7 +15,7 @@ const { wormholeFrame, WORMHOLE_APPROACH } = await server.ssrLoadModule('/src/wo
 const { CICADA_FIRE, CICADA_HP, CICADA_WINDUP } = await server.ssrLoadModule('/src/cicada.ts');
 const { wormholeReflectionPose, createWormholeReflection } = await server.ssrLoadModule('/src/wormhole/reflection.ts');
 const { createFighterRig } = await server.ssrLoadModule('/src/ship-rigs.ts');
-const { FONS_APPROACH, FONS_HP, FONS_RAIN_AT, FONS_RAIN_END, fonsPhase, fonsRocks, fonsSheltered, fonsBeamHits, fonsBeams } =
+const { FONS_APPROACH, FONS_HP, FONS_RAIN_AT, FONS_RAIN_END, fonsPhase, fonsPose, fonsRocks, fonsSheltered, fonsBeamHits, fonsBeams } =
   await server.ssrLoadModule('/src/wormhole/fons/combat.ts');
 const { createFonsMantle } = await server.ssrLoadModule('/src/wormhole/fons/mantle.ts');
 const { createFonsLightning } = await server.ssrLoadModule('/src/wormhole/fons/lightning.ts');
@@ -226,9 +226,41 @@ test('the mantle holds its pins while the trailing folds move and freezes at a f
   const frozen = position.slice();
   cloth.update(3, false);
   assert.deepEqual(position, frozen);
-  for (let tick = 181; tick <= 960; tick++) cloth.update(tick * STEP, false);
+  for (let tick = 181; tick <= 640; tick++) cloth.update(tick * STEP, false);
+  const opposite = cloth.root.children[1].geometry.attributes.position.array;
+  for (const [panel, side] of [[position, -1], [opposite, 1]]) {
+    const hem = (9 * 17 + 16) * 3;
+    assert(panel[hem] * side < -.2 && panel[hem + 2] > 1.6);
+  }
+  for (let tick = 641; tick <= 960; tick++) cloth.update(tick * STEP, false);
   assert(position.every(value => Number.isFinite(value) && Math.abs(value) < 6));
   assert(position.every((value, index) => index % 3 !== 2 || value <= -1.019));
+});
+
+test('Fons blocks pulse and direct fire as the cloak closes before the rain', () => {
+  const flight = new Flight('sentry', [], 'vex', 'wormhole');
+  flight.startFonsApproach();
+  while (flight.phase === 'approach') flight.step(STEP);
+  flight.invulnerable = 100;
+  function fire(time) {
+    flight.time = time;
+    const { x, y } = fonsPose(time + STEP);
+    const shot = { x, y: y - 1.45, z: 0, vx: 0, vy: 24, vz: -25 };
+    flight.shots = [shot];
+    flight.step(STEP);
+    assert(!flight.shots.includes(shot));
+  }
+  assert(fonsPhase(FONS_RAIN_AT - 1.7).wrap > 0);
+  assert(!fonsPhase(FONS_RAIN_AT - 1.7).shielded);
+  fire(FONS_RAIN_AT - 1);
+  assert(flight.fonsShielded && !fonsPhase(flight.fonsTime).rain);
+  flight.pulse();
+  assert.equal(flight.bossHealth, FONS_HP);
+  fire(FONS_RAIN_AT + .6);
+  assert.equal(flight.bossHealth, FONS_HP);
+  fire(FONS_RAIN_END + 1.25);
+  assert(!flight.fonsShielded);
+  assert.equal(flight.bossHealth, FONS_HP - 1);
 });
 
 test('entry lightning redraws its branches on the presentation clock and clears before combat', () => {
