@@ -106,7 +106,7 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     const fighting = flight.phase === 'stage' || flight.phase === 'boss';
     const label = {
       stage: levels[flight.level].sector,
-      approach: flight.isFleet ? 'BREACH APPROACH' : flight.isDen ? 'GANTRY APPROACH' : flight.level==='biolume'?'DARK CROWN':flight.level==='summer'?'LOTUS PALACE':flight.level==='heliostat'?'COLLECTOR APPROACH':flight.level==='boulevard'?'SUNSET PLAZA':flight.level === 'vents' ? 'ABYSSAL DROP' : flight.level === 'io' ? 'CALDERA APPROACH' : flight.level === 'titan' ? 'ASCENT' : 'CONTACT',
+      approach: flight.level === 'wormhole' ? 'TITAN ECHO' : flight.isFleet ? 'BREACH APPROACH' : flight.isDen ? 'GANTRY APPROACH' : flight.level==='biolume'?'DARK CROWN':flight.level==='summer'?'LOTUS PALACE':flight.level==='heliostat'?'COLLECTOR APPROACH':flight.level==='boulevard'?'SUNSET PLAZA':flight.level === 'vents' ? 'ABYSSAL DROP' : flight.level === 'io' ? 'CALDERA APPROACH' : flight.level === 'titan' ? 'ASCENT' : 'CONTACT',
       boss: 'BOSS',
       won: 'CLEAR',
       lost: 'SIGNAL LOST',
@@ -142,7 +142,7 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
       trenchStart.disabled = start.disabled || !view;
       element('vent-study').hidden = !betweenRuns || flight.level !== 'vents';
       element('io-study').hidden = !betweenRuns || flight.level !== 'io';
-      bossStart.textContent = flight.isDen || flight.level === 'summer' || flight.level === 'heliostat' || flight.level === 'boulevard' || flight.level === 'preserve' || flight.level === 'vents' || flight.level === 'titan' || flight.level === 'io' ? 'Launch at transition' : 'Launch at boss';
+      bossStart.textContent = flight.isDen || flight.isCicadaFight || flight.level === 'summer' || flight.level === 'heliostat' || flight.level === 'boulevard' || flight.level === 'preserve' || flight.level === 'vents' || flight.level === 'io' ? 'Launch at transition' : 'Launch at boss';
       if (flight.isFleet) bossStart.textContent = 'Launch at breach';
       bossStart.disabled = start.disabled || !view;
     }
@@ -162,14 +162,14 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     else if (flight.isFleet && flight.phase === 'boss')
       tip = flight.droneWeapon === 'towline' ? 'Sweep the arc across the saucer.' : 'Move after the side guns light up · Thread the rings';
     else if (flight.droneWeapon === 'towline') {
-      tip = flight.phase === 'boss' ? (flight.level==='biolume'?'Sweep the arc through seekers or the ray.':flight.level==='heliostat'||flight.level==='boulevard'?'Sweep the arc across the cyan core.':flight.level === 'ice' ? 'Sweep the arc across the mouth marker.' : flight.level === 'io' ? 'Sweep the arc across the cyan support, then exposed machinery.' : flight.level === 'titan' ? 'Sweep the arc across the glowing thorax vent.' : flight.level === 'vents' ? (flight.crabCoreOpen ? 'Sweep the arc across the exposed gills.' : 'Sweep the arc across a glowing claw joint.') : 'Sweep the arc across the green cannon.') : 'Park the drone · Sweep the arc';
+      tip = flight.phase === 'boss' ? (flight.level==='biolume'?'Sweep the arc through seekers or the ray.':flight.level==='heliostat'||flight.level==='boulevard'?'Sweep the arc across the cyan core.':flight.level === 'ice' ? 'Sweep the arc across the mouth marker.' : flight.level === 'io' ? 'Sweep the arc across the cyan support, then exposed machinery.' : flight.isCicadaFight ? 'Sweep the arc across the glowing thorax vent.' : flight.level === 'vents' ? (flight.crabCoreOpen ? 'Sweep the arc across the exposed gills.' : 'Sweep the arc across a glowing claw joint.') : 'Sweep the arc across the green cannon.') : 'Park the drone · Sweep the arc';
     }
     else if(flight.phase==='boss'&&flight.level==='biolume')tip='Shoot seeking lanterns · Dodge their burst · Fire straight into the ray.';
     else if(flight.phase==='boss'&&(flight.level==='boulevard'||flight.level==='heliostat'))tip='Target the cyan core · Move after the amber aim lock.';
     else if (flight.phase === 'boss' && flight.level === 'preserve')
       tip = 'Dodge the claw windups. Pulse interrupts an attack. Fire into the belly.';
     else if (flight.phase === 'boss')
-      tip = flight.level === 'ice' ? 'Tap the mouth marker. Dodge amber rings.' : flight.level === 'io' ? (flight.ioLegBroken ? 'Machinery exposed · Dodge the wheel shots.' : 'Break the cyan front support.') : flight.level === 'titan' ? 'Tap the glowing thorax vent. Dodge amber rings.' : flight.level === 'vents' ? (flight.crabCoreOpen ? 'Tap the gill chamber. Dodge amber rings.' : 'Tap the glowing joint. Break both claws.') : flight.level==='summer'?'Destroy all three hydra heads. Dodge amber rings.':'Tap the green cannon. Dodge amber rings.';
+      tip = flight.level === 'ice' ? 'Tap the mouth marker. Dodge amber rings.' : flight.level === 'io' ? (flight.ioLegBroken ? 'Machinery exposed · Dodge the wheel shots.' : 'Break the cyan front support.') : flight.isCicadaFight ? 'Tap the glowing thorax vent. Dodge amber rings.' : flight.level === 'vents' ? (flight.crabCoreOpen ? 'Tap the gill chamber. Dodge amber rings.' : 'Tap the glowing joint. Break both claws.') : flight.level==='summer'?'Destroy all three hydra heads. Dodge amber rings.':'Tap the green cannon. Dodge amber rings.';
     if (active && flight.perkTime > 0) {
       tip = flight.perkMessage;
     }

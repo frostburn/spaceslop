@@ -50,6 +50,7 @@ import { GROUNDSKEEPER_HP, GROUNDSKEEPER_RADIUS, groundskeeperContact, groundske
 import { PRESERVE_APPROACH } from './preserve-layout';
 import { CLOSE_CALLS_REQUIRED, HOT_DOCK_COOLDOWN, HOT_DOCK_DISTANCE, type PilotId } from './pilot-data';
 import { WING_FLASH_TIME, WING_FORMATION, wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
+import { WORMHOLE_APPROACH } from './wormhole/route';
 
 export { HEIGHT, WIDTH } from './playfield';
 export const STEP = 1 / 60;
@@ -294,7 +295,7 @@ export class Flight {
     if (level === 'preserve') this.bossHealth = GROUNDSKEEPER_HP;
     if (level === 'vents')this.bossHealth=CRAB_HP;
     if (level === 'io') this.bossHealth=IO_HP;
-    if (level === 'titan') this.bossHealth=CICADA_HP;
+    if (this.isCicadaFight) this.bossHealth=CICADA_HP;
     if (level === 'broodlock') this.obstacles = new HiveCollision();
     if (level === 'ice') { this.obstacles = new IceCollision(); this.bossHealth=LEVIATHAN_HP; }
     if (droneWeapon === 'towline') this.droneCooldown = TOWLINE_INTERVAL;
@@ -307,6 +308,7 @@ export class Flight {
 
   get isDen() { return this.level === 'den'; }
   get isFleet() { return this.level === 'fleet'; }
+  get isCicadaFight() { return this.level === 'titan' || this.level === 'wormhole'; }
   get planarBoss() { return this.level === 'biolume' || this.isDen || this.isFleet; }
   get weaponsActive() { return this.phase === 'stage' || this.phase === 'boss' || ((this.isDen || this.isFleet) && this.phase === 'approach'); }
   get denBossTime() {
@@ -329,9 +331,9 @@ export class Flight {
   get heliostatUnstableAge(){return Math.max(0,this.heliostatAttackTime-this.heliostatEscalationAt);}
   get heliostatTargets(){return this.heliostatAimCycle===Math.floor(this.heliostatAttackTime/HELIOSTAT_INTERVAL)&&this.heliostatCancelledCycle!==this.heliostatAimCycle?this.markers:[];}
 
-  get transitionDuration() { if (this.isFleet) return FLEET_APPROACH; if (this.isDen) return DEN_APPROACH; if(this.level==='biolume')return GROVE_APPROACH; if(this.level==='summer')return SUMMER_APPROACH;if(this.level==='heliostat')return HELIOSTAT_APPROACH;if(this.level==='boulevard')return BOULEVARD_APPROACH;return this.level === 'preserve' ? PRESERVE_APPROACH : this.level === 'vents' ? VENT_APPROACH : this.level === 'io' ? IO_APPROACH : this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
+  get transitionDuration() { if (this.level === 'wormhole') return WORMHOLE_APPROACH; if (this.isFleet) return FLEET_APPROACH; if (this.isDen) return DEN_APPROACH; if(this.level==='biolume')return GROVE_APPROACH; if(this.level==='summer')return SUMMER_APPROACH;if(this.level==='heliostat')return HELIOSTAT_APPROACH;if(this.level==='boulevard')return BOULEVARD_APPROACH;return this.level === 'preserve' ? PRESERVE_APPROACH : this.level === 'vents' ? VENT_APPROACH : this.level === 'io' ? IO_APPROACH : this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
 
-  get bossMaxHealth() { if (this.isFleet) return FLEET_BOSS_HP; if (this.isDen) return DEN_HP; if(this.level==='biolume')return RAY_HP;if(this.level==='summer')return SUMMER_HP;if(this.level==='heliostat')return HELIOSTAT_HP;if(this.level==='boulevard')return BOULEVARD_HP;return this.level === 'preserve' ? GROUNDSKEEPER_HP : this.level === 'vents' ? CRAB_HP : this.level === 'io' ? IO_HP : this.level === 'titan' ? CICADA_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
+  get bossMaxHealth() { if (this.isCicadaFight) return CICADA_HP; if (this.isFleet) return FLEET_BOSS_HP; if (this.isDen) return DEN_HP; if(this.level==='biolume')return RAY_HP;if(this.level==='summer')return SUMMER_HP;if(this.level==='heliostat')return HELIOSTAT_HP;if(this.level==='boulevard')return BOULEVARD_HP;return this.level === 'preserve' ? GROUNDSKEEPER_HP : this.level === 'vents' ? CRAB_HP : this.level === 'io' ? IO_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
   get bossTargetRadius() { if(this.level==='biolume')return RAY_ORGAN_RADIUS/RAY_PROJECTION;if(this.level==='summer')return .48*HYDRA_BOSS_SIZE;if(this.level==='boulevard'||this.level==='heliostat')return 1.25;return this.level === 'preserve' ? GROUNDSKEEPER_RADIUS : BOSS_CANNON_RADIUS; }
   get summerTargetHead(){return nearestHydraHead(this.summerHydra,this.player.x/BOSS_PROJECTION,true);}
   get summerHeadsAlive(){return this.summerHydra.hp.filter(hp=>hp>0).length;}
@@ -418,11 +420,11 @@ export class Flight {
     if(this.level==='biolume'){const s=raySignal(this.rayTime);return this.phase==='boss'?Math.max(s.fan,s.seeker):0;}
     if(this.level==='heliostat'){if(this.heliostatCancelledCycle===Math.floor(this.time/HELIOSTAT_INTERVAL))return 0;const t=this.time%HELIOSTAT_INTERVAL;return this.phase==='boss'&&t<HELIOSTAT_FIRE?clamp((t-HELIOSTAT_WINDUP)/(HELIOSTAT_FIRE-HELIOSTAT_WINDUP),0,1):0;}
     if(this.level==='boulevard'){const t=this.time%BOULEVARD_INTERVAL;return this.phase==='boss'&&t<BOULEVARD_FIRE?clamp((t-BOULEVARD_WINDUP)/(BOULEVARD_FIRE-BOULEVARD_WINDUP),0,1):0;}
-    if (this.phase !== 'boss' || this.volley !== Math.floor(this.time / (this.level === 'io' ? IO_INTERVAL : this.level === 'titan' ? CICADA_INTERVAL : this.level === 'ice' ? LEVIATHAN_INTERVAL : BOSS_VOLLEY_INTERVAL))) return 0;
-    const interval = this.level === 'io' ? IO_INTERVAL : this.level === 'titan' ? CICADA_INTERVAL : this.level === 'ice' ? LEVIATHAN_INTERVAL : BOSS_VOLLEY_INTERVAL;
+    const interval = this.level === 'io' ? IO_INTERVAL : this.isCicadaFight ? CICADA_INTERVAL : this.level === 'ice' ? LEVIATHAN_INTERVAL : BOSS_VOLLEY_INTERVAL;
+    if (this.phase !== 'boss' || this.volley !== Math.floor(this.time / interval)) return 0;
     const elapsed = this.time % interval;
     if(this.level === 'io') return elapsed < IO_FIRE ? clamp((elapsed-IO_WINDUP)/(IO_FIRE-IO_WINDUP),0,1) : 0;
-    if(this.level === 'titan') return clamp((elapsed-CICADA_WINDUP)/(CICADA_FIRE-CICADA_WINDUP),0,1);
+    if(this.isCicadaFight) return clamp((elapsed-CICADA_WINDUP)/(CICADA_FIRE-CICADA_WINDUP),0,1);
     if(this.level === 'ice') return clamp((elapsed-LEVIATHAN_WINDUP)/(LEVIATHAN_FIRE-LEVIATHAN_WINDUP),0,1);
     return clamp((elapsed - BOSS_WINDUP_AT) / (BOSS_FIRE_AT - BOSS_WINDUP_AT), 0, 1);
   }
@@ -873,6 +875,7 @@ export class Flight {
   }
 
   private stepStage(dt: number) {
+    if (this.level === 'wormhole') return;
     if (this.level === 'fleet') {
       this.stepFleet(dt);
       return;
@@ -1184,7 +1187,7 @@ export class Flight {
     }
     if(this.level==='boulevard'){this.stepBoulevard();return;}
     if(this.level === 'io') { this.stepCaldera(); return; }
-    if(this.level === 'titan') { this.stepCicada(); return; }
+    if(this.isCicadaFight) { this.stepCicada(); return; }
     if(this.level === 'ice') { this.stepLeviathan(); return; }
     const elapsed = this.time % BOSS_VOLLEY_INTERVAL;
     const volley = Math.floor(this.time / BOSS_VOLLEY_INTERVAL);
@@ -1345,7 +1348,7 @@ export class Flight {
     const targetsBoss = !drone && Math.abs(x) < 1.65;
     // Preserve horizontal drone placement while advancing visibly toward boss depth.
     const expansion = 1 / BOSS_PROJECTION - 1;
-    const dx = drone ? x * expansion : (targetsBoss ? (this.level === 'io'||this.level==='vents'||this.level==='summer' ? this.exposedCannonX : 0) - x : 0);
+    const dx = drone ? x * expansion : (targetsBoss ? (this.level === 'io'||this.level==='vents'||this.level==='summer'||this.level==='wormhole' ? this.exposedCannonX : 0) - x : 0);
     const dy = drone || targetsBoss ? this.bossAimY - y : 0;
     this.shots.push({ x, y, z: 0, vx: dx / duration, vy: dy / duration,
       vz: BOSS_DEPTH / duration, targetsBoss, bossSupport: this.level === 'io' ? !this.ioLegBroken : undefined, crabTarget:this.level==='vents'?this.crabTargetX:undefined,hydraTarget:this.level==='summer'&&targetsBoss?this.summerTargetHead:undefined, drone, damage });

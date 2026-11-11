@@ -2,11 +2,11 @@ import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { addTitanSetae, titanChitin } from './titan-insect-surfaces';
 
-export function createCicada() {
+export function createCicada(makeChitin = titanChitin) {
   const root=new T.Group();root.name='titan-cicada';
   const orb=new T.SphereGeometry(1,32,24);
-  const chitin=titanChitin(0xfff0d5,.72);
-  const rim=titanChitin(0xaf8e64,.75);
+  const chitin=makeChitin(0xfff0d5,.72);
+  const rim=makeChitin(0xaf8e64,.75);
   const dark=new T.MeshStandardMaterial({color:0x302530,roughness:.8});
   const eye=new T.MeshPhysicalMaterial({color:0x632631,roughness:.3,metalness:.18,clearcoat:.7});
   function volume(parent:T.Object3D,material:T.Material,x:number,y:number,z:number,sx:number,sy:number,sz:number,geometry:T.BufferGeometry=orb){
@@ -28,8 +28,8 @@ export function createCicada() {
     addTitanSetae(root,0,-1.3-i*.38,Math.max(.32-i*.10,.97*(1-i*.18)),w*2.5,.95,i%2+1);
   }
   const head=new T.Group();root.add(head);head.position.set(0,1.2,.65);
-  const faceCuticle=titanChitin(0x4c3941,.77);
-  const paleFace=titanChitin(0xeee0c3,.8);
+  const faceCuticle=makeChitin(0x4c3941,.77);
+  const paleFace=makeChitin(0xeee0c3,.8);
   paleFace.onBeforeCompile=shader=>{shader.vertexShader='varying float faceY;\n'+shader.vertexShader;shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nfaceY=position.y;');shader.fragmentShader='varying float faceY;\n'+shader.fragmentShader;shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
     diffuseColor.rgb*=mix(vec3(1),vec3(.18,.16,.12),smoothstep(-.7,-.2,faceY));`);};
   volume(head,faceCuticle,0,0,0,1.7,.72,.8);
@@ -77,7 +77,7 @@ export function createCicada() {
     const anchor=new T.Object3D();anchor.name=side<0?'laser_contact_L':'laser_contact_R';anchor.position.set(side*2.4,0,.88);root.add(anchor);
   }
   const wings:T.Group[]=[];
-  const membrane=new T.MeshPhysicalMaterial({color:0xd3ab67,transparent:true,opacity:.32,roughness:.25,metalness:.12,clearcoat:.8,side:T.DoubleSide,depthWrite:false,iridescence:.15});
+  const membrane=new T.MeshPhysicalMaterial({color:0xd3ab67,emissive:0xffb375,emissiveIntensity:0,transparent:true,opacity:.32,roughness:.25,metalness:.12,clearcoat:.8,side:T.DoubleSide,depthWrite:false,iridescence:.15});
   for(const side of [-1,1])for(const rear of [false,true]){
     const wing=new T.Group();wing.name=`${rear?'hind':'fore'}wing-${side}`;wing.position.set(side*.9,rear?-.45:.5,-.3);root.add(wing);wings.push(wing);
     const shape=new T.Shape();shape.moveTo(0,0);shape.bezierCurveTo(1.5,1.8,4.3,3.2,5.6,2.7);shape.bezierCurveTo(5.8,1.8,3.2,-.8,0,0);
@@ -115,10 +115,15 @@ export function createCicada() {
     volume(leg,chitin,b.x,b.y,b.z,.2,.2,.2);
     addTitanSetae(leg,b.x*.48,b.y*.48,b.z*.48+.17,.75,.70,2);
   }
-  return {root,pose(_reveal:number,charge:number,exposed:number,_fired:number,recoil:number,time=0){
+  return {root,pose(_reveal:number,charge:number,exposed:number,_fired:number,recoil:number,time=0,wingSpread=1,backlight=0){
     head.rotation.y=Math.sin(time*.75)*.09;head.rotation.z=Math.sin(time*.47)*.035;
     head.position.z=.65-recoil*.13;
-    for(let i=0;i<wings.length;i++){const side=i<2?-1:1;wings[i].rotation.y=side*(.16+Math.sin(time*32+i%2*.65)*.22);wings[i].rotation.z=Math.sin(time*2+i)*.025;}
+    for(let i=0;i<wings.length;i++){
+      const side=i<2?-1:1;
+      wings[i].rotation.y=side*(.16+1.02*(1-wingSpread)+Math.sin(time*32+i%2*.65)*.22*wingSpread);
+      wings[i].rotation.z=Math.sin(time*2+i)*.025;
+    }
+    membrane.emissiveIntensity=backlight;
     legs.forEach((leg,i)=>{leg.rotation.x=Math.sin(time*1.8+i)*.13;leg.rotation.z=Math.sin(time*1.3+i)*.06;});
     vents.forEach((vent,i)=>{const live=(i===0?exposed<0:exposed>0);(vent.material as T.MeshStandardMaterial).emissiveIntensity=live?.9+charge*2.6:.1;});
   }};

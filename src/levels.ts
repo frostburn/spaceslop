@@ -1,4 +1,5 @@
 export const levels = {
+  wormhole: { name: 'Wormhole · Boss rush preview', sector: 'WORMHOLE', boss: 'TITAN CICADA', duration: 7 },
   fleet: { name: 'Fleet Clash · Pleiadians and Grays', sector: 'FLEET CLASH', boss: 'GRAY COMMAND SAUCER', duration: 98 },
   den: { name: 'Draconian Den · Cliffside', sector: 'DRACONIAN DEN', boss: 'THE GANTRY CHIEF', duration: 100 },
   biolume:{name:'Lantern Grove · Bioluminescence',sector:'LANTERN GROVE',boss:'LANTERN RAY',duration:100},

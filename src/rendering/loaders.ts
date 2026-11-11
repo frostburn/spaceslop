@@ -3,6 +3,7 @@ import type { LevelFactory } from './level';
 export const levelLoaders: Record<LevelId, () => Promise<{
   createLevel: LevelFactory;
 }>> = {
+  wormhole: () => import('./levels/wormhole'),
   fleet: () => import('./levels/fleet'),
   den: () => import('./levels/den'),
   biolume: () => import('./levels/biolume'),

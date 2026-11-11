@@ -29,20 +29,29 @@ function fallbackChitin() {
   return texture;
 }
 
-let chitinMap: T.Texture = fallbackChitin();
-const shellMaterials = new Set<T.MeshStandardMaterial>();
-export function titanChitin(color: number, roughness = .67, metalness = .09) {
-  const material = new T.MeshStandardMaterial({ color, roughness, metalness, map: chitinMap, bumpMap: chitinMap, bumpScale: .018 });
-  shellMaterials.add(material); return material;
+export function createTitanChitinSurface() {
+  let map: T.Texture = fallbackChitin();
+  const materials: T.MeshStandardMaterial[] = [];
+  return {
+    material(color: number, roughness = .67, metalness = .09) {
+      const material = new T.MeshStandardMaterial({ color, roughness, metalness, map, bumpMap: map, bumpScale: .018 });
+      materials.push(material);
+      return material;
+    },
+    setTexture(texture: T.Texture) {
+      texture.wrapS = texture.wrapT = T.RepeatWrapping;
+      texture.anisotropy = 4;
+      map = texture;
+      for (const material of materials) {
+        material.map = material.bumpMap = texture;
+        material.needsUpdate = true;
+      }
+    },
+  };
 }
-export function setTitanChitinTexture(texture: T.Texture) {
-  texture.wrapS = texture.wrapT = T.RepeatWrapping;
-  texture.anisotropy = 4;
-  chitinMap = texture;
-  for (const material of shellMaterials) {
-    material.map = material.bumpMap = texture; material.needsUpdate = true;
-  }
-}
+const defaultChitin = createTitanChitinSurface();
+export const titanChitin = defaultChitin.material;
+export const setTitanChitinTexture = defaultChitin.setTexture;
 
 // Short tapered bristles are opaque modeled geometry, not soft fur billboards.
 // Each species shares its bristle buffer across all patches and pool entries.
