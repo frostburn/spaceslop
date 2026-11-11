@@ -166,7 +166,7 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
       tip = offlineReady ? 'Level ready offline' : 'Ready to launch';
     else if (flight.isFonsFight && flight.phase === 'boss') {
       const storm = fonsPhase(flight.fonsTime);
-      if (storm.rain || storm.warning > 0) tip = 'Stay in the wake of a falling asteroid';
+      if (storm.rain || storm.warning > 0) tip = 'Stay in the wake of a falling crystal';
       else if (storm.openingRifts) tip = 'Wall rifts opening · Watch for falling cover';
       else tip = flight.droneWeapon === 'towline' ? 'Sweep the arc across the mirror' : 'Fire into the mirror · Dodge the sweeps';
     }

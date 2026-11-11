@@ -1,40 +1,26 @@
 import * as T from 'three';
 import type { Flight } from '../../game';
 import { HEIGHT, WIDTH } from '../../playfield';
-import { applyTriplanar } from '../../rendering/triplanar';
+import { bismuthCoating, bismuthGeometry, bismuthVaryings } from './bismuth';
 import { fonsBeams, fonsPose, fonsRocks, fonsPhase } from './combat';
-import { createStoneSurface } from './stone-surface';
 import { wallRiftShape } from './wall-rift';
 
-function asteroid(seed: number) {
-  const shape = new T.IcosahedronGeometry(1, 5);
-  const p = shape.attributes.position;
-  const colors: number[] = [];
-  const slate = new T.Color(0x777981), facets = new T.Color(0xb2a9a1), color = new T.Color();
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-    const coarse = Math.sin(x * 4.6 + z * 3.2 + seed) * Math.cos(y * 4.3 - z * 3.4);
-    const chips = Math.sin(x * 13.2 - y * 8.5 + z * 6.4) * Math.cos(y * 12.2 + x * 7.8 + seed);
-    const height = .94 + coarse * .105 + chips * .075;
-    p.setXYZ(i, x * height, y * height, z * height);
-    color.copy(slate).lerp(facets, T.MathUtils.clamp(.41 + .28 * coarse + .28 * chips, 0, 1));
-    colors.push(color.r, color.g, color.b);
-  }
-  shape.setAttribute('color', new T.Float32BufferAttribute(colors, 3));
-  shape.computeVertexNormals();
-  return shape;
-}
-
-function breachingRock(seed: number, stone: ReturnType<typeof createStoneSurface>) {
+function breachingCrystal(variant: number) {
   const rift = { value: new T.Vector4() };
   const clock = { value: 0 }, crossing = { value: false };
-  const material = new T.MeshStandardMaterial({ ...stone, vertexColors: true, roughness: .94, bumpScale: .17 });
+  const material = new T.MeshStandardMaterial({ color: 0xd5d9e2, metalness: .84, roughness: .25 });
   material.onBeforeCompile = shader => {
     Object.assign(shader.uniforms, { rockRift: rift, rockClock: clock, rockCrossing: crossing });
-    shader.vertexShader = 'varying vec4 rockScreen;\n' + shader.vertexShader.replace(
-      '#include <project_vertex>', '#include <project_vertex>\nrockScreen = gl_Position;',
-    );
-    shader.fragmentShader = `
+    shader.vertexShader = bismuthVaryings + `
+      varying vec4 rockScreen;
+      attribute float oxideThickness, terraceGrain;
+    ` + shader.vertexShader.replace('#include <project_vertex>', `
+      #include <project_vertex>
+      rockScreen = gl_Position;
+      oxideBand = oxideThickness;
+      growthLine = terraceGrain;
+    `);
+    shader.fragmentShader = bismuthVaryings + `
       varying vec4 rockScreen;
       uniform vec4 rockRift;
       uniform float rockClock;
@@ -51,12 +37,12 @@ function breachingRock(seed: number, stone: ReturnType<typeof createStoneSurface
         riftLight = exp(-abs(radius - rockRift.z) * 7.0) * rockRift.z;
       }
     `).replace('#include <opaque_fragment>', `
+      ${bismuthCoating}
       outgoingLight += riftLight * vec3(.12, .024, .32);
       #include <opaque_fragment>
     `);
   };
-  applyTriplanar(material, .71);
-  return { mesh: new T.Mesh(asteroid(seed), material), rift, clock, crossing };
+  return { mesh: new T.Mesh(bismuthGeometry(variant), material), rift, clock, crossing };
 }
 
 function streak(plane: T.PlaneGeometry) {
@@ -107,10 +93,9 @@ export function createFonsEffects() {
   root.name = 'fons-attacks';
   const plane = new T.PlaneGeometry(1, 1);
   const beams = [streak(plane), streak(plane)];
-  const stone = createStoneSurface();
-  const asteroids = [breachingRock(3.2, stone), breachingRock(8.7, stone)];
-  const rocks = asteroids.map(asteroid => asteroid.mesh);
-  rocks.forEach((rock, index) => { rock.name = 'fons-wall-asteroid-' + index; });
+  const crystals = [breachingCrystal(0), breachingCrystal(1)];
+  const rocks = crystals.map(crystal => crystal.mesh);
+  rocks.forEach((rock, index) => { rock.name = 'fons-wall-bismuth-' + index; });
   const impacts = rocks.map(() => new T.Mesh(plane, new T.ShaderMaterial({
     uniforms: { clock: { value: 0 } },
     transparent: true, depthWrite: false, blending: T.AdditiveBlending,
@@ -156,7 +141,7 @@ export function createFonsEffects() {
   function update(time: number, distance: number, threats: readonly Flight['threats'][number][], active: boolean) {
     const pose = fonsPose(time), state = fonsPhase(time);
     const placed = fonsRocks(time);
-    for (const [index, { mesh: rock, rift, clock, crossing }] of asteroids.entries()) {
+    for (const [index, { mesh: rock, rift, clock, crossing }] of crystals.entries()) {
       const p = placed[index];
       const projection = 1 - p.depth / distance;
       rock.visible = p.visible;
