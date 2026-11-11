@@ -1,5 +1,11 @@
 import type { LevelId } from '../levels';
 export const textureFiles = {
+  biolumeBackdrop:'encounters/biolume-backdrop.webp',
+  biolumeForeground:'encounters/biolume-foreground.webp',
+  biolumeEnemy:'encounters/biolume-glider.png',
+  biolumePods:'encounters/biolume-study-atlas.png',
+  biolumeBoss:'encounters/biolume-lantern-ray.png',
+  biolumeFrog:'encounters/biolume-frog-atlas.png',
   summerMammoth:'encounters/summer-mammoth.png',
   summerIce:'encounters/summer-ice.png',
   summerHydra:'encounters/summer-hydra.png',
@@ -38,6 +44,10 @@ export type EncounterTexture = keyof typeof textureFiles;
 
 // Study aliases share the catalog's media paths; only the study loader is DEV.
 export const studyTextureFiles = {
+  biolumeBackdrop:'encounters/biolume-study-backdrop.png',
+  biolumeForeground:'encounters/biolume-study-foreground.png',
+  biolumeEnemy:'encounters/biolume-glider.png',
+  biolumePods:'encounters/biolume-study-atlas.png',
   heliostatMetal: textureFiles.armor,
   heliostatCeramic: textureFiles.ioCeramic,
   heliostatBackdrop: textureFiles.heliostatBackdrop,
@@ -45,6 +55,7 @@ export const studyTextureFiles = {
 export type StudyTexture = keyof typeof studyTextureFiles;
 
 export const levelTextures: Record<LevelId, readonly EncounterTexture[]> = {
+  biolume:['armor','biolumeBackdrop','biolumeForeground','biolumeEnemy','biolumePods','biolumeBoss','biolumeFrog'],
   summer:['armor','summerMammoth','summerIce','summerHydra','summerLotusFlanks','summerLotusWall'],
   heliostat:['armor','ioCeramic','heliostatBackdrop','heliostatGuard'],
   boulevard:['armor','boulevardRoad'],

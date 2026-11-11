@@ -140,6 +140,8 @@ export class FlightView {
     this.perspective.updateProjectionMatrix();
     this.cannonMarker.renderOrder = 12;
     const p = this.level;
+    this.renderer.toneMapping=p.toneMapping??T.NoToneMapping;
+    this.renderer.toneMappingExposure=p.exposure??1;
     this.scene.background = new T.Color(p.background ?? sceneColor);
     this.keyLight = new T.DirectionalLight(p.key ?? 0xb9e8ff, p.keyIntensity ?? 2.7);
     this.keyLight.position.set(3, 5, 6);
@@ -376,7 +378,7 @@ export class FlightView {
       droneSpeed
     };
     this.level.update(levelFrame);
-    this.cannonMarker.visible = flight.phase === 'boss';
+    this.cannonMarker.visible = flight.phase === 'boss'&&flight.level!=='biolume';
     if (this.cannonMarker.visible) {
       const p = this.level.contact(flight.exposedCannonX, distance, flight);
       this.cannonMarker.position.set(p.x, p.y, 0);
@@ -441,17 +443,18 @@ export class FlightView {
           if(target.summer?.kind==='hydra'&&wing.laserHead!==undefined)model=model?.getObjectByName('hydra-head-'+wing.laserHead);
         }
         const shieldModel=flight.level==='summer'&&flight.phase==='boss'&&target===undefined?this.level.boss:undefined;
-        const end = typeof target === 'number' ? this.level.contact(target, distance ?? BOSS_CAMERA_DISTANCE, flight)
+        const end = typeof target === 'number' && flight.level==='biolume' ? wing.beamEnd : typeof target === 'number' ? this.level.contact(target, distance ?? BOSS_CAMERA_DISTANCE, flight)
           : model ? this.laserContact(origin, wing.beamEnd, model, distance, this.viewPitch) : shieldModel?this.laserContact(origin,wing.beamEnd,shieldModel,distance,this.viewPitch):wing.beamEnd;
         laser.draw(origin, end, wing.laserHold, this.animationTime, typeof target === 'number' || Boolean(model), flight.phase === 'boss' && target === undefined);
       }
     }
   }
   private drawProjectiles(flight: Flight) {
-    this.projectiles.ship.draw(flight.shots.filter((shot) => !shot.drone && !shot.wing), this.animationTime);
-    this.projectiles.drone.draw(flight.shots.filter((shot) => shot.drone), this.animationTime);
+    const shots=flight.level==='biolume'?flight.shots.map(s=>({...s,x:s.x*(22-.85)/22,y:s.y*(22-.85)/22,z:.85})):flight.shots;
+    this.projectiles.ship.draw(shots.filter((shot) => !shot.drone && !shot.wing), this.animationTime);
+    this.projectiles.drone.draw(shots.filter((shot) => shot.drone), this.animationTime);
     for (const weapon of ['homing', 'cannon', 'omega'] as const) {
-      this.projectiles[weapon].draw(flight.shots.filter((shot) => shot.wing === weapon), this.animationTime);
+      this.projectiles[weapon].draw(shots.filter((shot) => shot.wing === weapon), this.animationTime);
     }
     this.projectiles.hostile.draw(flight.level !== 'ice' && flight.level !== 'broodlock' ? flight.threats : [], this.animationTime);
     this.projectiles.brine.draw(flight.level === 'ice' ? flight.threats : [], this.animationTime);

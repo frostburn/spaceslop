@@ -6,7 +6,7 @@ export type StudyArt = Partial<Record<StudyTexture, T.Texture>>;
 
 export async function loadStudyArt(signal: AbortSignal): Promise<StudyArt> {
   const art: StudyArt = {};
-  await Promise.all(Object.entries(__STUDY_TEXTURES__).map(async ([name, path]) => {
+  await Promise.all(Object.entries(__STUDY_TEXTURES__).filter(([name])=>name.startsWith('heliostat')).map(async ([name, path]) => {
     const texture = await loadStudyTexture(import.meta.env.BASE_URL + path, signal);
     if (texture) art[name as StudyTexture] = texture;
   }));

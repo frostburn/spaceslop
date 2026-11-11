@@ -1,4 +1,10 @@
+import {createFrogAssets,createFrogRig} from './biolume/frog-rig';
+import {createFrogAtlas} from './biolume/frog-raster';
+import {frogSignal} from './biolume/frog';
+import {createGroveBranch} from './biolume/branch';
 import {createSummerStudies} from './summer/workshop';
+import {createLanternRay,createRaySeekerAssets,createRaySeekerRig} from './biolume/lantern-ray-rig';
+import {raySignal} from './biolume/lantern-ray';
 import {createHeliostatMaterials} from './heliostat/materials';
 import {createGuardAssets,createHeliostatGuard} from './heliostat/guard';
 import {createHeliostatDrone,actorPose} from './heliostat/actors';
@@ -204,7 +210,24 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const helioArt:{heliostatMetal?:T.Texture;heliostatCeramic?:T.Texture}={};
   void loadEncounterTexture('armor',texture=>{helioArt.heliostatMetal=texture;helioMaterials.setArt(helioArt,true);},1);
   void loadEncounterTexture('ioCeramic',texture=>{helioArt.heliostatCeramic=texture;helioMaterials.setArt(helioArt,true);},1);
+  const lanternRay=createLanternRay(),rayStudy=new T.Group(),rayLight=new T.PointLight(0xffa34f,15,9,2),raySeeker=createRaySeekerRig(createRaySeekerAssets());rayLight.position.set(0,2.9,1.45);rayStudy.add(lanternRay.root,rayLight);
+  let rayArt:T.Texture|undefined;void loadEncounterTexture('biolumeBoss',map=>{rayArt=map;lanternRay.setArt(map);});
+  window.addEventListener('pagehide',()=>{lanternRay.release();rayArt?.dispose();},{once:true});
+  const frogAtlas=createFrogAtlas(),frog=createFrogRig(createFrogAssets(),frogAtlas),fernBranch=createGroveBranch(),frogStudy=new T.Group(),frogLight=new T.PointLight(0x58ffd0,5,9,2);frogLight.position.set(0,1.8,1.5);frogStudy.add(frog.root,frogLight);
+  const frogLoad = new AbortController();
+  let frogArt: T.Texture | undefined;
+  void loadEncounterTexture('biolumeFrog', map => {
+    frogArt = map;
+    frogAtlas.setArt(map);
+    if (assetSelect.value === 'lantern_frog') updatePose();
+  }, undefined, frogLoad.signal);
+  let branchArt:T.Texture|undefined;void loadEncounterTexture('biolumePods',map=>{branchArt=map;fernBranch.setArt(map);});
+  window.addEventListener('pagehide',()=>{frogLoad.abort();frog.release();frogAtlas.release();frogArt?.dispose();fernBranch.release();branchArt?.dispose();},{once:true});
   const assets = {
+    lantern_frog:{root:frogStudy,duration:5,bounds:new T.Box3(new T.Vector3(-1.4,-4.6,-.5),new T.Vector3(1.4,3.2,1.2)),pose(time:number){const state={nextAt:0,attackAt:.6,turnFrom:-1,angle:0,reach:5.5};frog.pose({x:0,y:2},state,time);const s=frogSignal(state,time);frogLight.intensity=5+7*s.warning;return s.warning>0?'turning into locked aim / throat charge':s.retracting?'retracting bullet tongue':s.active?'extending bullet tongue':'crouch / breathing / glowing dorsal glands';}},
+    grove_fern_branch:{root:fernBranch.root,duration:8,bounds:new T.Box3(new T.Vector3(-4.5,-3.5,1),new T.Vector3(4.5,3.5,4)),pose(time:number){fernBranch.update(12,time);fernBranch.root.position.y=0;return 'study-atlas bark / attached glowing fern crowns';}},
+    lantern_ray:{root:rayStudy,duration:12,bounds:new T.Box3(new T.Vector3(-5,-2,-1.5),new T.Vector3(5,8,1.5)),pose(time:number){lanternRay.pose(time);const s=raySignal(time);rayLight.intensity=12+6*Math.max(s.fan,s.seeker);return s.seeker>0?'seeking lantern charge':s.fan>0?'aimed fan charge':'breathing / wing flex / traveling bioluminescence';}},
+    lantern_seeker:{root:raySeeker.root,duration:6,pose(time:number){raySeeker.pose({x:0,y:0,age:time,rayOrb:{heading:time*.4,previousX:0,previousY:0}});return 'shootable seeking lantern / rotating shell';}},
     ...createSummerStudies(camera),
     heliostat_manowar:{root:helioGuard,duration:4,pose(time:number){helioGuardPose(time,0,T.MathUtils.smoothstep(time,2.4,3.3));return 'raster float / ruffled sail / rigid harness / swaying tendrils';}},
     heliostat_drone:{root:helioDrone,duration:3,pose(time:number){helioDrone.rotation.y=.12*Math.sin(time*2);return 'inspection drone';}},
@@ -360,11 +383,13 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     selected = Object.hasOwn(assets, key) ? assets[key as keyof typeof assets] : assets.raptor;
     lastAssets.set(sector.value, key);
     const habitat = sector.value === 'preserve', scenery = key === 'preserve_section', summer=sector.value==='summer';
+    const biolume=sector.value==='biolume';renderer.toneMapping=biolume?T.ACESFilmicToneMapping:T.NoToneMapping;renderer.toneMappingExposure=biolume?1.1:1;
     light.color.setHex(summer?0xffedd0:habitat ? preserveLighting.key : 0xb9e8ff);
     light.intensity = summer ? 2.1 : habitat ? (scenery ? preserveLighting.keyIntensity : 2.4) : 2.7;
     fill.color.setHex(summer?0xd5e9ec:habitat ? preserveLighting.sky : 0xd6e3ff);
     fill.groundColor.setHex(summer?0x728153:habitat ? preserveLighting.ground : 0x514873);
     fill.intensity = summer?1.6:habitat ? preserveLighting.skyIntensity : 1.75;
+    if(biolume){light.intensity=fill.intensity=0;}
     uv.visible = habitat && !scenery;
     for (const asset of Object.values(assets)) asset.root.visible = asset === selected;
     time = 0;

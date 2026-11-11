@@ -1,4 +1,5 @@
 export const levels = {
+  biolume:{name:'Lantern Grove · Bioluminescence',sector:'LANTERN GROVE',boss:'LANTERN RAY',duration:100},
   summer:{name:'Summer Ice Age · Thaw',sector:'SUMMER THAW',boss:'LOTUS HYDRA',duration:100},
   heliostat: {name:'Uranus · Heliostat',sector:'HELIOSTAT',boss:'SUNSPOT REGULATOR',duration:100},
   boulevard: {name:'Synthwave · Boulevard',sector:'BOULEVARD',boss:'PURSUIT CRUISER',duration:100},
