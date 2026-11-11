@@ -1,9 +1,7 @@
 import * as T from 'three';
-import { DEN_PATROL_POSE_STEP, denPatrolWarp } from './patrol';
+import { denPatrolWarp } from './patrol';
+import { turn16Crops, turn16Rows } from './patrol-atlas-16';
 
-const ATLAS_WIDTH = 1536, ATLAS_HEIGHT = 1024;
-const PIXEL = .00525;
-const GUTTER = 42;
 const COLUMNS = 5;
 
 // Atlas crops and chassis pivots in source pixels. UVs are normalized so the
@@ -73,15 +71,31 @@ const rows = [
   ],
 ] as const;
 
-const poses = rows.map((points, i) => {
-  const [left, top, right, bottom, pivotX, pivotY] = crops[i];
-  const angle = i * DEN_PATROL_POSE_STEP, c = Math.cos(angle), s = Math.sin(angle);
-  const xy: number[] = [], uv: number[] = [];
-  for (const [y, l, mid, r] of points) for (const x of [l - GUTTER, l, mid, r, r + GUTTER]) {
-    xy.push(x * PIXEL, -y * PIXEL);
-    uv.push((pivotX + c * x - s * y) / ATLAS_WIDTH, 1 - (pivotY + s * x + c * y) / ATLAS_HEIGHT);
-  }
-  return { xy, uv, crop: new T.Vector4(left / ATLAS_WIDTH, 1 - bottom / ATLAS_HEIGHT, right / ATLAS_WIDTH, 1 - top / ATLAS_HEIGHT) };
+type AtlasRegistration = {
+  width: number;
+  height: number;
+  pixel: number;
+  gutter: number;
+  crops: readonly (readonly [number, number, number, number, number, number])[];
+  rows: readonly (readonly (readonly [number, number, number, number])[])[];
+};
+
+function registerPoses({ width, height, pixel, gutter, crops, rows }: AtlasRegistration) {
+  return rows.map((points, i) => {
+    const [left, top, right, bottom, pivotX, pivotY] = crops[i];
+    const angle = (Math.PI / 2) * i / (rows.length - 1), c = Math.cos(angle), s = Math.sin(angle);
+    const xy: number[] = [], uv: number[] = [];
+    for (const [y, l, mid, r] of points) for (const x of [l - gutter, l, mid, r, r + gutter]) {
+      xy.push(x * pixel, -y * pixel);
+      uv.push((pivotX + c * x - s * y) / width, 1 - (pivotY + s * x + c * y) / height);
+    }
+    return { xy, uv, crop: new T.Vector4(left / width, 1 - bottom / height, right / width, 1 - top / height) };
+  });
+}
+
+const legacyPoses = registerPoses({ width: 1536, height: 1024, pixel: .00525, gutter: 42, crops, rows });
+const densePoses = registerPoses({
+  width: 1254, height: 1254, pixel: .009, gutter: 24, crops: turn16Crops, rows: turn16Rows,
 });
 
 const vertexCount = rows[0].length * COLUMNS;
@@ -100,6 +114,7 @@ export function createPatrolWarpCard() {
   geometry.setAttribute('uv', uv);
   geometry.setAttribute('nextUV', nextUV);
   geometry.setIndex(indices);
+  let poses = legacyPoses;
   const uniforms = {
     atlas: { value: null as T.Texture | null },
     crop: { value: poses[0].crop }, nextCrop: { value: poses[0].crop }, poseBlend: { value: 0 },
@@ -146,7 +161,7 @@ export function createPatrolWarpCard() {
   let firstKey = Infinity, secondKey = Infinity;
 
   function pose(heading: number) {
-    const turn = denPatrolWarp(heading);
+    const turn = denPatrolWarp(heading, poses.length);
     const a = poses[turn.first], b = poses[turn.second];
     const sign = turn.mirror ? -1 : 1;
     const keyA = turn.first * sign, keyB = turn.second * sign;
@@ -184,7 +199,16 @@ export function createPatrolWarpCard() {
 
   return {
     root,
-    setArt(texture: T.Texture) { uniforms.atlas.value = texture; pose(0); root.visible = true; },
+    setArt(texture: T.Texture) {
+      const image = texture.image as { width: number; height: number } | undefined;
+      const ratio = image ? image.width / image.height : 0;
+      if (ratio !== 1 && ratio !== 1.5) throw new Error('Unsupported patrol atlas layout');
+      poses = ratio === 1 ? densePoses : legacyPoses;
+      firstKey = secondKey = Infinity;
+      uniforms.atlas.value = texture;
+      pose(0);
+      root.visible = true;
+    },
     pose,
   };
 }

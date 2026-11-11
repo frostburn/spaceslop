@@ -72,14 +72,13 @@ export function denPatrolCanFire(pose: ReturnType<typeof denPatrolPose>, patrol:
   return Math.abs(pose.x) + radius < WIDTH / 2 && pose.y + radius < HEIGHT / 2 && pose.y > -4.1 && Math.abs(pose.heading) < .63;
 }
 
-export const DEN_PATROL_POSE_STEP = Math.PI / 12;
-
-export function denPatrolWarp(heading: number) {
+export function denPatrolWarp(heading: number, poseCount: number) {
   const angle = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, heading));
-  const position = Math.min(6, Math.abs(angle) / DEN_PATROL_POSE_STEP);
-  const first = Math.floor(position), second = Math.min(6, first + 1);
+  const last = poseCount - 1;
+  const position = Math.abs(angle) / (Math.PI / 2) * last;
+  const first = Math.floor(position), second = Math.min(last, first + 1);
   const fraction = position - first;
-  // Blend over the central six degrees of each fifteen-degree interval.
+  // Blend over the central 40% of the interval between registered views.
   const t = Math.max(0, Math.min(1, (fraction - .3) / .4));
   return { angle, first, second, fraction, blend: t * t * (3 - 2 * t), mirror: angle > 0 };
 }

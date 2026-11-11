@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
+import { Texture } from 'three';
 import { createServer } from 'vite';
 
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false, ws: false }, appType: 'custom' });
@@ -7,7 +8,7 @@ after(() => server.close());
 const { DEN_CYCLE, denBodyEntry, denPose } = await server.ssrLoadModule('/src/den/combat.ts');
 const { Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
 const { DEN_APPROACH, DEN_DURATION, DEN_SCREENS, denScroll } = await server.ssrLoadModule('/src/den/route.ts');
-const { DEN_PATROL_POSE_STEP, denWaves, denPatrolPose, denPatrolCanFire, denPatrolWarp } = await server.ssrLoadModule('/src/den/patrol.ts');
+const { denWaves, denPatrolPose, denPatrolCanFire, denPatrolWarp } = await server.ssrLoadModule('/src/den/patrol.ts');
 const { createPatrolWarpCard } = await server.ssrLoadModule('/src/den/patrol-warp.ts');
 const { createDenPlateMotion } = await server.ssrLoadModule('/src/den/plate-motion.ts');
 
@@ -35,23 +36,23 @@ test('the ten-screen route joins the gantry with continuous scroll speed', () =>
   assert(denScroll(DEN_DURATION + DEN_APPROACH) - denScroll(DEN_DURATION + DEN_APPROACH - step) < 1e-7);
 });
 
-test('patrols turn through seven art views and wait until they are fully visible', () => {
+test('patrols turn through both supported atlases and wait until they are fully visible', () => {
   assert(denWaves.length >= 18);
   const activePose = ({ first, second, blend }) => blend < .5 ? first : second;
-  for (let i = 0; i <= 6; i++) {
-    const angle = i * DEN_PATROL_POSE_STEP;
-    assert.equal(activePose(denPatrolWarp(-angle)), i);
-    assert.equal(activePose(denPatrolWarp(angle)), i);
-    assert.equal(denPatrolWarp(-angle).mirror, false);
-    assert.equal(denPatrolWarp(angle).mirror, i > 0);
+  for (const count of [7, 16]) for (let i = 0; i < count; i++) {
+    const angle = (Math.PI / 2) * i / (count - 1);
+    assert.equal(activePose(denPatrolWarp(-angle, count)), i);
+    assert.equal(activePose(denPatrolWarp(angle, count)), i);
+    assert.equal(denPatrolWarp(-angle, count).mirror, false);
+    assert.equal(denPatrolWarp(angle, count).mirror, i > 0);
   }
   for (const side of [-1, 1]) {
     const patrol = { course: 'cross', side, slot: 0, heavy: false };
     const initial = denPatrolPose(0, -1.1 * side, patrol);
     const settled = denPatrolPose(2.3, -1.1 * side, patrol);
-    assert.equal(activePose(denPatrolWarp(initial.heading)), 6);
+    assert.equal(activePose(denPatrolWarp(initial.heading, 16)), 15);
     assert(!denPatrolCanFire(initial, patrol));
-    assert.equal(activePose(denPatrolWarp(settled.heading)), 0);
+    assert.equal(activePose(denPatrolWarp(settled.heading, 16)), 0);
     assert(denPatrolCanFire(settled, patrol));
   }
 });
@@ -68,27 +69,37 @@ test('patrol mesh stays continuous through atlas handoffs and straight ahead', (
     };
   };
   const epsilon = 1e-5;
-  assert.deepEqual(sample(-epsilon).uv, sample(epsilon).uv);
-  assert.equal(sample(.29 * DEN_PATROL_POSE_STEP).blend, 0);
-  assert.equal(sample(.71 * DEN_PATROL_POSE_STEP).blend, 1);
-  for (const side of [-1, 1]) for (let i = 0; i < 6; i++) {
-    const angle = side * (i + .5) * DEN_PATROL_POSE_STEP;
-    const a = sample(angle - epsilon), b = sample(angle + epsilon);
-    assert.deepEqual(a.uv, b.uv);
-    assert.deepEqual(a.nextUV, b.nextUV);
-    assert.notDeepEqual(a.uv, a.nextUV);
-    assert(Math.abs(a.blend - .5) < .001 && Math.abs(b.blend - .5) < .001);
-    assert(a.shape.every((coordinate, j) => Math.abs(coordinate - b.shape[j]) < .001));
-    for (let j = 0; j < geometry.index.count; j += 3) {
-      const [a, b, c] = [0, 1, 2].map(k => geometry.index.getX(j + k));
-      assert((position.getX(b) - position.getX(a)) * (position.getY(c) - position.getY(a))
-        - (position.getY(b) - position.getY(a)) * (position.getX(c) - position.getX(a)) > 0);
+  assert.throws(() => card.setArt(new Texture({ width: 640, height: 480 })), /Unsupported patrol atlas layout/);
+  assert.equal(card.root.visible, false);
+  for (const [count, width, height] of [[7, 768, 512], [16, 627, 627]]) {
+    const texture = new Texture({ width, height });
+    card.setArt(texture);
+    const step = Math.PI / (2 * (count - 1));
+    const straight = sample(0);
+    assert.deepEqual(sample(-epsilon).uv, sample(epsilon).uv);
+    assert.notDeepEqual(straight.uv, sample(Math.PI / 2).uv);
+    assert.equal(sample(.29 * step).blend, 0);
+    assert.equal(sample(.71 * step).blend, 1);
+    for (const side of [-1, 1]) for (let i = 0; i < count - 1; i++) {
+      const angle = side * (i + .5) * step;
+      const a = sample(angle - epsilon), b = sample(angle + epsilon);
+      assert.deepEqual(a.uv, b.uv);
+      assert.deepEqual(a.nextUV, b.nextUV);
+      assert.notDeepEqual(a.uv, a.nextUV);
+      assert(Math.abs(a.blend - .5) < .001 && Math.abs(b.blend - .5) < .001);
+      assert(a.shape.every((coordinate, j) => Math.abs(coordinate - b.shape[j]) < .001));
+      for (let j = 0; j < geometry.index.count; j += 3) {
+        const [a, b, c] = [0, 1, 2].map(k => geometry.index.getX(j + k));
+        assert((position.getX(b) - position.getX(a)) * (position.getY(c) - position.getY(a))
+          - (position.getY(b) - position.getY(a)) * (position.getX(c) - position.getX(a)) > 0);
+      }
+      const key = (i + 1) * step;
+      const before = sample(side * (key - epsilon)), after = sample(side * (key + epsilon));
+      assert.equal(before.blend, 1);
+      assert.equal(after.blend, 0);
+      assert.deepEqual(before.nextUV, after.uv);
     }
-    const key = (i + 1) * DEN_PATROL_POSE_STEP;
-    const before = sample(side * (key - epsilon)), after = sample(side * (key + epsilon));
-    assert.equal(before.blend, 1);
-    assert.equal(after.blend, 0);
-    assert.deepEqual(before.nextUV, after.uv);
+    texture.dispose();
   }
   geometry.dispose();
   card.root.material.dispose();
