@@ -41,6 +41,8 @@ Heliostat's `weathering.ts` layers fixed dirt, dust, streaks and sparse corrosio
 
 `den/cliff-props.ts` registers separate chimney and banner cards to the scrolling cliff plate. Smoke starts at the measured chimney openings and drifts outward in pooled puffs. A subdivided banner mesh bends below a rigid rail and reacts to nearby flight. The presentation clock freezes both effects on pause. The optional atlas has a procedural fallback and loads with the Den package.
 
+`den/defense.ts` registers six turret crews to the ledges and ten hovering mines to the route. Gunners track the ship at a limited speed and lock a three-round burst after their rig is fully visible. Weapon hits use the same angle as the barrel, and the pedestal stays on the ledge after defeat. Mines arm inside their visible radius, then release a single ring of ten shards. `den/defense-rig.ts` reuses the registered points for the sights, recoil, fuse and blast. Its four-part atlas is optional and the game warms either the artwork or the modeled fallback before launch.
+
 ## Lantern Grove
 
 `rendering/levels/biolume.ts` owns the playable 100-second Lantern Grove, its pooled bending raster gliders, seed-pod cards, local illumination and raster Lantern Ray boss. `biolume/route.ts` owns ten-screen registration, a smooth final coast, light/pod anchors. `biolume/lantern-ray.ts` owns the boss silhouette deformation, moving organ targets, warning phases, homing-seeker steering and swept interception math. The view stays top-down. The boss is already in the last clearing and scrolls into view; the stage enters combat without an approach or clearing shots and threats. The arena stays at the last frame while its fight runs.

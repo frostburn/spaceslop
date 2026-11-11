@@ -1,11 +1,9 @@
 import * as T from 'three';
 import { HEIGHT, WIDTH } from '../playfield';
 import type { LevelFrame } from '../rendering/level';
-import { DEN_SCREENS } from './route';
+import { DEN_PLATE_WIDTH as PLATE_WIDTH, DEN_SCREEN_HEIGHT as SCREEN_HEIGHT, DEN_SCREENS } from './route';
 
 const ATLAS = 1254;
-const PLATE_WIDTH = 576;
-const SCREEN_HEIGHT = 1024;
 const propDepth = .99995;
 type Sprite = {
   crop: readonly [left: number, top: number, right: number, bottom: number];

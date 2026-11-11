@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { createDenBiker } from '../../den/biker';
 import { createDenCliffProps } from '../../den/cliff-props';
+import { createDenDefenses } from '../../den/defense-rig';
 import { DEN_PATROL_POOL, DEN_PATROL_WINDUP, denPatrolPose, denPatrolScale } from '../../den/patrol';
 import { createDenPatrols } from '../../den/patrol-rig';
 import { DEN_DURATION, DEN_SCREENS, denScroll } from '../../den/route';
@@ -15,10 +16,11 @@ export const createLevel: LevelFactory = ({ signal }) => {
   const boss = createDenBiker();
   const patrols = createDenPatrols(DEN_PATROL_POOL);
   const props = createDenCliffProps();
+  const defenses = createDenDefenses();
   const root = new T.Group();
   root.name = 'draconian-den';
   const patrolRoots = patrols.rigs.map(rig => rig.root);
-  root.add(scenery.root, props.root, ...patrolRoots, boss.root);
+  root.add(scenery.root, props.root, defenses.root, ...patrolRoots, boss.root);
   const models: (T.Object3D | undefined)[] = [];
 
   const ready = Promise.all([
@@ -29,11 +31,12 @@ export const createLevel: LevelFactory = ({ signal }) => {
     loadEncounterTexture('denBiker', boss.setArt, undefined, signal),
     loadEncounterTexture('denPatrol', patrols.setArt, undefined, signal),
     loadEncounterTexture('denProps', props.setArt, undefined, signal),
-  ]).then(([tiles, , , , chiefArt, patrolArt, propArt]) => {
+    loadEncounterTexture('denDefenses', defenses.setArt, undefined, signal),
+  ]).then(([tiles, , , , chiefArt, patrolArt, propArt, defenseArt]) => {
     if (signal.aborted) { disposePlateTiles(tiles); return []; }
     scenery.setCliff(tiles);
     scenery.update(0, 0, 0);
-    return [...scenery.textures, props.fallback, chiefArt, patrolArt, propArt];
+    return [...scenery.textures, props.fallback, chiefArt, patrolArt, propArt, defenseArt];
   });
 
   return {
@@ -55,8 +58,8 @@ export const createLevel: LevelFactory = ({ signal }) => {
     toneMapping: T.ACESFilmicToneMapping,
     exposure: 1.12,
     contacts: [],
-    prepare: props.prime,
-    warmup: [[scenery.root, props.root], patrolRoots, [boss.root]],
+    prepare() { props.prime(); defenses.prime(); },
+    warmup: [[scenery.root, props.root], patrolRoots, [defenses.root], [boss.root]],
     update(frame) {
       const { flight, time, reveal, animationTime } = frame;
       const scroll = denScroll(time);
@@ -80,6 +83,7 @@ export const createLevel: LevelFactory = ({ signal }) => {
       }
       scenery.update(scroll, reveal, animationTime);
       props.update(scroll, frame);
+      defenses.update(scroll, time, flight, models);
     },
     contact: (_x, _distance, flight) => ({ x: flight.exposedCannonX, y: flight.bossAimY, z: .85 }),
     dispose: scenery.dispose,

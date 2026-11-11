@@ -12,6 +12,8 @@ const { denWaves, denPatrolPose, denPatrolCanFire, denPatrolWarp } = await serve
 const { turn16Hardpoints } = await server.ssrLoadModule('/src/den/patrol-atlas-16.ts');
 const { createDenPatrols } = await server.ssrLoadModule('/src/den/patrol-rig.ts');
 const { createPatrolWarpCard } = await server.ssrLoadModule('/src/den/patrol-warp.ts');
+const { DEN_TURRET_REACH, DEN_TURRET_RECOIL, DEN_MINE_FUSE, createDenTurret, denMinePose,
+  denTurretSignal, stepDenTurret } = await server.ssrLoadModule('/src/den/defense.ts');
 
 test('the gantry sweep alternates from the settled bike position and carries its hit area', () => {
   const a = denPose(DEN_CYCLE - .0001), b = denPose(DEN_CYCLE);
@@ -155,6 +157,74 @@ test('patrol exhaust sits on the engine pixels through both directions of a warp
     });
   }
   texture.dispose();
+});
+
+test('Den turretmen hold fire offscreen and fire a three-round burst from the locked muzzle', () => {
+  const turret = createDenTurret(0), point = { x: -2.5, y: 7 }, player = { x: 1.5, y: -3 };
+  for (let time = 0; time < 3; time += STEP) assert.equal(stepDenTurret(turret, point, player, time, STEP), undefined);
+  assert.equal(turret.fireAt, Infinity);
+  point.y = 6;
+  const shots = [];
+  let locked;
+  for (let time = 3; time < 5; time += STEP) {
+    const before = turret.heading;
+    const muzzle = stepDenTurret(turret, point, player, time, STEP);
+    assert(Math.abs(turret.heading - before) <= 4.5 * STEP + 1e-10);
+    if (turret.locked !== undefined && locked === undefined) {
+      locked = turret.locked;
+      player.x = -3.2;
+    }
+    if (!muzzle) continue;
+    shots.push(muzzle);
+    assert.equal(denTurretSignal(turret, time).recoil, 1);
+    assert(Math.abs(Math.hypot(muzzle.x - point.x, muzzle.y - point.y) - (DEN_TURRET_REACH - DEN_TURRET_RECOIL)) < 1e-9);
+  }
+  assert.equal(shots.length, 3);
+  assert(shots.every(shot => shot.heading === locked));
+});
+
+test('Den turretmen take swept fire and laser damage while their base is fixed to the scroll', () => {
+  const flight = new Flight('sentry', ['laser'], 'vex', 'den');
+  flight.time = 7.1;
+  flight.step(0);
+  const enemy = flight.enemies.find(enemy => enemy.denTurret);
+  assert(enemy);
+  const { x, y, hp } = enemy;
+  flight.player.x += x - flight.wingOrigin(-1).x;
+  flight.shots.push({ x, y: y - 1.6, z: 0, vx: 0, vy: 150, vz: 0 });
+  flight.step(STEP);
+  assert.equal(enemy.x, x);
+  assert(Math.abs(enemy.y - y + .09 * 16 * STEP) < 1e-9);
+  assert.equal(flight.wings[0].laserTarget, enemy);
+  assert(enemy.laserDamage > 0 && enemy.hp < hp - 1);
+  flight.pulse();
+  assert.equal(enemy.hp, 0);
+  assert(!flight.enemies.includes(enemy));
+});
+
+test('Den mines can be skirted and each armed mine survives Pulse until its one shrapnel burst', () => {
+  const flight = new Flight('sentry', [], 'vex', 'den');
+  flight.time = 6;
+  const mine = flight.denMines[0];
+  const pose = denMinePose(0, mine, denScroll(flight.time), flight.time);
+  flight.player = { x: -3, y: pose.y };
+  flight.step(STEP);
+  assert.equal(mine.armedAt, undefined);
+  flight.player = { x: pose.x, y: pose.y - .62 };
+  flight.step(STEP);
+  assert.equal(mine.armedAt, flight.time);
+  flight.pulse();
+  flight.player.x = 3.9;
+  assert.equal(mine.burstAt, undefined);
+  while (flight.time + STEP < mine.armedAt + DEN_MINE_FUSE) flight.step(STEP);
+  assert.equal(mine.burstAt, undefined);
+  flight.step(STEP);
+  assert.equal(mine.burstAt, flight.time);
+  const shards = () => flight.threats.filter(shot => Math.abs(Math.hypot(shot.vx, shot.vy) - 4) < 1e-7);
+  assert.equal(shards().length, 10);
+  assert(shards().every(shot => shot.z === 0 && shot.planar));
+  flight.step(STEP);
+  assert.equal(shards().length, 10);
 });
 
 test('the gantry encounter is winnable with the ordinary ship and planar shots', () => {

@@ -3,6 +3,8 @@ import { levels } from '../levels';
 export const DEN_DURATION = levels.den.duration;
 export const DEN_SCREENS = 10;
 export const DEN_APPROACH = 7;
+export const DEN_PLATE_WIDTH = 576;
+export const DEN_SCREEN_HEIGHT = 1024;
 
 const speed = (DEN_SCREENS - 1) / DEN_DURATION;
 
