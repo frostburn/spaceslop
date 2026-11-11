@@ -78,7 +78,10 @@ export function denPatrolWarp(heading: number) {
   const angle = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, heading));
   const position = Math.min(6, Math.abs(angle) / DEN_PATROL_POSE_STEP);
   const first = Math.floor(position), second = Math.min(6, first + 1);
-  return { angle, first, second, fraction: position - first, source: Math.round(position), mirror: angle > 0 };
+  const fraction = position - first;
+  // Blend over the central six degrees of each fifteen-degree interval.
+  const t = Math.max(0, Math.min(1, (fraction - .3) / .4));
+  return { angle, first, second, fraction, blend: t * t * (3 - 2 * t), mirror: angle > 0 };
 }
 
 export function denPatrolEntry(a: Point, b: Point, pose: Point & { heading?: number }, patrol: DenPatrol, padding = .05) {

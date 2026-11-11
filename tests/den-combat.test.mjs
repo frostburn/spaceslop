@@ -37,10 +37,11 @@ test('the ten-screen route joins the gantry with continuous scroll speed', () =>
 
 test('patrols turn through seven art views and wait until they are fully visible', () => {
   assert(denWaves.length >= 18);
+  const activePose = ({ first, second, blend }) => blend < .5 ? first : second;
   for (let i = 0; i <= 6; i++) {
     const angle = i * DEN_PATROL_POSE_STEP;
-    assert.equal(denPatrolWarp(-angle).source, i);
-    assert.equal(denPatrolWarp(angle).source, i);
+    assert.equal(activePose(denPatrolWarp(-angle)), i);
+    assert.equal(activePose(denPatrolWarp(angle)), i);
     assert.equal(denPatrolWarp(-angle).mirror, false);
     assert.equal(denPatrolWarp(angle).mirror, i > 0);
   }
@@ -48,32 +49,46 @@ test('patrols turn through seven art views and wait until they are fully visible
     const patrol = { course: 'cross', side, slot: 0, heavy: false };
     const initial = denPatrolPose(0, -1.1 * side, patrol);
     const settled = denPatrolPose(2.3, -1.1 * side, patrol);
-    assert.equal(denPatrolWarp(initial.heading).source, 6);
+    assert.equal(activePose(denPatrolWarp(initial.heading)), 6);
     assert(!denPatrolCanFire(initial, patrol));
-    assert.equal(denPatrolWarp(settled.heading).source, 0);
+    assert.equal(activePose(denPatrolWarp(settled.heading)), 0);
     assert(denPatrolCanFire(settled, patrol));
   }
 });
 
 test('patrol mesh stays continuous through atlas handoffs and straight ahead', () => {
   const card = createPatrolWarpCard(), geometry = card.root.geometry;
-  const position = geometry.getAttribute('position'), uv = geometry.getAttribute('uv');
+  const position = geometry.getAttribute('position');
+  const uv = geometry.getAttribute('uv'), nextUV = geometry.getAttribute('nextUV');
   const sample = angle => {
     card.pose(angle);
-    return { shape: Array.from(position.array), uv: Array.from(uv.array) };
+    return {
+      shape: Array.from(position.array), uv: Array.from(uv.array), nextUV: Array.from(nextUV.array),
+      blend: card.root.material.uniforms.poseBlend.value,
+    };
   };
   const epsilon = 1e-5;
   assert.deepEqual(sample(-epsilon).uv, sample(epsilon).uv);
+  assert.equal(sample(.29 * DEN_PATROL_POSE_STEP).blend, 0);
+  assert.equal(sample(.71 * DEN_PATROL_POSE_STEP).blend, 1);
   for (const side of [-1, 1]) for (let i = 0; i < 6; i++) {
     const angle = side * (i + .5) * DEN_PATROL_POSE_STEP;
     const a = sample(angle - epsilon), b = sample(angle + epsilon);
-    assert.notDeepEqual(a.uv, b.uv);
+    assert.deepEqual(a.uv, b.uv);
+    assert.deepEqual(a.nextUV, b.nextUV);
+    assert.notDeepEqual(a.uv, a.nextUV);
+    assert(Math.abs(a.blend - .5) < .001 && Math.abs(b.blend - .5) < .001);
     assert(a.shape.every((coordinate, j) => Math.abs(coordinate - b.shape[j]) < .001));
     for (let j = 0; j < geometry.index.count; j += 3) {
       const [a, b, c] = [0, 1, 2].map(k => geometry.index.getX(j + k));
       assert((position.getX(b) - position.getX(a)) * (position.getY(c) - position.getY(a))
         - (position.getY(b) - position.getY(a)) * (position.getX(c) - position.getX(a)) > 0);
     }
+    const key = (i + 1) * DEN_PATROL_POSE_STEP;
+    const before = sample(side * (key - epsilon)), after = sample(side * (key + epsilon));
+    assert.equal(before.blend, 1);
+    assert.equal(after.blend, 0);
+    assert.deepEqual(before.nextUV, after.uv);
   }
   geometry.dispose();
   card.root.material.dispose();

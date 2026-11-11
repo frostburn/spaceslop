@@ -95,27 +95,44 @@ export function createPatrolWarpCard() {
   const geometry = new T.BufferGeometry();
   const position = new T.BufferAttribute(new Float32Array(vertexCount * 3), 3).setUsage(T.DynamicDrawUsage);
   const uv = new T.BufferAttribute(new Float32Array(vertexCount * 2), 2).setUsage(T.DynamicDrawUsage);
+  const nextUV = new T.BufferAttribute(new Float32Array(vertexCount * 2), 2).setUsage(T.DynamicDrawUsage);
   geometry.setAttribute('position', position);
   geometry.setAttribute('uv', uv);
+  geometry.setAttribute('nextUV', nextUV);
   geometry.setIndex(indices);
-  const uniforms = { atlas: { value: null as T.Texture | null }, crop: { value: poses[0].crop } };
+  const uniforms = {
+    atlas: { value: null as T.Texture | null },
+    crop: { value: poses[0].crop }, nextCrop: { value: poses[0].crop }, poseBlend: { value: 0 },
+  };
   const material = new T.ShaderMaterial({
     uniforms,
     transparent: true,
     depthWrite: false,
     premultipliedAlpha: true,
-    vertexShader: `varying vec2 artUV;
+    vertexShader: `attribute vec2 nextUV;
+      varying vec2 artUV, nextArtUV;
       void main() {
         artUV = uv;
+        nextArtUV = nextUV;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }`,
-    fragmentShader: `varying vec2 artUV;
+    fragmentShader: `varying vec2 artUV, nextArtUV;
       uniform sampler2D atlas;
-      uniform vec4 crop;
+      uniform vec4 crop, nextCrop;
+      uniform float poseBlend;
+      vec4 samplePose(vec2 p, vec4 bounds) {
+        vec4 art = texture2D(atlas, p);
+        if (any(lessThan(p, bounds.xy)) || any(greaterThan(p, bounds.zw))) return vec4(0.0);
+        float a = smoothstep(.27, .54, art.a);
+        return vec4(art.rgb * a, a);
+      }
       void main() {
-        vec4 art = texture2D(atlas, artUV);
-        if (any(lessThan(artUV, crop.xy)) || any(greaterThan(artUV, crop.zw)) || art.a < .27) discard;
-        gl_FragColor = vec4(art.rgb, smoothstep(.27, .54, art.a));
+        vec4 art;
+        if (poseBlend <= 0.0) art = samplePose(artUV, crop);
+        else if (poseBlend >= 1.0) art = samplePose(nextArtUV, nextCrop);
+        else art = mix(samplePose(artUV, crop), samplePose(nextArtUV, nextCrop), poseBlend);
+        if (art.a < .005) discard;
+        gl_FragColor = vec4(art.rgb / art.a, art.a);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
         #include <premultiplied_alpha_fragment>
@@ -126,32 +143,42 @@ export function createPatrolWarpCard() {
   root.position.z = .19;
   root.visible = false;
   root.frustumCulled = false;
-  let sourceKey = Infinity;
+  let firstKey = Infinity, secondKey = Infinity;
 
   function pose(heading: number) {
     const turn = denPatrolWarp(heading);
-    const a = poses[turn.first].xy, b = poses[turn.second].xy;
+    const a = poses[turn.first], b = poses[turn.second];
     const sign = turn.mirror ? -1 : 1;
-    const source = poses[turn.source];
-    const key = turn.source * sign;
-    const updateUV = key !== sourceKey;
+    const keyA = turn.first * sign, keyB = turn.second * sign;
+    const updateFirst = keyA !== firstKey, updateSecond = keyB !== secondKey;
     for (let i = 0; i < vertexCount; i++) {
       // Reverse the columns when mirroring to retain front-face winding.
       const j = turn.mirror ? i + COLUMNS - 1 - 2 * (i % COLUMNS) : i;
-      position.setXYZ(i, sign * T.MathUtils.lerp(a[j * 2], b[j * 2], turn.fraction),
-        T.MathUtils.lerp(a[j * 2 + 1], b[j * 2 + 1], turn.fraction), 0);
-      if (updateUV) {
-        // Keep the same head-on image when crossing straight ahead.
-        const k = turn.source === 0 ? i : j;
-        uv.setXY(i, source.uv[k * 2], source.uv[k * 2 + 1]);
+      position.setXYZ(i, sign * T.MathUtils.lerp(a.xy[j * 2], b.xy[j * 2], turn.fraction),
+        T.MathUtils.lerp(a.xy[j * 2 + 1], b.xy[j * 2 + 1], turn.fraction), 0);
+      // Each texture follows the same vertices, with the head-on view shared
+      // between both turn directions.
+      if (updateFirst) {
+        const k = (turn.first === 0 ? i : j) * 2;
+        uv.setXY(i, a.uv[k], a.uv[k + 1]);
+      }
+      if (updateSecond) {
+        const k = (turn.second === 0 ? i : j) * 2;
+        nextUV.setXY(i, b.uv[k], b.uv[k + 1]);
       }
     }
     position.needsUpdate = true;
-    if (updateUV) {
-      sourceKey = key;
+    if (updateFirst) {
+      firstKey = keyA;
       uv.needsUpdate = true;
-      uniforms.crop.value = source.crop;
+      uniforms.crop.value = a.crop;
     }
+    if (updateSecond) {
+      secondKey = keyB;
+      nextUV.needsUpdate = true;
+      uniforms.nextCrop.value = b.crop;
+    }
+    uniforms.poseBlend.value = turn.blend;
     root.rotation.z = turn.angle;
   }
 
