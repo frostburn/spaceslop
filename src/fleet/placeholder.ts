@@ -1,5 +1,5 @@
 import * as T from 'three';
-import { flagshipPorts, trenchPorts } from './route';
+import { flagshipEngines, flagshipPorts, trenchPorts } from './route';
 
 function plate(width: number, height: number, paint: (c: CanvasRenderingContext2D) => void) {
   const canvas = document.createElement('canvas');
@@ -156,8 +156,12 @@ export function fallbackPleiadianHull(trench: boolean) {
       c.strokeStyle = '#d5b275';
       c.lineWidth = 4;
       c.stroke(spine);
-      globe(c, 500 + side * (trench ? 249 : 86), 1848, trench ? 87 : 55, '#ae9166', '#776648', '#382f29');
-      globe(c, 500 + side * (trench ? 249 : 86), 1848, trench ? 64 : 38, '#59bddd', '#205479', '#0b233a');
+    }
+    const engines = trench ? flagshipEngines.trench : flagshipEngines.broadside;
+    for (const [u, v] of engines.mounts) {
+      const x = u * 1000, y = v * 2000, radius = engines.radius * 1000;
+      globe(c, x, y, radius * 1.55, '#ae9166', '#776648', '#382f29');
+      globe(c, x, y, radius, '#59bddd', '#205479', '#0b233a');
     }
     if (trench) {
       const lane = new Path2D(trenchFloor);

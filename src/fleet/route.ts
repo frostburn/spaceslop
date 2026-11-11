@@ -20,6 +20,11 @@ export const flankShips: readonly FleetHull[] = [
 export const trenchShip: FleetHull = { x: 0, y: 140.5, width: 23.5 };
 
 // Positions measured from the top left of the full, uncropped plates.
+export const flagshipEngines = {
+  broadside: { radius: .032, mounts: [[.422, .932], [.566, .932]] },
+  trench: { radius: .043, mounts: [[.235, .929], [.764, .929]] },
+} as const;
+
 export const flagshipPorts = [
   [.577, .234], [.563, .346], [.564, .397],
   [.568, .449], [.582, .596], [.578, .645],

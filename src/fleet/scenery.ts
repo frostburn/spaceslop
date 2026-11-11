@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { loadEncounterTexture } from '../encounter-texture';
 import { HEIGHT, WIDTH } from '../playfield';
+import { createFlagshipEngines } from './engines';
 import { fallbackFleetPlanets, fallbackFleetSky, fallbackPleiadianHull } from './placeholder';
 import { fleetViewY, flankShips, trenchShip } from './route';
 
@@ -17,13 +18,17 @@ export function createFleetScenery(signal: AbortSignal) {
   const starfield = new T.Mesh(new T.PlaneGeometry(WIDTH, HEIGHT), sky);
   starfield.name = 'fleet-starfield';
   starfield.renderOrder = -20;
-  const planets = new T.Mesh(new T.PlaneGeometry(2.75, 2.75), pair);
+  const planets = new T.Mesh(new T.PlaneGeometry(7, 7), pair);
   planets.name = 'fleet-drifting-planets';
   planets.renderOrder = -15;
 
+  const clock = { value: 0 };
+  const engines = createFlagshipEngines(clock);
   const ships = [...flankShips, trenchShip].map((site, index) => {
-    const mesh = new T.Mesh(new T.PlaneGeometry(site.width, 2 * site.width), site === trenchShip ? trench : flagship);
-    mesh.name = site === trenchShip ? 'fleet-trench-flagship' : `fleet-broadside-flagship-${index + 1}`;
+    const isTrench = site === trenchShip;
+    const mesh = new T.Mesh(new T.PlaneGeometry(site.width, 2 * site.width), isTrench ? trench : flagship);
+    mesh.name = isTrench ? 'fleet-trench-flagship' : `fleet-broadside-flagship-${index + 1}`;
+    mesh.add(...engines(site, isTrench, index));
     return { site, mesh };
   });
   root.add(starfield, planets, ...ships.map(({ mesh }) => mesh));
@@ -42,13 +47,14 @@ export function createFleetScenery(signal: AbortSignal) {
 
   return {
     root, maps,
-    update(time: number, clock: number, distance: number) {
+    update(time: number, animationTime: number, distance: number) {
+      clock.value = animationTime;
       place(distance, -125, starfield);
-      place(distance, -94, planets, -1.0 + 1.04 * Math.sin(clock * .026 - .4), -1.55 + .81 * Math.cos(clock * .020 + 1));
-      planets.rotation.z = -.13 + .0056 * clock;
+      place(distance, -94, planets, -.6 + 1.04 * Math.sin(animationTime * .026 - .4), -2.05 + .81 * Math.cos(animationTime * .020 + 1));
+      planets.rotation.z = -.13 + .0056 * animationTime;
       for (const { site, mesh } of ships) {
         const y = fleetViewY(site.y, time);
-        mesh.visible = Math.abs(y) < HEIGHT / 2 + site.width + 1;
+        mesh.visible = Math.abs(y) < HEIGHT / 2 + site.width + 6;
         place(distance, site === trenchShip ? -2.3 : -3.1, mesh, site.x, y);
       }
     },
