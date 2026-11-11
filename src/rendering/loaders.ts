@@ -3,7 +3,7 @@ import type { LevelFactory } from './level';
 export const levelLoaders: Record<LevelId, () => Promise<{
   createLevel: LevelFactory;
 }>> = {
-  den: import.meta.env.DEV ? () => import('./levels/den') : () => Promise.reject(new Error('Development encounter')),
+  den: () => import('./levels/den'),
   biolume: () => import('./levels/biolume'),
   summer: () => import('./levels/summer'),
   heliostat: () => import('./levels/heliostat'),

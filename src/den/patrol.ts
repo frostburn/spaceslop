@@ -1,0 +1,86 @@
+import { HEIGHT, WIDTH } from '../playfield';
+import type { WingWeapon } from '../wing';
+import { ellipseEntry } from './combat';
+
+type Point = { x: number; y: number };
+type Course = 'launch' | 'cross' | 'weave';
+export type DenPatrol = { course: Course; side: -1 | 1; slot: number; heavy: boolean };
+type DenWave = Omit<DenPatrol, 'slot' | 'heavy'> & {
+  time: number;
+  lanes: readonly number[];
+  guard?: number;
+  drop?: WingWeapon;
+};
+
+export const DEN_PATROL_POOL = 10;
+export const DEN_PATROL_STAGGER = .58;
+export const DEN_PATROL_WINDUP = .46;
+
+export const denWaves: readonly DenWave[] = [
+  { time: 3.0, course: 'launch', side: -1, lanes: [-1.15] },
+  { time: 7.4, course: 'weave', side: -1, lanes: [-1.45, 1.7], drop: 'homing' },
+  { time: 12.2, course: 'cross', side: 1, lanes: [-1.7, -.25] },
+  { time: 17.6, course: 'launch', side: -1, lanes: [-2.1, -.25, 1.5], drop: 'cannon' },
+  { time: 22.7, course: 'weave', side: 1, lanes: [-1.9, .25, 2.45] },
+  { time: 28.3, course: 'cross', side: -1, lanes: [.7, 2.5], guard: 1, drop: 'laser' },
+  { time: 33.4, course: 'launch', side: 1, lanes: [2.55, .65] },
+  { time: 38.5, course: 'weave', side: -1, lanes: [-2.3, .2, 2.5], drop: 'omega' },
+  { time: 43.6, course: 'launch', side: -1, lanes: [-2.2, -.9, .55] },
+  { time: 48.1, course: 'cross', side: 1, lanes: [-2.4, -.85], guard: 0, drop: 'homing' },
+  { time: 53.5, course: 'weave', side: 1, lanes: [-2.55, -.5, 1.8] },
+  { time: 58.3, course: 'cross', side: -1, lanes: [.5, 2.35], guard: 1, drop: 'cannon' },
+  { time: 63.4, course: 'launch', side: 1, lanes: [2.2, 1, -.3] },
+  { time: 68.7, course: 'weave', side: -1, lanes: [-2.25, .2, 2.35], guard: 1, drop: 'laser' },
+  { time: 73.5, course: 'cross', side: 1, lanes: [-2.15, -.55, .8] },
+  { time: 78.5, course: 'launch', side: -1, lanes: [-1.8, .05, 1.75], guard: 0 },
+  { time: 83.6, course: 'cross', side: -1, lanes: [.35, 1.85], guard: 1, drop: 'omega' },
+  { time: 89.2, course: 'weave', side: 1, lanes: [-2.5, 0, 2.4], guard: 1 },
+  { time: 94, course: 'cross', side: 1, lanes: [-1.55, .6], guard: 0 },
+];
+
+export function denPatrolScale(patrol: DenPatrol) { return patrol.heavy ? 1.23 : 1; }
+
+export function denPatrolPose(age: number, lane: number, patrol: DenPatrol) {
+  const t = Math.max(0, age);
+  const speed = patrol.heavy ? 2.35 : 2.75;
+  const weave = patrol.course === 'weave';
+  const entry = weave ? 0 : patrol.course === 'cross' ? 2.3 : 1.8;
+  const startY = weave ? 9.45 : 6.8 - .3 * patrol.slot;
+  const startX = patrol.side * (WIDTH / 2 + 1.5);
+  const fall = speed * entry * 2 / Math.PI;
+  if (t < entry) {
+    const angle = t / entry * Math.PI / 2;
+    const vx = (lane - startX) * Math.cos(angle) * Math.PI / (2 * entry);
+    const vy = -speed * Math.sin(angle);
+    return {
+      x: startX + (lane - startX) * Math.sin(angle), y: startY - fall * (1 - Math.cos(angle)),
+      heading: Math.atan2(vx, -vy), throttle: .74,
+    };
+  }
+  const motion = (t - entry) * (weave ? 2.15 : 1.8);
+  const amplitude = weave ? .78 : .34;
+  const direction = lane > 1.7 ? -1 : lane < -1.7 ? 1 : patrol.side;
+  const vx = direction * amplitude * Math.sin(motion) * (weave ? 2.15 : 1.8) / 2;
+  return {
+    x: lane + direction * amplitude * (1 - Math.cos(motion)) / 2, y: startY - fall - speed * (t - entry),
+    heading: Math.atan2(vx, speed), throttle: .42 + .12 * Math.cos(motion),
+  };
+}
+
+export function denPatrolCanFire(pose: ReturnType<typeof denPatrolPose>, patrol: DenPatrol) {
+  const radius = 1.14 * denPatrolScale(patrol);
+  return Math.abs(pose.x) + radius < WIDTH / 2 && pose.y + radius < HEIGHT / 2 && pose.y > -4.1 && Math.abs(pose.heading) < .63;
+}
+
+export function denPatrolFrame(heading: number) {
+  const angle = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, heading));
+  const step = Math.PI / 12;
+  const index = Math.round(Math.abs(angle) / step);
+  const mirror = index > 0 && angle > 0;
+  return { index, mirror, bank: angle - Math.sign(angle) * index * step };
+}
+
+export function denPatrolEntry(a: Point, b: Point, pose: Point & { heading?: number }, patrol: DenPatrol, padding = .05) {
+  const size = denPatrolScale(patrol);
+  return ellipseEntry(a, b, { ...pose, bank: pose.heading ?? 0 }, -.08 * size, .49 * size + padding, .87 * size + padding);
+}

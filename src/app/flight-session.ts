@@ -1,4 +1,5 @@
 import {groveSection} from '../biolume/route';
+import { DEN_SCREENS, denSection } from '../den/route';
 import {boulevardSection} from '../boulevard';
 import {summerSection} from '../summer/layout';
 import { bindFlightInput } from './input';
@@ -8,7 +9,7 @@ import { titanSection } from '../titan-layout';
 import { BOSS_HP, Flight, STEP } from '../game';
 import { setupPilots } from '../pilots';
 import { createFlightView, type FlightView } from '../view';
-import { levels, playableLevels, readLevel, type LevelId } from '../levels';
+import { levels, readLevel, type LevelId } from '../levels';
 import { iceSection } from '../ice-layout';
 import { readWingWeapon, wingWeapons } from '../wing';
 export async function openFlightSession(selectedLevel: LevelId, signal: AbortSignal) {
@@ -73,7 +74,7 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
   const bossHealth = element<HTMLProgressElement>('boss-health');
   const droneWeapon = element<HTMLSelectElement>('drone-weapon');
   const levelSelector = element<HTMLSelectElement>('level');
-  levelSelector.replaceChildren(...Object.entries(playableLevels()).map(([id,level])=>new Option(level.name,id)));
+  levelSelector.replaceChildren(...Object.entries(levels).map(([id,level])=>new Option(level.name,id)));
   levelSelector.value = selectedLevel;
   levelSelector.disabled = true;
   const testingWings = import.meta.env.DEV || new URLSearchParams(location.search).get('testLoadout') === '1';
@@ -112,7 +113,8 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
       sector.textContent = `IO · ${Math.min(IO_SCREENS, Math.floor(flight.hiveProgress * IO_SCREENS) + 1)}/${IO_SCREENS}`;
     if(flight.level==='boulevard'&&flight.phase==='stage')sector.textContent=`BOULEVARD · ${Math.min(10,1+Math.floor(flight.time/10))}/10`;
     if(flight.level==='biolume'&&flight.phase==='stage')sector.textContent=`LANTERN GROVE · ${Math.min(10,1+Math.floor(flight.time/10))}/10`;
-    sector.title = flight.level==='biolume'?groveSection(flight.phase==='stage'?flight.time:100):flight.level==='summer'?summerSection(flight.time):flight.level==='boulevard'?boulevardSection(flight.time):flight.level === 'vents' && flight.phase === 'stage' ? ventSection(flight.time) : flight.level === 'io' && flight.phase === 'stage' ? ioSection(flight.time) : flight.level === 'titan' ? titanSection(flight.hiveProgress) : flight.level === 'ice' ? iceSection(flight.hiveProgress) : levels[flight.level].name;
+    if (flight.isDen && flight.phase === 'stage') sector.textContent = `${label} · ${Math.min(DEN_SCREENS, 1 + Math.floor(flight.hiveProgress * DEN_SCREENS))}/${DEN_SCREENS}`;
+    sector.title = flight.isDen ? denSection(flight.phase === 'stage' ? flight.time : flight.stageDuration) : flight.level==='biolume'?groveSection(flight.phase==='stage'?flight.time:100):flight.level==='summer'?summerSection(flight.time):flight.level==='boulevard'?boulevardSection(flight.time):flight.level === 'vents' && flight.phase === 'stage' ? ventSection(flight.time) : flight.level === 'io' && flight.phase === 'stage' ? ioSection(flight.time) : flight.level === 'titan' ? titanSection(flight.hiveProgress) : flight.level === 'ice' ? iceSection(flight.hiveProgress) : levels[flight.level].name;
     score.textContent = String(flight.score).padStart(6, '0');
     hull.textContent = String(flight.hull).padStart(2, '0');
     charges.textContent = String(flight.charges).padStart(2, '0');
@@ -126,10 +128,10 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     const betweenRuns = screen === 'title' || screen === 'results';
     if (import.meta.env.DEV) {
       const bossStart = element<HTMLButtonElement>('dev-boss');
-      bossStart.hidden = !betweenRuns || flight.level === 'den';
+      bossStart.hidden = !betweenRuns;
       element('vent-study').hidden = !betweenRuns || flight.level !== 'vents';
       element('io-study').hidden = !betweenRuns || flight.level !== 'io';
-      bossStart.textContent = flight.level === 'summer' || flight.level === 'heliostat' || flight.level === 'boulevard' || flight.level === 'preserve' || flight.level === 'vents' || flight.level === 'titan' || flight.level === 'io' ? 'Launch at transition' : 'Launch at boss';
+      bossStart.textContent = flight.isDen || flight.level === 'summer' || flight.level === 'heliostat' || flight.level === 'boulevard' || flight.level === 'preserve' || flight.level === 'vents' || flight.level === 'titan' || flight.level === 'io' ? 'Launch at transition' : 'Launch at boss';
       bossStart.disabled = start.disabled || !view;
     }
     pilotPicker.setVisible(betweenRuns);

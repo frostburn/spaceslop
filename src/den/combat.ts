@@ -1,7 +1,8 @@
+import { DEN_APPROACH } from './route';
+
 type Point = { x: number; y: number };
 
 export const DEN_HP = 105;
-export const DEN_APPROACH = 1.6;
 export const DEN_CYCLE = 5.6;
 export const DEN_BURSTS = [1.48, 1.86, 2.27, 3.38] as const;
 export const DEN_GUNS = [{ x: -1.49, y: -1.02 }, { x: 1.49, y: -1.02 }] as const;
@@ -40,7 +41,7 @@ export function denMount(pose: Pose, point: Point) {
   return { x: pose.x + c * point.x - s * point.y, y: pose.y + s * point.x + c * point.y };
 }
 
-function ellipseEntry(a: Point, b: Point, pose: Pose, y: number, rx: number, ry: number) {
+export function ellipseEntry(a: Point, b: Point, pose: Point & { bank: number }, y: number, rx: number, ry: number) {
   const c = Math.cos(pose.bank), s = Math.sin(pose.bank);
   const project = (p: Point) => {
     const x = p.x - pose.x, py = p.y - pose.y;

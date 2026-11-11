@@ -1,5 +1,5 @@
 import { registerSW } from 'virtual:pwa-register';
-import { levels, playableLevels, readLevel, type LevelId } from './levels';
+import { levels, readLevel, type LevelId } from './levels';
 import { saveLevelOffline, savedLevels, clearSavedLevels } from './app/offline';
 import './style.css';
 const menu = document.querySelector<HTMLElement>('#front-menu')!;
@@ -12,7 +12,7 @@ let selected = readLevel(new URLSearchParams(location.search).get('level'));
 let session: AbortController | undefined;
 let reloadBeforePreparation = false;
 const descriptions: Record<LevelId, string> = {
-  den: 'Face a draconian biker on a gantry overlooking the black hole.',
+  den: 'Fly the cliffside docks and rookeries, then face the Gantry Chief above the black hole.',
   biolume:'Fly beneath translucent luminous leaves, over tangled root bridges and blackwater pools. Lantern gliders guard the nursery; the enormous Lantern Ray waits in the Dark Crown.',
   summer:'Grazing mammoths, flower-rich meadows and thawing glacier gardens. Follow the river into the glass-covered lotus palace.',
   heliostat:'Fly through an artificial-star power plant above Uranus. Dodge capacitor discharges, cyborg man o’wars and inspection drones, then disable the Sunspot Regulator.',
@@ -35,10 +35,9 @@ function select(id: LevelId) {
 }
 function levelDetail(id: LevelId, saved = false) {
   const level = levels[id];
-  const route = id === 'den' ? 'Boss prototype' : `${level.duration} second route`;
-  return `${route} · ${saved ? 'Saved offline' : level.boss}`;
+  return `${level.duration} second route · ${saved ? 'Saved offline' : level.boss}`;
 }
-for (const [id, level] of Object.entries(playableLevels())) {
+for (const [id, level] of Object.entries(levels)) {
   const button = document.createElement('button');
   button.type = 'button';
   button.dataset.level = id;

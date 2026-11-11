@@ -419,7 +419,7 @@ export class FlightView {
     else this.renderer.render(this.scene, camera);
   }
   private drawWings(flight: Flight, reveal: number, velocity: T.Vector2, distance?: number) {
-    const fighting = flight.phase === 'stage' || flight.phase === 'boss';
+    const fighting = flight.weaponsActive;
     const throttle = Math.min(1, 0.38 + velocity.length() * 0.12 + 0.24 * Math.sin(reveal * Math.PI));
     for (const [index, wing] of flight.wings.entries()) {
       const laser = this.wingLasers[index];
@@ -447,7 +447,7 @@ export class FlightView {
           if(target.summer?.kind==='hydra'&&wing.laserHead!==undefined)model=model?.getObjectByName('hydra-head-'+wing.laserHead);
         }
         const shieldModel=flight.level==='summer'&&flight.phase==='boss'&&target===undefined?this.level.boss:undefined;
-        const end = typeof target === 'number' && flight.planarBoss ? wing.beamEnd : typeof target === 'number' ? this.level.contact(target, distance ?? BOSS_CAMERA_DISTANCE, flight)
+        const end = flight.isDen || (typeof target === 'number' && flight.planarBoss) ? wing.beamEnd : typeof target === 'number' ? this.level.contact(target, distance ?? BOSS_CAMERA_DISTANCE, flight)
           : model ? this.laserContact(origin, wing.beamEnd, model, distance, this.viewPitch) : shieldModel?this.laserContact(origin,wing.beamEnd,shieldModel,distance,this.viewPitch):wing.beamEnd;
         const contact = typeof target === 'number' || Boolean(model);
         if (flight.isDen) {

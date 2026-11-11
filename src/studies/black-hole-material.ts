@@ -33,6 +33,7 @@ export function createBlackHoleMaterial(sky?: T.Texture) {
       diskArt: {value: null as T.Texture | null},
       useArt: {value: false},
       diskRotation: {value: new T.Vector2(1, 0)},
+      diskRoll: {value: 0},
       diskGain: {value: 1},
       inclination: {value: T.MathUtils.degToRad(84)},
       frameScale: {value: new T.Vector2(1, 1)},
@@ -54,7 +55,7 @@ export function createBlackHoleMaterial(sky?: T.Texture) {
       uniform sampler2D orbits, diskArt;
       uniform bool useArt;
       uniform vec2 diskRotation;
-      uniform float inclination, diskGain;
+      uniform float inclination, diskGain, diskRoll;
       uniform vec2 frameScale, lensCenter;
       uniform float lensExtent;
       uniform int mode;
@@ -162,6 +163,8 @@ export function createBlackHoleMaterial(sky?: T.Texture) {
         if (mode == 0 && impact < SHADOW) color = vec3(0.0);
         #endif
         if (impact <= .001 || impact >= MAX_IMPACT) return color;
+        float rollC = cos(diskRoll), rollS = sin(diskRoll);
+        q = mat2(rollC, -rollS, rollS, rollC) * q;
         float sine = sin(inclination), cosine = cos(inclination);
         vec3 observer = vec3(0.0, -sine, cosine);
         vec3 axis = vec3(q.x, q.y * cosine, q.y * sine) / impact;

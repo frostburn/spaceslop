@@ -2,7 +2,9 @@ import {FROG_HP,FROG_RADIUS,createFrogState,stepFrog,frogHeading,frogTongueHits,
 import {groveWaves,groveMotion,groveEnemySize,groveCanAttack,GROVE_SPAWN_LEAD,type GroveCourse} from './biolume/combat';
 import {GROVE_APPROACH} from './biolume/route';
 import {RAY_HP,RAY_FAN_AT,RAY_SEEKER_AT,RAY_PROJECTION,RAY_ORGAN_RADIUS,RAY_SEEKER_RADIUS,RAY_SEEKER_HP,RAY_SEEKER_POOL,raySignal,rayOrgan,rayBodyEntry,stepRaySeeker,rayOrbEntry,raySeekerBurst,type RaySeeker} from './biolume/lantern-ray';
-import { DEN_APPROACH, DEN_BURSTS, DEN_CYCLE, DEN_GUNS, DEN_HP, denBodyEntry, denMount, denPose } from './den/combat';
+import { DEN_BURSTS, DEN_CYCLE, DEN_GUNS, DEN_HP, denBodyEntry, denMount, denPose } from './den/combat';
+import { DEN_APPROACH } from './den/route';
+import { DEN_PATROL_STAGGER, DEN_PATROL_WINDUP, denPatrolCanFire, denPatrolEntry, denPatrolPose, denPatrolScale, denWaves, type DenPatrol } from './den/patrol';
 import { HELIOSTAT_HP,HELIOSTAT_APPROACH,HELIOSTAT_INTERVAL,HELIOSTAT_WINDUP,HELIOSTAT_FIRE,HELIOSTAT_CHANNEL,HELIOSTAT_FADE,HELIOSTAT_GUARD_FIRE,HELIOSTAT_SPAWN_LEAD,heliostatWaves,heliostatMotion,heliostatCanAttack,heliostatPlasmaHits,electricSites,electricHits,type HeliostatCourse } from './heliostat/combat';
 import {SUMMER_HP,SUMMER_APPROACH} from './summer/layout';
 import {createHydraAttack,stepHydraAttack} from './summer/hydra-attack';
@@ -66,6 +68,7 @@ type Shot = Point & {
 };
 type Threat = Shot & { graze?: 'near' | 'counted';planar?:boolean };
 type Enemy = Point & {
+  den?: DenPatrol;
   rayOrb?:RaySeeker;
   grove?:GroveCourse;frog?:FrogState;
   summer?:SummerCourse;
@@ -279,14 +282,12 @@ export class Flight {
       const weapon = loadout[index];
       if (weapon) this.equip(wing, weapon);
     }
-    if (this.isDen) {
-      this.bossHealth = DEN_HP;
-      this.enter('approach');
-    }
+    if (this.isDen) this.bossHealth = DEN_HP;
   }
 
-  get isDen() { return import.meta.env.DEV && this.level === 'den'; }
+  get isDen() { return this.level === 'den'; }
   get planarBoss() { return this.level === 'biolume' || this.isDen; }
+  get weaponsActive() { return this.phase === 'stage' || this.phase === 'boss' || (this.isDen && this.phase === 'approach'); }
   get denBossTime() {
     if (this.phase === 'approach') return this.time - DEN_APPROACH;
     return this.phase === 'boss' ? this.time : this.denFinalTime;
@@ -485,8 +486,8 @@ export class Flight {
       this.droneLaunch = undefined;
     }
     if (this.phase === 'approach') {
-      if (this.time >= this.transitionDuration) this.enter('boss');
-      return;
+      if (this.time >= this.transitionDuration) { this.enter('boss'); return; }
+      if (!this.isDen) return;
     }
 
     this.cooldown -= dt;
@@ -496,7 +497,7 @@ export class Flight {
     }
     const boss = this.phase === 'boss';
     if (boss) this.stepBoss(dt);
-    else this.stepStage(dt);
+    else if (this.phase === 'stage') this.stepStage(dt);
     this.stepDroneWeapon(dt);
     for (const wing of this.wings) this.stepWing(wing, boss, dt);
 
@@ -543,7 +544,7 @@ export class Flight {
           if(!shot.pierced)return false;
           const hits=shot.hydraPierced??=new Map(),heads=hits.get(enemy)??new Set<HydraSide>();heads.add(hit.side);hits.set(enemy,heads);continue;
         }
-        const hit = enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},previous,shot) : enemy.ambusher ? ambusherBodyHit(enemy.ambusher,this.time,previous,shot) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,previous,shot) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, previous, shot) : shot.wing === 'homing'
+        const hit = enemy.den ? Number.isFinite(denPatrolEntry(previous, shot, enemy, enemy.den)) : enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},previous,shot) : enemy.ambusher ? ambusherBodyHit(enemy.ambusher,this.time,previous,shot) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,previous,shot) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, previous, shot) : shot.wing === 'homing'
           ? nearSegment(enemy, previous, shot, enemyRadius(enemy))
           : Math.abs(shot.x - enemy.x) < enemyRadius(enemy) &&
             shot.y >= enemy.y - enemyRadius(enemy,.46) && previous.y <= enemy.y + enemyRadius(enemy,.46);
@@ -641,7 +642,7 @@ export class Flight {
   }
 
   private stepWing(wing: Wing, boss: boolean, dt: number) {
-    if (!wing.weapon || (this.phase !== 'stage' && this.phase !== 'boss')) return;
+    if (!wing.weapon || !this.weaponsActive) return;
     const origin = this.wingOrigin(wing.side);
     if (wing.weapon === 'laser') {
       this.stepLaser(wing, origin, boss, dt);
@@ -682,6 +683,14 @@ export class Flight {
       if (Math.abs(origin.x - this.exposedCannonX * BOSS_PROJECTION) < this.bossTargetRadius * BOSS_PROJECTION) {
         target = this.exposedCannonX;
       }
+    } else if (this.isDen) {
+      let first = Infinity;
+      for (const candidate of this.enemies) {
+        if (!candidate.den || candidate.hp <= 0) continue;
+        const t = denPatrolEntry(origin, { x: origin.x, y: 9 }, candidate, candidate.den);
+        if (t < first) { first = t; enemy = candidate; }
+      }
+      if (enemy) { target = enemy; endY = origin.y + (9 - origin.y) * first; }
     } else {
       let firstContact=Infinity;
       for (const candidate of this.enemies) {
@@ -751,7 +760,7 @@ export class Flight {
   }
 
   private stepDroneWeapon(dt: number) {
-    if (this.phase !== 'stage' && this.phase !== 'boss') return;
+    if (!this.weaponsActive) return;
     this.droneCooldown = Math.max(0, this.droneCooldown - dt);
     if (this.droneWeapon === 'sentry') {
       if (!this.droneTarget && this.droneCooldown === 0) {
@@ -810,7 +819,7 @@ export class Flight {
         continue;
       }
       if (enemy.hp > 0 && !enemy.mine && !this.towlineEnemies.has(enemy) &&
-        (enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},this.player,this.drone) : enemy.ambusher ? ambusherBodyHit(enemy.ambusher,this.time,this.player,this.drone) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,this.player,this.drone) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, this.player, this.drone) : nearSegment(enemy, this.player, this.drone, enemyRadius(enemy)))) {
+        (enemy.den ? Number.isFinite(denPatrolEntry(this.player, this.drone, enemy, enemy.den)) : enemy.flyer ? flyerBodyHit({...enemy,flyer:enemy.flyer},this.player,this.drone) : enemy.ambusher ? ambusherBodyHit(enemy.ambusher,this.time,this.player,this.drone) : enemy.shrimp||enemy.ventWorm ? faunaBodyHit(enemy,this.player,this.drone) : enemy.marine ? marineBodyHit(enemy as Enemy & {marine: MarineKind}, this.player, this.drone) : nearSegment(enemy, this.player, this.drone, enemyRadius(enemy)))) {
         this.towlineEnemies.add(enemy);
         this.damageEnemy(enemy, this.towlineDamage);
       }
@@ -818,6 +827,10 @@ export class Flight {
   }
 
   private stepStage(dt: number) {
+    if (this.isDen) {
+      if (this.time < this.stageDuration) this.stepDenPatrols(dt);
+      return;
+    }
     if(this.level==='heliostat')while(this.nextCrawler<crawlerSites.length){
       const crawler={site:this.nextCrawler},p=crawlerPose(crawler,this.time);if(p.physicalY>23)break;
       this.nextCrawler++;if(p.y<-10)continue;
@@ -977,6 +990,43 @@ export class Flight {
         if(!enemy.ventWorm)enemy.hp = 0;
         if (enemy.centipede) severCentipede(enemy);
         this.hit();
+      }
+    }
+  }
+
+  private stepDenPatrols(dt: number) {
+    const wave = denWaves[this.nextWave];
+    if (wave && this.time >= wave.time) {
+      this.nextWave++;
+      for (const [slot, lane] of wave.lanes.entries()) {
+        const den: DenPatrol = { course: wave.course, side: wave.side, slot, heavy: slot === wave.guard };
+        const age = this.time - wave.time - slot * DEN_PATROL_STAGGER - dt;
+        const pose = denPatrolPose(age, lane, den);
+        this.enemies.push({ x: pose.x, y: pose.y, heading: pose.heading, lane, age, den, fire: Infinity,
+          hp: den.heavy ? 7 : 3, drop: slot === (wave.guard ?? 0) ? wave.drop : undefined });
+      }
+    }
+
+    for (const enemy of this.enemies) {
+      if (!enemy.den || enemy.hp <= 0) continue;
+      enemy.age += dt;
+      const pose = denPatrolPose(enemy.age, enemy.lane, enemy.den);
+      enemy.x = pose.x;
+      enemy.y = pose.y;
+      enemy.heading = pose.heading;
+      if (enemy.age < 0) continue;
+      if (Number.isFinite(denPatrolEntry(this.player, this.player, enemy, enemy.den, .23))) this.hit();
+      if (this.phase !== 'stage') return;
+      if (!denPatrolCanFire(pose, enemy.den)) { enemy.fire = Infinity; continue; }
+      if (!Number.isFinite(enemy.fire)) enemy.fire = enemy.age + DEN_PATROL_WINDUP;
+      if (enemy.age < enemy.fire) continue;
+      enemy.fire = enemy.age + (enemy.den.heavy ? 2.45 : 2.8);
+      const reach = .82 * denPatrolScale(enemy.den);
+      const x = enemy.x + Math.sin(pose.heading) * reach, y = enemy.y - Math.cos(pose.heading) * reach;
+      const aim = Math.atan2(this.player.x - x, Math.max(1.8, y - this.player.y));
+      for (const spread of enemy.den.heavy ? [-.22, 0, .22] : [0]) {
+        const angle = aim + spread, speed = enemy.den.heavy ? 4.95 : 4.7;
+        this.threats.push({ x, y, z: 0, vx: Math.sin(angle) * speed, vy: -Math.cos(angle) * speed, vz: 0, planar: true });
       }
     }
   }
@@ -1235,7 +1285,7 @@ export class Flight {
     this.phase = phase;
     this.time = 0;
     if (phase === 'approach' || phase === 'won') {
-      this.shots = [];
+      if (!this.isDen || phase === 'won') this.shots = [];
       this.threats = [];
       this.enemies = [];
       this.drops = [];

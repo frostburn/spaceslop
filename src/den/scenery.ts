@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { HEIGHT, WIDTH } from '../playfield';
 import { createBlackHoleMaterial } from '../studies/black-hole-material';
+import { createDenCliffside } from './cliffside';
 
 function surface(width: number, height: number) {
   const canvas = document.createElement('canvas');
@@ -84,7 +85,7 @@ function gantryFallback() {
 
 export function createDenScenery() {
   const root = new T.Group();
-  const quad = new T.PlaneGeometry(2, 2);
+  const cliff = createDenCliffside(gantryFallback());
   const lens = createBlackHoleMaterial(skyFallback());
   const lensUniforms = lens.material.uniforms;
   lensUniforms.frameScale.value.set(1, HEIGHT / WIDTH);
@@ -93,50 +94,23 @@ export function createDenScenery() {
   lensUniforms.diskGain.value = .78;
   lensUniforms.skyOffset.value.set(-.012, .085);
   lensUniforms.skyRoll.value = -.7;
-  const sky = new T.Mesh(quad, lens.material);
+  const sky = new T.Mesh(new T.PlaneGeometry(2, 2), lens.material);
   sky.name = 'lensed-galactic-center';
   sky.frustumCulled = false;
   sky.renderOrder = -1000;
 
-  const plateUniforms = {
-    image: { value: gantryFallback() as T.Texture },
-    crop: { value: new T.Vector2() },
-    offset: { value: new T.Vector2() },
-  };
-  const plate = new T.Mesh(quad, new T.ShaderMaterial({
-    uniforms: plateUniforms,
-    depthTest: false,
-    depthWrite: false,
-    alphaToCoverage: true,
-    vertexShader: `varying vec2 screenUV;
-      void main() {
-        screenUV = uv;
-        gl_Position = vec4(position.xy, 0.0, 1.0);
-      }`,
-    fragmentShader: `varying vec2 screenUV;
-      uniform sampler2D image;
-      uniform vec2 crop, offset;
-      void main() {
-        vec4 plate = texture2D(image, (screenUV - .5) * crop + .5 + offset);
-        if (plate.a < .15) discard;
-        gl_FragColor = vec4(plate.rgb * .76, smoothstep(.15, .7, plate.a));
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-      }`,
-  }));
-  plate.name = 'gantry-plate';
-  plate.frustumCulled = false;
-  plate.renderOrder = -999;
-  root.add(sky, plate);
+  root.add(sky, cliff.root);
 
   return {
     root,
     get textures(): T.Texture[] {
-      return [...lens.tables, lensUniforms.skyArt.value, plateUniforms.image.value,
+      return [...lens.tables, lensUniforms.skyArt.value, ...cliff.textures,
         ...(lensUniforms.diskArt.value ? [lensUniforms.diskArt.value] : [])];
     },
     setSky(map: T.Texture) {
+      map.wrapS = T.RepeatWrapping;
       map.wrapT = T.ClampToEdgeWrapping;
+      map.anisotropy = 4;
       lensUniforms.skyArt.value.dispose();
       lensUniforms.skyArt.value = map;
     },
@@ -145,22 +119,16 @@ export function createDenScenery() {
       lensUniforms.diskArt.value = map;
       lensUniforms.useArt.value = true;
     },
-    setPlate(map: T.Texture) {
-      map.wrapS = map.wrapT = T.ClampToEdgeWrapping;
-      plateUniforms.image.value.dispose();
-      plateUniforms.image.value = map;
-    },
-    update(reveal: number, time: number) {
-      const approach = 1 - reveal;
-      lensUniforms.lensCenter.value.set(.035 + .62 * approach, .56 + .025 * approach);
+    setPlate: cliff.setArena,
+    setCliff: cliff.setCliff,
+    update(scroll: number, reveal: number, time: number) {
+      cliff.update(scroll);
+      lensUniforms.lensCenter.value.set(T.MathUtils.lerp(1.04, .035, reveal), T.MathUtils.lerp(.45, .56, reveal));
+      lensUniforms.lensExtent.value = T.MathUtils.lerp(14.2, 11.7, reveal);
+      lensUniforms.diskRoll.value = .24 * (1 - reveal);
       const angle = .18 * time;
       lensUniforms.diskRotation.value.set(Math.cos(angle), Math.sin(angle));
-      const { width, height } = plateUniforms.image.value.image as HTMLCanvasElement | HTMLImageElement;
-      const aspect = (width / height) / (WIDTH / HEIGHT);
-      const x = Math.min(1, 1 / aspect) * (1 - .036 * approach);
-      const y = Math.min(1, aspect) * (1 - .04 * approach);
-      plateUniforms.crop.value.set(x, y);
-      plateUniforms.offset.value.set(.32 * (1 - x) * approach, -.25 * (1 - y) * approach);
     },
+    dispose: cliff.dispose,
   };
 }
