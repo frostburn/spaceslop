@@ -27,6 +27,10 @@ const sceneColor = 0x0b1020;
 const teal = 0x88f2ff;
 const orange = 0xff885d;
 const mint = 0xa1ffc5;
+function planarProjectileLayer({x, y}: { x: number; y: number }, z: number) {
+  const scale = (BOSS_CAMERA_DISTANCE - z) / BOSS_CAMERA_DISTANCE;
+  return { x: x * scale, y: y * scale, z };
+}
 function trackMotion() {
   const previous = new T.Vector2();
   const velocity = new T.Vector2();
@@ -378,7 +382,7 @@ export class FlightView {
       droneSpeed
     };
     this.level.update(levelFrame);
-    this.cannonMarker.visible = flight.phase === 'boss'&&flight.level!=='biolume';
+    this.cannonMarker.visible = flight.phase === 'boss' && !flight.planarBoss;
     if (this.cannonMarker.visible) {
       const p = this.level.contact(flight.exposedCannonX, distance, flight);
       this.cannonMarker.position.set(p.x, p.y, 0);
@@ -443,20 +447,28 @@ export class FlightView {
           if(target.summer?.kind==='hydra'&&wing.laserHead!==undefined)model=model?.getObjectByName('hydra-head-'+wing.laserHead);
         }
         const shieldModel=flight.level==='summer'&&flight.phase==='boss'&&target===undefined?this.level.boss:undefined;
-        const end = typeof target === 'number' && flight.level==='biolume' ? wing.beamEnd : typeof target === 'number' ? this.level.contact(target, distance ?? BOSS_CAMERA_DISTANCE, flight)
+        const end = typeof target === 'number' && flight.planarBoss ? wing.beamEnd : typeof target === 'number' ? this.level.contact(target, distance ?? BOSS_CAMERA_DISTANCE, flight)
           : model ? this.laserContact(origin, wing.beamEnd, model, distance, this.viewPitch) : shieldModel?this.laserContact(origin,wing.beamEnd,shieldModel,distance,this.viewPitch):wing.beamEnd;
-        laser.draw(origin, end, wing.laserHold, this.animationTime, typeof target === 'number' || Boolean(model), flight.phase === 'boss' && target === undefined);
+        const contact = typeof target === 'number' || Boolean(model);
+        if (flight.isDen) {
+          const z = .85;
+          laser.root.position.z = z;
+          laser.draw(planarProjectileLayer(origin, z), planarProjectileLayer(end, z), wing.laserHold, this.animationTime, contact);
+        } else {
+          laser.draw(origin, end, wing.laserHold, this.animationTime, contact, flight.phase === 'boss' && target === undefined);
+        }
       }
     }
   }
   private drawProjectiles(flight: Flight) {
-    const shots=flight.level==='biolume'?flight.shots.map(s=>({...s,x:s.x*(22-.85)/22,y:s.y*(22-.85)/22,z:.85})):flight.shots;
+    const shots = flight.planarBoss ? flight.shots.map(s => ({ ...s, ...planarProjectileLayer(s, .85) })) : flight.shots;
     this.projectiles.ship.draw(shots.filter((shot) => !shot.drone && !shot.wing), this.animationTime);
     this.projectiles.drone.draw(shots.filter((shot) => shot.drone), this.animationTime);
     for (const weapon of ['homing', 'cannon', 'omega'] as const) {
       this.projectiles[weapon].draw(shots.filter((shot) => shot.wing === weapon), this.animationTime);
     }
-    this.projectiles.hostile.draw(flight.level !== 'ice' && flight.level !== 'broodlock' ? flight.threats : [], this.animationTime);
+    const hostile = flight.isDen ? flight.threats.map(s => ({ ...s, ...planarProjectileLayer(s, .85) })) : flight.threats;
+    this.projectiles.hostile.draw(flight.level !== 'ice' && flight.level !== 'broodlock' ? hostile : [], this.animationTime);
     this.projectiles.brine.draw(flight.level === 'ice' ? flight.threats : [], this.animationTime);
     this.projectiles.spore.draw(flight.level === 'broodlock' ? flight.threats : [], this.animationTime);
   }
@@ -502,7 +514,7 @@ export class FlightView {
       this.combat.emit(flight.bossHealth === 0 ? 'kill' : 'hit', flight.level==='summer'&&flight.summerLastHit?flight.summerLastHit:{
         x: flight.exposedCannonX,
         y: flight.bossAimY,
-        z: BOSS_DEPTH + BOSS_MUZZLE_Z
+        z: flight.isDen ? .91 : BOSS_DEPTH + BOSS_MUZZLE_Z
       }, teal);
       this.bossHitAt = this.animationTime;
       emitted = true;

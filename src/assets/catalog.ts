@@ -1,4 +1,4 @@
-import type { LevelId } from '../levels';
+import type { ReleaseLevelId } from '../levels';
 export const textureFiles = {
   biolumeBackdrop:'encounters/biolume-backdrop.webp',
   biolumeForeground:'encounters/biolume-foreground.webp',
@@ -45,6 +45,9 @@ export type EncounterTexture = keyof typeof textureFiles;
 // Study aliases share the catalog's media paths; only the study loader is DEV.
 export const studyTextureFiles = {
   blackHoleDisk: 'encounters/draconian-accretion-disk.png',
+  denBiker: 'encounters/draconian-biker-atlas.png',
+  denGantry: 'encounters/draconian-gantry.png',
+  denSky: 'encounters/draconian-galactic-center.png',
   biolumeBackdrop:'encounters/biolume-study-backdrop.png',
   biolumeForeground:'encounters/biolume-study-foreground.png',
   biolumeEnemy:'encounters/biolume-glider.png',
@@ -55,7 +58,7 @@ export const studyTextureFiles = {
 } as const;
 export type StudyTexture = keyof typeof studyTextureFiles;
 
-export const levelTextures: Record<LevelId, readonly EncounterTexture[]> = {
+export const levelTextures: Record<ReleaseLevelId, readonly EncounterTexture[]> = {
   biolume:['armor','biolumeBackdrop','biolumeForeground','biolumeEnemy','biolumePods','biolumeBoss','biolumeFrog'],
   summer:['armor','summerMammoth','summerIce','summerHydra','summerLotusFlanks','summerLotusWall'],
   heliostat:['armor','ioCeramic','heliostatBackdrop','heliostatGuard'],

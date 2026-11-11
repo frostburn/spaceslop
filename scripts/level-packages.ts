@@ -1,6 +1,6 @@
 import type { Plugin } from 'vite';
 import type { OutputChunk, OutputBundle } from 'rollup';
-import { levels, type LevelId } from '../src/levels';
+import { releaseLevels, type ReleaseLevelId } from '../src/levels';
 import { levelTextures } from '../src/assets/catalog';
 // Only the static dependency closure of the menu is precached. Each dynamic
 // level entry has its own offline package; following dynamicImports here would
@@ -41,7 +41,7 @@ export function levelPackages(media: Record<string, string>, portraits: string[]
         if (c.facadeModuleId?.includes('workbox-window'))
           shellFiles.add(c.fileName);
       const session = entry('/src/app/flight-session.ts');
-      const packages = Object.fromEntries((Object.keys(levels) as LevelId[]).map(id => {
+      const packages = Object.fromEntries((Object.keys(releaseLevels) as ReleaseLevelId[]).map(id => {
         const levelEntry = entry(`/src/rendering/levels/${id}.ts`);
         const required = new Set([...closure(session), ...closure(levelEntry)]);
         return [id, {

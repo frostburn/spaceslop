@@ -4,7 +4,8 @@ import {createServer} from 'vite';
 const server=await createServer({configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true},appType:'custom'});
 after(()=>server.close());
 const lens=await server.ssrLoadModule('/src/studies/black-hole-orbits.ts');
-const table=lens.bakeLightOrbits();
+const exits=new Uint8Array(lens.ORBIT_COLUMNS*4);
+const table=lens.bakeLightOrbits(exits);
 function rowSample(column,row){
  const offset=(row*lens.ORBIT_COLUMNS+column)*4;
  return table[offset+2]===255?(256*table[offset]+table[offset+1])/131070:undefined;
@@ -28,6 +29,17 @@ test('a distant ray has nearly the straight-line closest approach',()=>{
  const u=rayAt(lens.ORBIT_MAX_IMPACT,Math.PI/2);
  assert(u>1/lens.ORBIT_MAX_IMPACT);
  assert(u<1.07/lens.ORBIT_MAX_IMPACT);
+});
+test('escaping rays bend the sky most strongly near the shadow',()=>{
+ const bend=column=>{
+  const i=4*column;
+  return exits[i+2]===255?(exits[i]*256+exits[i+1])/65535*lens.ORBIT_MAX_ANGLE-Math.PI:undefined;
+ };
+ assert.equal(bend(lens.ORBIT_FINE_FIRST),undefined);
+ assert.equal(bend((lens.ORBIT_FINE_FIRST+lens.ORBIT_FINE_LAST)/2),undefined);
+ assert(bend(lens.ORBIT_FINE_LAST)>1);
+ const distant=bend(lens.ORBIT_COLUMNS-1);
+ assert(distant>4/lens.ORBIT_MAX_IMPACT&&distant<.2);
 });
 test('near-edge-on bending exposes both far-side disk images',()=>{
  const inclination=84*Math.PI/180;

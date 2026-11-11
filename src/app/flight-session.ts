@@ -8,7 +8,7 @@ import { titanSection } from '../titan-layout';
 import { BOSS_HP, Flight, STEP } from '../game';
 import { setupPilots } from '../pilots';
 import { createFlightView, type FlightView } from '../view';
-import { levels, readLevel, type LevelId } from '../levels';
+import { levels, playableLevels, readLevel, type LevelId } from '../levels';
 import { iceSection } from '../ice-layout';
 import { readWingWeapon, wingWeapons } from '../wing';
 export async function openFlightSession(selectedLevel: LevelId, signal: AbortSignal) {
@@ -73,7 +73,7 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
   const bossHealth = element<HTMLProgressElement>('boss-health');
   const droneWeapon = element<HTMLSelectElement>('drone-weapon');
   const levelSelector = element<HTMLSelectElement>('level');
-  levelSelector.replaceChildren(...Object.entries(levels).map(([id,level])=>new Option(level.name,id)));
+  levelSelector.replaceChildren(...Object.entries(playableLevels()).map(([id,level])=>new Option(level.name,id)));
   levelSelector.value = selectedLevel;
   levelSelector.disabled = true;
   const testingWings = import.meta.env.DEV || new URLSearchParams(location.search).get('testLoadout') === '1';
@@ -101,7 +101,7 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     const fighting = flight.phase === 'stage' || flight.phase === 'boss';
     const label = {
       stage: levels[flight.level].sector,
-      approach: flight.level==='biolume'?'DARK CROWN':flight.level==='summer'?'LOTUS PALACE':flight.level==='heliostat'?'COLLECTOR APPROACH':flight.level==='boulevard'?'SUNSET PLAZA':flight.level === 'vents' ? 'ABYSSAL DROP' : flight.level === 'io' ? 'CALDERA APPROACH' : flight.level === 'titan' ? 'ASCENT' : 'CONTACT',
+      approach: flight.isDen ? 'GANTRY APPROACH' : flight.level==='biolume'?'DARK CROWN':flight.level==='summer'?'LOTUS PALACE':flight.level==='heliostat'?'COLLECTOR APPROACH':flight.level==='boulevard'?'SUNSET PLAZA':flight.level === 'vents' ? 'ABYSSAL DROP' : flight.level === 'io' ? 'CALDERA APPROACH' : flight.level === 'titan' ? 'ASCENT' : 'CONTACT',
       boss: 'BOSS',
       won: 'CLEAR',
       lost: 'SIGNAL LOST',
@@ -126,7 +126,7 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     const betweenRuns = screen === 'title' || screen === 'results';
     if (import.meta.env.DEV) {
       const bossStart = element<HTMLButtonElement>('dev-boss');
-      bossStart.hidden = !betweenRuns;
+      bossStart.hidden = !betweenRuns || flight.level === 'den';
       element('vent-study').hidden = !betweenRuns || flight.level !== 'vents';
       element('io-study').hidden = !betweenRuns || flight.level !== 'io';
       bossStart.textContent = flight.level === 'summer' || flight.level === 'heliostat' || flight.level === 'boulevard' || flight.level === 'preserve' || flight.level === 'vents' || flight.level === 'titan' || flight.level === 'io' ? 'Launch at transition' : 'Launch at boss';
@@ -143,6 +143,8 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
       tip = 'Preparing graphics…';
     else if (screen === 'title')
       tip = offlineReady ? 'Level ready offline' : 'Ready to launch';
+    else if (flight.isDen && flight.phase === 'boss')
+      tip = flight.droneWeapon === 'towline' ? 'Sweep the arc across the bike.' : 'Watch the engines · Dodge the sweeping bursts';
     else if (flight.droneWeapon === 'towline') {
       tip = flight.phase === 'boss' ? (flight.level==='biolume'?'Sweep the arc through seekers or the ray.':flight.level==='heliostat'||flight.level==='boulevard'?'Sweep the arc across the cyan core.':flight.level === 'ice' ? 'Sweep the arc across the mouth marker.' : flight.level === 'io' ? 'Sweep the arc across the cyan support, then exposed machinery.' : flight.level === 'titan' ? 'Sweep the arc across the glowing thorax vent.' : flight.level === 'vents' ? (flight.crabCoreOpen ? 'Sweep the arc across the exposed gills.' : 'Sweep the arc across a glowing claw joint.') : 'Sweep the arc across the green cannon.') : 'Park the drone · Sweep the arc';
     }

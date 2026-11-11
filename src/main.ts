@@ -1,5 +1,5 @@
 import { registerSW } from 'virtual:pwa-register';
-import { levels, readLevel, type LevelId } from './levels';
+import { levels, playableLevels, readLevel, type LevelId } from './levels';
 import { saveLevelOffline, savedLevels, clearSavedLevels } from './app/offline';
 import './style.css';
 const menu = document.querySelector<HTMLElement>('#front-menu')!;
@@ -12,6 +12,7 @@ let selected = readLevel(new URLSearchParams(location.search).get('level'));
 let session: AbortController | undefined;
 let reloadBeforePreparation = false;
 const descriptions: Record<LevelId, string> = {
+  den: 'Face a draconian biker on a gantry overlooking the black hole.',
   biolume:'Fly beneath translucent luminous leaves, over tangled root bridges and blackwater pools. Lantern gliders guard the nursery; the enormous Lantern Ray waits in the Dark Crown.',
   summer:'Grazing mammoths, flower-rich meadows and thawing glacier gardens. Follow the river into the glass-covered lotus palace.',
   heliostat:'Fly through an artificial-star power plant above Uranus. Dodge capacitor discharges, cyborg man o’wars and inspection drones, then disable the Sunspot Regulator.',
@@ -32,7 +33,12 @@ function select(id: LevelId) {
   history.replaceState(null, '', url);
   status.textContent = descriptions[id];
 }
-for (const [id, level] of Object.entries(levels)) {
+function levelDetail(id: LevelId, saved = false) {
+  const level = levels[id];
+  const route = id === 'den' ? 'Boss prototype' : `${level.duration} second route`;
+  return `${route} · ${saved ? 'Saved offline' : level.boss}`;
+}
+for (const [id, level] of Object.entries(playableLevels())) {
   const button = document.createElement('button');
   button.type = 'button';
   button.dataset.level = id;
@@ -40,7 +46,7 @@ for (const [id, level] of Object.entries(levels)) {
   const title = document.createElement('strong');
   const detail = document.createElement('span');
   title.textContent = level.name;
-  detail.textContent = `${level.duration} second route · ${level.boss}`;
+  detail.textContent = levelDetail(id as LevelId);
   button.append(title, detail);
   button.addEventListener('click', () => select(id as LevelId));
   cards.append(button);
@@ -51,7 +57,7 @@ async function refreshSavedLevels() {
     const id = card.dataset.level as LevelId;
     const saved = ready.includes(id);
     card.classList.toggle('saved-offline', saved);
-    card.querySelector('span')!.textContent = `${levels[id].duration} second route · ${saved ? 'Saved offline' : levels[id].boss}`;
+    card.querySelector('span')!.textContent = levelDetail(id, saved);
   }
 }
 select(selected);

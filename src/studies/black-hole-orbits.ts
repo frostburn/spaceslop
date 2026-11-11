@@ -23,7 +23,7 @@ function impactAt(column: number) {
 // with u = 0 and du/dφ = 1/b, where b is the screen-space impact parameter.
 const acceleration = (u: number) => 3 * u * u - u;
 
-export function bakeLightOrbits() {
+export function bakeLightOrbits(exits?: Uint8Array) {
   const data = new Uint8Array(ORBIT_COLUMNS * ORBIT_ROWS * 4);
   const step = ORBIT_MAX_ANGLE / (ORBIT_ROWS - 1);
   for (let column = 1; column < ORBIT_COLUMNS; column++) {
@@ -47,8 +47,19 @@ export function bakeLightOrbits() {
       const laterV = velocity + middleA * step / 2;
       const laterA = acceleration(laterU);
       const finalA = acceleration(u + laterV * step);
+      const previousU = u;
       u += step * (velocity + 2 * middleV + 2 * laterV + velocity + laterA * step) / 6;
       velocity += step * (a + 2 * middleA + 2 * laterA + finalA) / 6;
+      if (exits && u < 0) {
+        const exitRow = row + previousU / (previousU - u);
+        if (exitRow <= ORBIT_ROWS - 1) {
+          const packedExit = Math.round(exitRow / (ORBIT_ROWS - 1) * 65535);
+          const offset = column * 4;
+          exits[offset] = packedExit >> 8;
+          exits[offset + 1] = packedExit & 255;
+          exits[offset + 2] = exits[offset + 3] = 255;
+        }
+      }
     }
   }
   return data;

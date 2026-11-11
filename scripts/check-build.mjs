@@ -25,9 +25,9 @@ assert(pack.required.includes(pack.entry));
  assert(!serviceWorker.includes('encounters/'),'The service worker eagerly downloads level media.');
 }
 for(const file of ['workshop.html','vent-study.html','io-study.html','heliostat-study.html','biolume-study.html','black-hole-study.html'])await assert.rejects(stat(join(root,file)));
-for(const file of files.filter(f=>f.endsWith('.js'))){const text=await readFile(join(root,'assets',file),'utf8');assert(!text.includes('__qa'),'QA hooks leaked into production.');assert(!/(workshop|vent-study|io-study|heliostat-study|biolume-study|black-hole-study)\.html/.test(text),'Development links leaked into production.');assert(!/Play study|Orbit view|inspect-backdrop|Relief shading/.test(text),'Study UI leaked into production code.');}
+for(const file of files.filter(f=>f.endsWith('.js'))){const text=await readFile(join(root,'assets',file),'utf8');assert(!text.includes('__qa'),'QA hooks leaked into production.');assert(!/(workshop|vent-study|io-study|heliostat-study|biolume-study|black-hole-study)\.html/.test(text),'Development links leaked into production.');assert(!/Play study|Orbit view|inspect-backdrop|Relief shading|lensed-galactic-center/.test(text),'Development renderer leaked into production code.');}
 for(const [id,pack] of Object.entries(packs.levels)){
- assert(!pack.media.some(path=>/biolume-study-(backdrop|foreground)|draconian-accretion-disk/.test(path)),'DEV plate entered an offline level package.');
+ assert(!pack.media.some(path=>/biolume-study-(backdrop|foreground)|draconian-(accretion-disk|biker-atlas|galactic-center|gantry)/.test(path)),'DEV plate entered an offline level package.');
  if(id!=='biolume')assert(!pack.media.some(path=>/biolume-(backdrop|foreground|glider|study-atlas|lantern-ray|frog-atlas)/.test(path)),'Lantern Grove art leaked into another level.');
 }
 console.log('Menu size, ten isolated level packages, selective precaching and production dev-page exclusions passed.');
