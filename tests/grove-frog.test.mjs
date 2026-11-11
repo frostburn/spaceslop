@@ -11,13 +11,17 @@ const {groveScroll}=await server.ssrLoadModule('/src/biolume/route.ts');
 const origin={x:-2,y:2};
 test('frog aim locks only on screen, warns, extends, holds and retracts into the mouth',()=>{
  const s=frog.createFrogState(-2);frog.stepFrog(s,origin,{x:0,y:-3},2,false);assert.equal(s.attackAt,undefined);
+ const previousAngle=s.angle;
  frog.stepFrog(s,origin,{x:0,y:-3},2,true);const angle=s.angle;
+ assert.equal(frog.frogHeading(s,2),previousAngle);
+ assert(frog.frogHeading(s,2.3)>Math.min(previousAngle,angle)&&frog.frogHeading(s,2.3)<Math.max(previousAngle,angle));
+ assert.equal(frog.frogHeading(s,2+frog.FROG_WINDUP),angle);
  frog.stepFrog(s,origin,{x:3,y:3},2.2,true);assert.equal(s.angle,angle);
  assert(frog.frogSignal(s,2.4).warning>0);assert.equal(frog.frogSignal(s,2.4).extension,0);
  const full=2+frog.FROG_WINDUP+frog.FROG_EXTEND,holdEnd=full+frog.FROG_HOLD;
  assert.equal(frog.frogSignal(s,full).extension,1);assert.equal(frog.frogSignal(s,holdEnd-.01).extension,1);
  const returning=frog.frogSignal(s,holdEnd+frog.FROG_RETRACT/2);assert(returning.retracting);assert(Math.abs(returning.extension-.5)<1e-9);
- const mouth=frog.frogMouth(s,origin),far=frog.frogTonguePoint(s,origin,full,1),near=frog.frogTonguePoint(s,origin,holdEnd+frog.FROG_RETRACT/2,1);
+ const mouth=frog.frogMouth(s,origin,full),far=frog.frogTonguePoint(s,origin,full,1),near=frog.frogTonguePoint(s,origin,holdEnd+frog.FROG_RETRACT/2,1);
  assert(Math.abs(Math.hypot(far.x-mouth.x,far.y-mouth.y)-s.reach)<1e-9);assert(Math.hypot(near.x-mouth.x,near.y-mouth.y)<s.reach);
  assert.deepEqual(frog.frogTonguePoint(s,origin,2+frog.FROG_ATTACK,1),mouth);
  frog.stepFrog(s,origin,{x:1,y:-3},2+frog.FROG_ATTACK+.01,true);assert.equal(s.attackAt,undefined);assert(s.nextAt>2+frog.FROG_ATTACK);
@@ -25,7 +29,7 @@ test('frog aim locks only on screen, warns, extends, holds and retracts into the
 test('tongue contact matches the visible curve on extension and return, never the warning',()=>{
  const s={nextAt:0,attackAt:0,angle:.5,reach:5};
  for(const age of[1.05,1.4,1.9]){const p=frog.frogTonguePoint(s,origin,age,.8);assert(frog.frogTongueHits(s,origin,age,p));assert(!frog.frogTongueHits(s,origin,age,{x:p.x+2,y:p.y}));}
- assert(!frog.frogTongueHits(s,origin,.4,frog.frogMouth(s,origin)));
+ assert(!frog.frogTongueHits(s,origin,.4,frog.frogMouth(s,origin,.4)));
 });
 test('frogs scroll with the ground, enter fully before attacking, and stay within their two-rig pool',()=>{
  const waves=groveWaves.filter(w=>w.grove.kind==='frog');assert.equal(waves.length,6);
@@ -44,6 +48,7 @@ for(const weapon of['primary','sentry','homing','cannon','laser','omega','towlin
  const {f,e}=quiet(weapon);
  if(weapon==='pulse')f.pulse();
  for(let i=0;i<900&&e.hp>0;i++){
+  if(weapon==='homing')f.player.y=Math.max(-7.1,e.y-3.5);
   if(weapon==='towline'){f.player={x:-1.2,y:e.y};f.drone={x:1.2,y:e.y};}
   f.step(STEP);
  }
@@ -70,5 +75,29 @@ test('frog atlas swaps aligned heads only during the tongue strike and falls bac
  rig.pose(origin,state,1.4);assert(open.visible&&!closed.visible);assert(rig.beads.count>0);
  rig.pose(origin,state,1.9);assert(open.visible);rig.pose(origin,state,2.6);assert(closed.visible&&!open.visible);
  atlas.release();rig.pose(origin,state,2.6);assert(!raster.visible&&rig.body.children[0].visible);
- rig.release();art.dispose();atlas.body.dispose();atlas.closed.dispose();atlas.open.dispose();atlas.material.dispose();for(const resource of Object.values(assets))resource.dispose();
+ rig.release();art.dispose();raster.getObjectByName('frog-raster-body').geometry.dispose();atlas.closed.dispose();atlas.open.dispose();atlas.material.dispose();for(const resource of Object.values(assets))resource.dispose();
+});
+
+
+test('frog raster feet flex through a turn while the neck and open mouth stay registered',async()=>{
+ const {createFrogAtlas}=await server.ssrLoadModule('/src/biolume/frog-raster.ts');
+ const atlas=createFrogAtlas(),assets=createFrogAssets(),rig=createFrogRig(assets,atlas),art=new T.Texture();atlas.setArt(art);
+ const torso=rig.body.getObjectByName('frog-raster-body'),positions=torso.geometry.attributes.position;
+ const rest=positions.array.slice(),state={nextAt:0,attackAt:0,turnFrom:-1,angle:.5,reach:5};
+ const toe=Array.from({length:positions.count},(_,i)=>i).find(i=>positions.getX(i)>.68&&positions.getY(i)>.31&&positions.getY(i)<.41);
+ const neck=Array.from({length:positions.count},(_,i)=>i).find(i=>Math.abs(positions.getX(i))<.04&&Math.abs(positions.getY(i))<.03);
+ assert.notEqual(toe,undefined);assert.notEqual(neck,undefined);
+ rig.pose(origin,state,.3);assert(Math.abs(positions.getY(toe)-rest[toe*3+1])>.05);assert.equal(positions.getX(neck),rest[neck*3]);assert.equal(positions.getY(neck),rest[neck*3+1]);
+ const indices=torso.geometry.index.array;
+ for(let i=0;i<indices.length;i+=3){
+  const [a,b,c]=indices.subarray(i,i+3),x=positions.getX(a),y=positions.getY(a);
+  assert((positions.getX(b)-x)*(positions.getY(c)-y)-(positions.getY(b)-y)*(positions.getX(c)-x)>0,'Turn folded a raster triangle');
+ }
+ assert.equal(rig.body.rotation.z,frog.frogHeading(state,.3));
+ const version=positions.version;rig.pose(origin,state,.3);assert.equal(positions.version,version);
+ rig.pose(origin,state,1.4);assert.equal(positions.getY(toe),rest[toe*3+1]);assert.notDeepEqual(positions.array,rest);
+ const mouth=new T.Vector3(0,-frog.FROG_MOUTH_OFFSET,0);rig.body.localToWorld(mouth);
+ const start=frog.frogTonguePoint(state,origin,1.4,0),projection=22/(22-mouth.z);
+ assert(Math.hypot(mouth.x*projection-start.x,mouth.y*projection-start.y)<1e-6);
+ rig.release();torso.geometry.dispose();atlas.closed.dispose();atlas.open.dispose();atlas.material.dispose();art.dispose();for(const resource of Object.values(assets))resource.dispose();
 });

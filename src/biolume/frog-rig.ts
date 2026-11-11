@@ -1,7 +1,7 @@
 import * as T from 'three';
-import type {createFrogAtlas} from './frog-raster';
+import {createFrogRasterBody, type createFrogAtlas} from './frog-raster';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
-import {FROG_BEADS,frogSignal,frogTonguePoint,type FrogState,type FrogPoint} from './frog';
+import {FROG_BEADS,frogHeading,frogSignal,frogTonguePoint,type FrogState,type FrogPoint} from './frog';
 
 /** Shared modeled frog: low crouch, powerful folded thighs and splayed toe pads. */
 export function createFrogAssets(){
@@ -58,15 +58,14 @@ export function createFrogRig(assets:ReturnType<typeof createFrogAssets>, atlas?
  const throat=new T.Mesh(assets.eye,assets.gland);throat.position.set(0,-.44,.46);throat.scale.set(.12,.11,.035);body.add(throat);
  const modeledParts = [...body.children];
  const raster = atlas ? new T.Group() : undefined;
- const torso = atlas ? new T.Mesh(atlas.body, atlas.material) : undefined;
+ const torso = atlas ? createFrogRasterBody(atlas.material) : undefined;
  const closedHead = atlas ? new T.Mesh(atlas.closed, atlas.material) : undefined;
  const openHead = atlas ? new T.Mesh(atlas.open, atlas.material) : undefined;
  if(raster && torso && closedHead && openHead){
   raster.name = 'frog-atlas';
-  torso.name = 'frog-raster-body';
   closedHead.name = 'frog-head-closed';
   openHead.name = 'frog-head-open';
-  raster.add(torso, closedHead, openHead);
+  raster.add(torso.mesh, closedHead, openHead);
   raster.visible = false;
   body.add(raster);
  }
@@ -78,14 +77,20 @@ export function createFrogRig(assets:ReturnType<typeof createFrogAssets>, atlas?
   if(age===last&&origin.x===lastX&&origin.y===lastY&&state.attackAt===lastAttack&&lastArt===artwork)return;
   last=age;lastX=origin.x;lastY=origin.y;lastAttack=state.attackAt;lastArt=artwork;
   const s=frogSignal(state,age),bodyZ=.2,k=(22-bodyZ)/22;
-  body.position.set(origin.x*k,origin.y*k,bodyZ);body.rotation.z=state.angle;body.scale.setScalar(k);
+  const heading = frogHeading(state, age);
+  body.position.set(origin.x*k,origin.y*k,bodyZ);body.rotation.z=heading;body.scale.setScalar(k);
   skin.scale.z=1+.025*Math.sin(age*2.1);glands.scale.z=skin.scale.z;
   throat.scale.set(.12+.05*s.warning,.11+.09*s.warning,.035+.025*s.warning);
   mouth.scale.y=.035+.08*Math.max(s.warning,s.extension);
   if(raster && torso && closedHead && openHead){
    raster.visible = artwork;
    for(const part of modeledParts) part.visible = !artwork;
-   torso.scale.x = 1 + .018 * Math.sin(age * 2.1);
+   if (artwork) {
+    const maxFootLag = .16;
+    const forefootLag = T.MathUtils.clamp(frogHeading(state, age - .11) - heading, -maxFootLag, maxFootLag);
+    const hindfootLag = T.MathUtils.clamp(frogHeading(state, age - .16) - heading, -maxFootLag, maxFootLag);
+    torso.pose(age, forefootLag, hindfootLag);
+   }
    closedHead.visible = !s.active;
    openHead.visible = s.active;
   }

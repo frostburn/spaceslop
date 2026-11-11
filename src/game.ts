@@ -1,4 +1,4 @@
-import {FROG_HP,FROG_RADIUS,createFrogState,stepFrog,frogTongueHits,type FrogState} from './biolume/frog';
+import {FROG_HP,FROG_RADIUS,createFrogState,stepFrog,frogHeading,frogTongueHits,type FrogState} from './biolume/frog';
 import {groveWaves,groveMotion,groveEnemySize,groveCanAttack,GROVE_SPAWN_LEAD,type GroveCourse} from './biolume/combat';
 import {GROVE_APPROACH} from './biolume/route';
 import {RAY_HP,RAY_FAN_AT,RAY_SEEKER_AT,RAY_PROJECTION,RAY_ORGAN_RADIUS,RAY_SEEKER_RADIUS,RAY_SEEKER_HP,RAY_SEEKER_POOL,raySignal,rayOrgan,rayBodyEntry,stepRaySeeker,rayOrbEntry,raySeekerBurst,type RaySeeker} from './biolume/lantern-ray';
@@ -847,7 +847,7 @@ export class Flight {
         const p=ambusherPose(enemy.ambusher,this.time);enemy.x=p.head.x;enemy.y=p.head.y;
       } else if(enemy.grove){
         const p=groveMotion(enemy.age,enemy.lane,enemy.grove);enemy.x=p.x;enemy.y=p.y;enemy.heading=p.heading;
-        if(enemy.frog){stepFrog(enemy.frog,enemy,this.player,enemy.age,groveCanAttack(enemy.age,enemy.lane,enemy.grove));enemy.heading=enemy.frog.angle;if(frogTongueHits(enemy.frog,enemy,enemy.age,this.player))this.hit();}
+        if(enemy.frog){stepFrog(enemy.frog,enemy,this.player,enemy.age,groveCanAttack(enemy.age,enemy.lane,enemy.grove));enemy.heading=frogHeading(enemy.frog,enemy.age);if(frogTongueHits(enemy.frog,enemy,enemy.age,this.player))this.hit();}
       } else if(enemy.heliostat){
         const p=heliostatMotion(enemy.age,enemy.lane,enemy.heliostat);enemy.x=p.x;enemy.y=p.y;enemy.heading=p.heading;
       } else if(enemy.summer){
