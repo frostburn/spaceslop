@@ -64,6 +64,9 @@ import { createWingPod } from './wing-pod';
 import type { WingWeapon } from './wing';
 import { createPowerupGraphic } from './powerup-graphics';
 import { createContinuousLaser, createProjectileBatch, projectileNames, type ProjectileKind } from './projectile-graphics';
+import { FLEET_CAMERA_DISTANCE, FLEET_DURATION } from './fleet/route';
+import { createFleetSky } from './fleet/sky';
+import { HEIGHT, WIDTH } from './playfield';
 import './workshop.css';
 
 function element<T extends HTMLElement>(id: string) {
@@ -223,7 +226,16 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   }, undefined, frogLoad.signal);
   let branchArt:T.Texture|undefined;void loadEncounterTexture('biolumePods',map=>{branchArt=map;fernBranch.setArt(map);});
   window.addEventListener('pagehide',()=>{frogLoad.abort();frog.release();frogAtlas.release();frogArt?.dispose();fernBranch.release();branchArt?.dispose();},{once:true});
+  const fleetLoad = new AbortController();
+  const fleetSky = createFleetSky(fleetLoad.signal);
+  const fleetCamera = new T.PerspectiveCamera(T.MathUtils.radToDeg(2 * Math.atan(HEIGHT / 2 / FLEET_CAMERA_DISTANCE)), WIDTH / HEIGHT, .05, 240);
+  fleetCamera.position.z = FLEET_CAMERA_DISTANCE;
+  window.addEventListener('pagehide', () => fleetLoad.abort(), { once: true });
   const assets = {
+    fleet_planets: { root: fleetSky.root, duration: FLEET_DURATION, pose(time: number) {
+      fleetSky.update(time);
+      return `${time.toFixed(1)} s / ${FLEET_DURATION} s`;
+    } },
     lantern_frog:{root:frogStudy,duration:5,bounds:new T.Box3(new T.Vector3(-1.4,-4.6,-.5),new T.Vector3(1.4,3.2,1.2)),pose(time:number){const state={nextAt:0,attackAt:.6,turnFrom:-1,angle:0,reach:5.5};frog.pose({x:0,y:2},state,time);const s=frogSignal(state,time);frogLight.intensity=5+7*s.warning;return s.warning>0?'turning into locked aim / throat charge':s.retracting?'retracting bullet tongue':s.active?'extending bullet tongue':'crouch / breathing / glowing dorsal glands';}},
     grove_fern_branch:{root:fernBranch.root,duration:8,bounds:new T.Box3(new T.Vector3(-4.5,-3.5,1),new T.Vector3(4.5,3.5,4)),pose(time:number){fernBranch.update(12,time);fernBranch.root.position.y=0;return 'study-atlas bark / attached glowing fern crowns';}},
     lantern_ray:{root:rayStudy,duration:12,bounds:new T.Box3(new T.Vector3(-5,-2,-1.5),new T.Vector3(5,8,1.5)),pose(time:number){lanternRay.pose(time);const s=raySignal(time);rayLight.intensity=12+6*Math.max(s.fan,s.seeker);return s.seeker>0?'seeking lantern charge':s.fan>0?'aimed fan charge':'breathing / wing flex / traveling bioluminescence';}},
@@ -360,6 +372,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   }
 
   function fitCamera(direction: T.Vector3) {
+    if (assetSelect.value === 'fleet_planets') return;
     cameraView = direction;
     const box = 'bounds' in selected ? selected.bounds : new T.Box3().setFromObject(selected.root);
     const bounds = box.getBoundingSphere(new T.Sphere());
@@ -392,6 +405,10 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     if(biolume){light.intensity=fill.intensity=0;}
     uv.visible = habitat && !scenery;
     for (const asset of Object.values(assets)) asset.root.visible = asset === selected;
+    const fleetPreview = key === 'fleet_planets';
+    element('camera-controls').hidden = fleetPreview;
+    wireframe.closest('label')!.hidden = fleetPreview;
+    controls.enabled = !fleetPreview;
     time = 0;
     motion.hidden = selected.duration === 0;
     timeline.max = String(selected.duration);
@@ -450,7 +467,14 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     controls.update();
     if(assetSelect.value==='summer_hydra'||assetSelect.value==='summer_lotus_hydra')updatePose();
     if(iceField.root.visible)iceField.capture(renderer,camera);
-    if(sector.value==='boulevard')glow.present(renderer,scene,camera);else renderer.render(scene,camera);
+    if (assetSelect.value === 'fleet_planets') {
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      const width = Math.min(w, h * WIDTH / HEIGHT), height = width * HEIGHT / WIDTH;
+      renderer.setViewport((w - width) / 2, (h - height) / 2, width, height);
+      renderer.render(scene, fleetCamera);
+      renderer.setViewport(0, 0, w, h);
+    } else if (sector.value === 'boulevard') glow.present(renderer, scene, camera);
+    else renderer.render(scene, camera);
   });
 }
 

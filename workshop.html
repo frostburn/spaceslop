@@ -18,6 +18,7 @@
       <aside class="tools" aria-label="Asset inspection controls">
         <label for="sector">Sector</label>
         <select id="sector">
+          <option value="fleet">Fleet Clash</option>
           <option value="biolume">Lantern Grove · Bioluminescence</option>
           <option value="summer">Summer Ice Age · Thaw</option>
           <option value="heliostat">Uranus · Heliostat</option>
@@ -33,6 +34,9 @@
         </select>
         <label for="asset">Asset</label>
         <select id="asset">
+          <optgroup label="Fleet Clash" data-sector="fleet">
+            <option value="fleet_planets">Planet pair journey</option>
+          </optgroup>
           <optgroup label="Lantern Grove · Bioluminescence" data-sector="biolume">
             <option value="lantern_frog">Lantern frog · Retracting bullet tongue</option>
             <option value="grove_fern_branch">Overhead branch · Glowing ferns</option>
@@ -135,7 +139,7 @@
             <option value="pickup_omega">Omega pickup</option>
           </optgroup>
         </select>
-        <fieldset>
+        <fieldset id="camera-controls">
           <legend>Camera</legend>
           <div class="camera-views">
             <button id="game-view" type="button">Game</button>
