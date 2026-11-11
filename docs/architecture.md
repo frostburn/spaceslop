@@ -39,6 +39,8 @@ Heliostat's `weathering.ts` layers fixed dirt, dust, streaks and sparse corrosio
 
 `den/patrol-warp.ts` deforms the square atlas along measured bands through the snout, grip, intake and nose. Vertex velocities carry through each of the sixteen views. At each handoff, the two textures briefly crossfade on the shared mesh. Each exhaust mount follows its source triangle through the same deformation and blend, and both plumes draw below the bike.
 
+`den/cliff-props.ts` registers separate chimney and banner cards to the scrolling cliff plate. Smoke starts at the measured chimney openings and drifts outward in pooled puffs. A subdivided banner mesh bends below a rigid rail and reacts to nearby flight. The presentation clock freezes both effects on pause. The optional atlas has a procedural fallback and loads with the Den package.
+
 ## Lantern Grove
 
 `rendering/levels/biolume.ts` owns the playable 100-second Lantern Grove, its pooled bending raster gliders, seed-pod cards, local illumination and raster Lantern Ray boss. `biolume/route.ts` owns ten-screen registration, a smooth final coast, light/pod anchors. `biolume/lantern-ray.ts` owns the boss silhouette deformation, moving organ targets, warning phases, homing-seeker steering and swept interception math. The view stays top-down. The boss is already in the last clearing and scrolls into view; the stage enters combat without an approach or clearing shots and threats. The arena stays at the last frame while its fight runs.
