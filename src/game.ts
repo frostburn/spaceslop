@@ -58,6 +58,7 @@ export const BOSS_DEPTH = -12;
 export const BOSS_Y = 4.2;
 export const BOSS_CAMERA_DISTANCE = 22;
 export const BOSS_PROJECTION = BOSS_CAMERA_DISTANCE / (BOSS_CAMERA_DISTANCE - BOSS_DEPTH);
+export const WORMHOLE_PITCH = Math.atan2(BOSS_CAMERA_DISTANCE, BOSS_Y * BOSS_PROJECTION);
 export const BOSS_CANNON_X = 2.4;
 export const BOSS_CANNON_RADIUS = 0.8;
 export const BOSS_HP = 30;
@@ -107,6 +108,7 @@ const TOWLINE_INTERVAL = 1.05;
 const TOWLINE_DURATION = 0.2;
 const TOWLINE_DAMAGE = 2;
 const BOSS_IMPACT_TRAVEL = 0.48;
+const wormholeForward = { y: Math.cos(WORMHOLE_PITCH), z: -Math.sin(WORMHOLE_PITCH) };
 
 const wingShots = {
   homing: { interval: 0.72, damage: 0.5, speed: 11, bossTravel: 0.68 },
@@ -531,7 +533,12 @@ export class Flight {
     this.stepDroneWeapon(dt);
     for (const wing of this.wings) this.stepWing(wing, boss, dt);
 
+    const tunnelCruise = !boss && this.level === 'wormhole';
     this.shots = this.shots.filter((shot) => {
+      if (tunnelCruise) {
+        this.advance(shot, dt);
+        return shot.z > -140;
+      }
       const previous = { x: shot.x, y: shot.y,z:shot.z };
       if (shot.wing === 'homing') this.guideMissile(shot, boss, dt);
       this.advance(shot, dt);
@@ -686,17 +693,25 @@ export class Flight {
     wing.flash = WING_FLASH_TIME;
     boss &&= !this.planarBoss;
     const duration = spec.bossTravel;
+    const tunnel = !boss && this.level === 'wormhole';
+    const forwardSpeed = spec.speed * 1.8;
     this.shots.push({
       ...origin, z: 0, wing: wing.weapon, damage: spec.damage,
       vx: boss ? origin.x * (1 / BOSS_PROJECTION - 1) / duration : 0,
-      vy: boss ? (this.bossAimY - origin.y) / duration : spec.speed,
-      vz: boss ? BOSS_DEPTH / duration : 0,
+      vy: boss ? (this.bossAimY - origin.y) / duration : tunnel ? forwardSpeed * wormholeForward.y : spec.speed,
+      vz: boss ? BOSS_DEPTH / duration : tunnel ? forwardSpeed * wormholeForward.z : 0,
       pierced: wing.weapon === 'omega' ? new Set<Enemy>() : undefined,
       hydraTarget:boss&&this.level==='summer'&&wing.weapon==='homing'?nearestHydraHead(this.summerHydra,origin.x/BOSS_PROJECTION,true):undefined,
     });
   }
 
   private stepLaser(wing: Wing, origin: Point, boss: boolean, dt: number) {
+    if (!boss && this.level === 'wormhole') {
+      // Match the receding shots by drawing the beam toward the same horizon.
+      const horizon = BOSS_Y * BOSS_PROJECTION;
+      wing.beamEnd = { x: .16 * origin.x, y: .16 * origin.y + .84 * horizon };
+      return;
+    }
     let enemy: Enemy | undefined;
     let target: Enemy | number | undefined;
     let head:HydraSide|undefined;
@@ -1339,6 +1354,12 @@ export class Flight {
   }
 
   private fire({ x, y }: Point, drone = false, damage = 1) {
+    if (this.level === 'wormhole' && this.phase === 'stage') {
+      const muzzle = drone ? .31 : .89;
+      this.shots.push({ x, y: y + muzzle * wormholeForward.y, z: muzzle * wormholeForward.z,
+        vx: 0, vy: 32 * wormholeForward.y, vz: 32 * wormholeForward.z, drone, damage });
+      return;
+    }
     if (this.phase === 'stage' || this.planarBoss) {
       this.shots.push({ x, y: y + (drone ? 0.3 : 0.45), z: 0, vx: 0, vy: 15, vz: 0, drone, damage });
       return;

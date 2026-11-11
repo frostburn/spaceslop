@@ -139,7 +139,7 @@ export class FlightView {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = T.PCFShadowMap;
     this.scene.add(this.plane);
-    this.level = createLevel({ plane: this.plane, scene: this.scene, signal });
+    this.level = createLevel({ plane: this.plane, scene: this.scene, fighter: this.player.root, signal });
     this.perspective.far = this.level.farDistance ?? 240;
     this.perspective.updateProjectionMatrix();
     this.cannonMarker.renderOrder = 12;

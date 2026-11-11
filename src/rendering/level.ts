@@ -18,7 +18,7 @@ export interface LevelScene {
   models: (T.Object3D | undefined)[];
   ready: Promise<TextureResult[]>;
   stageDistance: number;
-  fixedCamera?: boolean; // Keep the flight plane top-down through the boss approach.
+  fixedCamera?: boolean; // Keep the camera aligned with the flight plane through the approach.
   farDistance?: number;
   background?: number;
   key?: number;
@@ -58,6 +58,7 @@ export interface LevelContext {
   signal: AbortSignal;
   plane: T.Group;
   scene: T.Scene;
+  fighter: T.Group;
 }
 export type LevelFactory = (context: LevelContext) => LevelScene;
 export function addRoots(root: T.Group, ...items: (T.Object3D | {

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
+import { Color } from 'three';
 import { createServer } from 'vite';
 
 const server = await createServer({
@@ -8,10 +9,12 @@ const server = await createServer({
   optimizeDeps: { noDiscovery: true, entries: [] }, appType: 'custom',
 });
 after(() => server.close());
-const { Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
+const { Flight, STEP, BOSS_CAMERA_DISTANCE, BOSS_Y, BOSS_PROJECTION } = await server.ssrLoadModule('/src/game.ts');
 const { levels } = await server.ssrLoadModule('/src/levels.ts');
 const { wormholeFrame, WORMHOLE_APPROACH } = await server.ssrLoadModule('/src/wormhole/route.ts');
 const { CICADA_FIRE, CICADA_HP, CICADA_WINDUP } = await server.ssrLoadModule('/src/cicada.ts');
+const { wormholeReflectionPose, createWormholeReflection } = await server.ssrLoadModule('/src/wormhole/reflection.ts');
+const { createFighterRig } = await server.ssrLoadModule('/src/ship-rigs.ts');
 
 test('the traveling aperture centers and opens before the cicada reaches combat depth', () => {
   const end = levels.wormhole.duration;
@@ -68,4 +71,70 @@ test('the preview has a quiet approach, then the Titan rematch telegraphs and fi
   assert.equal(flight.exposedCannonX, -firstVent);
   assert.equal(flight.threats.length, 3);
   assert(flight.threats.every(shot => shot.vz > 0 && shot.z < 0));
+});
+
+test('introductory ordnance recedes toward the tunnel horizon', () => {
+  const flight = new Flight('sentry', ['homing', 'laser'], 'vex', 'wormhole');
+  const horizon = BOSS_Y * BOSS_PROJECTION;
+  flight.step(STEP);
+  assert.equal(flight.shots.length, 3);
+  for (const shot of flight.shots) {
+    assert(shot.vz < 0 && shot.z < 0);
+    assert(Math.abs(-BOSS_CAMERA_DISTANCE * shot.vy / shot.vz - horizon) < 1e-8);
+  }
+  const origin = flight.wingOrigin(1), beam = flight.wings[1].beamEnd;
+  assert(beam.x > 0 && beam.x < origin.x);
+  assert(beam.y > origin.y && beam.y < horizon);
+});
+
+test('ship reflection fades in at the walls and blends across the corners', () => {
+  const horizon = BOSS_Y * BOSS_PROJECTION;
+  assert.equal(wormholeReflectionPose(0, -5.3, horizon), undefined);
+  const left = wormholeReflectionPose(-3.95, -5.3, horizon);
+  const right = wormholeReflectionPose(3.95, -5.3, horizon);
+  assert.equal(left.x, -right.x);
+  assert.equal(left.y, right.y);
+  assert.equal(right.nx, 1);
+  assert.equal(right.strength, 1);
+  assert(wormholeReflectionPose(3.3, -5.3, horizon).strength < right.strength);
+  const bottom = wormholeReflectionPose(0, -7.1, horizon);
+  const corner = wormholeReflectionPose(3.95, -7.1, horizon);
+  assert.equal(bottom.ny, -1);
+  assert(corner.nx > 0 && corner.ny < 0);
+  assert(Math.abs(corner.x) < 9 / 16 && Math.abs(corner.y) < 1);
+  assert(Math.abs(Math.hypot(corner.nx, corner.ny) - 1) < 1e-8);
+});
+
+test('reflection capture primes once, restores renderer state, and disposes the target', () => {
+  const reflection = createWormholeReflection(createFighterRig().root);
+  const clear = new Color(0x6633ff), originalColor = clear.clone();
+  let alpha = .75, target = null, draws = 0, disposed = false, fail = false;
+  const renderer = {
+    getRenderTarget: () => target,
+    setRenderTarget: value => { target = value; },
+    getClearAlpha: () => alpha,
+    getClearColor: color => color.copy(clear),
+    setClearColor(color, opacity) { clear.set(color); alpha = opacity; },
+    render() {
+      assert.equal(alpha, 0);
+      assert.equal(target.texture, reflection.texture);
+      if (draws++ === 0) target.addEventListener('dispose', () => { disposed = true; });
+      if (fail) throw Error('Capture interrupted');
+    },
+  };
+  reflection.capture(renderer, undefined);
+  assert.equal(draws, 0);
+  reflection.prime();
+  reflection.capture(renderer, undefined);
+  reflection.capture(renderer, undefined);
+  assert.equal(draws, 1);
+  const edge = wormholeReflectionPose(3.8, -5.3, BOSS_Y * BOSS_PROJECTION);
+  fail = true;
+  assert.throws(() => reflection.capture(renderer, edge), /interrupted/);
+  assert.equal(draws, 2);
+  assert.equal(target, null);
+  assert.equal(alpha, .75);
+  assert(clear.equals(originalColor));
+  reflection.dispose();
+  assert(disposed);
 });

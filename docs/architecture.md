@@ -33,7 +33,9 @@ Heliostat's `weathering.ts` layers fixed dirt, dust, streaks and sparse corrosio
 
 ## Wormhole boss rush preview
 
-`wormhole/route.ts` registers the forward scroll, moving aperture, expanding light front and cicada entrance on one level clock. `wormhole/tunnel.ts` projects the twisted walls behind the flight plane, sampling them and the star field along deflected rays near the aperture. `wormhole/titan-echo.ts` wraps an amber panorama into the wall using Titan's cloud noise. Combat and HUD graphics draw over the effect with a fixed flight camera. There is no offscreen capture. The preview reuses the Titan cicada rig, vents and telegraphed volleys for one rematch. It warms the tunnel and boss before launch. Its only optional encounter maps are the common alloy and cicada chitin, with a session-owned fallback surface for the latter. The dev hangar can launch at the start of the aperture approach.
+`wormhole/route.ts` registers the forward scroll, moving aperture, expanding light front and cicada entrance on one level clock. `wormhole/tunnel.ts` projects the twisted walls behind the flight plane and bends both star layers with the wall ripples and traveling lens. `wormhole/titan-echo.ts` wraps an amber panorama into the wall using Titan's cloud noise. The fixed forward view aligns the ship and its opening ordnance with the tunnel axis. Combat and HUD graphics draw over the tunnel. The preview reuses the Titan cicada rig, vents and telegraphed volleys for one rematch. Its only optional encounter maps are the common alloy and cicada chitin, with a session-owned fallback surface for the latter. The dev hangar can launch at the start of the aperture approach.
+
+`wormhole/reflection.ts` projects a soft mirror near the closest wall, blending the normal at corners. A 160×160 capture of the live hull and exhaust supplies the tunnel's warped reflection. It renders on demand near the edges and once in preflight. The capture borrows the ship's geometry and materials and releases its own target on exit. It shares the frozen level clock with the tunnel, and both the tunnel and the boss warm before launch.
 
 ## Fleet Clash
 

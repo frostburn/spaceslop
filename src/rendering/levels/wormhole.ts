@@ -2,20 +2,24 @@ import * as T from 'three';
 import { createCicada } from '../../cicada-rig';
 import { BOSS_RECOIL_TIME } from '../../encounters';
 import { loadEncounterTexture } from '../../encounter-texture';
-import { BOSS_CAMERA_DISTANCE, BOSS_DEPTH, BOSS_PROJECTION, BOSS_Y, HEIGHT } from '../../game';
+import { BOSS_CAMERA_DISTANCE, BOSS_DEPTH, BOSS_PROJECTION, BOSS_Y, HEIGHT, WORMHOLE_PITCH } from '../../game';
 import { createBossLaserContact } from '../../laser-contact';
 import { createTitanChitinSurface } from '../../titan-insect-surfaces';
+import { createWormholeReflection, wormholeReflectionPose, type WormholeReflectionPose } from '../../wormhole/reflection';
 import { wormholeFrame, WORMHOLE_APPROACH } from '../../wormhole/route';
 import { createWormholeTunnel } from '../../wormhole/tunnel';
 import type { LevelFactory } from '../level';
 
 const halfHeight = HEIGHT / 2;
 const apertureY = BOSS_Y * BOSS_PROJECTION / halfHeight;
+const headOn = { pitch: WORMHOLE_PITCH, bank: 0 };
 
-export const createLevel: LevelFactory = ({ plane, signal }) => {
+export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
   const root = new T.Group();
   root.name = 'wormhole';
-  const tunnel = createWormholeTunnel(apertureY);
+  const reflection = createWormholeReflection(fighter);
+  const tunnel = createWormholeTunnel(apertureY, reflection.texture);
+  let mirror: WormholeReflectionPose;
   const chitin = createTitanChitinSurface();
   const boss = createCicada(chitin.material);
   boss.root.visible = false;
@@ -31,7 +35,7 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
     ready,
     stageDistance: BOSS_CAMERA_DISTANCE,
     fixedCamera: true,
-    shipPitch: 0,
+    orientation: () => headOn,
     toneMapping: T.ACESFilmicToneMapping,
     key: 0xb6d6ff,
     keyIntensity: 2.45,
@@ -44,11 +48,18 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
     prepare() {
       // Prime the rematch at its settled depth before the entrance animates it.
       boss.root.position.set(0, BOSS_Y, BOSS_DEPTH);
+      reflection.prime();
+    },
+    capture(renderer) { reflection.capture(renderer, mirror); },
+    dispose() {
+      tunnel.clearReflection();
+      reflection.dispose();
     },
     contact: createBossLaserContact(plane, boss.root),
     update({ flight, time }) {
       const frame = wormholeFrame(time, flight.stageDuration);
-      tunnel.pose(frame);
+      mirror = fighter.visible ? wormholeReflectionPose(flight.player.x, flight.player.y, apertureY * halfHeight) : undefined;
+      tunnel.pose(frame, mirror);
       const shipRadius = Math.hypot(flight.player.x / halfHeight - frame.lensX, flight.player.y / halfHeight - apertureY - frame.lensY);
       const waveLight = frame.waveStrength * Math.exp(-8 * Math.abs(frame.waveRadius - shipRadius));
       rim.intensity = .54 + frame.echo * 1.65 + waveLight * 1.8;
