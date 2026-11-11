@@ -1,0 +1,7 @@
+# Black hole study
+
+Open **Black hole study** from the Vite development menu. The study starts at an inclination of 84° from face-on. Switch between the lensed disk, straight projection and face-on source to compare the images. The slider changes inclination in both projected views.
+
+The optional source is `public/encounters/draconian-accretion-disk.png`. Use the complete square RGBA raster delivered in chat, at 1254×1254 or resized to 627×627. The shader samples the annulus between 13% and 46.2% of the canvas width from its center. The same views work with procedural plasma while the texture is unavailable. The study and its texture stay out of the production menu and level packages.
+
+`black-hole-orbits.ts` integrates the Schwarzschild null orbit equation in units of GM/c². A packed lookup texture stores inverse radius versus orbital angle and impact parameter, with finer sampling around the critical impact parameter √27. The shader samples up to three crossings of the equatorial plane. The near side crosses the shadow, the far side arches above it and a later crossing reveals the underside. A frequency shift based on the disk's circular motion and gravitational redshift changes brightness across the image. The thin, stationary disk extends from 6 to 19 GM/c². The study assumes an observer at infinity and a non-spinning black hole. It draws on demand and releases its lookup and raster when the page closes.

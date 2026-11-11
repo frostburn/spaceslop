@@ -44,6 +44,7 @@ export type EncounterTexture = keyof typeof textureFiles;
 
 // Study aliases share the catalog's media paths; only the study loader is DEV.
 export const studyTextureFiles = {
+  blackHoleDisk: 'encounters/draconian-accretion-disk.png',
   biolumeBackdrop:'encounters/biolume-study-backdrop.png',
   biolumeForeground:'encounters/biolume-study-foreground.png',
   biolumeEnemy:'encounters/biolume-glider.png',
