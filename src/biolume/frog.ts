@@ -4,7 +4,7 @@ export type FrogState={nextAt:number;attackAt?:number;angle:number;reach:number}
 export const FROG_HP=8,FROG_POOL=2,FROG_RADIUS=.68;
 export const FROG_WINDUP=.8,FROG_EXTEND=.55,FROG_HOLD=.16,FROG_RETRACT=.9;
 export const FROG_ATTACK=FROG_WINDUP+FROG_EXTEND+FROG_HOLD+FROG_RETRACT;
-export const FROG_BEADS=24;
+export const FROG_BEADS=24,FROG_MOUTH_OFFSET=.58;
 const clamp=(v:number)=>Math.max(0,Math.min(1,v));
 const smooth=(v:number)=>{const t=clamp(v);return t*t*(3-2*t);};
 export function createFrogState(lane:number):FrogState{return{nextAt:1.1,angle:lane<0?.5:-.5,reach:0};}
@@ -22,13 +22,13 @@ export function stepFrog(state:FrogState,origin:FrogPoint,target:FrogPoint,age:n
  }
 }
 export function frogMouth(state:FrogState,origin:FrogPoint,out={x:0,y:0}){
- out.x=origin.x+.58*Math.sin(state.angle);out.y=origin.y-.58*Math.cos(state.angle);return out;
+ out.x=origin.x+FROG_MOUTH_OFFSET*Math.sin(state.angle);out.y=origin.y-FROG_MOUTH_OFFSET*Math.cos(state.angle);return out;
 }
 /** Connected orange bullets trace the same curving tongue during launch and return. */
 export function frogTonguePoint(state:FrogState,origin:FrogPoint,age:number,t:number,out={x:0,y:0}){
  const s=frogSignal(state,age),length=state.reach*s.extension,bend=.13*Math.sin(Math.PI*t)*s.extension;
  const dx=Math.sin(state.angle),dy=-Math.cos(state.angle);
- out.x=origin.x+dx*(.58+length*t)-dy*bend;out.y=origin.y+dy*(.58+length*t)+dx*bend;return out;
+ out.x=origin.x+dx*(FROG_MOUTH_OFFSET+length*t)-dy*bend;out.y=origin.y+dy*(FROG_MOUTH_OFFSET+length*t)+dx*bend;return out;
 }
 const a={x:0,y:0},b={x:0,y:0};
 export function frogTongueHits(state:FrogState,origin:FrogPoint,age:number,player:FrogPoint){

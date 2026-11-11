@@ -34,5 +34,5 @@ const aerialWaves=Array.from({length:20},(_,i)=>{
 });
 
 // Bank-perched frogs are registered to the raster route, not aerial paths.
-const frogWaves=[[22,2.6],[36,-2.6],[48,2.5],[62,-2.4],[75,2.5],[85,-2.6]].map(([time,lane],i)=>({time,lanes:[lane],carrier:0,drop:drops[(i+1)%4],grove:{kind:'frog',formation:'weave',slot:0,mirror:1,anchor:time}as GroveCourse}));
+const frogWaves=[[22,1.8],[36,-2.6],[48,2.5],[62,-2.4],[75,2.5],[85,-2.6]].map(([time,lane],i)=>({time,lanes:[lane],carrier:0,drop:drops[(i+1)%4],grove:{kind:'frog',formation:'weave',slot:0,mirror:1,anchor:time}as GroveCourse}));
 export const groveWaves=[...aerialWaves,...frogWaves].sort((a,b)=>a.time-b.time);

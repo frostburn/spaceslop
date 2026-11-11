@@ -1,4 +1,5 @@
 import * as T from 'three';
+import type {createFrogAtlas} from './frog-raster';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {FROG_BEADS,frogSignal,frogTonguePoint,type FrogState,type FrogPoint} from './frog';
 
@@ -45,7 +46,7 @@ export function createFrogAssets(){
   eye:new T.SphereGeometry(1,16,10),ring:new T.TorusGeometry(.14,.018,5,20),
  };
 }
-export function createFrogRig(assets:ReturnType<typeof createFrogAssets>){
+export function createFrogRig(assets:ReturnType<typeof createFrogAssets>, atlas?:ReturnType<typeof createFrogAtlas>){
  const root=new T.Group();root.name='biolume-lantern-frog';const body=new T.Group();body.name='frog-body';root.add(body);
  const skin=new T.Mesh(assets.skinGeometry,assets.skin),glands=new T.Mesh(assets.glowGeometry,assets.gland);body.add(skin,glands);
  for(const side of[-1,1]){
@@ -55,17 +56,39 @@ export function createFrogRig(assets:ReturnType<typeof createFrogAssets>){
  }
  const mouth=new T.Mesh(assets.eye,assets.dark);mouth.position.set(0,-.57,.34);mouth.scale.set(.28,.035,.045);body.add(mouth);
  const throat=new T.Mesh(assets.eye,assets.gland);throat.position.set(0,-.44,.46);throat.scale.set(.12,.11,.035);body.add(throat);
+ const modeledParts = [...body.children];
+ const raster = atlas ? new T.Group() : undefined;
+ const torso = atlas ? new T.Mesh(atlas.body, atlas.material) : undefined;
+ const closedHead = atlas ? new T.Mesh(atlas.closed, atlas.material) : undefined;
+ const openHead = atlas ? new T.Mesh(atlas.open, atlas.material) : undefined;
+ if(raster && torso && closedHead && openHead){
+  raster.name = 'frog-atlas';
+  torso.name = 'frog-raster-body';
+  closedHead.name = 'frog-head-closed';
+  openHead.name = 'frog-head-open';
+  raster.add(torso, closedHead, openHead);
+  raster.visible = false;
+  body.add(raster);
+ }
  const beads=new T.InstancedMesh(assets.bead,assets.beadMaterial,FROG_BEADS),halos=new T.InstancedMesh(assets.halo,assets.haloMaterial,FROG_BEADS);beads.frustumCulled=halos.frustumCulled=false;root.add(beads,halos);
  const matrix=new T.Object3D(),p={x:0,y:0};
- let last=NaN,lastX=NaN,lastY=NaN,lastAttack:number|undefined;
+ let last=NaN,lastX=NaN,lastY=NaN,lastAttack:number|undefined,lastArt=false;
  function pose(origin:FrogPoint,state:FrogState,age:number){
-  if(age===last&&origin.x===lastX&&origin.y===lastY&&state.attackAt===lastAttack)return;
-  last=age;lastX=origin.x;lastY=origin.y;lastAttack=state.attackAt;
+  const artwork = atlas?.available ?? false;
+  if(age===last&&origin.x===lastX&&origin.y===lastY&&state.attackAt===lastAttack&&lastArt===artwork)return;
+  last=age;lastX=origin.x;lastY=origin.y;lastAttack=state.attackAt;lastArt=artwork;
   const s=frogSignal(state,age),bodyZ=.2,k=(22-bodyZ)/22;
   body.position.set(origin.x*k,origin.y*k,bodyZ);body.rotation.z=state.angle;body.scale.setScalar(k);
   skin.scale.z=1+.025*Math.sin(age*2.1);glands.scale.z=skin.scale.z;
   throat.scale.set(.12+.05*s.warning,.11+.09*s.warning,.035+.025*s.warning);
   mouth.scale.y=.035+.08*Math.max(s.warning,s.extension);
+  if(raster && torso && closedHead && openHead){
+   raster.visible = artwork;
+   for(const part of modeledParts) part.visible = !artwork;
+   torso.scale.x = 1 + .018 * Math.sin(age * 2.1);
+   closedHead.visible = !s.active;
+   openHead.visible = s.active;
+  }
   const length=state.reach*s.extension,count=s.active?Math.min(FROG_BEADS,Math.max(1,Math.ceil(length/.28))):0;
   beads.count=halos.count=count;
   for(let i=0;i<count;i++){
@@ -73,5 +96,5 @@ export function createFrogRig(assets:ReturnType<typeof createFrogAssets>){
    const z=.85,scale=(22-z)/22;matrix.position.set(p.x*scale,p.y*scale,z);matrix.scale.setScalar(scale*(i===count-1?1.3:1));matrix.updateMatrix();beads.setMatrixAt(i,matrix.matrix);halos.setMatrixAt(i,matrix.matrix);
   }beads.instanceMatrix.needsUpdate=halos.instanceMatrix.needsUpdate=true;
  }
- return{root,body,beads,halos,pose,prime(){pose({x:0,y:0},{nextAt:0,attackAt:0,angle:0,reach:6},1.35);beads.count=halos.count=FROG_BEADS;},release(){beads.dispose();halos.dispose();}};
+ return{root,body,beads,halos,pose,prime(){pose({x:0,y:0},{nextAt:0,attackAt:0,angle:0,reach:6},1.35);beads.count=halos.count=FROG_BEADS;for(const part of modeledParts)part.visible=true;if(atlas?.available&&closedHead&&openHead){closedHead.visible=openHead.visible=true;}},release(){beads.dispose();halos.dispose();}};
 }

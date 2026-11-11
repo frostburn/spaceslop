@@ -1,4 +1,5 @@
 import {createFrogAssets,createFrogRig} from '../../biolume/frog-rig';
+import {createFrogAtlas} from '../../biolume/frog-raster';
 import {FROG_POOL} from '../../biolume/frog';
 import * as T from 'three';
 import {createGroveBranch} from '../../biolume/branch';
@@ -26,7 +27,8 @@ export const createLevel:LevelFactory=({plane,scene,signal})=>{
   const water=createGroveWater(plane,scene,plates);
   const gains=Array.from({length:GROVE_ENEMY_POOL},()=>({value:1})),gliders=gains.map(g=>createGliderRig(g));
   const boss=createLanternRay(),seekerAssets=createRaySeekerAssets(),seekers=Array.from({length:RAY_SEEKER_POOL},()=>createRaySeekerRig(seekerAssets));boss.root.visible=false;
-  const frogAssets=createFrogAssets(),frogs=Array.from({length:FROG_POOL},()=>createFrogRig(frogAssets));
+  const frogAssets=createFrogAssets(),frogAtlas=createFrogAtlas();
+  const frogs=Array.from({length:FROG_POOL},()=>createFrogRig(frogAssets,frogAtlas));
   const actors=[...gliders,...seekers,...frogs];
   root.add(plates.root,lighting.root,water.root,...pods.meshes,...gliders.map(r=>r.root),...seekers.map(r=>r.root),...frogs.map(r=>r.root),boss.root);
   const models:(T.Object3D|undefined)[]=[],media:T.Texture[]=[];
@@ -35,6 +37,7 @@ export const createLevel:LevelFactory=({plane,scene,signal})=>{
     plates.ready,
     loadEncounterTexture('biolumeEnemy',map=>{media.push(map);for(const rig of gliders)rig.raster.setArt(map);},undefined,signal),
     loadEncounterTexture('biolumePods',map=>{media.push(map);pods.setArt(map);water.setPods(map);branches.forEach(branch=>branch.setArt(map));},undefined,signal),
+    loadEncounterTexture('biolumeFrog',map=>{media.push(map);frogAtlas.setArt(map);},undefined,signal),
     loadEncounterTexture('biolumeBoss',map=>{media.push(map);boss.setArt(map);},undefined,signal),
   ]).then(results=>[...new Set([...results.flat(),...plates.layers.flat().map(s=>s.fallback),...gliders.map(r=>r.raster.mesh.material.map!),pods.meshes[0].material.map!,water.pods.meshes[0].material.map!,boss.fallback])]);
   const ecology=createGroveEcology();root.add(ecology.root);
@@ -68,6 +71,6 @@ export const createLevel:LevelFactory=({plane,scene,signal})=>{
       ecology.update(time,animationTime,avoid);branches.forEach(branch=>branch.update(time,animationTime));
       lighting.update(frame,boss.root);
     },
-    dispose(){if(disposed)return;disposed=true;frogs.forEach(r=>r.release());branches.forEach(branch=>branch.release());water.dispose();plates.dispose();boss.release();gliders.forEach(r=>r.release());pods.release();for(const t of new Set(media))t.dispose();restores.forEach(r=>r());restores=[];},
+    dispose(){if(disposed)return;disposed=true;frogs.forEach(r=>r.release());frogAtlas.release();branches.forEach(branch=>branch.release());water.dispose();plates.dispose();boss.release();gliders.forEach(r=>r.release());pods.release();for(const t of new Set(media))t.dispose();restores.forEach(r=>r());restores=[];},
   };
 };

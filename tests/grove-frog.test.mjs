@@ -58,3 +58,17 @@ test('frog models share resources, use registered tongue points, freeze uploads 
  let disposed=0;r.beads.addEventListener('dispose',()=>disposed++);r.release();assert.equal(disposed,1);other.release();
  for(const v of Object.values(a))v.dispose();
 });
+
+test('frog atlas swaps aligned heads only during the tongue strike and falls back without art',async()=>{
+ const {createFrogAtlas}=await server.ssrLoadModule('/src/biolume/frog-raster.ts');
+ const atlas=createFrogAtlas(),assets=createFrogAssets(),rig=createFrogRig(assets,atlas),state={nextAt:0,attackAt:0,angle:0,reach:5};
+ const raster=rig.body.getObjectByName('frog-atlas'),closed=raster.getObjectByName('frog-head-closed'),open=raster.getObjectByName('frog-head-open');
+ rig.pose(origin,state,.4);assert(!raster.visible);assert(rig.body.children[0].visible);
+ const art=new T.Texture({width:627,height:627});atlas.setArt(art);rig.pose(origin,state,.4);
+ assert(raster.visible&&closed.visible&&!open.visible);assert(!rig.body.children[0].visible);
+ assert(Math.abs(closed.geometry.attributes.position.getY(0)-open.geometry.attributes.position.getY(0))<1e-6);
+ rig.pose(origin,state,1.4);assert(open.visible&&!closed.visible);assert(rig.beads.count>0);
+ rig.pose(origin,state,1.9);assert(open.visible);rig.pose(origin,state,2.6);assert(closed.visible&&!open.visible);
+ atlas.release();rig.pose(origin,state,2.6);assert(!raster.visible&&rig.body.children[0].visible);
+ rig.release();art.dispose();atlas.body.dispose();atlas.closed.dispose();atlas.open.dispose();atlas.material.dispose();for(const resource of Object.values(assets))resource.dispose();
+});

@@ -5,6 +5,7 @@ export const textureFiles = {
   biolumeEnemy:'encounters/biolume-glider.png',
   biolumePods:'encounters/biolume-study-atlas.png',
   biolumeBoss:'encounters/biolume-lantern-ray.png',
+  biolumeFrog:'encounters/biolume-frog-atlas.png',
   summerMammoth:'encounters/summer-mammoth.png',
   summerIce:'encounters/summer-ice.png',
   summerHydra:'encounters/summer-hydra.png',
@@ -54,7 +55,7 @@ export const studyTextureFiles = {
 export type StudyTexture = keyof typeof studyTextureFiles;
 
 export const levelTextures: Record<LevelId, readonly EncounterTexture[]> = {
-  biolume:['armor','biolumeBackdrop','biolumeForeground','biolumeEnemy','biolumePods','biolumeBoss'],
+  biolume:['armor','biolumeBackdrop','biolumeForeground','biolumeEnemy','biolumePods','biolumeBoss','biolumeFrog'],
   summer:['armor','summerMammoth','summerIce','summerHydra','summerLotusFlanks','summerLotusWall'],
   heliostat:['armor','ioCeramic','heliostatBackdrop','heliostatGuard'],
   boulevard:['armor','boulevardRoad'],
