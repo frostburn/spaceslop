@@ -40,6 +40,7 @@ function openBlackHoleStudy() {
     uniforms.mode.value = Number(mode.value);
     uniforms.inclination.value = T.MathUtils.degToRad(inclination.valueAsNumber);
     inclination.disabled = mode.value === '2';
+    canvas.classList.toggle('lensed', mode.value === '0');
     angle.value = `${inclination.value}°`;
     renderer.render(scene, camera);
   }
@@ -57,6 +58,14 @@ function openBlackHoleStudy() {
   const resize = new ResizeObserver(resizeFrame);
   resize.observe(canvas);
   resizeFrame();
+
+  let startTime: number | undefined;
+  renderer.setAnimationLoop(now => {
+    startTime ??= now;
+    const rotation = (now - startTime) * .00018;
+    lens.material.uniforms.diskRotation.value.set(Math.cos(rotation), Math.sin(rotation));
+    renderer.render(scene, camera);
+  });
 
   let art: T.Texture | undefined;
   const path = __STUDY_TEXTURES__.blackHoleDisk;
@@ -76,6 +85,7 @@ function openBlackHoleStudy() {
     if (event.persisted) return;
     controller.abort();
     resize.disconnect();
+    renderer.setAnimationLoop(null);
     art?.dispose();
     geometry.dispose();
     lens.dispose();

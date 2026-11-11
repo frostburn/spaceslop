@@ -20,6 +20,7 @@ export function createBlackHoleMaterial() {
       orbits: {value: orbits},
       diskArt: {value: null as T.Texture | null},
       useArt: {value: false},
+      diskRotation: {value: new T.Vector2(1, 0)},
       inclination: {value: T.MathUtils.degToRad(84)},
       frameScale: {value: new T.Vector2(1, 1)},
       mode: {value: 0},
@@ -37,6 +38,7 @@ export function createBlackHoleMaterial() {
       varying vec2 screen;
       uniform sampler2D orbits, diskArt;
       uniform bool useArt;
+      uniform vec2 diskRotation;
       uniform float inclination;
       uniform vec2 frameScale;
       uniform int mode;
@@ -64,6 +66,10 @@ export function createBlackHoleMaterial() {
       }
 
       vec4 plasma(vec2 direction, float radius) {
+        // Sample the rotating source in disk coordinates. Ray intersections,
+        // the shadow and the approaching side of the disk stay registered.
+        direction = vec2(dot(direction, diskRotation),
+          dot(direction, vec2(-diskRotation.y, diskRotation.x)));
         float radial = (radius - INNER) / (OUTER - INNER);
         float edge = smoothstep(0.0, .016, radial) * (1.0 - smoothstep(.82, 1.0, radial));
         if (useArt) {

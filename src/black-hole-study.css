@@ -12,6 +12,7 @@ header a { color: #d2b6a0; text-underline-offset: .2em; }
 h1 { margin: .55rem 0 1.4rem; font-size: clamp(1.8rem, 5vw, 3rem); letter-spacing: -.04em; font-weight: 600; }
 .study { display: grid; grid-template-columns: minmax(0, 1fr) 15rem; gap: clamp(1rem, 3vw, 2rem); align-items: start; }
 canvas { display: block; width: 100%; aspect-ratio: 1; background: #090b11; border: 1px solid #3b2d28; }
+canvas.lensed { filter: blur(.65px); }
 aside { display: grid; grid-template-columns: minmax(0, 1fr); gap: .55rem; }
 label { display: flex; justify-content: space-between; font-size: .9rem; }
 select { min-height: 44px; padding: .5rem; border: 1px solid #544137; border-radius: .3rem; background: #17131a; color: inherit; font: inherit; margin-bottom: 1rem; }
