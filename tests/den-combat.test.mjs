@@ -7,7 +7,8 @@ after(() => server.close());
 const { DEN_CYCLE, denBodyEntry, denPose } = await server.ssrLoadModule('/src/den/combat.ts');
 const { Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
 const { DEN_APPROACH, DEN_DURATION, DEN_SCREENS, denScroll } = await server.ssrLoadModule('/src/den/route.ts');
-const { denWaves, denPatrolPose, denPatrolCanFire, denPatrolBlend } = await server.ssrLoadModule('/src/den/patrol.ts');
+const { DEN_PATROL_POSE_STEP, denWaves, denPatrolPose, denPatrolCanFire, denPatrolWarp } = await server.ssrLoadModule('/src/den/patrol.ts');
+const { createPatrolWarpCard } = await server.ssrLoadModule('/src/den/patrol-warp.ts');
 const { createDenPlateMotion } = await server.ssrLoadModule('/src/den/plate-motion.ts');
 
 test('the gantry sweep alternates from the settled bike position and carries its hit area', () => {
@@ -36,27 +37,46 @@ test('the ten-screen route joins the gantry with continuous scroll speed', () =>
 
 test('patrols turn through seven art views and wait until they are fully visible', () => {
   assert(denWaves.length >= 18);
-  const dominant = pose => pose.mix < .5 ? pose.first : pose.second;
   for (let i = 0; i <= 6; i++) {
-    const angle = i * Math.PI / 12;
-    assert.equal(dominant(denPatrolBlend(-angle)), i);
-    assert.equal(dominant(denPatrolBlend(angle)), i);
-    assert.equal(denPatrolBlend(-angle).mirror, false);
-    assert.equal(denPatrolBlend(angle).mirror, i > 0);
+    const angle = i * DEN_PATROL_POSE_STEP;
+    assert.equal(denPatrolWarp(-angle).source, i);
+    assert.equal(denPatrolWarp(angle).source, i);
+    assert.equal(denPatrolWarp(-angle).mirror, false);
+    assert.equal(denPatrolWarp(angle).mirror, i > 0);
   }
-  const blend = denPatrolBlend(2.5 * Math.PI / 12);
-  assert.equal(blend.first, 2);
-  assert.equal(blend.second, 3);
-  assert(Math.abs(blend.mix - .5) < 1e-10);
   for (const side of [-1, 1]) {
     const patrol = { course: 'cross', side, slot: 0, heavy: false };
     const initial = denPatrolPose(0, -1.1 * side, patrol);
     const settled = denPatrolPose(2.3, -1.1 * side, patrol);
-    assert.equal(dominant(denPatrolBlend(initial.heading)), 6);
+    assert.equal(denPatrolWarp(initial.heading).source, 6);
     assert(!denPatrolCanFire(initial, patrol));
-    assert.equal(dominant(denPatrolBlend(settled.heading)), 0);
+    assert.equal(denPatrolWarp(settled.heading).source, 0);
     assert(denPatrolCanFire(settled, patrol));
   }
+});
+
+test('patrol mesh stays continuous through atlas handoffs and straight ahead', () => {
+  const card = createPatrolWarpCard(), geometry = card.root.geometry;
+  const position = geometry.getAttribute('position'), uv = geometry.getAttribute('uv');
+  const sample = angle => {
+    card.pose(angle);
+    return { shape: Array.from(position.array), uv: Array.from(uv.array) };
+  };
+  const epsilon = 1e-5;
+  assert.deepEqual(sample(-epsilon).uv, sample(epsilon).uv);
+  for (const side of [-1, 1]) for (let i = 0; i < 6; i++) {
+    const angle = side * (i + .5) * DEN_PATROL_POSE_STEP;
+    const a = sample(angle - epsilon), b = sample(angle + epsilon);
+    assert.notDeepEqual(a.uv, b.uv);
+    assert(a.shape.every((coordinate, j) => Math.abs(coordinate - b.shape[j]) < .001));
+    for (let j = 0; j < geometry.index.count; j += 3) {
+      const [a, b, c] = [0, 1, 2].map(k => geometry.index.getX(j + k));
+      assert((position.getX(b) - position.getX(a)) * (position.getY(c) - position.getY(a))
+        - (position.getY(b) - position.getY(a)) * (position.getX(c) - position.getX(a)) > 0);
+    }
+  }
+  geometry.dispose();
+  card.root.material.dispose();
 });
 
 test('passing actors disturb a visible flag, and a paused frame holds the wake', () => {

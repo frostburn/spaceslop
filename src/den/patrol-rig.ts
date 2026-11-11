@@ -1,67 +1,6 @@
 import * as T from 'three';
 import { addBurner, burnerMaterial, poseBurners, shipBurners } from '../burners';
-import { denPatrolBlend } from './patrol';
-
-// Measured on the original 1536×1024 atlas. The last pair marks the same
-// chassis point in every view, so cropped poses share a world-space pivot.
-const frames = [
-  [97, 31, 313, 461, 206, 269],
-  [466, 30, 681, 453, 567, 264],
-  [837, 39, 1095, 441, 955, 262],
-  [1184, 52, 1508, 423, 1335, 262],
-  [24, 585, 370, 914, 201, 766],
-  [389, 605, 747, 872, 569, 757],
-  [768, 621, 1143, 865, 962, 755],
-] as const;
-
-const crops = frames.map(([left, top, right, bottom, x, y]) => ({
-  bounds: new T.Vector4(left / 1536, 1 - bottom / 1024, right / 1536, 1 - top / 1024),
-  pivot: new T.Vector2(x / 1536, 1 - y / 1024),
-}));
-
-function patrolMaterial() {
-  const uniforms = {
-    atlas: { value: null as T.Texture | null },
-    cropA: { value: crops[0].bounds }, cropB: { value: crops[0].bounds },
-    pivotA: { value: crops[0].pivot }, pivotB: { value: crops[0].pivot },
-    orientationA: { value: new T.Vector3(1, 0, 1) }, orientationB: { value: new T.Vector3(1, 0, 1) },
-    poseMix: { value: 0 },
-  };
-  return new T.ShaderMaterial({
-    uniforms,
-    transparent: true,
-    depthWrite: false,
-    premultipliedAlpha: true,
-    vertexShader: `varying vec2 cardPoint;
-      void main() {
-        cardPoint = position.xy;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }`,
-    fragmentShader: `varying vec2 cardPoint;
-      uniform sampler2D atlas;
-      uniform vec4 cropA, cropB;
-      uniform vec2 pivotA, pivotB;
-      uniform vec3 orientationA, orientationB;
-      uniform float poseMix;
-      vec4 samplePose(vec4 crop, vec2 pivot, vec3 turn) {
-        vec2 p = mat2(turn.x, -turn.y, turn.y, turn.x) * cardPoint;
-        p.x *= turn.z;
-        vec2 uv = pivot + p / (vec2(1536.0, 1024.0) * .00525);
-        vec4 color = texture2D(atlas, uv);
-        if (any(lessThan(uv, crop.xy)) || any(greaterThan(uv, crop.zw))) return vec4(0.0);
-        color.a = smoothstep(.27, .54, color.a);
-        return vec4(color.rgb * color.a, color.a);
-      }
-      void main() {
-        vec4 pose = mix(samplePose(cropA, pivotA, orientationA), samplePose(cropB, pivotB, orientationB), poseMix);
-        if (pose.a < .005) discard;
-        gl_FragColor = vec4(pose.rgb / pose.a, pose.a);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-        #include <premultiplied_alpha_fragment>
-      }`,
-  });
-}
+import { createPatrolWarpCard } from './patrol-warp';
 
 function placeholder() {
   const root = new T.Group();
@@ -93,7 +32,6 @@ function placeholder() {
 }
 
 export function createDenPatrols(count: number) {
-  const geometry = new T.PlaneGeometry(3, 3);
   const model = placeholder();
   const jets = burnerMaterial(0xff812d);
   const warningShape = new T.RingGeometry(.047, .096, 14);
@@ -101,11 +39,7 @@ export function createDenPatrols(count: number) {
   const rigs = Array.from({ length: count }, () => {
     const root = new T.Group(), effects = new T.Group(), fallback = model.clone();
     root.name = 'draconian-patrol';
-    const art = patrolMaterial(), uniforms = art.uniforms;
-    const card = new T.Mesh(geometry, art);
-    card.name = 'patrol-heading';
-    card.position.z = .19;
-    card.visible = false;
+    const warp = createPatrolWarpCard(), card = warp.root;
     for (const x of [-.36, .36]) addBurner(effects, jets, x, .42, -.13, .14, .87).rotation.z = Math.PI;
     const plumes = shipBurners(effects);
     for (const plume of plumes) plume.renderOrder = -2;
@@ -117,22 +51,12 @@ export function createDenPatrols(count: number) {
     root.add(fallback, card, effects);
     return {
       root,
-      useArt(map: T.Texture) { uniforms.atlas.value = map; card.visible = true; fallback.visible = false; },
+      useArt(map: T.Texture) { warp.setArt(map); fallback.visible = false; },
       pose(x: number, y: number, heading: number, size: number, throttle: number, charge: number, time: number) {
         root.visible = true;
         root.position.set(x, y, .12);
         root.scale.setScalar(size);
-        if (card.visible) {
-          const turn = denPatrolBlend(heading);
-          const first = crops[turn.first], second = crops[turn.second];
-          uniforms.cropA.value = first.bounds;
-          uniforms.cropB.value = second.bounds;
-          uniforms.pivotA.value = first.pivot;
-          uniforms.pivotB.value = second.pivot;
-          uniforms.orientationA.value.set(Math.cos(turn.firstBank), Math.sin(turn.firstBank), turn.mirror && turn.first > 0 ? -1 : 1);
-          uniforms.orientationB.value.set(Math.cos(turn.secondBank), Math.sin(turn.secondBank), turn.mirror && turn.second > 0 ? -1 : 1);
-          uniforms.poseMix.value = turn.mix;
-        }
+        if (card.visible) warp.pose(heading);
         effects.rotation.z = fallback.rotation.z = heading;
         poseBurners(plumes, time, throttle);
         warning.visible = charge > 0;
