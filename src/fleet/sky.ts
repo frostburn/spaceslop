@@ -4,6 +4,9 @@ import { HEIGHT, WIDTH } from '../playfield';
 import { fallbackFleetPlanets, fallbackFleetSky } from './placeholder';
 import { FLEET_CAMERA_DISTANCE } from './route';
 
+const PAIR_SPAN = 12;
+const OPENING_ROLL = -.13;
+
 export function placeFleetPlate(distance: number, depth: number, mesh: T.Mesh, x = 0, y = 0) {
   const factor = 1 - depth / distance;
   mesh.position.set(x * factor, y * factor, depth);
@@ -52,10 +55,20 @@ export function createFleetSky(signal: AbortSignal) {
   stars.name = 'fleet-starfield';
   stars.renderOrder = -20;
   placeFleetPlate(FLEET_CAMERA_DISTANCE, -125, stars);
-  const planets = new T.Mesh(new T.PlaneGeometry(12, 12), pair);
+  const planets = new T.Mesh(new T.PlaneGeometry(PAIR_SPAN, PAIR_SPAN), pair);
   planets.name = 'fleet-drifting-planets';
   planets.renderOrder = -15;
   root.add(stars, planets);
+
+  const pivot = new T.Vector2();
+  function registerPivot() {
+    const globe = uniforms.globe.value, moon = uniforms.moon.value;
+    // With comparable densities, mass is proportional to radius cubed.
+    const moonFraction = moon.z ** 3 / (globe.z ** 3 + moon.z ** 3);
+    pivot.set(globe.x, globe.y).lerp(new T.Vector2(moon.x, moon.y), moonFraction)
+      .subScalar(.5).multiplyScalar(PAIR_SPAN);
+  }
+  registerPivot();
 
   const maps = Promise.all([
     loadEncounterTexture('fleetSky', texture => {
@@ -68,6 +81,7 @@ export function createFleetSky(signal: AbortSignal) {
       // Disc centers and radii registered in the original square artwork.
       uniforms.globe.value.set(.381, .599, .306);
       uniforms.moon.value.set(.757, .224, .151);
+      registerPivot();
       pairFallback.dispose();
     }, undefined, signal),
   ]).then(() => [sky.map, uniforms.map.value]);
@@ -75,12 +89,15 @@ export function createFleetSky(signal: AbortSignal) {
   return {
     root, maps,
     update(time: number) {
-      const roll = -.13 + .0067 * time;
+      const roll = OPENING_ROLL + .0067 * time;
       planets.rotation.z = roll;
-      placeFleetPlate(FLEET_CAMERA_DISTANCE, -94, planets,
-        -.45 + 1.6 * Math.sin(time * .032 - .4), -2.35 + 1.05 * Math.cos(time * .024 + 1));
-      // Convert the fixed upper-left key into the rotating image's UV frame.
       const c = Math.cos(roll), s = Math.sin(roll);
+      // Hold the opening composition and roll around the mass-weighted center.
+      const dx = Math.cos(OPENING_ROLL) - c, dy = Math.sin(OPENING_ROLL) - s;
+      placeFleetPlate(FLEET_CAMERA_DISTANCE, -94, planets,
+        -.45 + 1.6 * Math.sin(time * .032 - .4) + dx * pivot.x - dy * pivot.y,
+        -2.35 + 1.05 * Math.cos(time * .024 + 1) + dy * pivot.x + dx * pivot.y);
+      // Convert the fixed upper-left key into the rotating image's UV frame.
       uniforms.sun.value.set(-.67 * c + .58 * s, .67 * s + .58 * c, .46).normalize();
     },
   };
