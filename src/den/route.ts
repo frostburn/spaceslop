@@ -21,13 +21,12 @@ export function denSection(time: number) {
   return names[Math.min(names.length - 1, Math.floor(Math.max(0, time) / (DEN_DURATION / names.length)))];
 }
 
+// Set back from the railings on the workshop floor and rookery ledges.
 export const denNests = [
-  { u: .26, at: .88, width: .86, angle: -.11 },
-  { u: .17, at: 2.68, width: .68, angle: .22 },
-  { u: .71, at: 4.98, width: .93, angle: -.16 },
-  { u: .15, at: 6.46, width: .72, angle: .31 },
-  { u: .20, at: 8.44, width: .8, angle: -.24 },
-] as const;
+  [132, 7584, .58, .28],
+  [425, 5107, .48, -.20],
+  [319, 4736, .63, .13],
+].map(([x, y, width, angle]) => ({ u: x / 576, at: DEN_SCREENS - y / 1024, width, angle }));
 
 export function denNestPoint(site: typeof denNests[number], scroll: number, distance: number, z: number) {
   const scale = (distance - z) / distance;

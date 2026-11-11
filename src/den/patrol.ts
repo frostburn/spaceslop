@@ -72,12 +72,17 @@ export function denPatrolCanFire(pose: ReturnType<typeof denPatrolPose>, patrol:
   return Math.abs(pose.x) + radius < WIDTH / 2 && pose.y + radius < HEIGHT / 2 && pose.y > -4.1 && Math.abs(pose.heading) < .63;
 }
 
-export function denPatrolFrame(heading: number) {
+export function denPatrolBlend(heading: number) {
   const angle = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, heading));
   const step = Math.PI / 12;
-  const index = Math.round(Math.abs(angle) / step);
-  const mirror = index > 0 && angle > 0;
-  return { index, mirror, bank: angle - Math.sign(angle) * index * step };
+  const position = Math.min(6, Math.abs(angle) / step);
+  const first = Math.floor(position), second = Math.min(6, first + 1);
+  const fraction = position - first;
+  const signedStep = Math.sign(angle) * step;
+  return {
+    first, second, mix: fraction * fraction * (3 - 2 * fraction), mirror: angle > 0,
+    firstBank: angle - first * signedStep, secondBank: angle - second * signedStep,
+  };
 }
 
 export function denPatrolEntry(a: Point, b: Point, pose: Point & { heading?: number }, patrol: DenPatrol, padding = .05) {

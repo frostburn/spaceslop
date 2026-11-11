@@ -7,7 +7,8 @@ after(() => server.close());
 const { DEN_CYCLE, denBodyEntry, denPose } = await server.ssrLoadModule('/src/den/combat.ts');
 const { Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
 const { DEN_APPROACH, DEN_DURATION, DEN_SCREENS, denScroll } = await server.ssrLoadModule('/src/den/route.ts');
-const { denWaves, denPatrolPose, denPatrolCanFire, denPatrolFrame } = await server.ssrLoadModule('/src/den/patrol.ts');
+const { denWaves, denPatrolPose, denPatrolCanFire, denPatrolBlend } = await server.ssrLoadModule('/src/den/patrol.ts');
+const { createDenPlateMotion } = await server.ssrLoadModule('/src/den/plate-motion.ts');
 
 test('the gantry sweep alternates from the settled bike position and carries its hit area', () => {
   const a = denPose(DEN_CYCLE - .0001), b = denPose(DEN_CYCLE);
@@ -35,22 +36,47 @@ test('the ten-screen route joins the gantry with continuous scroll speed', () =>
 
 test('patrols turn through seven art views and wait until they are fully visible', () => {
   assert(denWaves.length >= 18);
+  const dominant = pose => pose.mix < .5 ? pose.first : pose.second;
   for (let i = 0; i <= 6; i++) {
     const angle = i * Math.PI / 12;
-    assert.equal(denPatrolFrame(-angle).index, i);
-    assert.equal(denPatrolFrame(angle).index, i);
-    assert.equal(denPatrolFrame(-angle).mirror, false);
-    assert.equal(denPatrolFrame(angle).mirror, i > 0);
+    assert.equal(dominant(denPatrolBlend(-angle)), i);
+    assert.equal(dominant(denPatrolBlend(angle)), i);
+    assert.equal(denPatrolBlend(-angle).mirror, false);
+    assert.equal(denPatrolBlend(angle).mirror, i > 0);
   }
+  const blend = denPatrolBlend(2.5 * Math.PI / 12);
+  assert.equal(blend.first, 2);
+  assert.equal(blend.second, 3);
+  assert(Math.abs(blend.mix - .5) < 1e-10);
   for (const side of [-1, 1]) {
     const patrol = { course: 'cross', side, slot: 0, heavy: false };
     const initial = denPatrolPose(0, -1.1 * side, patrol);
     const settled = denPatrolPose(2.3, -1.1 * side, patrol);
-    assert.equal(denPatrolFrame(initial.heading).index, 6);
+    assert.equal(dominant(denPatrolBlend(initial.heading)), 6);
     assert(!denPatrolCanFire(initial, patrol));
-    assert.equal(denPatrolFrame(settled.heading).index, 0);
+    assert.equal(dominant(denPatrolBlend(settled.heading)), 0);
     assert(denPatrolCanFire(settled, patrol));
   }
+});
+
+test('passing actors disturb a visible flag, and a paused frame holds the wake', () => {
+  const motion = createDenPlateMotion(), scroll = .55;
+  const sample = (elapsed, actors = [], newFlight = false) => {
+    motion.update(0, scroll, 2, { elapsed, actors, newFlight });
+    assert.equal(motion.uniforms.flagCount.value, 1);
+    return motion.uniforms.flagTips.value[0].w;
+  };
+  motion.useCliff(true);
+  assert.equal(sample(0), 0);
+  const rod = motion.uniforms.flagRods.value[0], tip = motion.uniforms.flagTips.value[0];
+  const near = { x: ((rod.x + rod.z + 2 * tip.x) * .25 - .5) * 9,
+    y: ((Math.max(rod.y, rod.w) + tip.y) * .5 - scroll - .5) * 16, speed: 6 };
+  const wake = sample(.12, [near]);
+  assert(wake > .8);
+  assert.equal(sample(0), wake);
+  const tail = sample(.23);
+  assert(tail > 0 && tail < wake);
+  assert.equal(sample(0, [], true), 0);
 });
 
 test('the gantry encounter is winnable with the ordinary ship and planar shots', () => {

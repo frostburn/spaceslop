@@ -37,6 +37,8 @@ Heliostat's `weathering.ts` layers fixed dirt, dust, streaks and sparse corrosio
 
 `den/patrol.ts` owns launches, lane crossings and weaving patrols. Attack windup starts once a rider is inside the visible field. `den/patrol-rig.ts` registers seven atlas views around the same chassis point and mirrors them for the other direction. The swept hit ellipse uses the same heading. The cliff, gantry, patrols and nests have procedural fallbacks. The Den owns its stage textures and GPU resources and loads them only when selected.
 
+Patrol pose blends sample the two adjacent atlas views in one pass above the exhaust. `den/plate-motion.ts` registers flag rods, cloth tips and the workshop steam vent to the existing plates. The scrolling shader bends the cloth below its rod and carries wisps up from the vent. Actor proximity adds a short wake that decays on the presentation clock.
+
 ## Lantern Grove
 
 `rendering/levels/biolume.ts` owns the playable 100-second Lantern Grove, its pooled bending raster gliders, seed-pod cards, local illumination and raster Lantern Ray boss. `biolume/route.ts` owns ten-screen registration, a smooth final coast, light/pod anchors. `biolume/lantern-ray.ts` owns the boss silhouette deformation, moving organ targets, warning phases, homing-seeker steering and swept interception math. The view stays top-down. The boss is already in the last clearing and scrolls into view; the stage enters combat without an approach or clearing shots and threats. The arena stays at the last frame while its fight runs.
