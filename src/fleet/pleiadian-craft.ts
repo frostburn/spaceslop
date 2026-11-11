@@ -3,6 +3,33 @@ import { addBurner, burnerMaterial } from '../burners';
 import { part } from '../rig-geometry';
 import { pleiadianPaint } from './pleiadian-paint';
 
+function goldReflectionMap() {
+  const width = 256, height = 128;
+  const data = new Uint16Array(width * height * 4);
+  const half = T.DataUtils.toHalfFloat;
+  const opaque = half(1);
+  for (let y = 0; y < height; y++) {
+    const v = (y + .5) / height;
+    for (let x = 0; x < width; x++) {
+      const u = (x + .5) / width;
+      // Narrow reflected light across the bank angles, with a cooler broad fill.
+      const key = Math.exp(-(((u - .706 - .27 * (v - .46)) / .031) ** 2 + ((v - .46) / .115) ** 2));
+      const edge = Math.exp(-(((u - .83) / .057) ** 2 + ((v - .53) / .066) ** 2));
+      const fill = Math.exp(-(((u - .56) / .14) ** 2 + ((v - .56) / .24) ** 2));
+      const i = (y * width + x) * 4;
+      data[i] = half(.095 + 6.4 * key + 1.95 * edge + .58 * fill);
+      data[i + 1] = half(.108 + 5.9 * key + 2.08 * edge + .66 * fill);
+      data[i + 2] = half(.145 + 5.15 * key + 2.35 * edge + .78 * fill);
+      data[i + 3] = opaque;
+    }
+  }
+  const map = new T.DataTexture(data, width, height, T.RGBAFormat, T.HalfFloatType);
+  map.name = 'fleet-pleiadian-reflection-lights';
+  map.mapping = T.EquirectangularReflectionMapping;
+  map.needsUpdate = true;
+  return map;
+}
+
 function paintedShell(outline: T.Shape) {
   const shell = new T.ExtrudeGeometry(outline, {
     depth: .11, bevelThickness: .04, bevelSize: .04, bevelSegments: 2, steps: 1,
@@ -16,6 +43,7 @@ function paintedShell(outline: T.Shape) {
 }
 
 export function createPleiadianCraft(environment: T.Texture) {
+  const goldLight = goldReflectionMap();
   const shuttleOutline = new T.Shape();
   shuttleOutline.moveTo(0, .67);
   shuttleOutline.quadraticCurveTo(.16, .54, .20, .22);
@@ -40,7 +68,7 @@ export function createPleiadianCraft(environment: T.Texture) {
   const engine = new T.MeshStandardMaterial({ color: 0x484855, roughness: .49, metalness: .55 });
   const exhaust = burnerMaterial(0x77baff);
   const trim = new T.MeshStandardMaterial({
-    color: 0xd3a563, roughness: .25, metalness: .86, envMap: environment, envMapIntensity: 2.45,
+    color: 0xd3a563, roughness: .25, metalness: .86, envMap: goldLight, envMapIntensity: 1.15,
   });
   const burntTrim = new T.MeshStandardMaterial({
     color: 0x665245, roughness: .8, metalness: .2, envMap: environment, envMapIntensity: .8,
@@ -48,7 +76,7 @@ export function createPleiadianCraft(environment: T.Texture) {
   const clean = pleiadianPaint(false), damaged = pleiadianPaint(true);
   const cleanCap = new T.MeshStandardMaterial({
     map: clean.albedo, roughnessMap: clean.finish, metalnessMap: clean.finish,
-    roughness: 1, metalness: 1, bumpScale: .015, envMap: environment, envMapIntensity: 2.15,
+    roughness: 1, metalness: 1, bumpScale: .015, envMap: goldLight, envMapIntensity: 1.15,
   });
   const damagedCap = new T.MeshStandardMaterial({
     map: damaged.albedo, roughnessMap: damaged.finish, metalnessMap: damaged.finish,
@@ -57,7 +85,7 @@ export function createPleiadianCraft(environment: T.Texture) {
   const cleanHull = [cleanCap, trim], damagedHull = [damagedCap, burntTrim];
 
   return {
-    maps: [clean.albedo, clean.finish, damaged.albedo, damaged.finish],
+    maps: [clean.albedo, clean.finish, damaged.albedo, damaged.finish, goldLight],
     create(kind: 'shuttle' | 'fighter' | 'wreck') {
       const root = new T.Group();
       const shuttle = kind === 'shuttle', wreck = kind === 'wreck';
