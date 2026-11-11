@@ -1,6 +1,6 @@
 import { HEIGHT, WIDTH } from '../playfield';
 import type { WingWeapon } from '../wing';
-import { ellipseEntry } from './combat';
+import { ellipseEntry } from '../planar-contact';
 
 type Point = { x: number; y: number };
 type Course = 'launch' | 'cross' | 'weave';

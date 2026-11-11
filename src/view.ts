@@ -11,7 +11,7 @@ import { createPowerupGraphic } from './powerup-graphics';
 import { createContinuousLaser, createMuzzleFlash, createProjectileBatch, projectileKinds, type ProjectileKind } from './projectile-graphics';
 import { ambusherFeedback } from './preserve-ambusher';
 import { faunaMuzzle } from './vent-fauna';
-import { type LevelId } from './levels';
+import type { LevelId } from './levels';
 import { levelLoaders } from './rendering/loaders';
 import { type LevelFactory, type LevelScene, type LevelFrame } from './rendering/level';
 import { loadCommonTextures } from './rendering/common-textures';
@@ -447,8 +447,12 @@ export class FlightView {
           if(target.summer?.kind==='hydra'&&wing.laserHead!==undefined)model=model?.getObjectByName('hydra-head-'+wing.laserHead);
         }
         const shieldModel=flight.level==='summer'&&flight.phase==='boss'&&target===undefined?this.level.boss:undefined;
-        const end = flight.isDen || (typeof target === 'number' && flight.planarBoss) ? wing.beamEnd : typeof target === 'number' ? this.level.contact(target, distance ?? BOSS_CAMERA_DISTANCE, flight)
+        let end = flight.isDen || (typeof target === 'number' && flight.planarBoss) ? wing.beamEnd : typeof target === 'number' ? this.level.contact(target, distance ?? BOSS_CAMERA_DISTANCE, flight)
           : model ? this.laserContact(origin, wing.beamEnd, model, distance, this.viewPitch) : shieldModel?this.laserContact(origin,wing.beamEnd,shieldModel,distance,this.viewPitch):wing.beamEnd;
+        if (flight.isFleet && typeof target === 'number') {
+          const hullEnd = this.laserContact(origin, { x: origin.x, y: 9 }, this.level.boss, distance);
+          if (hullEnd.y < 9 - 1e-5) end = hullEnd;
+        }
         const contact = typeof target === 'number' || Boolean(model);
         if (flight.isDen) {
           const z = .85;
@@ -467,7 +471,8 @@ export class FlightView {
     for (const weapon of ['homing', 'cannon', 'omega'] as const) {
       this.projectiles[weapon].draw(shots.filter((shot) => shot.wing === weapon), this.animationTime);
     }
-    const hostile = flight.isDen ? flight.threats.map(s => ({ ...s, ...planarProjectileLayer(s, .85) })) : flight.threats;
+    const hostile = flight.isDen ? flight.threats.map(s => ({ ...s, ...planarProjectileLayer(s, .85) }))
+      : flight.level === 'fleet' ? flight.threats.filter(s => !s.broadside) : flight.threats;
     this.projectiles.hostile.draw(flight.level !== 'ice' && flight.level !== 'broodlock' ? hostile : [], this.animationTime);
     this.projectiles.brine.draw(flight.level === 'ice' ? flight.threats : [], this.animationTime);
     this.projectiles.spore.draw(flight.level === 'broodlock' ? flight.threats : [], this.animationTime);
@@ -511,7 +516,8 @@ export class FlightView {
         });
     const bossLaserDamage = flight.bossLaserDamage - this.previousBossLaserDamage;
     if (this.previousBossHealth - flight.bossHealth - bossLaserDamage > 1e-6 && this.animationTime - this.bossHitAt > 0.07) {
-      this.combat.emit(flight.bossHealth === 0 ? 'kill' : 'hit', flight.level==='summer'&&flight.summerLastHit?flight.summerLastHit:{
+      this.combat.emit(flight.bossHealth === 0 ? 'kill' : 'hit', flight.level==='summer'&&flight.summerLastHit?flight.summerLastHit:flight.isFleet?
+        planarProjectileLayer({ x: flight.exposedCannonX, y: flight.bossAimY }, .85):{
         x: flight.exposedCannonX,
         y: flight.bossAimY,
         z: flight.isDen ? .91 : BOSS_DEPTH + BOSS_MUZZLE_Z

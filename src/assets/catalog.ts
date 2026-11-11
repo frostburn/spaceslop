@@ -1,5 +1,10 @@
 import type { LevelId } from '../levels';
 export const textureFiles = {
+  fleetSky: 'encounters/fleet-starfield.png',
+  fleetPlanets: 'encounters/fleet-planet-pair.png',
+  fleetFlagship: 'encounters/fleet-pleiadian-flagship.png',
+  fleetTrench: 'encounters/fleet-pleiadian-trench.png',
+  fleetSaucer: 'encounters/fleet-saucer-alloy.png',
   denCliff: 'encounters/draconian-cliffside.webp',
   denDisk: 'encounters/draconian-accretion-disk.png',
   denBiker: 'encounters/draconian-biker-atlas.png',
@@ -64,6 +69,7 @@ export const studyTextureFiles = {
 export type StudyTexture = keyof typeof studyTextureFiles;
 
 export const levelTextures: Record<LevelId, readonly EncounterTexture[]> = {
+  fleet: ['armor', 'fleetSky', 'fleetPlanets', 'fleetFlagship', 'fleetTrench', 'fleetSaucer'],
   den: ['armor', 'denCliff', 'denDisk', 'denBiker', 'denGantry', 'denSky', 'denPatrol', 'denProps', 'denDefenses'],
   biolume:['armor','biolumeBackdrop','biolumeForeground','biolumeEnemy','biolumePods','biolumeBoss','biolumeFrog'],
   summer:['armor','summerMammoth','summerIce','summerHydra','summerLotusFlanks','summerLotusWall'],

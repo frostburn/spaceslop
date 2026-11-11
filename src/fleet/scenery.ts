@@ -1,0 +1,72 @@
+import * as T from 'three';
+import { loadEncounterTexture } from '../encounter-texture';
+import { HEIGHT, WIDTH } from '../playfield';
+import { createFlagshipEngines } from './engines';
+import { fallbackPleiadianHull } from './placeholder';
+import { createFleetSky, placeFleetPlate } from './sky';
+import { fleetViewY, flankShips, trenchShip } from './route';
+
+export const fleetLighting = {
+  key: 0xffe6c9, sky: 0xc3deff, ground: 0x667295, keyIntensity: 2.32, skyIntensity: 1.22,
+  toneMapping: T.ACESFilmicToneMapping, exposure: 1.17,
+};
+
+export function createFleetScenery(signal: AbortSignal) {
+  const root = new T.Group();
+  root.name = 'fleet-scenery';
+  const sky = createFleetSky(signal);
+  root.add(sky.root);
+  const flankFallback = fallbackPleiadianHull(false), trenchFallback = fallbackPleiadianHull(true);
+  const flagship = new T.MeshBasicMaterial({ map: flankFallback, alphaTest: .38, toneMapped: false });
+  const trench = new T.MeshBasicMaterial({ map: trenchFallback, alphaTest: .38, toneMapped: false });
+  const distant = new T.MeshBasicMaterial({ map: flankFallback, color: 0x758095, alphaTest: .38, toneMapped: false });
+  const clock = { value: 0 };
+  const engines = createFlagshipEngines(clock);
+  const distantHull = { x: 0, y: 0, width: 3.7 };
+  const crossing = new T.Mesh(new T.PlaneGeometry(distantHull.width, 2 * distantHull.width), distant);
+  crossing.name = 'fleet-distant-flagship';
+  crossing.rotation.z = Math.atan2(.52, .69);
+  crossing.add(...engines(distantHull, false, flankShips.length + 1, .46));
+  root.add(crossing);
+
+  const ships = [...flankShips, trenchShip].map((site, index) => {
+    const isTrench = site === trenchShip;
+    const mesh = new T.Mesh(new T.PlaneGeometry(site.width, 2 * site.width), isTrench ? trench : flagship);
+    mesh.name = isTrench ? 'fleet-trench-flagship' : `fleet-broadside-flagship-${index + 1}`;
+    mesh.add(...engines(site, isTrench, index));
+    return { site, mesh };
+  });
+  root.add(...ships.map(({ mesh }) => mesh));
+  const maps = Promise.all([
+    sky.maps,
+    loadEncounterTexture('fleetFlagship', replace([flagship, distant], flankFallback), undefined, signal),
+    loadEncounterTexture('fleetTrench', replace([trench], trenchFallback), undefined, signal),
+  ]).then(([skyMaps]) => [...skyMaps, flagship.map, trench.map]);
+
+  return {
+    root, maps,
+    update(time: number, animationTime: number, distance: number) {
+      clock.value = animationTime;
+      sky.update(time);
+      const age = time - 13;
+      const x = 6.5 - .52 * age, y = -9.1 + .69 * age;
+      crossing.visible = Math.abs(x) < WIDTH / 2 + 4 && Math.abs(y) < HEIGHT / 2 + 4;
+      placeFleetPlate(distance, -43, crossing, x, y);
+      for (const { site, mesh } of ships) {
+        const y = fleetViewY(site.y, time);
+        mesh.visible = Math.abs(y) < HEIGHT / 2 + site.width + 6;
+        placeFleetPlate(distance, site === trenchShip ? -9.3 : -3.1, mesh, site.x, y);
+      }
+    },
+  };
+}
+
+function replace(materials: readonly T.MeshBasicMaterial[], fallback: T.CanvasTexture) {
+  return (texture: T.Texture) => {
+    for (const material of materials) {
+      material.map = texture;
+      material.needsUpdate = true;
+    }
+    fallback.dispose();
+  };
+}
