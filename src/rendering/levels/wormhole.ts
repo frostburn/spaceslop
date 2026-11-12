@@ -41,7 +41,7 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
   const ready = Promise.all([
     loadEncounterTexture('titanChitin', chitin.setTexture, 1, signal),
     loadEncounterTexture('fonsMane', fons.setMane, undefined, signal),
-  ]);
+  ]).then(textures => [...textures, ...tunnel.textures]);
 
   return {
     root,
@@ -100,7 +100,7 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
       const rocks = attacks.root.visible
         ? attacks.update(fonsTime, distance, flight.threats, flight.phase === 'boss' || flight.phase === 'lost', flight.fonsVariant)
         : undefined;
-      tunnel.setFons(fonsTime, finale, storm, rocks);
+      tunnel.setFons(flight.fonsVariant, fonsTime, finale, storm, rocks);
       lightning.root.visible = false;
       const crackle = flight.isFonsFight && fonsTime < 0 ? lightning.update(fonsTime, distance) : 0;
       const shipRadius = Math.hypot(fighter.position.x / halfHeight - frame.lensX, fighter.position.y / halfHeight - apertureY - frame.lensY);
