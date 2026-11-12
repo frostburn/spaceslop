@@ -49,9 +49,10 @@
       </section>
       <section class="edit" aria-labelledby="edit-heading">
         <h2 id="edit-heading">Control point</h2>
-        <p>Drag any interior point on either 8×8 grid. The 28 edge points are fixed to the sprite bounds. The ring marks the corresponding point in the other pose.</p>
+        <p>Each handoff has its own pair of 8×8 grids. Drag the interior points. The edge points stay on the sprite bounds and the ring marks the corresponding point.</p>
         <div class="fields">
-          <label>Pose<select id="edit-pose"><option value="0">Outgoing</option><option value="1">Incoming</option></select></label>
+          <label>Handoff<select id="edit-handoff"></select></label>
+          <label>Grid<select id="edit-pose"><option value="0">Outgoing</option><option value="1">Incoming</option></select></label>
           <label>Point<select id="edit-point"></select></label>
         </div>
         <div class="sliders">
@@ -65,15 +66,15 @@
           </div>
           <div class="actions">
             <label class="check"><input id="lock-point" type="checkbox"> Lock selected point</label>
-            <button id="reset-pose" type="button" title="Restore the selected pose and clear its locks" disabled>Reset pose</button>
+            <button id="reset-grid" type="button" title="Restore the selected grid and clear its locks" disabled>Reset grid</button>
             <button id="copy-edits" type="button" disabled>Copy edits</button>
           </div>
         </div>
-        <textarea id="export" aria-label="Edited atlas interior points" readonly hidden></textarea>
+        <textarea id="export" aria-label="Edited handoff grids" readonly hidden></textarea>
       </section>
       <section class="edit tuning" aria-labelledby="tune-heading">
         <h2 id="tune-heading">Hill-climb</h2>
-        <p>Tunes the outgoing and incoming poses in both turn directions. Gold squares mark locked points. The head-on pose mirrors edits and locks.</p>
+        <p>Tunes this pair in both turn directions while penalizing grid distortion. Gold squares mark locked points.</p>
         <div class="fields">
           <label>Search area
             <select id="tune-scope">

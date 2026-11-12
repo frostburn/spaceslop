@@ -1,12 +1,11 @@
 import * as T from 'three';
-import { denPatrolWarp } from '../den/patrol';
 import {
   createPatrolWarpCard, PATROL_GRID_SIZE as columns, PATROL_VERTEX_COUNT, patrolAtlasFor, patrolGridPoint,
-  patrolInteriorIndex, patrolMirrorPoint, type PatrolPoint, type PatrolRegistration,
+  patrolGridTurn, patrolInteriorIndex, patrolMirrorPoint, type PatrolGrid, type PatrolPoint, type PatrolRegistration,
 } from '../den/patrol-warp';
 import { loadEncounterTexture } from '../encounter-texture';
 import { createPatrolDifference } from './patrol-difference';
-import { meshFoldsNear, movePatrolPoint, patrolSourceSpan } from './patrol-registration';
+import { movePatrolPoint, patrolSourceSpan } from './patrol-registration';
 import { tunePatrolHandoff } from './patrol-tuning';
 import './patrol-study.css';
 
@@ -84,8 +83,9 @@ function start() {
   const previewTitle = element('preview-title'), viewport = overlay.canvas.parentElement!;
   const play = element<HTMLButtonElement>('play'), follow = element<HTMLButtonElement>('follow');
   const editPose = element<HTMLSelectElement>('edit-pose'), editPoint = element<HTMLSelectElement>('edit-point');
+  const editHandoff = element<HTMLSelectElement>('edit-handoff');
   const pointX = range('point-x'), pointY = range('point-y');
-  const reset = element<HTMLButtonElement>('reset-pose'), copy = element<HTMLButtonElement>('copy-edits');
+  const reset = element<HTMLButtonElement>('reset-grid'), copy = element<HTMLButtonElement>('copy-edits');
   const lockPoint = range('lock-point'), tuneScope = element<HTMLSelectElement>('tune-scope');
   const tune = element<HTMLButtonElement>('tune-start'), undoTune = element<HTMLButtonElement>('tune-undo');
   const tuneProgress = element<HTMLProgressElement>('tune-progress');
@@ -100,10 +100,12 @@ function start() {
     preview.replaceWith(Object.assign(document.createElement('p'), { textContent: 'The live blend needs WebGL 2.' }));
   }
   const difference = renderer && createPatrolDifference(renderer, scene, camera, card.root);
-  let atlas = patrolAtlasFor(1254, 1254), registration: PatrolRegistration = atlas.interiors;
-  let locks = registration.map(() => new Set<number>());
+  let atlas = patrolAtlasFor(1254, 1254), registration: PatrolRegistration = atlas.handoffs;
+  const newLocks = () => registration.map(() => [new Set<number>(), new Set<number>()] as const);
+  let locks = newLocks();
   let tuning: AbortController | undefined, tuneTask: Promise<void> | undefined;
-  let beforeTune: PatrolRegistration | undefined;
+  let beforeTune: { handoff: number; registration: PatrolRegistration } | undefined;
+  let reportHandoff = -1;
   let texture: T.Texture | undefined;
   const edited = new Set<number>();
   const sourcePoints: Point[][] = [[], []];
@@ -115,16 +117,20 @@ function start() {
   editPoint.value = String(2 * columns + 4);
   card.setRegistration(atlas);
 
-  const turnAt = () => denPatrolWarp(heading.valueAsNumber * degrees, atlas.crops.length);
+  const turnAt = () => patrolGridTurn(heading.valueAsNumber * degrees, atlas.crops.length);
   const selected = () => {
-    const turn = turnAt();
-    return {
-      frame: editPose.value === '0' ? turn.first : turn.second,
-      point: Number(editPoint.value),
-    };
+    const { handoff } = turnAt(), side = editPose.value === '0' ? 0 : 1;
+    return { handoff, side, frame: handoff + side, point: Number(editPoint.value) } as const;
   };
 
-  function paintSource(context: CanvasRenderingContext2D, frame: number, pane: number, selectedPoint: number) {
+  function populateHandoffs() {
+    const step = 90 / atlas.handoffs.length;
+    editHandoff.replaceChildren(...atlas.handoffs.map((_, i) => new Option(`${i * step}° → ${(i + 1) * step}°`, String(i))));
+  }
+  populateHandoffs();
+
+  function paintSource(context: CanvasRenderingContext2D, handoff: number, side: 0 | 1, selectedPoint: number) {
+    const frame = handoff + side;
     const size = square(context.canvas);
     const [left, top, right, bottom, pivotX, pivotY] = atlas.crops[frame];
     const scale = size / patrolSourceSpan(atlas);
@@ -137,17 +143,17 @@ function start() {
         x + left * scale, y + top * scale, (right - left) * scale, (bottom - top) * scale);
     }
     const points = Array.from({ length: PATROL_VERTEX_COUNT }, (_, point) => {
-      const [u, v] = patrolGridPoint(atlas.crops[frame], registration[frame], point);
+      const [u, v] = patrolGridPoint(atlas.crops[frame], registration[handoff][side], point);
       return { x: x + (left + u) * scale, y: y + (top + v) * scale };
     });
-    sourcePoints[pane] = points;
-    drawMesh(context, points, selectedPoint, pane !== Number(editPose.value), locks[frame]);
+    sourcePoints[side] = points;
+    drawMesh(context, points, selectedPoint, side !== Number(editPose.value), locks[handoff][side]);
   }
 
   function syncPointControls() {
-    const { frame, point } = selected(), crop = atlas.crops[frame];
-    const [x, y] = patrolGridPoint(crop, registration[frame], point);
-    const fixed = patrolInteriorIndex(point) < 0, locked = locks[frame].has(point);
+    const { handoff, side, frame, point } = selected(), crop = atlas.crops[frame];
+    const [x, y] = patrolGridPoint(crop, registration[handoff][side], point);
+    const fixed = patrolInteriorIndex(point) < 0, locked = locks[handoff][side].has(point);
     const busy = Boolean(tuning);
     pointX.max = String(crop[2] - crop[0]);
     pointY.max = String(crop[3] - crop[1]);
@@ -158,12 +164,13 @@ function start() {
     output('point-y').value = `${rounded(y)} px`;
     lockPoint.checked = fixed || locked;
     lockPoint.disabled = busy || fixed;
-    for (const field of [heading, play, editPose, editPoint, tuneScope]) field.disabled = busy;
-    const turn = turnAt();
-    tune.disabled = tuning ? tuning.signal.aborted : !texture || !difference || turn.first === turn.second;
-    reset.disabled = busy || (!edited.has(frame) && !locks[frame].size);
+    for (const field of [heading, play, editHandoff, editPose, editPoint, tuneScope]) field.disabled = busy;
+    editHandoff.value = String(handoff);
+    tune.disabled = tuning ? tuning.signal.aborted : !texture || !difference;
+    reset.disabled = busy || (registration[handoff][side] === atlas.handoffs[handoff][side] && !locks[handoff][side].size);
     copy.disabled = busy || !edited.size;
-    undoTune.disabled = busy || !beforeTune;
+    undoTune.disabled = busy || beforeTune?.handoff !== handoff;
+    tuneScore.hidden = tuneStatus.hidden = reportHandoff !== handoff;
   }
 
   function measureDifference(angle: number, now: number) {
@@ -205,10 +212,10 @@ function start() {
     viewport.classList.toggle('difference', comparing);
     score.hidden = !comparing;
     const { point } = selected();
-    for (const [pane, index] of [turn.first, turn.second].entries()) {
-      const title = pane === 0 ? 'Outgoing' : 'Incoming';
-      element(title.toLowerCase()).textContent = `${title} · Pose ${index + 1} · ${Math.round(index * 90 / (atlas.crops.length - 1))}°`;
-      paintSource(sources[pane], index, pane, point);
+    for (const side of [0, 1] as const) {
+      const index = turn.handoff + side, title = side === 0 ? 'Outgoing' : 'Incoming';
+      element(title.toLowerCase()).textContent = `${title} · Pose ${index + 1} · ${Math.round(index * 90 / atlas.handoffs.length)}°`;
+      paintSource(sources[side], turn.handoff, side, point);
     }
     const mounts = card.pose(turn.angle, weight);
     if (renderer) {
@@ -255,29 +262,28 @@ function start() {
     requestRender();
   }
 
-  function commitRegistration(next: PatrolRegistration, changedFrame?: number) {
+  function commitRegistration(next: PatrolRegistration) {
     card.setRegistration(atlas, next);
-    if (changedFrame !== undefined && meshFoldsNear(card, changedFrame, registration.length - 1)) throw new Error('Folded mesh');
     registration = next;
     edited.clear();
-    registration.forEach((rows, frame) => {
-      if (rows !== atlas.interiors[frame]) edited.add(frame);
+    registration.forEach((grids, handoff) => {
+      if (grids !== atlas.handoffs[handoff]) edited.add(handoff);
     });
     exportText.hidden = true;
     requestRender();
   }
 
-  function applyPose(frame: number, next: readonly PatrolPoint[], quiet = false) {
-    const candidate = [...registration];
-    candidate[frame] = next;
+  function applyGrid(handoff: number, side: 0 | 1, next: PatrolGrid, quiet = false) {
+    const candidate = [...registration], [outgoing, incoming] = registration[handoff], original = atlas.handoffs[handoff];
+    const nextOutgoing = side === 0 ? next : outgoing, nextIncoming = side === 1 ? next : incoming;
+    candidate[handoff] = nextOutgoing === original[0] && nextIncoming === original[1] ? original : [nextOutgoing, nextIncoming];
     try {
-      commitRegistration(candidate, frame);
+      commitRegistration(candidate);
       clearTuneHistory();
       status.textContent = texture ? '' : 'Patrol atlas unavailable. Control points are still editable.';
       return true;
     } catch {
-      card.setRegistration(atlas, registration);
-      if (!quiet) status.textContent = 'That edit would fold the mesh or move an anchor outside it.';
+      if (!quiet) status.textContent = 'That edit would fold the grid during this handoff.';
       requestRender();
       return false;
     }
@@ -285,24 +291,26 @@ function start() {
 
   function editCoordinates(event: Event) {
     if (tuning) return;
-    const { frame, point } = selected();
-    if (patrolInteriorIndex(point) < 0 || locks[frame].has(point)) return;
+    const { handoff, side, frame, point } = selected();
+    if (patrolInteriorIndex(point) < 0 || locks[handoff][side].has(point)) return;
     setPlaying(false);
-    const [x, y] = patrolGridPoint(atlas.crops[frame], registration[frame], point);
-    const next = movePatrolPoint(atlas, frame, registration[frame], point,
+    const grid = registration[handoff][side];
+    const [x, y] = patrolGridPoint(atlas.crops[frame], grid, point);
+    const next = movePatrolPoint(atlas, frame, grid, point,
       event.target === pointX ? pointX.valueAsNumber : x, event.target === pointY ? pointY.valueAsNumber : y);
-    if (next !== registration[frame]) applyPose(frame, next);
+    if (next !== grid) applyGrid(handoff, side, next);
   }
 
   function clearTuneHistory() {
     beforeTune = undefined;
+    reportHandoff = -1;
     tuneScore.value = '';
     tuneStatus.textContent = '';
   }
 
   async function startTune() {
-    const { first, second } = turnAt();
-    if (!renderer || !texture || !difference || first === second) return;
+    const { handoff } = turnAt();
+    if (!renderer || !texture || !difference) return;
     const initial = registration;
     const run = new AbortController();
     tuning = run;
@@ -311,6 +319,7 @@ function start() {
     showDifference.checked = true;
     sampled = undefined;
     score.value = 'Tuning…';
+    reportHandoff = handoff;
     tuneStatus.textContent = '';
     tuneScore.value = '';
     tuneProgress.removeAttribute('value');
@@ -320,13 +329,13 @@ function start() {
     let finished = false, measured = false;
     try {
       await tunePatrolHandoff({
-        renderer, texture, camera, atlas, initial, locks, first, selectedPoint: point,
+        renderer, texture, camera, atlas, initial, locks: locks[handoff], handoff, selectedPoint: point,
         wholeHandoff: tuneScope.value === 'all', signal: run.signal,
         onProgress: (next, before, best, completed, total) => {
           measured = true;
           if (next !== registration) {
             commitRegistration(next);
-            beforeTune = initial;
+            beforeTune = { handoff, registration: initial };
           }
           tuneProgress.max = total;
           tuneProgress.value = completed;
@@ -358,6 +367,11 @@ function start() {
   for (const field of [pointX, pointY]) field.addEventListener('input', editCoordinates);
   for (const field of [editPose, editPoint]) field.addEventListener('change', () => setPlaying(false));
   heading.addEventListener('input', () => setPlaying(false));
+  editHandoff.addEventListener('change', () => {
+    const sign = heading.valueAsNumber > 0 ? 1 : -1;
+    heading.value = String(sign * (Number(editHandoff.value) + .5) * 90 / atlas.handoffs.length);
+    setPlaying(false);
+  });
   blend.addEventListener('input', () => { manual = true; requestRender(); });
   follow.addEventListener('click', () => { manual = false; requestRender(); });
   play.addEventListener('click', () => setPlaying(!playing));
@@ -368,12 +382,12 @@ function start() {
     requestRender();
   });
   lockPoint.addEventListener('change', () => {
-    const { frame, point } = selected();
+    const { handoff, side, frame, point } = selected();
     if (patrolInteriorIndex(point) < 0) return;
     const points = frame === 0 ? [point, patrolMirrorPoint(point)] : [point];
     for (const p of points) {
-      if (lockPoint.checked) locks[frame].add(p);
-      else locks[frame].delete(p);
+      if (lockPoint.checked) locks[handoff][side].add(p);
+      else locks[handoff][side].delete(p);
     }
     clearTuneHistory();
     setPlaying(false);
@@ -385,21 +399,23 @@ function start() {
     } else tuneTask = startTune();
   });
   undoTune.addEventListener('click', () => {
-    if (!tuning && beforeTune) {
-      commitRegistration(beforeTune);
+    const { handoff } = turnAt();
+    if (!tuning && beforeTune?.handoff === handoff) {
+      commitRegistration(beforeTune.registration);
       clearTuneHistory();
+      reportHandoff = handoff;
       tuneStatus.textContent = 'Tuning undone.';
     }
   });
   reset.addEventListener('click', () => {
-    const { frame } = selected();
-    if (applyPose(frame, atlas.interiors[frame])) locks[frame].clear();
+    const { handoff, side } = selected();
+    if (applyGrid(handoff, side, atlas.handoffs[handoff][side])) locks[handoff][side].clear();
   });
   copy.addEventListener('click', async () => {
-    exportText.value = JSON.stringify(Object.fromEntries([...edited].map(frame => [frame, registration[frame]])), null, 2);
+    exportText.value = JSON.stringify(Object.fromEntries([...edited].map(handoff => [handoff, registration[handoff]])), null, 2);
     try {
       await navigator.clipboard.writeText(exportText.value);
-      status.textContent = 'Copied the 36 interior points of each edited pose, in crop-local pixels.';
+      status.textContent = 'Copied the outgoing and incoming grids for each edited handoff.';
     } catch {
       exportText.hidden = false;
       exportText.select();
@@ -407,7 +423,7 @@ function start() {
   });
   sources.forEach(({ canvas }, pane) => {
     let drag: {
-      pointer: number; frame: number; point: number; interior: readonly PatrolPoint[];
+      pointer: number; handoff: number; side: 0 | 1; frame: number; point: number; interior: PatrolGrid;
       start: Point; origin: PatrolPoint; last: Point; moved: boolean;
     } | undefined;
 
@@ -430,21 +446,21 @@ function start() {
       if (nearest < 0) return;
       editPose.value = String(pane);
       editPoint.value = String(nearest);
-      const { frame } = selected();
+      const { handoff, side, frame } = selected();
       setPlaying(false);
-      if (patrolInteriorIndex(nearest) < 0 || locks[frame].has(nearest)) {
+      if (patrolInteriorIndex(nearest) < 0 || locks[handoff][side].has(nearest)) {
         status.textContent = patrolInteriorIndex(nearest) < 0 ? 'The edge of the grid is fixed.' : 'This point is locked.';
         return;
       }
-      const interior = registration[frame], origin = patrolGridPoint(atlas.crops[frame], interior, nearest);
-      drag = { pointer: event.pointerId, frame, point: nearest, interior, start, origin, last: { x: origin[0], y: origin[1] }, moved: false };
+      const interior = registration[handoff][side], origin = patrolGridPoint(atlas.crops[frame], interior, nearest);
+      drag = { pointer: event.pointerId, handoff, side, frame, point: nearest, interior, start, origin, last: { x: origin[0], y: origin[1] }, moved: false };
       canvas.setPointerCapture(event.pointerId);
     });
 
     canvas.addEventListener('pointermove', event => {
       if (!drag || drag.pointer !== event.pointerId || tuning) return;
-      const { frame, point, interior, start, origin, last } = drag;
-      if (selected().frame !== frame || locks[frame].has(point)) return;
+      const { handoff, side, frame, point, interior, start, origin, last } = drag;
+      if (turnAt().handoff !== handoff || locks[handoff][side].has(point)) return;
       const position = canvasPosition(event), scale = patrolSourceSpan(atlas) / canvas.width;
       const dx = position.x - start.x, dy = position.y - start.y;
       if (!drag.moved && Math.hypot(dx, dy) < 2 * canvas.width / canvas.clientWidth) return;
@@ -452,7 +468,7 @@ function start() {
       const target = { x: origin[0] + dx * scale, y: origin[1] + dy * scale };
       const attempt = ({ x, y }: Point) => {
         const next = movePatrolPoint(atlas, frame, interior, point, x, y);
-        return next === registration[frame] || applyPose(frame, next, true);
+        return next === registration[handoff][side] || applyGrid(handoff, side, next, true);
       };
       if (attempt(target)) {
         drag.last = target;
@@ -469,7 +485,7 @@ function start() {
           drag.last = step;
         } else upper = t;
       }
-      status.textContent = 'Drag limited by the mesh or an anchor.';
+      status.textContent = 'Drag limited by the grid for this handoff.';
     });
 
     canvas.addEventListener('lostpointercapture', () => { drag = undefined; });
@@ -482,12 +498,13 @@ function start() {
     const image = map.image as HTMLImageElement;
     card.setArt(map);
     atlas = patrolAtlasFor(image.width, image.height);
-    registration = atlas.interiors;
-    locks = registration.map(() => new Set<number>());
+    registration = atlas.handoffs;
+    locks = newLocks();
     clearTuneHistory();
     edited.clear();
     texture = map;
     showDifference.disabled = !difference;
+    populateHandoffs();
   }, undefined, controller.signal).then(() => {
     if (controller.signal.aborted) return;
     status.textContent = texture ? '' : 'Patrol atlas unavailable. Control points are still editable.';

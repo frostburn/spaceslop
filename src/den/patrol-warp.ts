@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { denPatrolWarp } from './patrol';
-import { turn16Crops, turn16Hardpoints, turn16Interior } from './patrol-atlas-16';
+import { turn16Crops, turn16Hardpoints, turn16Handoffs } from './patrol-atlas-16';
 
 // Atlas crops and chassis pivots in source pixels. UVs are normalized so the
 // registrations also work with whole-canvas resizes.
@@ -26,7 +26,9 @@ for (let row = 0; row < edge; row++) for (let column = 0; column < edge; column+
 }
 
 export type PatrolPoint = readonly [x: number, y: number];
-export type PatrolRegistration = readonly (readonly PatrolPoint[])[];
+export type PatrolGrid = readonly PatrolPoint[];
+export type PatrolGridPair = readonly [outgoing: PatrolGrid, incoming: PatrolGrid];
+export type PatrolRegistration = readonly PatrolGridPair[];
 type Crop = readonly [left: number, top: number, right: number, bottom: number, pivotX: number, pivotY: number];
 type MeshAnchor = { vertices: [number, number, number]; weights: [number, number, number] };
 
@@ -35,7 +37,7 @@ export type PatrolAtlas = {
   height: number;
   pixel: number;
   crops: readonly Crop[];
-  interiors: PatrolRegistration;
+  handoffs: PatrolRegistration;
   hardpoints?: readonly (readonly [PatrolPoint, PatrolPoint, PatrolPoint])[];
 };
 
@@ -48,7 +50,7 @@ export function patrolMirrorPoint(point: number) {
   return point + edge - 2 * (point % PATROL_GRID_SIZE);
 }
 
-export function patrolGridPoint(crop: Crop, interior: readonly PatrolPoint[], point: number): PatrolPoint {
+export function patrolGridPoint(crop: Crop, interior: PatrolGrid, point: number): PatrolPoint {
   const i = patrolInteriorIndex(point);
   if (i >= 0) return interior[i];
   const [left, top, right, bottom] = crop;
@@ -81,53 +83,79 @@ function bindAnchor(xy: number[], x: number, y: number, mirror: boolean): MeshAn
   throw new Error('Patrol hardpoint lies outside its atlas mesh');
 }
 
-function registerPoses(atlas: PatrolAtlas, registration = atlas.interiors) {
+function registerGrid(atlas: PatrolAtlas, frame: number, interior: PatrolGrid) {
   const { width, height, pixel, crops, hardpoints } = atlas;
-  const poses = crops.map((crop, i) => {
-    const [left, top, right, bottom, pivotX, pivotY] = crop;
-    const angle = (Math.PI / 2) * i / (crops.length - 1), cos = Math.cos(angle), sin = Math.sin(angle);
-    const xy: number[] = [], uv: number[] = [];
-    const local = (x: number, y: number): PatrolPoint => {
-      const dx = (x - pivotX) * pixel, dy = (y - pivotY) * pixel;
-      return [cos * dx + sin * dy, sin * dx - cos * dy];
-    };
-    for (let point = 0; point < PATROL_VERTEX_COUNT; point++) {
-      const [u, v] = patrolGridPoint(crop, registration[i], point);
-      const x = left + u, y = top + v;
-      xy.push(...local(x, y));
-      uv.push(x / width, 1 - y / height);
-    }
-    const mounts = hardpoints?.[i].map(([x, y]) => {
-      const [localX, localY] = local(x, y);
-      // Mirroring changes the diagonal across a quad. Bind each mount to
-      // the triangle that actually carries its source pixel.
-      return { forward: bindAnchor(xy, localX, localY, false), mirrored: bindAnchor(xy, localX, localY, true) };
-    });
-    return { xy, uv, mounts, crop: new T.Vector4(left / width, 1 - bottom / height, right / width, 1 - top / height) };
+  const crop = crops[frame], [left, top, right, bottom, pivotX, pivotY] = crop;
+  const angle = (Math.PI / 2) * frame / (crops.length - 1), cos = Math.cos(angle), sin = Math.sin(angle);
+  const xy: number[] = [], uv: number[] = [];
+  const local = (x: number, y: number): PatrolPoint => {
+    const dx = (x - pivotX) * pixel, dy = (y - pivotY) * pixel;
+    return [cos * dx + sin * dy, sin * dx - cos * dy];
+  };
+  for (let point = 0; point < PATROL_VERTEX_COUNT; point++) {
+    const [u, v] = patrolGridPoint(crop, interior, point);
+    const x = left + u, y = top + v;
+    xy.push(...local(x, y));
+    uv.push(x / width, 1 - y / height);
+  }
+  const mounts = hardpoints?.[frame].map(([x, y]) => {
+    const [localX, localY] = local(x, y);
+    // Mirroring changes the diagonal across a quad. Bind each mount to
+    // the triangle that actually carries its source pixel.
+    return { forward: bindAnchor(xy, localX, localY, false), mirrored: bindAnchor(xy, localX, localY, true) };
   });
-  return poses.map((pose, i) => ({
-    ...pose,
-    // A shared tangent carries vertex velocity through each key. Limit it to
-    // monotone motion so a crest or hull edge cannot overshoot its source views.
-    tangent: pose.xy.map((x, j) => {
-      if (!hardpoints || i === 0 || i === poses.length - 1) return 0;
-      const a = x - poses[i - 1].xy[j], b = poses[i + 1].xy[j] - x;
-      return a * b > 0 ? 2 * a * b / (a + b) : 0;
-    }),
-  }));
+  return { xy, uv, mounts, crop: new T.Vector4(left / width, 1 - bottom / height, right / width, 1 - top / height) };
 }
 
-const legacyAtlas: PatrolAtlas = { width: 1536, height: 1024, pixel: .00525, crops, interiors: crops.map(uniformInterior) };
+function triangleArea(xy: number[], a: number, b: number, c: number) {
+  return (xy[b] - xy[a]) * (xy[c + 1] - xy[a + 1]) - (xy[b + 1] - xy[a + 1]) * (xy[c] - xy[a]);
+}
+
+function registerHandoff(atlas: PatrolAtlas, handoff: number, grids: PatrolGridPair) {
+  const outgoing = registerGrid(atlas, handoff, grids[0]), incoming = registerGrid(atlas, handoff + 1, grids[1]);
+  const midpoint = outgoing.xy.map((coordinate, i) => (coordinate + incoming.xy[i]) / 2);
+  for (const mirror of [false, true]) {
+    const sign = mirror ? -1 : 1;
+    const vertex = (index: number) => 2 * (mirror ? patrolMirrorPoint(index) : index);
+    for (let i = 0; i < indices.length; i += 3) {
+      const a = vertex(indices[i]), b = vertex(indices[i + 1]), c = vertex(indices[i + 2]);
+      const start = sign * triangleArea(outgoing.xy, a, b, c), end = sign * triangleArea(incoming.xy, a, b, c);
+      const middle = sign * triangleArea(midpoint, a, b, c);
+      // Triangle area is quadratic in the interpolation weight. Check its
+      // minimum, including any interior minimum between the two endpoints.
+      const quadratic = 2 * (start + end - 2 * middle), linear = end - start - quadratic;
+      const minimum = quadratic > 0 ? -linear / (2 * quadratic) : 0;
+      const low = minimum > 0 && minimum < 1 ? start + minimum * (linear + minimum * quadratic) : Math.min(start, end);
+      if (!(low > 1e-8)) throw new Error('Patrol handoff folds its mesh');
+    }
+  }
+  return [outgoing, incoming] as const;
+}
+
+const legacyAtlas: PatrolAtlas = {
+  width: 1536, height: 1024, pixel: .00525, crops,
+  handoffs: crops.slice(0, -1).map((crop, i) => [uniformInterior(crop), uniformInterior(crops[i + 1])]),
+};
 const denseAtlas: PatrolAtlas = {
   width: 1254, height: 1254, pixel: .009, crops: turn16Crops,
-  interiors: turn16Interior, hardpoints: turn16Hardpoints,
+  handoffs: turn16Handoffs, hardpoints: turn16Hardpoints,
 };
-const legacyPoses = registerPoses(legacyAtlas), densePoses = registerPoses(denseAtlas);
+const legacyHandoffs = legacyAtlas.handoffs.map((grids, i) => registerHandoff(legacyAtlas, i, grids));
+const denseHandoffs = denseAtlas.handoffs.map((grids, i) => registerHandoff(denseAtlas, i, grids));
 
 export function patrolAtlasFor(width: number, height: number) {
   if (width === height && width > 0) return denseAtlas;
   if (width / height === 1.5) return legacyAtlas;
   throw new Error('Unsupported patrol atlas layout');
+}
+
+export function patrolGridTurn(heading: number, poseCount: number) {
+  const turn = denPatrolWarp(heading, poseCount);
+  const atEnd = turn.first === turn.second;
+  return {
+    angle: turn.angle, mirror: turn.mirror, handoff: atEnd ? poseCount - 2 : turn.first,
+    fraction: atEnd ? 1 : turn.fraction, blend: atEnd ? 1 : turn.blend,
+  };
 }
 
 function createGeometry() {
@@ -155,11 +183,10 @@ export const patrolPoseSampling = `varying vec2 artUV, nextArtUV;
 
 export function createPatrolWarpCard() {
   const buffers = createGeometry();
-  let poses = densePoses;
-  let dense = true;
+  let activeAtlas = denseAtlas, activeRegistration = denseAtlas.handoffs, handoffs = denseHandoffs;
   const uniforms = {
     atlas: { value: null as T.Texture | null },
-    crop: { value: poses[0].crop }, nextCrop: { value: poses[0].crop }, poseBlend: { value: 0 },
+    crop: { value: handoffs[0][0].crop }, nextCrop: { value: handoffs[0][1].crop }, poseBlend: { value: 0 },
   };
   const material = new T.ShaderMaterial({
     uniforms,
@@ -192,7 +219,7 @@ export function createPatrolWarpCard() {
   root.position.z = .19;
   root.visible = false;
   root.frustumCulled = false;
-  let firstKey = Infinity, secondKey = Infinity;
+  let textureKey = Infinity;
   const mounts = [new T.Vector2(), new T.Vector2(), new T.Vector2()] as const;
   const nextMount = new T.Vector2();
 
@@ -206,48 +233,45 @@ export function createPatrolWarpCard() {
     }
   }
 
-  function setRegistration(atlas: PatrolAtlas, registration = atlas.interiors) {
-    poses = registration === atlas.interiors ? (atlas === denseAtlas ? densePoses : legacyPoses) : registerPoses(atlas, registration);
-    dense = atlas === denseAtlas;
-    firstKey = secondKey = Infinity;
+  function setRegistration(atlas: PatrolAtlas, registration = atlas.handoffs) {
+    const defaults = atlas === denseAtlas ? denseHandoffs : legacyHandoffs;
+    const next = registration === atlas.handoffs ? defaults : registration.map((grids, i) => {
+      if (grids === atlas.handoffs[i]) return defaults[i];
+      if (atlas === activeAtlas && grids === activeRegistration[i]) return handoffs[i];
+      return registerHandoff(atlas, i, grids);
+    });
+    activeAtlas = atlas;
+    activeRegistration = registration;
+    handoffs = next;
+    textureKey = Infinity;
   }
 
   function pose(heading: number, blendOverride?: number) {
     const { position, uv, nextUV } = buffers;
-    const turn = denPatrolWarp(heading, poses.length);
-    const a = poses[turn.first], b = poses[turn.second];
+    const turn = patrolGridTurn(heading, handoffs.length + 1);
+    const [a, b] = handoffs[turn.handoff];
     const sign = turn.mirror ? -1 : 1;
-    const keyA = turn.first * sign, keyB = turn.second * sign;
-    const updateFirst = keyA !== firstKey, updateSecond = keyB !== secondKey;
+    const key = turn.mirror ? ~turn.handoff : turn.handoff;
+    const updateUV = key !== textureKey;
     const t = turn.fraction;
-    const w = dense ? t * t * (3 - 2 * t) : t;
-    const tanA = dense ? t * (1 - t) ** 2 : 0;
-    const tanB = dense ? t * t * (t - 1) : 0;
+    // Both grids reproduce the exact painted sprite at a key. Ease the local
+    // deformation to rest there, so switching tessellations has no motion seam.
+    const w = t * t * (3 - 2 * t);
     for (let i = 0; i < PATROL_VERTEX_COUNT; i++) {
-      // Reverse the columns when mirroring to retain front-face winding.
       const j = turn.mirror ? patrolMirrorPoint(i) : i, x = 2 * j, y = x + 1;
-      position.setXYZ(i, sign * (T.MathUtils.lerp(a.xy[x], b.xy[x], w) + tanA * a.tangent[x] + tanB * b.tangent[x]),
-        T.MathUtils.lerp(a.xy[y], b.xy[y], w) + tanA * a.tangent[y] + tanB * b.tangent[y], 0);
-      // Each texture follows the same vertices, with the head-on view shared
-      // between both turn directions.
-      if (updateFirst) {
-        const k = (turn.first === 0 ? i : j) * 2;
+      position.setXYZ(i, sign * T.MathUtils.lerp(a.xy[x], b.xy[x], w), T.MathUtils.lerp(a.xy[y], b.xy[y], w), 0);
+      if (updateUV) {
+        // The symmetric head-on grid shares its unmirrored texture in both directions.
+        const k = (turn.handoff === 0 ? i : j) * 2;
         uv.setXY(i, a.uv[k], a.uv[k + 1]);
-      }
-      if (updateSecond) {
-        const k = (turn.second === 0 ? i : j) * 2;
-        nextUV.setXY(i, b.uv[k], b.uv[k + 1]);
+        nextUV.setXY(i, b.uv[x], b.uv[y]);
       }
     }
     position.needsUpdate = true;
-    if (updateFirst) {
-      firstKey = keyA;
-      uv.needsUpdate = true;
+    if (updateUV) {
+      textureKey = key;
+      uv.needsUpdate = nextUV.needsUpdate = true;
       uniforms.crop.value = a.crop;
-    }
-    if (updateSecond) {
-      secondKey = keyB;
-      nextUV.needsUpdate = true;
       uniforms.nextCrop.value = b.crop;
     }
     const blend = blendOverride ?? turn.blend;

@@ -1,11 +1,14 @@
-import { patrolInteriorIndex, patrolMirrorPoint, type createPatrolWarpCard, type PatrolAtlas, type PatrolPoint } from '../den/patrol-warp';
+import {
+  PATROL_GRID_SIZE, PATROL_VERTEX_COUNT, patrolGridPoint, patrolInteriorIndex, patrolMirrorPoint,
+  type PatrolAtlas, type PatrolGrid, type PatrolPoint,
+} from '../den/patrol-warp';
 
-export type PatrolLocks = readonly ReadonlySet<number>[];
+export type PatrolLocks = readonly [outgoing: ReadonlySet<number>, incoming: ReadonlySet<number>];
 export const patrolSourceSpan = (atlas: PatrolAtlas) => atlas.width === atlas.height ? 336 : 570;
 
 export function movePatrolPoint(
-  atlas: PatrolAtlas, frame: number, interior: readonly PatrolPoint[], point: number, x: number, y: number,
-): readonly PatrolPoint[] {
+  atlas: PatrolAtlas, frame: number, interior: PatrolGrid, point: number, x: number, y: number,
+): PatrolGrid {
   const i = patrolInteriorIndex(point);
   if (i < 0) return interior;
   const [left, top, right, bottom] = atlas.crops[frame];
@@ -19,19 +22,20 @@ export function movePatrolPoint(
   return next;
 }
 
-export function meshFoldsNear(card: ReturnType<typeof createPatrolWarpCard>, frame: number, last: number) {
-  const { index, attributes: { position } } = card.root.geometry;
-  // Changing one pose can also change the tangents of its neighbors.
-  for (const sign of [-1, 1]) {
-    for (let t = Math.max(0, frame - 2); t <= Math.min(last, frame + 2); t += .125) {
-      card.pose(sign * t * (Math.PI / 2) / last);
-      for (let i = 0; i < index!.count; i += 3) {
-        const a = index!.getX(i), b = index!.getX(i + 1), c = index!.getX(i + 2);
-        const ax = position.getX(a), ay = position.getY(a);
-        if ((position.getX(b) - ax) * (position.getY(c) - ay) -
-            (position.getY(b) - ay) * (position.getX(c) - ax) <= 0) return true;
-      }
+export function patrolGridStrain(atlas: PatrolAtlas, frame: number, grid: PatrolGrid) {
+  const crop = atlas.crops[frame], edge = PATROL_GRID_SIZE - 1;
+  const cellX = (crop[2] - crop[0]) / edge, cellY = (crop[3] - crop[1]) / edge;
+  const offsets = Array.from({ length: PATROL_VERTEX_COUNT }, (_, point): PatrolPoint => {
+    const [x, y] = patrolGridPoint(crop, grid, point);
+    return [x / cellX - point % PATROL_GRID_SIZE, y / cellY - Math.floor(point / PATROL_GRID_SIZE)];
+  });
+  let strain = 0;
+  for (const [i, [x, y]] of offsets.entries()) {
+    strain += .23 * (x * x + y * y);
+    for (const j of [i % PATROL_GRID_SIZE < edge ? i + 1 : PATROL_VERTEX_COUNT, i + PATROL_GRID_SIZE]) {
+      if (j >= PATROL_VERTEX_COUNT) continue;
+      strain += (x - offsets[j][0]) ** 2 + (y - offsets[j][1]) ** 2;
     }
   }
-  return false;
+  return strain;
 }
