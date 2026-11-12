@@ -64,6 +64,16 @@ export function createBossDefeat(boss: T.Group, plane: T.Group, level: LevelId) 
   const visible = boss.visible;
   boss.parent!.add(parent);
   parent.add(boss);
+  // Keep the same shader light count after a lit boss leaves the scene.
+  // Io's furnace and Heliostat's emitters use unshadowed point lights.
+  const inactiveLights = new T.Group();
+  inactiveLights.visible = false;
+  boss.traverse(object => {
+    if (object instanceof T.PointLight && !object.castShadow)
+      inactiveLights.add(new T.PointLight(object.color, 0));
+  });
+  if (inactiveLights.children.length > 0)
+    parent.add(inactiveLights);
   const path = exits[level];
   const core = boss.getObjectByName('laser_contact_C') ?? boss;
   const drift = new T.Vector3(...path.drift);
@@ -76,10 +86,12 @@ export function createBossDefeat(boss: T.Group, plane: T.Group, level: LevelId) 
       parent.quaternion.identity();
       parent.scale.setScalar(1);
       boss.visible = visible;
+      inactiveLights.visible = false;
       nextBurst = 0;
     },
     pose(time: number, emit: (source: T.Vector3, tint: number) => void) {
       boss.visible = time < DEFEAT_DURATION;
+      inactiveLights.visible = !boss.visible;
       if (!boss.visible) return false;
       const fall = T.MathUtils.smoothstep(time, .08, DEFEAT_DURATION);
       const scale = 1 - .99 * T.MathUtils.smoothstep(time, .62, DEFEAT_DURATION);

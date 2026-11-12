@@ -62,6 +62,32 @@ test('the defeat rig starts from the authored pose and resets for a replay', () 
   assert(defeat.pose(0, emit));
 });
 
+test('retiring a lit boss preserves the point light count without leaving it illuminated', () => {
+  const plane = new T.Group(), boss = new T.Group(), emitter = new T.Group();
+  plane.add(boss);
+  boss.add(emitter);
+  const light = new T.PointLight(0xff6300, 14);
+  emitter.add(light);
+  const defeat = createBossDefeat(boss, plane, 'io');
+  const visiblePointLights = () => {
+    const lights = [];
+    plane.traverseVisible(object => {
+      if (object instanceof T.PointLight) lights.push(object);
+    });
+    return lights;
+  };
+  const emit = () => {};
+  defeat.pose(0, emit);
+  assert.deepEqual(visiblePointLights(), [light]);
+  defeat.pose(VICTORY_DURATION, emit);
+  const retired = visiblePointLights();
+  assert.equal(retired.length, 1);
+  assert.equal(retired[0].intensity, 0);
+  defeat.reset();
+  assert.deepEqual(visiblePointLights(), [light]);
+  assert.equal(light.intensity, 14);
+});
+
 test('flares fan out from one launcher and hold their positions in the freeze frame', () => {
   const { root, pose } = createVictoryFlares();
   pose(.9);
