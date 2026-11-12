@@ -1,4 +1,4 @@
-import { pilots } from './pilot-data';
+import { pilots, type PilotId } from './pilot-data';
 
 declare const __PILOT_URLS__:Record<string,string>;
 declare const __PILOT_PORTRAITS__: readonly string[];
@@ -40,42 +40,26 @@ export function createPortrait(initials: string, color: string, url?: string, si
   return frame;
 }
 
-function portrait(pilot: Pilot) {
+function portrait(pilot: Pilot, signal: AbortSignal) {
   const path = `pilots/${pilot.id}.png`;
   const url = __PILOT_PORTRAITS__.includes(path) ? import.meta.env.BASE_URL + __PILOT_URLS__[path] : undefined;
-  return createPortrait(pilot.name[0], pilot.color, url);
+  return createPortrait(pilot.name[0], pilot.color, url, signal);
 }
 
-export function setupPilots(
-  picker: HTMLElement,
-  choices: HTMLElement,
-  selectedPortrait: HTMLElement,
-  selectedName: HTMLElement,
-  perkDescription: HTMLElement,
-  desktopSlot: HTMLElement,
-  mobileSlot: HTMLElement,
-  signal?:AbortSignal,
-) {
-  const desktop = matchMedia('(min-width: 760px)');
-  function placePicker() {
-    const focused = document.activeElement;
-    (desktop.matches ? desktopSlot : mobileSlot).append(picker);
-    if (focused instanceof HTMLElement && picker.contains(focused)) {
-      focused.focus({ preventScroll: true });
-    }
-  }
+export function showSelectedPilot(id: PilotId, slot: HTMLElement, name: HTMLElement, signal: AbortSignal) {
+  const pilot = pilots.find(pilot => pilot.id === id) ?? pilots[0];
+  slot.replaceChildren(portrait(pilot, signal));
+  slot.style.setProperty('--pilot-color', pilot.color);
+  name.textContent = pilot.name;
+}
 
-  desktop.addEventListener('change', placePicker,{signal});
+export function setupPilotPicker(choices: HTMLElement, perkDescription: HTMLElement, signal: AbortSignal) {
   choices.replaceChildren();
-  placePicker();
 
   let selected = savedPilot();
   function showPilot(pilot: Pilot) {
     selected = pilot;
-    selectedPortrait.replaceChildren(portrait(pilot));
-    selectedPortrait.style.setProperty('--pilot-color', pilot.color);
     perkDescription.textContent = `${pilot.perk} · ${pilot.description}`;
-    selectedName.textContent = pilot.name;
   }
   showPilot(selected);
 
@@ -93,21 +77,18 @@ export function setupPilots(
       } catch {
         // The current choice still works when storage is unavailable.
       }
-    });
+    }, { signal });
 
     const card = document.createElement('span');
     card.className = 'pilot-card';
     const name = document.createElement('span');
     name.textContent = pilot.name;
-    card.append(portrait(pilot), name);
+    card.append(portrait(pilot, signal), name);
     label.append(radio, card);
     choices.append(label);
   }
 
   return {
     get selectedId() { return selected.id; },
-    setVisible(selectable: boolean) {
-      if (picker.hidden === selectable) picker.hidden = !selectable;
-    },
   };
 }

@@ -12,7 +12,7 @@ function briefingUrl(path: string) {
   return versioned ? import.meta.env.BASE_URL + versioned : undefined;
 }
 
-function createRankDisplays(signal: AbortSignal) {
+export function createRankDisplays(signal: AbortSignal) {
   const badges = new Map<HTMLCanvasElement, Rank>();
   let atlas: HTMLImageElement | undefined;
   let atlasCellSize = 0;
@@ -57,17 +57,14 @@ function createRankDisplays(signal: AbortSignal) {
   };
 }
 
-export function setupBriefing(level: LevelId, brief: HTMLElement, pilotRanks: [HTMLElement, HTMLElement], signal: AbortSignal) {
+export function setupBriefing(level: LevelId, brief: HTMLElement, signal: AbortSignal) {
   const mission = missionFor[level], officer = officers[mission.officer];
   const rankDisplay = createRankDisplays(signal);
   const initials = officer.name.split(' ').map(name => name[0]).join('');
   brief.querySelector('.brief-portrait')!.replaceChildren(createPortrait(initials, '#a9d8e8', briefingUrl(officerPortraitFile(mission.officer)), signal));
   brief.querySelector('.officer-name')!.textContent = officer.name;
   brief.querySelector('.brief-quote')!.textContent = mission.brief;
+  brief.querySelector('.brief-objective p')!.textContent = mission.objective;
   rankDisplay(brief.querySelector<HTMLElement>('.officer-rank')!)(officer.rank);
-  const [setFullRank, setCompactRank] = [rankDisplay(pilotRanks[0]), rankDisplay(pilotRanks[1], true)];
-  return (rank: Rank) => {
-    setFullRank(rank);
-    setCompactRank(rank);
-  };
+  rankDisplay(brief.querySelector<HTMLElement>('#brief-pilot-rank')!)(mission.pilotRank);
 }

@@ -8,20 +8,65 @@
   </head>
   <body>
     <main id="front-menu" class="main-menu" aria-labelledby="menu-title">
-      <div class="menu-heading"><h1 id="menu-title">Spaceslop</h1></div>
-      <div class="menu-controls">
-        <div class="menu-modes" role="group" aria-label="Flight mode">
-          <button id="campaign-mode" type="button" aria-pressed="true">Campaign</button>
-          <button id="free-flight-mode" type="button" aria-pressed="false">Free Flight</button>
+      <div id="mission-list" class="mission-list">
+        <div class="menu-heading"><h1 id="menu-title">Spaceslop</h1></div>
+        <div class="menu-controls">
+          <div class="menu-modes" role="group" aria-label="Flight mode">
+            <button id="campaign-mode" type="button" aria-pressed="true">Campaign</button>
+            <button id="free-flight-mode" type="button" aria-pressed="false">Free Flight</button>
+          </div>
+          <div class="mission-action">
+            <p id="menu-status" role="status"></p>
+            <button id="prepare-flight" type="button">Open briefing</button>
+          </div>
         </div>
-        <div class="mission-action">
-          <p id="menu-status" role="status"></p>
-          <button id="prepare-flight" type="button">Open briefing</button>
-        </div>
+        <div id="level-cards" class="level-cards" role="group" aria-label="Select a mission"></div>
+        <div class="menu-actions"><details class="offline-settings"><summary>Offline storage</summary><p>Prepared levels are saved on this device. Clearing them keeps your campaign progress and pilot choice.</p><button id="clear-offline" type="button">Clear saved levels</button></details><button id="menu-update" type="button" hidden>Apply update</button></div>
+        <noscript>Enable JavaScript to launch Spaceslop.</noscript>
       </div>
-      <div id="level-cards" class="level-cards" role="group" aria-label="Select a mission"></div>
-      <div class="menu-actions"><details class="offline-settings"><summary>Offline storage</summary><p>Prepared levels are saved on this device. Clearing them keeps your campaign progress and pilot choice.</p><button id="clear-offline" type="button">Clear saved levels</button></details><button id="menu-update" type="button" hidden>Apply update</button></div>
-      <noscript>Enable JavaScript to launch Spaceslop.</noscript>
+      <section id="menu-briefing" aria-labelledby="brief-title" hidden>
+        <button id="brief-back" type="button">← Mission list</button>
+        <h1 id="brief-title" tabindex="-1"></h1>
+        <div class="brief-grid">
+          <div class="mission-brief" role="group" aria-label="Officer briefing">
+            <div class="brief-officer">
+              <div class="brief-portrait"></div>
+              <div>
+                <span class="officer-rank rank-badge"></span>
+                <strong class="officer-name"></strong>
+              </div>
+            </div>
+            <p class="brief-quote"></p>
+            <div class="brief-objective">
+              <h2>Objective</h2>
+              <p></p>
+            </div>
+          </div>
+          <div class="brief-loadout">
+            <fieldset id="pilot-picker">
+              <legend>Select pilot</legend>
+              <span id="brief-pilot-rank" class="rank-badge"></span>
+              <div id="pilot-choices"></div>
+            </fieldset>
+            <p id="pilot-perk-description"></p>
+            <label class="loadout-field">
+              Drone weapon
+              <select id="drone-weapon">
+                <option value="sentry">Sentry</option>
+                <option value="towline">Towline</option>
+              </select>
+            </label>
+            <details id="test-wing-loadout" class="test-wings" hidden>
+              <summary>Test wing loadout</summary>
+              <label class="loadout-field">Left wing <select id="left-wing"></select></label>
+              <label class="loadout-field">Right wing <select id="right-wing"></select></label>
+            </details>
+          </div>
+        </div>
+        <div class="brief-actions">
+          <button id="launch-flight" type="button">Launch</button>
+        </div>
+      </section>
     </main>
     <main id="game-app" hidden>
       <div class="console">
@@ -41,7 +86,6 @@
               <span id="pilot-perk-readout" hidden></span>
             </figcaption>
           </figure>
-          <div id="desktop-picker"></div>
         </aside>
         <footer class="controls">
           <span id="status" role="status">Tap for drone · Drag to steer</span>
@@ -50,45 +94,14 @@
       </div>
       <div class="bay">
         <div id="flight">
-          <canvas id="field" aria-label="Spaceslop flight view"></canvas>
+          <canvas id="field" aria-label="Spaceslop flight view" tabindex="-1"></canvas>
           <div id="boss-hud" hidden><span id="boss-name">INTERCEPTOR</span><progress id="boss-health" aria-label="Boss health"></progress></div>
           <section id="panel" aria-labelledby="heading">
             <h1 id="heading">Spaceslop</h1>
-            <div id="mission-brief" class="mission-brief" aria-label="Mission briefing" role="group" hidden>
-              <div class="brief-officer">
-                <div class="brief-portrait"></div>
-                <div>
-                  <span class="officer-rank rank-badge"></span>
-                  <strong class="officer-name"></strong>
-                </div>
-              </div>
-              <p class="brief-quote"></p>
-            </div>
             <p id="message">Tap to place the drone. Drag to steer.</p>
-            <div id="mobile-picker">
-              <div id="loadout-picker">
-                <fieldset id="pilot-picker">
-                  <legend>Select pilot</legend>
-                  <div id="pilot-choices"></div>
-                </fieldset>
-                <p id="pilot-perk-description"></p>
-                <label class="loadout-field">
-                  Drone weapon
-                  <select id="drone-weapon">
-                    <option value="sentry">Sentry</option>
-                    <option value="towline">Towline</option>
-                  </select>
-                </label>
-                <details id="test-wing-loadout" class="test-wings" hidden>
-                  <summary>Test wing loadout</summary>
-                  <label class="loadout-field">Left wing <select id="left-wing"></select></label>
-                  <label class="loadout-field">Right wing <select id="right-wing"></select></label>
-                </details>
-              </div>
-            </div>
             <div class="flight-actions">
               <button id="next-mission" type="button" hidden>Next briefing</button>
-              <button id="start" type="button" disabled>Launch</button>
+              <button id="start" type="button" hidden disabled>Resume</button>
             </div>
             <small>Keyboard · WASD or arrows · Space for pulse</small>
             <button id="return-menu" type="button">Choose another sector</button>

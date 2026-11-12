@@ -11,9 +11,9 @@ npm ci
 npm run dev
 ```
 
-The app opens in **Campaign**. **Open briefing** loads the selected mission, shows its officer and your mission rank, and lets you choose a loadout before launch. Clearing a mission unlocks the next one and records progress on this device. **Free Flight** offers every sector for practice. Tap to place the drone, drag to steer, or use WASD/arrows. Space fires Pulse and Escape pauses. **Menu** leaves the current run.
+The app opens in **Campaign**. **Open briefing** shows the selected mission’s officer, objective, rank and loadout controls in the menu. **Launch** prepares and starts the mission. Clearing a mission unlocks the next one and records progress on this device. **Free Flight** offers every sector for practice. Tap to place the drone, drag to steer, or use WASD/arrows. Space fires Pulse and Escape pauses. **Menu** leaves the current run.
 
-Vite dev links the asset workshop and camera studies directly from the main menu. The hangar also includes these links and boss/transition launch shortcuts. Direct URLs are `/workshop.html`, `/vent-study.html` and `/io-study.html`. Production excludes those pages and shortcuts. `?level=vents` selects Hadal Cable in Free Flight and `?testLoadout=1` enables the wing test picker.
+Vite dev links the asset workshop and camera studies directly from the main menu. The briefing includes boss and transition launch shortcuts. Direct URLs are `/workshop.html`, `/vent-study.html` and `/io-study.html`. Production excludes those pages and shortcuts. `?level=vents` selects Hadal Cable in Free Flight and `?testLoadout=1` enables the wing test picker.
 
 ## Validate
 
@@ -28,7 +28,7 @@ The build includes strict TypeScript checks. Build checks enforce the menu's siz
 
 ## Offline and hosting
 
-Serve `dist/` over HTTPS. The service worker initially saves only the menu and its small dependencies. Preparing a level saves its code and optional media, including its briefing officer. The hangar reports **Level ready offline** and the mission card shows **Saved offline**. Unprepared levels need a connection. **Offline storage → Clear saved levels** releases downloaded stages. Campaign progress and pilot choice are stored separately. Missing images use procedural fallbacks.
+Serve `dist/` over HTTPS. The service worker initially saves only the menu and its small dependencies. Launching a level saves its code and optional media, including its briefing officer. A paused flight reports **Level ready offline** and the mission card shows **Saved offline**. Unprepared levels need a connection. **Offline storage → Clear saved levels** releases downloaded stages. Campaign progress and pilot choice are stored separately. Missing images use procedural fallbacks.
 
 A versioned content URL keeps replaced artwork fresh. Updates are offered in the main menu and applied between sessions. Both root hosting and Vite `--base=/subpath/` builds are supported. Keep `index.html`, `sw.js` and `level-packages.json` revalidatable; hashed JS/CSS and versioned media can have long cache lifetimes. Retain the previous deployment's hashed files during an update if existing tabs must keep working.
 
