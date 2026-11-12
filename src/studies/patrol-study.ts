@@ -18,7 +18,7 @@ function square(canvas: HTMLCanvasElement) {
   return size;
 }
 
-function drawMesh(context: CanvasRenderingContext2D, points: readonly Point[], columns: number, selected = -1) {
+function drawMesh(context: CanvasRenderingContext2D, points: readonly Point[], columns: number, selected = -1, paired = false) {
   const grid = context.canvas.width / context.canvas.clientWidth;
   context.beginPath();
   for (const [i, p] of points.entries()) {
@@ -36,9 +36,24 @@ function drawMesh(context: CanvasRenderingContext2D, points: readonly Point[], c
   context.stroke();
   for (const [i, p] of points.entries()) {
     context.beginPath();
-    context.arc(p.x, p.y, grid * (i === selected ? 4 : 1.9), 0, 2 * Math.PI);
+    context.arc(p.x, p.y, grid * 1.9, 0, 2 * Math.PI);
     const detail = columns === 7 && (i % columns === 1 || i % columns === 5);
-    context.fillStyle = i === selected ? '#ffd280' : detail ? '#a7aaff' : '#a5f6e4';
+    context.fillStyle = detail ? '#a7aaff' : '#a5f6e4';
+    context.fill();
+  }
+  const point = points[selected];
+  if (!point) return;
+  context.beginPath();
+  context.arc(point.x, point.y, grid * (paired ? 5 : 4), 0, 2 * Math.PI);
+  context.strokeStyle = '#10202a';
+  context.lineWidth = grid * 3;
+  context.stroke();
+  if (paired) {
+    context.strokeStyle = '#ffd280';
+    context.lineWidth = grid * 1.5;
+    context.stroke();
+  } else {
+    context.fillStyle = '#ffd280';
     context.fill();
   }
 }
@@ -114,7 +129,7 @@ function start() {
       y: size / 2 + scale * (sin * u + cos * row[0]),
     })));
     sourcePoints[pane] = points;
-    drawMesh(context, points, atlas.grid.columns, selectedPoint);
+    drawMesh(context, points, atlas.grid.columns, selectedPoint, pane !== Number(editPose.value));
   }
 
   function syncPointControls() {
@@ -153,7 +168,7 @@ function start() {
     for (const [pane, index] of [turn.first, turn.second].entries()) {
       const title = pane === 0 ? 'Outgoing' : 'Incoming';
       element(title.toLowerCase()).textContent = `${title} · Pose ${index + 1} · ${Math.round(index * 90 / (atlas.rows.length - 1))}°`;
-      paintSource(sources[pane], index, pane, Number(editPose.value) === pane ? active : -1);
+      paintSource(sources[pane], index, pane, active);
     }
     const mounts = card.pose(turn.angle, weight);
     if (renderer) {
