@@ -3,11 +3,15 @@ import { HEIGHT, WIDTH } from '../playfield';
 import type { WormholeReflectionPose } from './reflection';
 import type { wormholeFrame } from './route';
 import type { fonsPhase, fonsRocks } from './fons/combat';
+import { createFonsBackdrop } from './fons/backdrop';
+import type { FonsVariant } from './fons/variants';
 import { wallRiftShape } from './fons/wall-rift';
 import { titanEcho } from './titan-echo';
 
 export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
+  const backdrop = createFonsBackdrop();
   const uniforms = {
+    ...backdrop.uniforms,
     travel: { value: 0 },
     lensCenter: { value: new T.Vector2(0, apertureY) },
     lensRadius: { value: .04 },
@@ -47,6 +51,7 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
       uniform vec4 wallRifts[2];
       ${titanEcho}
       ${wallRiftShape}
+      ${backdrop.fragmentShader}
 
       float lobe(float phase, float tightness) {
         return pow(max(0.0, .5 + .5 * cos(phase)), tightness);
@@ -156,6 +161,7 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
         // far wall can appear on both sides of the ring without copying a frame.
         float bend = lensStrength * (lensSquared + core) / (dot(delta, delta) + core);
         vec2 ray = screen - delta * bend;
+        ray = bendAtInvictus(ray);
         for (int i=0; i<2; i++) ray = bendAtRift(ray, wallRifts[i]);
 
         vec2 axis = vec2(0.0, ${apertureY.toFixed(8)});
@@ -210,10 +216,12 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
         float disc = 1.0-smoothstep(-.003,.003,moonEdge);
         float crescent = disc * smoothstep(-.007,.008,length(moon+vec2(.050,-.030))-.127);
         float atmosphere = exp(-abs(moonEdge)*72.0) * smoothstep(-.04,.07,moon.x-moon.y*.5);
-        color = mix(color, color*.11, disc*finale);
-        color += finale * vec3(1.1,.31,.065) * (crescent*.81 + atmosphere*.29);
+        float moonAmount = max(0.0, finale - royalBackdrop.x - royalBackdrop.y);
+        color = mix(color, color*.11, disc*moonAmount);
+        color += moonAmount * vec3(1.1,.31,.065) * (crescent*.81 + atmosphere*.29);
         float nebula = smoothstep(.25,.93,cloud) * lobe(theta*2.0-z*.25,3.4);
         color += finale*vec3(.15,.012,.135)*nebula*distanceFade;
+        color = showFonsBackdrop(color, ray, screen, storm.x);
         color = reflectedWall(color, tone, ripple, theta);
 
         float orbit = atan(delta.y, delta.x + .000001);
@@ -246,6 +254,7 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
   root.renderOrder = -100;
   return {
     root,
+    textures: backdrop.textures,
     pose(frame: ReturnType<typeof wormholeFrame>, mirror: WormholeReflectionPose) {
       uniforms.travel.value = frame.travel;
       uniforms.lensCenter.value.set(frame.lensX, apertureY + frame.lensY);
@@ -257,7 +266,8 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
       uniforms.reflectionStrength.value = mirror?.strength ?? 0;
       if (mirror) uniforms.reflectionPlane.value.set(mirror.x, mirror.y, mirror.nx, mirror.ny);
     },
-    setFons(time: number, amount: number, state?: ReturnType<typeof fonsPhase>, rocks?: ReturnType<typeof fonsRocks>) {
+    setFons(variant: FonsVariant, time: number, amount: number, state?: ReturnType<typeof fonsPhase>, rocks?: ReturnType<typeof fonsRocks>) {
+      backdrop.update(variant, time, amount);
       uniforms.finale.value = amount;
       uniforms.storm.value.set(time, state ? state.rain ? 1 : .19 * state.warning : 0);
       for (const [index, shadow] of uniforms.cover.value.entries()) {

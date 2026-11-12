@@ -11,7 +11,7 @@ const ART_INNER = .13;
 const ART_OUTER = .462;
 const number = (n: number) => n.toFixed(9);
 
-export function createBlackHoleMaterial(sky?: T.Texture) {
+export function createBlackHoleOptics(sky?: T.Texture) {
   const escapeAngles = sky ? new Uint8Array(ORBIT_COLUMNS * 4) : undefined;
   const orbits = new T.DataTexture(bakeLightOrbits(escapeAngles), ORBIT_COLUMNS, ORBIT_ROWS);
   const exits = escapeAngles ? new T.DataTexture(escapeAngles, ORBIT_COLUMNS, 1) : null;
@@ -20,44 +20,27 @@ export function createBlackHoleMaterial(sky?: T.Texture) {
     table.minFilter = table.magFilter = T.LinearFilter;
     table.needsUpdate = true;
   }
-  const material = new T.ShaderMaterial({
-    defines: sky ? { LENSED_SKY: 1 } : {},
-    uniforms: {
-      orbits: {value: orbits},
-      exits: {value: exits},
-      skyArt: {value: sky ?? null},
-      skyGain: {value: .65},
-      skyOffset: {value: new T.Vector2()},
-      skyFocalLength: {value: 18},
-      skyRoll: {value: 0},
-      diskArt: {value: null as T.Texture | null},
-      useArt: {value: false},
-      diskRotation: {value: new T.Vector2(1, 0)},
-      diskRoll: {value: 0},
-      diskGain: {value: 1},
-      inclination: {value: T.MathUtils.degToRad(84)},
-      frameScale: {value: new T.Vector2(1, 1)},
-      lensCenter: {value: new T.Vector2()},
-      lensExtent: {value: 21},
-      mode: {value: 0},
-    },
-    depthTest: false,
-    depthWrite: false,
-    vertexShader: `
-      varying vec2 screen;
-      void main() {
-        screen = uv * 2.0 - 1.0;
-        gl_Position = vec4(position.xy, 0.0, 1.0);
-      }
-    `,
-    fragmentShader: `
-      varying vec2 screen;
+  const uniforms = {
+    orbits: {value: orbits},
+    exits: {value: exits},
+    skyArt: {value: sky ?? null},
+    skyGain: {value: .65},
+    skyOffset: {value: new T.Vector2()},
+    skyFocalLength: {value: 18},
+    skyRoll: {value: 0},
+    diskArt: {value: null as T.Texture | null},
+    useArt: {value: false},
+    diskRotation: {value: new T.Vector2(1, 0)},
+    diskRoll: {value: 0},
+    diskGain: {value: 1},
+    inclination: {value: T.MathUtils.degToRad(84)},
+    mode: {value: 0},
+  };
+  const fragmentShader = /* glsl */ `
       uniform sampler2D orbits, diskArt;
       uniform bool useArt;
       uniform vec2 diskRotation;
       uniform float inclination, diskGain, diskRoll;
-      uniform vec2 frameScale, lensCenter;
-      uniform float lensExtent;
       uniform int mode;
       const float PI = 3.14159265359;
       const float INNER = ${number(DISK_INNER)};
@@ -198,6 +181,47 @@ export function createBlackHoleMaterial(sky?: T.Texture) {
         return color;
       }
 
+      vec3 sampleBlackHoleDisk(vec2 q, vec3 color) {
+        float impact = length(q);
+        float footprint = fwidth(impact);
+        // The higher-order image is thinner than a pixel near the critical
+        // curve. Filter radially there while leaving the rest a single sample.
+        if (mode != 0 || abs(impact - SHADOW) >= .24) return projectedDisk(q, color, footprint);
+        vec3 samples = vec3(0.0);
+        for (int sampleIndex = 0; sampleIndex < 8; sampleIndex++) {
+          float offset = (float(sampleIndex) - 3.5) * footprint / 8.0;
+          samples += projectedDisk(q * (1.0 + offset / impact), color, footprint) / 8.0;
+        }
+        return samples;
+      }
+  `;
+  return { tables, uniforms, fragmentShader };
+}
+
+export function createBlackHoleMaterial(sky?: T.Texture) {
+  const optics = createBlackHoleOptics(sky);
+  const material = new T.ShaderMaterial({
+    defines: sky ? { LENSED_SKY: 1 } : {},
+    uniforms: {
+      ...optics.uniforms,
+      frameScale: {value: new T.Vector2(1, 1)},
+      lensCenter: {value: new T.Vector2()},
+      lensExtent: {value: 21},
+    },
+    depthTest: false,
+    depthWrite: false,
+    vertexShader: `
+      varying vec2 screen;
+      void main() {
+        screen = uv * 2.0 - 1.0;
+        gl_Position = vec4(position.xy, 0.0, 1.0);
+      }
+    `,
+    fragmentShader: `
+      varying vec2 screen;
+      uniform vec2 frameScale, lensCenter;
+      uniform float lensExtent;
+      ${optics.fragmentShader}
       void main() {
         vec2 q = (screen - lensCenter) * frameScale;
         vec3 color = vec3(.0025, .0035, .007);
@@ -211,21 +235,11 @@ export function createBlackHoleMaterial(sky?: T.Texture) {
           }
         } else {
           q *= lensExtent;
-          float impact = length(q);
-          float footprint = fwidth(impact);
           #ifdef LENSED_SKY
-          color = lensedSky(q, impact, footprint);
+          float impact = length(q);
+          color = lensedSky(q, impact, fwidth(impact));
           #endif
-          // The higher-order image is thinner than a pixel near the critical
-          // curve. Filter radially there while leaving the rest a single draw.
-          if (mode == 0 && abs(impact - SHADOW) < .24) {
-            vec3 samples = vec3(0.0);
-            for (int sampleIndex = 0; sampleIndex < 8; sampleIndex++) {
-              float offset = (float(sampleIndex) - 3.5) * footprint / 8.0;
-              samples += projectedDisk(q * (1.0 + offset / impact), color, footprint) / 8.0;
-            }
-            color = samples;
-          } else color = projectedDisk(q, color, footprint);
+          color = sampleBlackHoleDisk(q, color);
         }
         gl_FragColor = vec4(color, 1.0);
         #include <tonemapping_fragment>
@@ -233,5 +247,5 @@ export function createBlackHoleMaterial(sky?: T.Texture) {
       }
     `,
   });
-  return {material, tables, dispose() { material.dispose(); for (const table of tables) table.dispose(); }};
+  return {material, tables: optics.tables, dispose() { material.dispose(); for (const table of optics.tables) table.dispose(); }};
 }

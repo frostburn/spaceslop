@@ -21,6 +21,35 @@ const { fonsBeams, fonsBeamHits, fonsCrownfireFlash, fonsTuskTip, fonsVolleys } 
   await server.ssrLoadModule('/src/wormhole/fons/attacks.ts');
 const { createFonsMantle } = await server.ssrLoadModule('/src/wormhole/fons/mantle.ts');
 const { createFonsLightning } = await server.ssrLoadModule('/src/wormhole/fons/lightning.ts');
+const { createFonsBackdrop } = await server.ssrLoadModule('/src/wormhole/fons/backdrop.ts');
+
+test('the royal backdrops follow their variant and Invictus cycles smoothly on the encounter clock', () => {
+  const { uniforms, textures, update } = createFonsBackdrop();
+  const mix = () => uniforms.royalBackdrop.value.toArray();
+  const angle = () => uniforms.inclination.value;
+  try {
+    update('normal', 0, 1);
+    assert.deepEqual(mix(), [0, 0]);
+    update('rex', -1.6, .42);
+    assert.deepEqual(mix(), [.42, 0]);
+    update('invictus', -FONS_APPROACH, 0);
+    assert.deepEqual(mix(), [0, 0]);
+    const initialAngle = angle();
+    assert(initialAngle > Math.PI * .45);
+    update('invictus', FONS_CYCLE / 2, 1);
+    assert.deepEqual(mix(), [0, 1]);
+    assert(angle() < Math.PI / 10);
+    const faceOnAngle = angle();
+    update('invictus', FONS_CYCLE / 2, 1);
+    assert.equal(angle(), faceOnAngle);
+    update('invictus', FONS_CYCLE, 1);
+    assert.equal(angle(), initialAngle);
+    update('normal', -FONS_APPROACH, 0);
+    assert.deepEqual(mix(), [0, 0]);
+  } finally {
+    for (const texture of textures) texture.dispose();
+  }
+});
 
 test('the traveling aperture centers and opens before the cicada reaches combat depth', () => {
   const end = levels.wormhole.duration;
