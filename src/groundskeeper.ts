@@ -1,7 +1,7 @@
 import { PRESERVE_BOSS_PITCH, PRESERVE_RISE, PRESERVE_WIDTH_SCALE } from './preserve-layout';
 
 export const GROUNDSKEEPER_HP = 160;
-export const GROUNDSKEEPER_CYCLE = 5.6;
+export const GROUNDSKEEPER_CYCLE = 5.05;
 export const GROUNDSKEEPER_WARN = 1;
 export const GROUNDSKEEPER_STRIKE = 2.35;
 export const GROUNDSKEEPER_END = 3.25;

@@ -28,7 +28,9 @@ export function groveCanAttack(age:number,lane:number,c:GroveCourse){const p=poi
 export function groveEnemySize(c:GroveCourse){return c.kind==='frog'?.68:c.kind==='sentry'?.7:c.kind==='skimmer'?.44:.57;}
 const drops=['homing','cannon','laser','omega']as const;
 const aerialWaves=Array.from({length:20},(_,i)=>{
-  const time=3+i*4.45,kind=i%5===3?'sentry':i>=8&&i<=12?'skimmer':'glider';
+  const time = 3 + i * 4.45;
+  const sentries = i % 5 === 3 || i === 16 || i === 19;
+  const kind = sentries ? 'sentry' : i >= 8 && i <= 12 ? 'skimmer' : 'glider';
   const formation=(['weave','sweep','train','weave']as const)[i%4];
   return{time,lanes:kind==='sentry'?[-2.65,2.65]:formation==='train'?[0,0,0,0]:[-2,0,2],drop:wingRewardForWave(drops,i),
     grove:{kind,formation,mirror:i%2?1:-1}as Omit<GroveCourse,'slot'>};

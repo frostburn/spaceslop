@@ -2,7 +2,7 @@ import { wingRewardForWave } from '../wing';
 import { levels } from '../levels';
 
 // Pure simulation data: the menu never imports models, media or Three.js.
-export const HELIOSTAT_DURATION = levels.heliostat.duration, HELIOSTAT_APPROACH = 8, HELIOSTAT_HP = 120;
+export const HELIOSTAT_DURATION = levels.heliostat.duration, HELIOSTAT_APPROACH = 8, HELIOSTAT_HP = 100;
 export const HELIOSTAT_SPEED = 2.8, HELIOSTAT_PITCH = 1.30, HELIOSTAT_DISTANCE = 36;
 export const HELIOSTAT_INTERVAL = 4.4, HELIOSTAT_WINDUP = .65, HELIOSTAT_FIRE = 1.9;
 export const HELIOSTAT_CHANNEL = 1.35, HELIOSTAT_GROW = .25, HELIOSTAT_FADE = .35, HELIOSTAT_EMITTER_X = 3.5;
@@ -57,7 +57,7 @@ export const heliostatWaves = Array.from({length:20},(_,i) => {
 // Fixed capacitor gates sit in the same world frame as the station. Their gap is
 // always safe. Warning, discharge and cooldown use simulation time, never timers.
 export const electricSites = [18,34,50,65,80,94].map((at,i) => ({at, gap: [-1.85,1.7,0][i%3]}));
-export const ELECTRIC_GAP = 2.3, ELECTRIC_WARNING = 1.35;
+export const ELECTRIC_GAP = 3.25, ELECTRIC_WARNING = 1.6;
 export function electricPose(site: number, time: number) {
   const s = electricSites[site], age = time-s.at+2.8;
   const hot = age >= ELECTRIC_WARNING;

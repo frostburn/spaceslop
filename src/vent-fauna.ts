@@ -1,6 +1,6 @@
 export type ShrimpFormation='weave'|'cross'|'curl';
 export type ShrimpCourse={formation:ShrimpFormation;mirror:number;slot:number};
-export const SHRIMP_HP=3,SHRIMP_POOL=12,SHRIMP_FIRST_FIRE=1.9,SHRIMP_INTERVAL=3.1;
+export const SHRIMP_HP=2,SHRIMP_POOL=12,SHRIMP_FIRST_FIRE=2.35,SHRIMP_INTERVAL=3.9;
 import {wormPose} from './vent-worm';
 export {wormPose,WORM_HP,WORM_POOL,WORM_FIRST_ATTACK,WORM_INTERVAL,WORM_WINDUP} from './vent-worm';
 const clamp=(v:number)=>Math.max(0,Math.min(1,v));

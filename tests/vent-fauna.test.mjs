@@ -56,7 +56,7 @@ test('worm locks its attack during the warning, lunges without projectiles and r
  const f=new Flight('sentry',[],'vex','vents'),e=worm();f.time=19.7;f.nextWave=100;f.fire=()=>{};f.stepDroneWeapon=()=>{};e.age=2.7-STEP;e.fire=3.6;e.wormLocked=false;f.enemies=[e];f.invulnerable=100;
  f.step(STEP);const angle=e.mortarAngle,reach=e.wormReach;assert(e.wormLocked);f.player={x:-3,y:-3};f.step(.1);assert.equal(e.mortarAngle,angle);assert.equal(e.wormReach,reach);
  while(e.age<5.9)f.step(STEP);assert.equal(f.threats.length,0);assert(!e.wormLocked);assert.notEqual(e.mortarAngle,angle);assert.equal(e.fire,10.2);
- const patrol=new Flight('sentry',[],'vex','vents'),s=shrimp();patrol.nextWave=100;patrol.fire=()=>{};patrol.stepDroneWeapon=()=>{};s.age=1.9-STEP;patrol.enemies=[s];patrol.step(STEP);assert.equal(patrol.threats.length,2);assert.equal(s.fire,5);
+ const patrol=new Flight('sentry',[],'vex','vents'),s=shrimp();patrol.nextWave=100;patrol.fire=()=>{};patrol.stepDroneWeapon=()=>{};s.fire=m.SHRIMP_FIRST_FIRE;s.age=s.fire-STEP;patrol.enemies=[s];patrol.step(STEP);assert.equal(patrol.threats.length,2);assert.equal(s.fire,m.SHRIMP_FIRST_FIRE+m.SHRIMP_INTERVAL);
 });
 
 test('the worm body hurts the ship along its length without dying on contact',()=>{

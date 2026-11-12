@@ -22,18 +22,19 @@ test('Crucibles cross slowly from alternating sides, telegraph every pour, and l
   for(let t=0;t<=11;t+=.02){const a=c.crucibleMotion(t,1),b=c.crucibleMotion(t,-1);assert.equal(a.x,-b.x);assert.equal(a.y,b.y);assert(Number.isFinite(a.x+a.y));}
  }
  assert.equal(c.crucibleValve(0,c.CRUCIBLE_FIRST_POUR),0);
- assert(c.crucibleValve(1.79,1.8)>.98);
- assert(Math.abs(c.crucibleValve(1.8,4.4)-1)<1e-12);
- assert.equal(c.crucibleValve(2.2,4.4),0);
+ const first = c.CRUCIBLE_FIRST_POUR, next = first + c.CRUCIBLE_POUR_INTERVAL;
+ assert(c.crucibleValve(first - .01,first)>.98);
+ assert(Math.abs(c.crucibleValve(first,next)-1)<1e-12);
+ assert.equal(c.crucibleValve(first + .4,next),0);
  assert.equal(c.slagHeat(0),1);assert.equal(c.slagHeat(.9),0);assert.equal(c.slagHeat(20),0);
  assert(c.slagSpeed(0)>c.slagSpeed(.9));
 });
 
 test('a pouring carrier releases three aimed droplets from its valve without ordinary plasma or per-frame repeats',()=>{
  const f=new Flight('sentry',[],'vex','io');f.fire=()=>{};f.stepDroneWeapon=()=>{};
- const enemy=carrier();enemy.age=1.8-STEP;f.enemies=[enemy];f.player={x:2,y:-5};f.step(STEP);
+ const enemy=carrier();enemy.age=c.CRUCIBLE_FIRST_POUR-STEP;f.enemies=[enemy];f.player={x:2,y:-5};f.step(STEP);
  assert.equal(f.threats.length,0);const droplets=f.enemies.filter(e=>e.slag);assert.equal(droplets.length,3);
- assert.equal(enemy.fire,4.4);
+ assert.equal(enemy.fire,c.CRUCIBLE_FIRST_POUR+c.CRUCIBLE_POUR_INTERVAL);
  for(const d of droplets){assert(Math.abs(d.x-enemy.x)<.06);assert(Math.abs(d.y-(enemy.y+c.CRUCIBLE_MUZZLE_Y))<.06);assert(d.slag.vy<0);assert.equal(d.hp,1);}
  const middle=droplets[1],dx=f.player.x-enemy.x,dy=f.player.y-enemy.y-c.CRUCIBLE_MUZZLE_Y;
  assert(Math.abs(middle.slag.vx*dy-middle.slag.vy*dx)<1e-9);
@@ -68,13 +69,13 @@ test('ship, drone, cannon and homing shots hit the larger vessel and destroy mol
 test('Omega pierces slag into a carrier once, lasers choose the nearest target, and Towline and Pulse clear both',()=>{
  const f=combat(),d=slag(0,1),e=carrier(0,2);f.enemies=[d,e];
  f.shots=[{x:0,y:0,z:0,vx:0,vy:20,vz:0,wing:'omega',damage:4,pierced:new Set()}];f.step(.12);
- assert.equal(d.hp,0);assert.equal(e.hp,6);f.step(.01);assert.equal(e.hp,6);
+ assert.equal(d.hp,0);assert.equal(e.hp,c.CRUCIBLE_HP-4);f.step(.01);assert.equal(e.hp,c.CRUCIBLE_HP-4);
  const laser=combat(),shield=slag(0,1),vessel=carrier(.8,3);laser.enemies=[vessel,shield];
  const wing=laser.wings[0];laser.stepLaser(wing,{x:0,y:-3},false,1);
  assert.equal(wing.laserTarget,shield);assert.equal(shield.hp,0);assert.equal(vessel.hp,c.CRUCIBLE_HP);
  laser.stepLaser(wing,{x:0,y:-3},false,1);assert.equal(wing.laserTarget,vessel);assert(vessel.hp<c.CRUCIBLE_HP);
  const tow=combat('towline'),td=slag(0,1),te=carrier(0,3);tow.player={x:0,y:0};tow.drone={x:0,y:5};tow.towlineCooldown=0;tow.enemies=[td,te];tow.stepDroneWeapon(STEP);
- assert.equal(td.hp,0);assert.equal(te.hp,7);
+ assert.equal(td.hp,0);assert.equal(te.hp,c.CRUCIBLE_HP-3);
  te.reward={weapon:'cannon',remaining:1};tow.pulse();assert.equal(te.hp,0);assert.equal(tow.enemies.length,0);assert.equal(tow.drops.length,1);assert.equal(tow.score,310);
 });
 

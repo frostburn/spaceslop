@@ -49,7 +49,7 @@ export const fleetWaves: readonly FleetWave[] = [
 export const FLEET_SAUCER_POOL = 12;
 export const FLEET_SAUCER_STAGGER = .31;
 export const FLEET_SAUCER_LIFE = 11;
-export const FLEET_SAUCER_WINDUP = .78;
+export const FLEET_SAUCER_WINDUP = 1;
 
 export function saucerSize(saucer: FleetSaucer) {
   return saucer.heavy ? .88 : .62;
@@ -107,8 +107,7 @@ const BROADSIDE_FLASH = .16;
 
 type GunSite = Point & { side: -1 | 1; fires: readonly number[] };
 
-function gunSite(point: Point, side: -1 | 1, trench: boolean): GunSite {
-  const targets = trench ? [2.65, -4.65] : [4.1, -4.75];
+function gunSite(point: Point, side: -1 | 1, targets: readonly number[]): GunSite {
   const fires = targets.flatMap(y => {
     const at = (point.y - y) / FLEET_SPEED;
     return at < 3.2 ? [] : BURST.map(offset => at + offset);
@@ -116,9 +115,14 @@ function gunSite(point: Point, side: -1 | 1, trench: boolean): GunSite {
   return { ...point, side, fires };
 }
 
+const flankTargets = [4.1, -4.75] as const;
+const trenchTargets = [2.65, -4.65] as const;
 export const broadsideGuns = [
-  ...flankShips.flatMap(hull => flagshipPorts.map(([u, v]) => gunSite(hullPoint(hull, u, v), 1, false))),
-  ...trenchPorts.map(([u, v, side]) => gunSite(hullPoint(trenchShip, u, v), side, true)),
+  ...flankShips.flatMap(hull => flagshipPorts.map(([u, v], i) =>
+    gunSite(hullPoint(hull, u, v), 1, [flankTargets[i % 2]]))),
+  // The entrance alternates fire heights. Guns deeper in the trench cover both.
+  ...trenchPorts.map(([u, v, side], i) =>
+    gunSite(hullPoint(trenchShip, u, v), side, i < 4 ? [trenchTargets[i % 2]] : trenchTargets)),
 ];
 
 export function broadsideSignal(gun: GunSite, time: number) {

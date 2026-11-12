@@ -30,6 +30,8 @@ test('capacitors warn harmlessly, hurt only across active filaments, and leave a
     assert(warning.warning&&!warning.hot);assert(hot.hot);assert(c.electricPose(site,at+6).hot&&c.electricPose(site,at+6).visible,'gate vanished while still in view');
     assert(!c.electricHits(site,at-2.2,at-2.2-STEP,{x:3,y:warning.y}));
     assert(c.electricHits(site,at-1.1,at-1.1-STEP,{x:hot.gap>0?-3:3,y:hot.y}));
+    for (const x of [hot.gap - 1.3, hot.gap + 1.3])
+      assert(!c.electricHits(site,at-1.1,at-1.1-STEP,{x,y:hot.y}));
     for(let t=at-3;t<at+3;t+=STEP)assert(!c.electricHits(site,t,t-STEP,{x:hot.gap,y:c.electricPose(site,t).y}));
   }
   const time=c.electricSites[0].at-1.1,p=c.electricPose(0,time);

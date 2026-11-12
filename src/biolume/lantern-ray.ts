@@ -1,5 +1,6 @@
-export const RAY_HP=90,RAY_SIZE=8.6,RAY_CYCLE=6,RAY_FAN_AT=1.8,RAY_SEEKER_AT=4.15;
+export const RAY_HP=112,RAY_SIZE=8.6,RAY_CYCLE=5.45,RAY_FAN_AT=1.8,RAY_SEEKER_AT=4.15;
 export const RAY_PROJECTION=22/34,RAY_ORGAN_RADIUS=.58,RAY_SEEKER_RADIUS=.34,RAY_SEEKER_HP=3,RAY_SEEKER_POOL=6;
+export const RAY_SEEKER_SPEED = 2.55;
 type Point={x:number;y:number};
 export type RaySeeker={heading:number;previousX:number;previousY:number};
 export type RayOrb=Point&{age:number;rayOrb:RaySeeker};
@@ -28,7 +29,7 @@ export function stepRaySeeker(orb:RayOrb,target:Point,dt:number){
  const s=orb.rayOrb;s.previousX=orb.x;s.previousY=orb.y;
  const aim=Math.atan2(target.x-orb.x,orb.y-target.y),delta=Math.atan2(Math.sin(aim-s.heading),Math.cos(aim-s.heading));
  s.heading+=Math.max(-.82*dt,Math.min(.82*dt,delta));
- orb.x+=Math.sin(s.heading)*2.25*dt;orb.y-=Math.cos(s.heading)*2.25*dt;
+ orb.x+=Math.sin(s.heading)*RAY_SEEKER_SPEED*dt;orb.y-=Math.cos(s.heading)*RAY_SEEKER_SPEED*dt;
 }
 export function rayOrbEntry(orb:RayOrb,a:Point,b:Point){
  const x=a.x-orb.rayOrb.previousX,y=a.y-orb.rayOrb.previousY,dx=b.x-a.x-(orb.x-orb.rayOrb.previousX),dy=b.y-a.y-(orb.y-orb.rayOrb.previousY),r=RAY_SEEKER_RADIUS+.06;

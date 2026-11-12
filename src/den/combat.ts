@@ -3,8 +3,8 @@ import { DEN_APPROACH } from './route';
 
 type Point = { x: number; y: number };
 
-export const DEN_HP = 105;
-export const DEN_CYCLE = 5.6;
+export const DEN_HP = 120;
+export const DEN_CYCLE = 5.15;
 export const DEN_BURSTS = [1.48, 1.86, 2.27, 3.38] as const;
 export const DEN_GUNS = [{ x: -1.49, y: -1.02 }, { x: 1.49, y: -1.02 }] as const;
 
