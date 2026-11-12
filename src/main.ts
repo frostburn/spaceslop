@@ -42,6 +42,7 @@ function moveLogoDiamond(event: PointerEvent) {
   const { left, width } = logoUnderline.getBoundingClientRect();
   if (width === 0) return;
   const position = Math.max(0, Math.min(1, (event.clientX - left) / width));
+  logo.classList.toggle('logo-touch', event.pointerType === 'touch');
   logo.style.setProperty('--logo-pointer-x', `${position * 100}%`);
 }
 
