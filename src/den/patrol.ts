@@ -19,9 +19,9 @@ export const DEN_PATROL_WINDUP = .46;
 export const denWaves: readonly DenWave[] = [
   { time: 3.0, course: 'launch', side: -1, lanes: [-1.15] },
   { time: 7.4, course: 'weave', side: -1, lanes: [-1.45, 1.7], drop: 'homing' },
-  { time: 12.2, course: 'cross', side: 1, lanes: [-1.7, -.25] },
+  { time: 12.2, course: 'cross', side: 1, lanes: [-1.7, -.25], drop: 'homing' },
   { time: 17.6, course: 'launch', side: -1, lanes: [-2.1, -.25, 1.5], drop: 'cannon' },
-  { time: 22.7, course: 'weave', side: 1, lanes: [-1.9, .25, 2.45] },
+  { time: 22.7, course: 'weave', side: 1, lanes: [-1.9, .25, 2.45], drop: 'homing' },
   { time: 28.3, course: 'cross', side: -1, lanes: [.7, 2.5], guard: 1, drop: 'laser' },
   { time: 33.4, course: 'launch', side: 1, lanes: [2.55, .65] },
   { time: 38.5, course: 'weave', side: -1, lanes: [-2.3, .2, 2.5], drop: 'omega' },

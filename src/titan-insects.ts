@@ -1,4 +1,4 @@
-import type {WingWeapon} from './wing';
+import { wingRewardForWave } from './wing';
 export const CICADA_SCOUT_POOL=12;
 export type CicadaFormation='chevron'|'sweep'|'dive';
 export type CicadaCourse={formation:CicadaFormation;slot:number;count:number;mirror:number};
@@ -18,8 +18,8 @@ export function cicadaMotion(age:number,lane:number,course:CicadaCourse){
 export const titanInsectWaves=Array.from({length:20},(_,i)=>{
  const centipede=i%4===2;
  const lanes=centipede?[[.8],[-.8],[.2],[-.3],[.6]][Math.floor(i/4)]:i%4===0?[-2.3,0,2.3]:i%4===1?[-1.5,1.5]:[-2.4,-1.2,0,1.2,2.4];
- return{time:1+i*3.9,lanes,carrier:centipede?2+i%2:i%lanes.length,
-  drop:(['homing','cannon','laser','omega'] as const)[i%4] as WingWeapon,
+ return{time:1+i*3.9,lanes,
+  drop:wingRewardForWave(['homing','cannon','laser','omega'],i),
   centipede:centipede?6+Math.floor(i/8):undefined,
   cicada:centipede?undefined:({formation:(i%4===0?'chevron':i%4===1?'sweep':'dive') as CicadaFormation,mirror:i%8<4?1:-1})};
 });

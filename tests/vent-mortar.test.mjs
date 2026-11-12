@@ -40,7 +40,7 @@ test('all projectile and laser weapon paths damage an anchored mortar; Towline a
   f.shots=[{x:0,y:0,z:0,vx:0,vy:15,vz:0,...options}];f.step(.08);assert(e.hp<4,JSON.stringify(options));
  }
  const laser=new Flight('sentry',[],'vex','vents'),e=enemy();e.x=0;e.y=1;laser.enemies=[e];laser.stepLaser(laser.wings[0],{x:0,y:-2},false,1);assert(e.hp<4);assert.equal(laser.wings[0].laserTarget,e);
- const tow=new Flight('towline',[],'vex','vents'),t=enemy();t.x=0;t.y=1;tow.enemies=[t];tow.player={x:0,y:0};tow.drone={x:0,y:3};tow.droneCooldown=0;tow.stepDroneWeapon(STEP);assert.equal(t.hp,2);tow.pulse();assert.equal(t.hp,0);assert.equal(tow.score,150);
+ const tow=new Flight('towline',[],'vex','vents'),t=enemy();t.x=0;t.y=1;tow.enemies=[t];tow.player={x:0,y:0};tow.drone={x:0,y:3};tow.towlineCooldown=0;tow.stepDroneWeapon(STEP);assert.equal(t.hp,1);tow.pulse();assert.equal(t.hp,0);assert.equal(tow.score,150);
 });
 
 test('the full route fits the prewarmed mortar pool even when the player never shoots',()=>{

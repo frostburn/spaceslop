@@ -15,7 +15,7 @@ function fixture(boss=false,weapon='primary'){
 }
 
 test('each river head absorbs only its own damage and the final head awards one kill/drop',()=>{
- const {f,enemy,state}=fixture();enemy.drop='laser';
+ const {f,enemy,state}=fixture();enemy.reward={weapon:'laser',remaining:1};
  f.damageEnemy(enemy,100,false,-1);assert.deepEqual(state.hp,[0,4,4]);assert.equal(enemy.hp,8);assert.equal(f.score,0);assert.equal(f.drops.length,0);
  assert(enemy.hitPoint.z>.5,'damage particles are behind the fallback head');
  f.damageEnemy(enemy,100,false,-1);assert.deepEqual(state.hp,[0,4,4]);
@@ -34,7 +34,7 @@ test('all three boss heads must be destroyed, with no overflow and no forced ord
 for(const boss of[false,true])for(const weapon of['primary','sentry','towline','homing','cannon','laser','omega'])test((boss?'boss':'river')+' heads take independent '+weapon+' damage',()=>{
  for(const side of h.HYDRA_SIDES){
   const {f,enemy,state}=fixture(boss,weapon),initial=[...state.hp],wing=['homing','cannon','laser','omega'].includes(weapon);
-  f.cooldown=weapon==='primary'?0:1e5;f.droneCooldown=weapon==='sentry'||weapon==='towline'?0:1e5;
+  f.cooldown=weapon==='primary'?0:1e5;f.droneCooldown=weapon==='sentry'?0:1e5;f.towlineCooldown=0;
   for(let i=0;i<180&&state.hp[side+1]===initial[side+1];i++){
    const p=boss?h.hydraBossHead(f.time,side):h.hydraHead(f.time,side),k=boss?BOSS_PROJECTION:1;
    f.player={x:p.x*k-(wing?WING_FORMATION.x:0),y:-4};

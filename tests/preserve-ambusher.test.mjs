@@ -19,7 +19,7 @@ function attack(site=0,aim={x:0,y:-5.3}) {
 }
 function target(state,time) {
   const p=a.ambusherPose(state,time);
-  return{x:p.head.x,y:p.head.y,lane:p.home.x,age:0,fire:Infinity,hp:a.AMBUSHER_HP,ambusher:state,drop:'cannon'};
+  return{x:p.head.x,y:p.head.y,lane:p.home.x,age:0,fire:Infinity,hp:a.AMBUSHER_HP,ambusher:state,reward:{weapon:'cannon',remaining:1}};
 }
 function quiet(time,enemy,drone='sentry') {
   const f=new Flight(drone,[],'vex','preserve');f.time=time;f.enemies=[enemy];
@@ -91,7 +91,7 @@ test('bullets, cannon, homing, Omega, laser, Towline and Pulse use exposed anato
   const e=target(state,bite),f=quiet(bite,e,'towline');
   f.stepLaser(f.wings[0],{x:p.head.x,y:-9},false,.1);assert(e.hp<a.AMBUSHER_HP);assert.equal(f.wings[0].laserTarget,e);
   assert.equal(f.wings[0].beamEnd.y,9,'visual tracing must reach the actual posed model');
-  const before=e.hp;f.player={x:p.head.x,y:-7};f.drone={x:p.head.x,y:2};f.droneCooldown=0;f.stepDroneWeapon(STEP);assert(e.hp<before);
+  const before=e.hp;f.player={x:p.head.x,y:-7};f.drone={x:p.head.x,y:2};f.towlineCooldown=0;f.stepDroneWeapon(STEP);assert(e.hp<before);
   f.pulse();assert.equal(e.hp,0);assert.equal(f.score,200);assert.equal(f.drops.length,1);f.damageEnemy(e,6);assert.equal(f.score,200);assert.equal(f.drops.length,1);
   const buried=target(a.createAmbusherState(0),start),hidden=quiet(start,buried);
   hidden.stepLaser(hidden.wings[0],{x:buried.x,y:-9},false,1);assert.equal(buried.hp,a.AMBUSHER_HP);

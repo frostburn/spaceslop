@@ -41,7 +41,7 @@ test('frogs scroll with the ground, enter fully before attacking, and stay withi
 });
 function quiet(weapon){
  const wing=['homing','cannon','laser','omega'].includes(weapon),f=new Flight(weapon==='towline'?'towline':'sentry',wing?[weapon,weapon]:[],'vex','biolume');f.nextWave=groveWaves.length;f.time=22;
- f.cooldown=weapon==='primary'?0:1e5;f.droneCooldown=['sentry','towline'].includes(weapon)?0:1e5;f.invulnerable=1e5;
+ f.cooldown=weapon==='primary'?0:1e5;f.droneCooldown=weapon==='sentry'?0:1e5;f.towlineCooldown=0;f.invulnerable=1e5;
  const x=wing?f.wingOrigin(-1).x:0,c={kind:'frog',formation:'weave',mirror:1,slot:0,anchor:22},p=groveMotion(0,x,c),e={...p,lane:x,age:0,hp:frog.FROG_HP,fire:1e5,grove:c,frog:frog.createFrogState(x)};f.enemies=[e];return{f,e};
 }
 for(const weapon of['primary','sentry','homing','cannon','laser','omega','towline','pulse'])test(`${weapon} can defeat a frog and remove its linked tongue`,()=>{

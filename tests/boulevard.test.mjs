@@ -4,7 +4,7 @@ const b=await server.ssrLoadModule('/src/boulevard.ts'),{Flight,STEP}=await serv
 
 test('ten-screen boulevard uses its own waves, all four repeat drops, armored escorts and a quiet plaza approach',()=>{
  const f=new Flight('sentry',[],'vex','boulevard');f.cooldown=f.droneCooldown=1e6;f.player.x=3.95;const forms=new Set(),drops=new Set();let heavy=false,max=0;
- while(f.phase==='stage'){f.invulnerable=100;f.step(STEP);max=Math.max(max,f.enemies.length);for(const e of f.enemies){assert((e.boulevard||e.mine)&&!e.raptor&&!e.flyer);if(e.mine)continue;forms.add(e.boulevard.formation);if(e.drop)drops.add(e.drop);heavy||=!!e.boulevard.heavy;}}
+ while(f.phase==='stage'){f.invulnerable=100;f.step(STEP);max=Math.max(max,f.enemies.length);for(const e of f.enemies){assert((e.boulevard||e.mine)&&!e.raptor&&!e.flyer);if(e.mine)continue;forms.add(e.boulevard.formation);if (e.reward) drops.add(e.reward.weapon);heavy||=!!e.boulevard.heavy;}}
  assert.equal(forms.size,5);assert.equal(drops.size,4);assert(heavy);assert(max<=b.BOULEVARD_POOL);assert.equal(f.time,0);assert.equal(f.phase,'approach');assert.equal(f.enemies.length,0);assert.equal(f.transitionDuration,7);assert.equal(f.bossHealth,b.BOULEVARD_HP);
  for(let t=0;t<7.01;t+=STEP)f.step(STEP);assert.equal(f.phase,'boss');
 });
@@ -42,7 +42,7 @@ test('scenery, designed vector strokes and both actor variants construct without
 test('cruiser aim locks before two-cannon fans and every weapon can finish the fight',()=>{
  const f=new Flight('sentry',[],'vex','boulevard');f.phase='boss';f.cooldown=f.droneCooldown=1e5;f.time=.7;f.stepBoss(0);const locked={...f.markers[0]};f.player.x=3;f.time=1.6;f.stepBoss(0);assert.equal(f.threats.length,10);assert(f.threats.some(t=>t.x<0)&&f.threats.some(t=>t.x>0));assert(Math.abs((f.threats[2].x+f.threats[2].vx*b.BOULEVARD_TRAVEL)-locked.x)<1e-8);
  for(const weapon of['homing','cannon','laser','omega']){const g=new Flight('sentry',[weapon,weapon],'vex','boulevard');g.phase='boss';g.deployDrone(0,1);for(let n=0;n<60*80&&g.phase==='boss';n++){g.invulnerable=100;g.step(STEP);}assert.equal(g.phase,'won',weapon);}
- const tow=new Flight('towline',[],'vex','boulevard');tow.phase='boss';tow.player={x:-2,y:2.5};tow.drone={x:2,y:2.5};tow.droneCooldown=0;const hp=tow.bossHealth;tow.stepDroneWeapon(STEP);assert(tow.bossHealth<hp);tow.pulse();assert(tow.bossHealth<hp-1);
+ const tow=new Flight('towline',[],'vex','boulevard');tow.phase='boss';tow.player={x:-2,y:2.5};tow.drone={x:2,y:2.5};tow.towlineCooldown=0;const hp=tow.bossHealth;tow.stepDroneWeapon(STEP);assert(tow.bossHealth<hp);tow.pulse();assert(tow.bossHealth<hp-1);
 });
 
 // Exercise the renderer's dispatch with actual simulation threats and real instance batches.

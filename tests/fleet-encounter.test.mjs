@@ -106,7 +106,7 @@ test('asset-independent patrol combat keeps saucers visible at fire time and fit
       const saucer = enemy.fleet;
       assert(saucer, 'other sector enemies did not spawn');
       courses.add(saucer.course);
-      if (enemy.drop) drops.add(enemy.drop);
+      if (enemy.reward) drops.add(enemy.reward.weapon);
       deepestBank = Math.max(deepestBank, Math.abs(saucerPose(enemy.age, enemy.lane, saucer).bank));
       if (Number.isFinite(enemy.fire) && prev.get(enemy) < enemy.fire) {
         assert(saucerCanFire(enemy, saucer));
@@ -196,7 +196,8 @@ test('weapons stay planar across the approach and every loadout can damage the s
     f.phase = 'boss';
     f.invulnerable = 100;
     f.cooldown = weapon === 'primary' ? 0 : 100;
-    f.droneCooldown = ['sentry', 'towline'].includes(weapon) ? 0 : 100;
+    f.droneCooldown = weapon === 'sentry' ? 0 : 100;
+    f.towlineCooldown = 0;
     f.drone = { x: 0, y: weapon === 'towline' ? 3.6 : -4.9 };
     if (weapon === 'pulse') f.pulse();
     for (let i = 0; i < 144; i++) f.step(STEP);

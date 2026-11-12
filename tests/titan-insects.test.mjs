@@ -58,17 +58,19 @@ test('head, tail and repeated fragment cuts leave no dead leaders or orphaned li
   }
 });
 
-test('ship, sentry, cannon and homing projectiles sever a carrier once without damaging adjacent sections', () => {
+test('ship, sentry, cannon and homing projectiles sever one section without paying the chain reward early', () => {
   for (const kind of ['ship', 'drone', 'cannon', 'homing']) {
     const parts = chain(3), target = parts[1], damage = kind === 'homing' ? .5 : 1;
-    target.hp = damage; target.drop = 'laser'; const f = combat(parts);
+    const reward = { weapon: 'laser', remaining: parts.length };
+    for (const part of parts) part.reward = reward;
+    target.hp = damage; const f = combat(parts);
     f.shots = [{ x: 0, y: target.y - .1, z: 0, vx: 0, vy: 12, vz: 0, damage,
       wing: ['cannon', 'homing'].includes(kind) ? kind : undefined, drone: kind === 'drone' }];
     f.step(STEP);
     assert.equal(target.hp, 0, kind); assert.equal(parts[0].hp, 2); assert.equal(parts[2].hp, 2);
     assert.equal(parts[0].centipede.chain.escape, -1); assert.equal(parts[2].centipede.chain.escape, 1);
-    assert.equal(f.score, 100); assert.equal(f.drops.length, 1);
-    f.step(STEP); assert.equal(f.score, 100); assert.equal(f.drops.length, 1);
+    assert.equal(f.score, 100); assert.equal(f.drops.length, 0);
+    f.step(STEP); assert.equal(f.score, 100); assert.equal(f.drops.length, 0);
   }
 });
 
@@ -100,13 +102,15 @@ test('laser locks track individual sections through a split and contact sparks m
 
 test('Towline damages each intersected section once per pulse and Pulse clears split chains without duplicate rewards', () => {
   const parts = chain(5), f = combat(parts, 'towline');
-  parts.forEach(p => { p.hp = 3; }); parts[2].hp = 2;
-  f.player.x = -2; f.player.y = 1.44; f.drone.x = 2; f.drone.y = 1.44; f.droneCooldown = 0;
+  const reward = { weapon: 'omega', remaining: parts.length };
+  parts.forEach(p => { p.hp = 4; p.reward = reward; }); parts[2].hp = 3;
+  f.player.x = -2; f.player.y = 1.44; f.drone.x = 2; f.drone.y = 1.44; f.towlineCooldown = 0;
   f.step(STEP); assert.equal(parts[2].hp, 0); assert.equal(f.score, 100);
   for (let i = 0; i < 5; i++) f.step(STEP);
   assert(parts.filter(p => p.hp > 0).every(p => p.hp >= 1));
   assert.equal(f.score, 100, 'the same link pulse cannot re-hit a surviving section');
-  parts[4].drop = 'omega'; f.pulse(); assert.equal(f.enemies.length, 0); assert.equal(f.score, 500);
+  assert.equal(f.drops.length, 0);
+  f.pulse(); assert.equal(f.enemies.length, 0); assert.equal(f.score, 500);
   assert.equal(f.drops.length, 1); f.pulse(); assert.equal(f.score, 500); assert.equal(f.drops.length, 1);
 });
 

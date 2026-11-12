@@ -1,3 +1,4 @@
+import { wingRewardForWave } from '../wing';
 import {summerRiver,summerScroll,smooth} from './layout';
 import {vortexMotion,vortexWaveIndices} from './vortex';
 export {hydraHead,hydraHit,hydraBeamEntry,HYDRA_BODY_Y} from './hydra-targets';
@@ -16,6 +17,6 @@ export function summerMotion(age:number,lane:number,c:SummerCourse,time:number){
 const weapons=['cannon','homing','laser','omega'] as const;
 export const summerWaves=Array.from({length:22},(_,i)=>{
   const hydra=i===5||i===12||i===18,vortexIndex=vortexWaveIndices.findIndex(index=>index===i),vortex=vortexIndex>=0,at=2+i*4.25;
-  return{time:at,lanes:hydra?[0]:vortex?[vortexIndex%2?-1.55:1.55]:[-2,0,2],carrier:hydra||vortex?0:1,drop:weapons[i%4],summer:{kind:hydra?'hydra' as const:vortex?'vortex' as const:i%3===0?'drone' as const:'scout' as const,
+  return{time:at,lanes:hydra?[0]:vortex?[vortexIndex%2?-1.55:1.55]:[-2,0,2],drop:wingRewardForWave(weapons,i),summer:{kind:hydra?'hydra' as const:vortex?'vortex' as const:i%3===0?'drone' as const:'scout' as const,
     formation:(['vee','cross','loop','weave'] as const)[i%4],mirror:vortex?(vortexIndex%2?1:-1):i%2?1:-1,at}};
 });

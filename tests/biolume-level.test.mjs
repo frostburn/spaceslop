@@ -43,7 +43,7 @@ test('the full quiet-to-nursery patrol fits the warmed pool and waits until visi
  const kinds=new Set(),drops=new Set();let maximum=0,shots=0;
  for(let time=0;time<100;time+=STEP){
   const prior=new Set(f.threats);f.step(STEP);maximum=Math.max(maximum,f.enemies.length);
-  for(const enemy of f.enemies){assert(enemy.grove,'Another sector enemy leaked into the grove');kinds.add(enemy.grove.kind);if(enemy.drop)drops.add(enemy.drop);assert(Number.isFinite(enemy.x+enemy.y+enemy.heading));}
+  for(const enemy of f.enemies){assert(enemy.grove,'Another sector enemy leaked into the grove');kinds.add(enemy.grove.kind);if (enemy.reward) drops.add(enemy.reward.weapon);assert(Number.isFinite(enemy.x+enemy.y+enemy.heading));}
   for(const shot of f.threats)if(!prior.has(shot)){shots++;assert(shot.y<6.6&&shot.y>-6.9&&Math.abs(shot.x)<4.3,'A hidden glider fired');}
  }
  assert(maximum<=combat.GROVE_ENEMY_POOL,`Pool needs ${maximum} rigs`);assert(shots>30);assert.equal(kinds.size,4);assert.equal(drops.size,4);
@@ -89,7 +89,7 @@ test('Lantern Ray stays above the floor and its moving organ contacts agree with
 
 for(const weapon of['primary','sentry','towline','homing','cannon','laser','omega','pulse'])test(`the Lantern Ray can be damaged with ${weapon}`,()=>{
  const wing=['homing','cannon','laser','omega'].includes(weapon),f=new Flight(weapon==='towline'?'towline':'sentry',wing?[weapon]:[],'vex','biolume');f.phase='boss';f.invulnerable=1000;
- if(weapon!=='primary')f.cooldown=1e5;if(weapon!=='sentry')f.droneCooldown=weapon==='towline'?0:1e5;
+ if(weapon!=='primary')f.cooldown=1e5;if(weapon!=='sentry')f.droneCooldown=1e5;f.towlineCooldown=0;
  if(weapon==='pulse')f.pulse();else for(let i=0;i<2200&&f.phase==='boss';i++){
   const x=f.exposedCannonX*22/34;f.player={x:weapon==='towline'?-2.8:0,y:weapon==='towline'?f.bossAimY*22/34:-4};f.drone={x:weapon==='towline'?2.8:x,y:weapon==='towline'?f.bossAimY*22/34:-2};f.step(STEP);
  }

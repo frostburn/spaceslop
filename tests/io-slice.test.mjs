@@ -13,7 +13,7 @@ const {readLevel}=await server.ssrLoadModule('/src/levels.ts');
 test('Io is a ten-screen route with eighteen Skipper patrols, five Crucibles and a quiet eight-second approach',()=>{
  assert.equal(readLevel('io'),'io');assert.equal(layout.IO_DURATION,100);assert.equal(layout.ioWaves.filter(w=>w.skipper).length,18);assert.equal(layout.ioWaves.filter(w=>w.crucible).length,5);
  const f=new Flight('sentry',[],'vex','io'),drops=new Set();let maximum=0;
- for(let i=0;i<6002;i++){f.invulnerable=100;f.step(STEP);for(const e of f.enemies){assert(e.skipper||e.crucible||e.slag);if(e.drop)drops.add(e.drop);}maximum=Math.max(maximum,f.enemies.length);}
+ for(let i=0;i<6002;i++){f.invulnerable=100;f.step(STEP);for(const e of f.enemies){assert(e.skipper||e.crucible||e.slag);if (e.reward) drops.add(e.reward.weapon);}maximum=Math.max(maximum,f.enemies.length);}
  assert.equal(drops.size,4);assert(maximum<=layout.IO_SKIPPER_POOL);assert.equal(f.phase,'approach');
  assert.equal(f.transitionDuration,8);assert.equal(f.enemies.length+f.shots.length+f.threats.length,0);
  while(f.phase==='approach'){assert.equal(f.threats.length+f.shots.length,0);f.step(STEP);}assert.equal(f.phase,'boss');assert.equal(f.bossHealth,72);
@@ -49,9 +49,9 @@ test('ship, sentry, homing, cannon, omega, laser, Towline and Pulse all damage t
  }
  const laser=new Flight('sentry',['laser'],'vex','io');laser.phase='boss';laser.cooldown=laser.droneCooldown=100;
  laser.player.x=laser.exposedCannonX*BOSS_PROJECTION+1.22;laser.step(STEP);assert(laser.bossHealth<72);assert(laser.bossLaserDamage>0);
- const tow=new Flight('towline',[],'vex','io');tow.phase='boss';tow.cooldown=100;tow.droneCooldown=0;tow.player={x:-3,y:tow.bossAimY*BOSS_PROJECTION};tow.drone={x:3,y:tow.player.y};
- tow.step(STEP);assert.equal(tow.bossHealth,70);
- for(let i=0;i<5;i++)tow.step(STEP);assert.equal(tow.bossHealth,70,'same Towline pulse cannot repeat damage');
+ const tow=new Flight('towline',[],'vex','io');tow.phase='boss';tow.cooldown=100;tow.droneCooldown=100;tow.towlineCooldown=0;tow.player={x:-3,y:tow.bossAimY*BOSS_PROJECTION};tow.drone={x:3,y:tow.player.y};
+ tow.step(STEP);assert.equal(tow.bossHealth,69);
+ for(let i=0;i<5;i++)tow.step(STEP);assert.equal(tow.bossHealth,69,'same Towline pulse cannot repeat damage');
  const pulse=new Flight('sentry',[],'vex','io');pulse.phase='boss';pulse.charges=5;
  for(let i=0;i<4;i++)pulse.pulse();assert.equal(pulse.bossHealth,52);assert(pulse.ioLegBroken);pulse.pulse();assert.equal(pulse.bossHealth,46);
 });

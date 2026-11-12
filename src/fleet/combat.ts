@@ -28,8 +28,8 @@ type FleetWave = {
 export const fleetWaves: readonly FleetWave[] = [
   { at: 2.1, course: 'escort', side: 1, lanes: [-1.35, .30, 1.8], drop: 'homing' },
   { at: 7.1, course: 'sweep', side: 1, lanes: [-1.8, -.15, 1.35], drop: 'cannon' },
-  { at: 12.8, course: 'pincer', side: 1, lanes: [-2.15, 2.15], drop: 'laser' },
-  { at: 17.9, course: 'hold', side: -1, lanes: [-1.7, .38, 2.13], guard: 1, drop: 'omega' },
+  { at: 12.8, course: 'pincer', side: 1, lanes: [-2.15, 2.15], drop: 'homing' },
+  { at: 17.9, course: 'hold', side: -1, lanes: [-1.7, .38, 2.13], guard: 1, drop: 'homing' },
   { at: 23.5, course: 'escort', side: -1, lanes: [-1.8, 0, 1.8] },
   { at: 29.0, course: 'sweep', side: -1, lanes: [-2, -.5, 1.1], drop: 'homing' },
   { at: 34.7, course: 'pincer', side: 1, lanes: [-2.3, 2.3], drop: 'cannon' },

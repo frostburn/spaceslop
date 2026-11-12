@@ -1,3 +1,4 @@
+import { wingRewardForWave } from './wing';
 // Stable simulation coordinates; the scenery and camera do the head-on swing.
 export const BOULEVARD_DURATION=100, BOULEVARD_SPEED=1.7, BOULEVARD_APPROACH=7;
 export const BOULEVARD_HP=100, BOULEVARD_INTERVAL=3.4, BOULEVARD_WINDUP=.55, BOULEVARD_FIRE=1.55, BOULEVARD_TRAVEL=.85;
@@ -33,7 +34,7 @@ export function boulevardMotion(age:number,lane:number,c:BoulevardCourse){
  return{...p,heading:Math.atan2(vx,-vy),bank:Math.max(-.25,Math.min(.25,vx*.12))};
 }
 const drops=['homing','cannon','laser','omega'] as const;
-export const boulevardWaves=Array.from({length:20},(_,i)=>({time:1.5+i*4.8,lanes:i%5===3?[-1.9,1.9]:i%5===4?[0]:i%4===1?[-2,2]:i%4===2?[0,0,0,0]:[-2.1,0,2.1],carrier:i%5===3?1:i%5===4?0:i%4===2?2:1,drop:drops[i%4],
+export const boulevardWaves=Array.from({length:20},(_,i)=>({time:1.5+i*4.8,lanes:i%5===3?[-1.9,1.9]:i%5===4?[0]:i%4===1?[-2,2]:i%4===2?[0,0,0,0]:[-2.1,0,2.1],drop:wingRewardForWave(drops,i),
  boulevard:{formation:(i%5===3?'intercept':i%5===4?'rush':i%4===1?'cross':i%4===2?'train':'chevron') as BoulevardCourse['formation'],mirror:i%2?1:-1,heavy:i%5===4}}));
 
 // Small, deterministic trim corrections stay inside the fixed combat proxy.

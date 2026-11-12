@@ -148,11 +148,12 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
       tip = flight.pickupMessage;
     }
     else if (active && flight.phase === 'stage') {
-      const wings = flight.wings.flatMap((wing) => wing.weapon
-        ? [`${wing.side < 0 ? 'L' : 'R'} ${wingWeapons[wing.weapon].short}`]
+      const equipment = flight.wings.flatMap((wing) => wing.weapon
+        ? [`${wing.side < 0 ? 'L' : 'R'} ${wingWeapons[wing.weapon].short}${wing.upgraded ? ' II' : ''}`]
         : []);
-      if (wings.length)
-        tip = wings.join(' · ');
+      if (flight.droneWeapon === 'towline') equipment.push('Towline');
+      if (equipment.length)
+        tip = equipment.join(' · ');
       else if (flight.drops.length)
         tip = 'Fly through the drop to equip it';
     }

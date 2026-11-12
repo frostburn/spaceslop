@@ -49,7 +49,7 @@ test('Vortex rotor remains articulated after batching and matches the live spira
 
 for(const weapon of['primary','sentry','towline','homing','cannon','laser','omega'])test('Vortex accepts '+weapon+' damage through the normal weapon path',()=>{
  const {f,enemy}=fixture(2.2),wing=['homing','cannon','laser','omega'].includes(weapon);enemy.fire=Infinity;
- f.cooldown=weapon==='primary'?0:1e5;f.droneCooldown=weapon==='sentry'||weapon==='towline'?0:1e5;f.droneWeapon=weapon==='towline'?'towline':'sentry';
+ f.cooldown=weapon==='primary'?0:1e5;f.droneCooldown=weapon==='sentry'?0:1e5;f.towlineCooldown=0;f.droneWeapon=weapon==='towline'?'towline':'sentry';
  if(wing){const equipped=new Flight('sentry',[undefined,weapon],'vex','summer');f.wings=equipped.wings;}
  for(let i=0;i<360&&enemy.hp>0;i++){
   f.player={x:enemy.x-(wing?WING_FORMATION.x:0),y:-4};
