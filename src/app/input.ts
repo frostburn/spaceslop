@@ -35,7 +35,7 @@ export function bindFlightInput(canvas: HTMLCanvasElement, context: InputContext
     context.flight().clearAim();
   }
   canvas.addEventListener('pointerdown', event => {
-    if (!context.active() || pointer || event.button !== 0)
+    if (!context.active() || context.flight().phase === 'won' || pointer || event.button !== 0)
       return;
     const { left, top, width, height } = canvas.getBoundingClientRect();
     if (!width || !height)

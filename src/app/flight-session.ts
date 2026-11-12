@@ -14,6 +14,7 @@ import { BOSS_HP, Flight, STEP, type DroneWeapon } from '../game';
 import type { PilotId } from '../pilot-data';
 import { showSelectedPilot } from '../pilots';
 import { createFlightView, type FlightView } from '../view';
+import { VICTORY_DURATION } from '../rendering/victory';
 import { levels, type LevelId } from '../levels';
 import { iceSection } from '../ice-layout';
 import { wingWeapons, type WingWeapon } from '../wing';
@@ -41,6 +42,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
   previousCanvas.replaceWith(canvas);
   const panel = element('panel');
   const heading = element('heading');
+  const promotionSubtitle = element('promotion-subtitle');
   const message = element('message');
   const mission = missionFor[selectedLevel];
   const rankDisplay = createRankDisplays(signal);
@@ -72,6 +74,8 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
   let screen: Screen = 'loading';
   let flight = new Flight(loadout.drone, loadout.wings, loadout.pilot, selectedLevel);
   let nextLevel: LevelId | undefined;
+  let promotion: Rank | undefined;
+  let victoryTime: number | undefined;
   const progressOnClear = !shortcut;
   let offlineReady = false;
   let view: FlightView | undefined;
@@ -109,6 +113,9 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     pulse.disabled = !active || !fighting || flight.charges === 0;
     pause.hidden = !active;
     panel.hidden = active;
+    const victoryResults = screen === 'results' && flight.phase === 'won';
+    panel.classList.toggle('victory-results', victoryResults);
+    promotionSubtitle.hidden = !victoryResults || promotion === undefined;
     start.hidden = screen === 'loading';
     nextMission.hidden = screen !== 'results' || !nextLevel;
     perkReadout.hidden = screen === 'loading' || screen === 'results';
@@ -158,6 +165,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
         tip = 'Fly through the drop to equip it';
     }
     if (!active && offlineReady && !preparing && screen !== 'loading') tip = 'Level ready offline';
+    if (flight.phase === 'won') tip = '';
     if (status.textContent !== tip)
       status.textContent = tip;
   }
@@ -171,7 +179,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     try {
       const currentView = view;
       signal.addEventListener('abort', () => controller.abort(), { once: true });
-      await currentView.warmup(controller.signal, () => currentView.render(flight));
+      await currentView.warmup(controller.signal, () => currentView.render(flight, 0, victoryTime));
     }
     catch (error) {
       if (!controller.signal.aborted)
@@ -195,22 +203,28 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     start.textContent = 'Resume';
     syncUI();
   }
+  function recordVictory() {
+    if (flight.phase !== 'won' || victoryTime !== undefined) return;
+    victoryTime = 0;
+    input.reset();
+    if (progressOnClear && campaignRun) {
+      const result = campaignRun.onClear();
+      nextLevel = result.next;
+      promotion = result.promoted;
+    }
+  }
   function showResults() {
     if (screen !== 'active') return;
     screen = 'results';
     input.reset();
-    heading.textContent = flight.phase === 'won' ? 'Sector clear' : 'Ship lost';
+    heading.textContent = flight.phase === 'won' ? 'Mission Complete' : 'Ship lost';
     const report = [`Score ${flight.score}`];
     if (flight.phase === 'won' && progressOnClear && campaignRun) {
-      const result = campaignRun.onClear();
-      nextLevel = result.next;
-      if (result.promoted) {
-        setPilotRank(result.promoted);
-        report.push(`Promoted to ${ranks[result.promoted].name}`);
-      }
+      if (promotion) setPilotRank(promotion);
       if (nextLevel) report.push(levels[nextLevel].name);
       else report.push('Campaign complete');
     }
+    promotionSubtitle.textContent = promotion ? `Promoted to ${ranks[promotion].name}` : '';
     message.textContent = report.join(' · ');
     start.textContent = 'Fly again';
     panel.scrollTop = 0;
@@ -225,6 +239,8 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     if (screen !== 'paused') {
       if (screen === 'results') flight = new Flight(loadout.drone, loadout.wings, loadout.pilot, selectedLevel);
       nextLevel = undefined;
+      promotion = undefined;
+      victoryTime = undefined;
       setPilotRank(mission.pilotRank);
       if (import.meta.env.DEV && shortcut) {
         if (shortcut === 'boss' || shortcut === 'trench') {
@@ -236,7 +252,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     screen = 'active';
     input.reset();
     previous = performance.now();
-    view.render(flight);
+    view.render(flight, 0, victoryTime);
     if (document.hidden) pauseFlight();
     else {
       syncUI();
@@ -248,10 +264,8 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     if (screen !== 'active')
       return;
     flight.pulse();
-    if (flight.phase === 'won')
-      showResults();
-    else
-      syncUI();
+    recordVictory();
+    syncUI();
   }
   pause.addEventListener('click', pauseFlight, { signal });
   pulse.addEventListener('click', firePulse, { signal });
@@ -287,7 +301,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
   }, { signal });
   const observer = new ResizeObserver(() => {
     view?.resize(canvas.clientWidth, canvas.clientHeight);
-    view?.render(flight);
+    view?.render(flight, 0, victoryTime);
   });
   observer.observe(canvas);
   let previous = performance.now();
@@ -296,16 +310,23 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     const elapsed = Math.min(Math.max((now - previous) / 1000, 0), 0.1);
     previous = now;
     if (screen === 'active' && view) {
-      accumulator += elapsed;
-      while (accumulator >= STEP && screen === 'active') {
-        input.steer(STEP);
-        flight.step(STEP);
-        accumulator -= STEP;
-        if (flight.phase === 'won' || flight.phase === 'lost')
-          showResults();
+      let presentationStep = elapsed;
+      if (victoryTime === undefined) {
+        accumulator += elapsed;
+        while (accumulator >= STEP && flight.phase !== 'won' && flight.phase !== 'lost') {
+          input.steer(STEP);
+          flight.step(STEP);
+          accumulator -= STEP;
+        }
+        recordVictory();
+      } else {
+        const next = Math.min(VICTORY_DURATION, victoryTime + elapsed);
+        presentationStep = next - victoryTime;
+        victoryTime = next;
       }
-      view.render(flight, elapsed);
-      syncUI();
+      view.render(flight, presentationStep, victoryTime);
+      if (flight.phase === 'lost' || victoryTime === VICTORY_DURATION) showResults();
+      else syncUI();
     }
     else {
       accumulator = 0;
@@ -320,6 +341,8 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     disposed = true;
     preparing?.abort();
     input.reset();
+    panel.classList.remove('victory-results');
+    promotionSubtitle.hidden = true;
     observer.disconnect();
     cancelAnimationFrame(animation);
     view?.dispose();

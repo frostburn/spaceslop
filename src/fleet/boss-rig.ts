@@ -44,14 +44,14 @@ export function createFleetBossRig(factory: ReturnType<typeof createSaucerFactor
 
   return {
     root,
-    pose(time: number, rapid: boolean, distance: number) {
+    pose(time: number, rapid: boolean, distance: number, alive = true) {
       const pose = fleetBossPose(time);
       const factor = 1 - pose.depth / distance;
       root.position.set(pose.x * factor, pose.y * factor, pose.depth);
       root.scale.setScalar(pose.radius * factor);
       rig.attitude(pose, 0, 0);
       for (const { port, lens, glow, halo } of banks) {
-        const { charge, flash } = fleetBossSignal(time, port, rapid);
+        const { charge, flash } = alive ? fleetBossSignal(time, port, rapid) : { charge: 0, flash: 0 };
         const ember = .35 + .91 * charge + 1.28 * flash;
         lens.color.setRGB(ember, .029 + charge * (port === 2 ? .46 : .13) + flash * .96, .018 + .04 * charge + .54 * flash);
         halo.visible = charge > .05 || flash > 0;

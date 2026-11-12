@@ -47,10 +47,10 @@ export const createLevel:LevelFactory=({plane,signal})=>{
     prepare(){restores=[terrain.prime(),ice.prime(),wisps.prime()];root.traverse(o=>{if(o instanceof T.Mesh){flags.set(o,o.frustumCulled);o.frustumCulled=false;}});const states=herd.map(h=>[h.rig.root.position.y,h.rig.root.visible] as const);herd.forEach(h=>{h.rig.root.position.y=0;h.rig.root.visible=true;});restores.push(()=>herd.forEach((h,i)=>{h.rig.root.position.y=states[i][0];h.rig.root.visible=states[i][1];}));},
     afterWarmup(){restores.forEach(restore=>restore());restores=[];for(const[m,cull]of flags)m.frustumCulled=cull;flags.clear();},
     contact:(x,d)=>contact(x,d),
-    update({flight,time,animationTime}){
+    update({flight,time,animationTime,victory}){
       const scroll=summerScroll(time);world.position.y=-scroll;clouds.update(scroll,animationTime);wisps.update(scroll,animationTime);terrain.update(scroll,animationTime);ice.update(scroll,animationTime);palace.update(animationTime);
       for(const {rig,site}of herd){rig.root.visible=Math.abs(site.y-scroll)<29;rig.pose(animationTime,site.y*.13);}
-      boss.root.visible=flight.bossHealth>0;boss.pose(time,flight.cannonWindup,0,flight.summerHydra,flight.summerBossTime);
+      boss.root.visible=flight.bossHealth>0;boss.pose(time,flight.cannonWindup,0,flight.summerHydra,flight.summerBossTime+(victory?.time??0));
       for(const r of enemies)r.root.visible=false;models.length=flight.enemies.length;models.fill(undefined);
       let scoutIndex=0,droneIndex=SUMMER_AIR_POOL/2,hi=0,vi=0;
       for(const[i,enemy]of flight.enemies.entries()){

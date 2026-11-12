@@ -28,13 +28,14 @@ export function createGroveLighting(shared:LightUniforms){
   }
   return{root,lights,update(frame:LevelFrame,boss:T.Object3D){
     const {flight:f,time}=frame;sceneryLight(0,grovePods,time,-1);sceneryLight(1,grovePods,time,1);sceneryLight(2,groveLeafLights,time);
+    const fighter=frame.victory?.fighter??f.player,drone=frame.victory?.drone??f.drone;
     for(let i=0;i<6;i++){
       const at=Math.floor(groveScroll(time))-.5+i%3,u=i<3?.11+.025*Math.sin(at*4.3):.89+.025*Math.cos(at*4.1);
       const p=groveSitePoint({at,u,size:1},time,-3.1);shared.blocker.value[i].set(p.x,p.y,p.z);
     }
-    lights[3].position.set(f.player.x,f.player.y+.2,.85);lights[3].intensity=f.hull>0?2.4:0;
-    lights[4].position.set(f.drone.x,f.drone.y,.75);lights[4].intensity=f.hull>0?1.8:0;
-    lights[5].position.set(f.player.x,f.player.y-.85,-.25);lights[5].intensity=f.hull>0?4.2+.6*Math.sin(time*11):0;
+    lights[3].position.set(fighter.x,fighter.y+.2,.85);lights[3].intensity=f.hull>0?2.4:0;
+    lights[4].position.set(drone.x,drone.y,.75);lights[4].intensity=f.hull>0?1.8:0;
+    lights[5].position.set(fighter.x,fighter.y-.85,-.25);lights[5].intensity=f.hull>0?4.2+.6*Math.sin(time*11):0;
     lights[6].intensity=0;lights[6].color.setHex(0xff8c42);
     if(boss.visible){lights[6].position.copy(boss.position);lights[6].position.z=1.45;lights[6].intensity=f.bossHealth>0?12+6*f.cannonWindup:.6;}
     else{
@@ -50,7 +51,8 @@ export function createGroveLighting(shared:LightUniforms){
     const seeker=f.enemies.find(e=>e.rayOrb&&e.hp>0);
     if(seeker){lights[7].position.set(seeker.x,seeker.y,.7);lights[7].intensity=4.5;lights[7].color.setHex(0xffaa42);}else lights[7].color.setHex(0x83eeff);
     for(const wing of f.wings)if(wing.weapon==='laser'&&wing.beamEnd){lights[7].position.set(wing.beamEnd.x,wing.beamEnd.y,.65);lights[7].intensity=4;}
-    if(f.pulseFlash>0){lights[7].position.set(f.player.x,f.player.y,1.2);lights[7].intensity=24*f.pulseFlash/.3;}
+    const pulse=f.pulseFlash-(frame.victory?.time??0);
+    if(pulse>0){lights[7].position.set(fighter.x,fighter.y,1.2);lights[7].intensity=24*pulse/.3;}
     for(let i=0;i<8;i++){
       const l=lights[i];shared.lightPosition.value[i].copy(l.position);shared.lightColor.value[i].set(l.color.r,l.color.g,l.color.b).multiplyScalar(l.intensity);
       halos[i].position.copy(l.position);halos[i].position.z+=.05;halos[i].material.uniforms.gain.value=Math.min(.18,l.intensity*.008);
