@@ -257,6 +257,7 @@ export class Flight {
   perkTime = 0;
   perkMessage = '';
   private closeCalls = 0;
+  private reinforcementUsed = false;
   private droneLaunch?: Point;
   private stageProgress = 0;
   private obstacles?: HiveCollision | IceCollision;
@@ -431,7 +432,7 @@ export class Flight {
         return this.closeCalls >= CLOSE_CALLS_REQUIRED
           ? 'Close Call · Pulse earned' : `Close Call · ${this.closeCalls}/${CLOSE_CALLS_REQUIRED} grazes`;
       case 'brass':
-        return 'Reinforcement · Bonus hull from surplus';
+        return this.reinforcementUsed ? 'Reinforcement · Used' : 'Reinforcement · Ready';
       case 'glint':
         if (this.hotDockReady) return 'Hot Dock · Charged';
         return this.hotDockCooldown > 0 ? 'Hot Dock · Cooling down' : 'Hot Dock · Awaiting redeploy';
@@ -756,7 +757,8 @@ export class Flight {
       this.droneWeapon = 'towline';
       this.towlineCooldown = 0;
       message = 'Drone upgraded · Towline';
-    } else if (this.pilot === 'brass') {
+    } else if (this.pilot === 'brass' && !this.reinforcementUsed) {
+      this.reinforcementUsed = true;
       this.hull++;
       this.announcePerk('Reinforcement · +1 Hull');
       return;

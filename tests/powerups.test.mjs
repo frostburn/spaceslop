@@ -99,9 +99,10 @@ test('pickups use collection side, preserve an existing matching wing, and reset
   assert.equal(flight.score, 250);
 });
 
-test('Broodlock can award Brass Towline and bonus hull from its first four clears', () => {
+test('Broodlock can award Brass Towline and one bonus hull per sortie', () => {
   const flight = quietFlight('broodlock', 'brass');
   const startingHull = flight.hull;
+  assert.equal(flight.perkReadout, 'Reinforcement · Ready');
   for (const time of [.8, 4.8, 9.2, 13.5]) {
     flight.time = time;
     flight.step(STEP);
@@ -114,11 +115,18 @@ test('Broodlock can award Brass Towline and bonus hull from its first four clear
   assert.equal(flight.droneWeapon, 'towline');
   assert.equal(flight.hull, startingHull + 1);
   assert.equal(flight.perkMessage, 'Reinforcement · +1 Hull');
+  assert.equal(flight.perkReadout, 'Reinforcement · Used');
   const score = flight.score;
   collect(flight, 'cannon');
+  assert.equal(flight.hull, startingHull + 1);
+  assert.equal(flight.score, score + 250);
+
+  flight.invulnerable = 0;
+  flight.hit();
+  assert.equal(flight.hull, startingHull);
   collect(flight, 'cannon');
-  assert.equal(flight.hull, startingHull + 3);
-  assert.equal(flight.score, score);
+  assert.equal(flight.hull, startingHull);
+  assert.equal(flight.score, score + 500);
 });
 
 test('each Mk II sidearm deals 50 percent more damage through its normal weapon path', () => {

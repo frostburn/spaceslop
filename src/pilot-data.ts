@@ -9,7 +9,7 @@ export const pilots = [
   },
   {
     id: 'brass', name: 'Brass', color: '#ffbd76', perk: 'Reinforcement',
-    description: 'Gain one bonus hull from every surplus weapon pickup.',
+    description: 'Gain one bonus hull from your first surplus weapon pickup each sortie.',
   },
   {
     id: 'glint', name: 'Glint', color: '#dca2f8', perk: 'Hot Dock',
