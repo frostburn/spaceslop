@@ -59,7 +59,7 @@ export async function tunePatrolHandoff({
   function nudge({ frame, band, point }: Target, delta: number) {
     const rows = bestBands[frame], row = rows[band];
     const value = point === undefined ? row[0] : patrolBandXs(row, atlas.gutter)[point];
-    const [min, max] = point === undefined ? bandLimits(atlas, rows, frame, band) : pointLimits(atlas, row, frame, band, point);
+    const [min, max] = point === undefined ? bandLimits(atlas, rows, frame, band) : pointLimits(atlas, row, point);
     const nextValue = T.MathUtils.clamp(roundPatrolCoordinate(value + delta), min, max);
     if (Math.abs(nextValue - value) < .001) return;
     const next = [...rows];

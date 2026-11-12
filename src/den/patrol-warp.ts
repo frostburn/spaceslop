@@ -81,7 +81,8 @@ function grid(columns: number, bands: number) {
 type PixelPoint = readonly [number, number];
 type MeshAnchor = { vertices: [number, number, number]; weights: [number, number, number] };
 export type PatrolBand = readonly [height: number, left: number, center: number, right: number,
-  innerLeft?: number, innerRight?: number, detailLeft?: number, detailRight?: number];
+  innerLeft?: number, innerRight?: number, detailLeft?: number | null, detailRight?: number | null,
+  pointYOffsets?: readonly number[]];
 
 export type PatrolAtlas = {
   width: number;
@@ -96,9 +97,13 @@ export type PatrolAtlas = {
 };
 
 export function patrolBandXs([, left, center, right, innerLeft = left, innerRight = right, detailLeft, detailRight]: PatrolBand, gutter: number) {
-  if (detailLeft !== undefined && detailRight !== undefined)
+  if (detailLeft != null && detailRight != null)
     return [left - gutter, detailLeft, innerLeft, center, innerRight, detailRight, right + gutter];
   return [left - gutter, innerLeft, center, innerRight, right + gutter];
+}
+
+export function patrolPointY(row: PatrolBand, point: number) {
+  return row[0] + (row[8]?.[point] ?? 0);
 }
 
 export function patrolBandAngle(atlas: PatrolAtlas, frame: number) {
@@ -132,8 +137,8 @@ function registerPoses(atlas: PatrolAtlas) {
     const band = patrolBandAngle(atlas, i), c = Math.cos(band), s = Math.sin(band);
     const turn = band - angle, cos = Math.cos(turn), sin = Math.sin(turn);
     const xy: number[] = [], uv: number[] = [];
-    for (const point of points) for (const x of patrolBandXs(point, gutter)) {
-      const y = point[0];
+    for (const row of points) for (const [point, x] of patrolBandXs(row, gutter).entries()) {
+      const y = patrolPointY(row, point);
       xy.push((cos * x - sin * y) * pixel, -(sin * x + cos * y) * pixel);
       uv.push((pivotX + c * x - s * y) / width, 1 - (pivotY + s * x + c * y) / height);
     }

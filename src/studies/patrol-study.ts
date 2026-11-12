@@ -1,9 +1,9 @@
 import * as T from 'three';
 import { denPatrolWarp } from '../den/patrol';
-import { createPatrolWarpCard, patrolAtlasFor, patrolBandAngle, patrolBandXs, type PatrolBand } from '../den/patrol-warp';
+import { createPatrolWarpCard, patrolAtlasFor, patrolBandAngle, patrolBandXs, patrolPointY, type PatrolBand } from '../den/patrol-warp';
 import { loadEncounterTexture } from '../encounter-texture';
 import { createPatrolDifference } from './patrol-difference';
-import { bandHasLock, bandLimits, dragPatrolPoint, meshFoldsNear, patrolSourceSpan, pointLimits, replaceBandPoint, roundPatrolCoordinate, type PatrolBands } from './patrol-registration';
+import { bandHasLock, bandLimits, dragPatrolBand, dragPatrolPoint, meshFoldsNear, patrolSourceSpan, pointLimits, pointYLimits, replaceBandPoint, roundPatrolCoordinate, type PatrolBands } from './patrol-registration';
 import { tunePatrolHandoff } from './patrol-tuning';
 import './patrol-study.css';
 
@@ -82,7 +82,8 @@ function start() {
   const previewTitle = element('preview-title'), viewport = overlay.canvas.parentElement!;
   const play = element<HTMLButtonElement>('play'), follow = element<HTMLButtonElement>('follow');
   const editPose = element<HTMLSelectElement>('edit-pose'), editBand = element<HTMLSelectElement>('edit-band');
-  const editPoint = element<HTMLSelectElement>('edit-point'), pointX = range('point-x'), bandY = range('band-y');
+  const editPoint = element<HTMLSelectElement>('edit-point'), pointX = range('point-x'), pointY = range('point-y'), bandY = range('band-y');
+  const dragMode = element<HTMLSelectElement>('drag-mode');
   const reset = element<HTMLButtonElement>('reset-pose'), copy = element<HTMLButtonElement>('copy-edits');
   const lockPoint = range('lock-point'), tuneScope = element<HTMLSelectElement>('tune-scope');
   const tune = element<HTMLButtonElement>('tune-start'), undoTune = element<HTMLButtonElement>('tune-undo');
@@ -145,10 +146,10 @@ function start() {
         x + left * scale, y + top * scale, (right - left) * scale, (bottom - top) * scale);
     }
     const angle = patrolBandAngle(atlas, frame), cos = Math.cos(angle), sin = Math.sin(angle);
-    const points = bands[frame].flatMap(row => patrolBandXs(row, atlas.gutter).map(u => ({
-      x: size / 2 + scale * (cos * u - sin * row[0]),
-      y: size / 2 + scale * (sin * u + cos * row[0]),
-    })));
+    const points = bands[frame].flatMap(row => patrolBandXs(row, atlas.gutter).map((u, point) => {
+      const v = patrolPointY(row, point);
+      return { x: size / 2 + scale * (cos * u - sin * v), y: size / 2 + scale * (sin * u + cos * v) };
+    }));
     sourcePoints[pane] = points;
     drawMesh(context, points, atlas.grid.columns, selectedPoint, pane !== Number(editPose.value), locks[frame]);
   }
@@ -159,12 +160,19 @@ function start() {
     const xs = patrolBandXs(row, atlas.gutter);
     const locked = locks[frame].has(band * columns + point);
     const busy = Boolean(tuning);
-    const [minX, maxX] = pointLimits(atlas, row, frame, band, point);
+    const [minX, maxX] = pointLimits(atlas, row, point);
     const [minY, maxY] = bandLimits(atlas, bands[frame], frame, band);
     pointX.min = String(minX);
     pointX.max = String(maxX);
     pointX.disabled = busy || locked || (frame === 0 && point === Math.floor(columns / 2));
     pointX.value = String(xs[point]);
+    const [minPointY, maxPointY] = pointYLimits(atlas, bands[frame], band, point);
+    const y = rounded(patrolPointY(row, point));
+    pointY.min = String(minPointY);
+    pointY.max = String(maxPointY);
+    pointY.disabled = busy || locked || minPointY === maxPointY;
+    pointY.value = String(y);
+    output('point-y').value = `${y} px`;
     bandY.min = String(minY);
     bandY.max = String(maxY);
     bandY.disabled = busy || bandHasLock(locks[frame], columns, band);
@@ -172,7 +180,7 @@ function start() {
     output('point-x').value = `${rounded(xs[point])} px`;
     output('band-y').value = `${rounded(row[0])} px`;
     lockPoint.checked = locked;
-    for (const field of [heading, play, editPose, editBand, editPoint, lockPoint, tuneScope]) field.disabled = busy;
+    for (const field of [heading, play, editPose, editBand, editPoint, dragMode, lockPoint, tuneScope]) field.disabled = busy;
     const turn = turnAt();
     tune.disabled = tuning ? tuning.signal.aborted : !texture || !difference || turn.first === turn.second;
     reset.disabled = busy || (!edited.has(frame) && !locks[frame].size);
@@ -305,6 +313,7 @@ function start() {
     const next = [...bands[frame]], row = next[band];
     const [, ...rest] = row;
     next[band] = event.target === bandY ? [bandY.valueAsNumber, ...rest]
+      : event.target === pointY ? replaceBandPoint(atlas, row, frame, point, patrolBandXs(row, atlas.gutter)[point], pointY.valueAsNumber)
       : replaceBandPoint(atlas, row, frame, point, pointX.valueAsNumber);
     applyBands(frame, next);
   }
@@ -370,7 +379,7 @@ function start() {
     }
   }
 
-  for (const field of [pointX, bandY]) field.addEventListener('input', editCoordinates);
+  for (const field of [pointX, pointY, bandY]) field.addEventListener('input', editCoordinates);
   for (const field of [editPose, editBand, editPoint]) field.addEventListener('change', () => setPlaying(false));
   heading.addEventListener('input', () => setPlaying(false));
   blend.addEventListener('input', () => { manual = true; requestRender(); });
@@ -424,7 +433,7 @@ function start() {
   sources.forEach(({ canvas }, pane) => {
     let drag: {
       pointer: number; frame: number; band: number; point: number;
-      rows: readonly PatrolBand[]; start: Point; origin: Point; last: Point; moved: boolean;
+      rows: readonly PatrolBand[]; start: Point; origin: Point; last: Point; moved: boolean; wholeBand: boolean;
     } | undefined;
 
     function canvasPosition(event: PointerEvent) {
@@ -456,14 +465,14 @@ function start() {
         return;
       }
       const rows = bands[frame], row = rows[band];
-      const origin = { x: patrolBandXs(row, atlas.gutter)[point], y: row[0] };
-      drag = { pointer: event.pointerId, frame, band, point, rows, start, origin, last: origin, moved: false };
+      const origin = { x: patrolBandXs(row, atlas.gutter)[point], y: patrolPointY(row, point) };
+      drag = { pointer: event.pointerId, frame, band, point, rows, start, origin, last: origin, moved: false, wholeBand: dragMode.value === 'band' };
       canvas.setPointerCapture(event.pointerId);
     });
 
     canvas.addEventListener('pointermove', event => {
       if (!drag || drag.pointer !== event.pointerId || tuning) return;
-      const { frame, band, point, rows, start, origin, last } = drag;
+      const { frame, band, point, rows, start, origin, last, wholeBand } = drag;
       if (selected().frame !== frame) return;
       const position = canvasPosition(event), scale = patrolSourceSpan(atlas) / canvas.width;
       const angle = patrolBandAngle(atlas, frame), cos = Math.cos(angle), sin = Math.sin(angle);
@@ -472,13 +481,15 @@ function start() {
       drag.moved = true;
       const target = { x: origin.x + (cos * dx + sin * dy) * scale, y: origin.y + (-sin * dx + cos * dy) * scale };
       const attempt = ({ x, y }: Point) => {
-        const next = dragPatrolPoint(atlas, rows, locks[frame], frame, band, point, x, y);
+        const next = wholeBand
+          ? dragPatrolBand(atlas, rows, locks[frame], frame, band, point, x, y - (origin.y - rows[band][0]))
+          : dragPatrolPoint(atlas, rows, frame, band, point, x, y);
         return next === bands[frame] || applyBands(frame, next, true);
       };
       if (attempt(target)) {
         drag.last = target;
-        if (Math.abs(bands[frame][band][0] - target.y) > .2) {
-          status.textContent = 'Drag reached a locked band or the edge of the mesh.';
+        if (Math.abs(patrolPointY(bands[frame][band], point) - target.y) > .2) {
+          status.textContent = wholeBand ? 'Drag reached a locked band or the edge of the mesh.' : 'Drag reached the edge of the mesh.';
         }
         return;
       }

@@ -1,35 +1,72 @@
-import { patrolBandAngle, patrolBandXs, type createPatrolWarpCard, type PatrolAtlas, type PatrolBand } from '../den/patrol-warp';
+import { patrolBandAngle, patrolBandXs, patrolPointY, type createPatrolWarpCard, type PatrolAtlas, type PatrolBand } from '../den/patrol-warp';
 
 export type PatrolBands = readonly (readonly PatrolBand[])[];
 export type PatrolLocks = readonly ReadonlySet<number>[];
 export const roundPatrolCoordinate = (value: number) => Math.round(value * 10) / 10;
 export const patrolSourceSpan = (atlas: PatrolAtlas) => atlas.width === atlas.height ? 336 : 570;
 
-export function pointLimits(atlas: PatrolAtlas, row: PatrolBand, frame: number, band: number, point: number) {
-  const xs = patrolBandXs(row, atlas.gutter);
-  const original = patrolBandXs(atlas.rows[frame][band], atlas.gutter)[point];
-  return [
-    roundPatrolCoordinate(Math.min(xs[point], Math.max(original - 28, (xs[point - 1] ?? -Infinity) + .2))),
-    roundPatrolCoordinate(Math.max(xs[point], Math.min(original + 28, (xs[point + 1] ?? Infinity) - .2))),
-  ] as const;
+export function pointLimits(atlas: PatrolAtlas, row: PatrolBand, point: number) {
+  const x = patrolBandXs(row, atlas.gutter)[point], half = patrolSourceSpan(atlas) / 2;
+  return [Math.min(x, -half), Math.max(x, half)] as const;
+}
+
+export function pointYLimits(atlas: PatrolAtlas, rows: readonly PatrolBand[], band: number, point: number) {
+  const y = patrolPointY(rows[band], point), half = patrolSourceSpan(atlas) / 2;
+  if (band === 0 || band === rows.length - 1) return [y, y] as const;
+  if (point === 0 || point === atlas.grid.columns - 1) {
+    return [roundPatrolCoordinate(patrolPointY(rows[band - 1], point) + .2),
+      roundPatrolCoordinate(patrolPointY(rows[band + 1], point) - .2)] as const;
+  }
+  return [Math.min(y, -half), Math.max(y, half)] as const;
 }
 
 export function bandLimits(atlas: PatrolAtlas, rows: readonly PatrolBand[], frame: number, band: number) {
-  const original = atlas.rows[frame][band][0];
-  return [
-    roundPatrolCoordinate(rows[band - 1] ? rows[band - 1][0] + .2 : original - 18),
-    roundPatrolCoordinate(rows[band + 1] ? rows[band + 1][0] - .2 : original + 18),
-  ] as const;
+  const original = atlas.rows[frame][band][0], row = rows[band];
+  const points = [0, atlas.grid.columns - 1];
+  const lower = rows[band - 1], upper = rows[band + 1];
+  const min = lower ? Math.max(lower[0], ...points.map(point => patrolPointY(lower, point) - (row[8]?.[point] ?? 0))) + .2 : original - 18;
+  const max = upper ? Math.min(upper[0], ...points.map(point => patrolPointY(upper, point) - (row[8]?.[point] ?? 0))) - .2 : original + 18;
+  return [roundPatrolCoordinate(Math.min(row[0], min)), roundPatrolCoordinate(Math.max(row[0], max))] as const;
 }
 
-export function replaceBandPoint(atlas: PatrolAtlas, row: PatrolBand, frame: number, point: number, x: number): PatrolBand {
-  const xs = patrolBandXs(row, atlas.gutter);
-  const { columns } = atlas.grid, center = Math.floor(columns / 2);
-  xs[point] = x;
-  if (frame === 0) xs[columns - 1 - point] = -x;
+function withPointOffsets(row: PatrolBand, offsets: readonly number[]): PatrolBand {
+  if (!offsets.some(Boolean) && row[8] === undefined) return row;
+  if (!offsets.some(Boolean)) {
+    const [y, left, center, right, innerLeft, innerRight, detailLeft, detailRight] = row;
+    const flat = [y, left, center, right, innerLeft, innerRight] as const;
+    return detailLeft == null || detailRight == null ? flat : [...flat, detailLeft, detailRight];
+  }
+  const [y, left, center, right, innerLeft, innerRight, detailLeft, detailRight] = row;
+  return [y, left, center, right, innerLeft, innerRight, detailLeft ?? null, detailRight ?? null, offsets];
+}
+
+export function replaceBandPoint(
+  atlas: PatrolAtlas, row: PatrolBand, frame: number, point: number, x: number, y = patrolPointY(row, point),
+): PatrolBand {
+  const xs = patrolBandXs(row, atlas.gutter), { columns } = atlas.grid, center = Math.floor(columns / 2);
+  const offsets = Array.from({ length: columns }, (_, i) => row[8]?.[i] ?? 0);
+  offsets[point] = roundPatrolCoordinate(y - row[0]);
+  xs[point] = frame === 0 && point === center ? 0 : x;
+  if (frame === 0) {
+    xs[columns - 1 - point] = -xs[point];
+    offsets[columns - 1 - point] = offsets[point];
+  }
   const next = [row[0], roundPatrolCoordinate(xs[0] + atlas.gutter), xs[center],
     roundPatrolCoordinate(xs[columns - 1] - atlas.gutter), xs[center - 1], xs[center + 1]] as const;
-  return columns === 7 ? [...next, xs[1], xs[5]] : next;
+  return withPointOffsets(columns === 7 ? [...next, xs[1], xs[5]] : next, offsets);
+}
+
+export function dragPatrolPoint(
+  atlas: PatrolAtlas, rows: readonly PatrolBand[], frame: number, band: number, point: number, x: number, y: number,
+): readonly PatrolBand[] {
+  const row = rows[band];
+  const [minX, maxX] = pointLimits(atlas, row, point), [minY, maxY] = pointYLimits(atlas, rows, band, point);
+  const nextX = frame === 0 && point === Math.floor(atlas.grid.columns / 2) ? 0 : Math.max(minX, Math.min(maxX, roundPatrolCoordinate(x)));
+  const nextY = Math.max(minY, Math.min(maxY, roundPatrolCoordinate(y)));
+  if (nextX === patrolBandXs(row, atlas.gutter)[point] && Math.abs(nextY - patrolPointY(row, point)) < .001) return rows;
+  const next = [...rows];
+  next[band] = replaceBandPoint(atlas, row, frame, point, nextX, nextY);
+  return next;
 }
 
 export function bandHasLock(locks: ReadonlySet<number>, columns: number, band: number) {
@@ -77,44 +114,49 @@ export function preservePatrolSilhouette(
     samples.push({ x, y });
   }
   samples.sort((a, b) => a.y - b.y);
-  let band = 0;
-  const leftRoom = new Float32Array(samples.length), rightRoom = new Float32Array(samples.length);
-  for (const [i, sample] of samples.entries()) {
-    while (sample.y >= original[band + 1][0]) band++;
-    const [leftEdge, rightEdge] = edges(original, band, sample.y);
-    leftRoom[i] = Math.min(.35, sample.x - leftEdge);
-    rightRoom[i] = Math.min(.35, rightEdge - sample.x);
-  }
+  const rimColumns = [0, atlas.grid.columns - 1];
+  const originalRims = rimColumns.map(point => patrolRim(atlas, original, point));
+  const room = originalRims.map((rim, side) => Float32Array.from(samples, ({ x, y }) =>
+    Math.min(.35, (x - rimXAt(rim, y)) * (side === 0 ? 1 : -1))));
 
-  function edges(rows: readonly PatrolBand[], band: number, y: number) {
-    const a = rows[band], b = rows[band + 1];
-    const t = (y - a[0]) / (b[0] - a[0]);
-    return [a[1] + (b[1] - a[1]) * t - atlas.gutter, a[3] + (b[3] - a[3]) * t + atlas.gutter];
-  }
-
-  return (rows: readonly PatrolBand[], changedBand: number) => {
-    // Only samples between the two neighboring bands can move relative to the rim.
-    const first = rows[Math.max(0, changedBand - 1)][0];
-    const last = rows[Math.min(rows.length - 1, changedBand + 1)][0];
+  return (rows: readonly PatrolBand[], changedBand: number) => rimColumns.every((point, side) => {
+    const rim = patrolRim(atlas, rows, point), sign = side === 0 ? 1 : -1;
+    if (!rim.every((p, i) => i === 0 || p.y > rim[i - 1].y)) return false;
+    const first = rim[Math.max(0, changedBand - 1)].y;
+    const last = rim[Math.min(rows.length - 1, changedBand + 1)].y;
     for (let i = 0; i < samples.length; i++) {
       const { x, y } = samples[i];
       if (y < first) continue;
       if (y >= last) break;
-      const b = y >= rows[changedBand][0] ? changedBand : changedBand - 1;
-      const [leftEdge, rightEdge] = edges(rows, b, y);
-      if (x - leftEdge < leftRoom[i] - .0001 || rightEdge - x < rightRoom[i] - .0001) return false;
+      if ((x - rimXAt(rim, y)) * sign < room[side][i] - .0001) return false;
     }
     return true;
-  };
+  });
+}
+
+function patrolRim(atlas: PatrolAtlas, rows: readonly PatrolBand[], point: number) {
+  const left = point === 0;
+  return rows.map(row => ({ x: left ? row[1] - atlas.gutter : row[3] + atlas.gutter, y: patrolPointY(row, point) }));
+}
+
+function rimXAt(rim: readonly { x: number; y: number }[], y: number) {
+  let lo = 0, hi = rim.length - 1;
+  while (hi - lo > 1) {
+    const mid = (hi + lo) >> 1;
+    if (rim[mid].y <= y) lo = mid;
+    else hi = mid;
+  }
+  const a = rim[lo], b = rim[hi], t = (y - a.y) / (b.y - a.y);
+  return a.x + (b.x - a.x) * t;
 }
 
 // Each pose uses ordered bands. For a long drag, redistribute the bands between
 // the nearest pinned rows and resample their columns at the new heights.
-export function dragPatrolPoint(
+export function dragPatrolBand(
   atlas: PatrolAtlas, rows: readonly PatrolBand[], locks: ReadonlySet<number>,
   frame: number, band: number, point: number, x: number, y: number,
 ): readonly PatrolBand[] {
-  const { columns } = atlas.grid, last = rows.length - 1, gutter = atlas.gutter;
+  const { columns } = atlas.grid, last = rows.length - 1;
   if (locks.has(band * columns + point)) return rows;
   const next = [...rows];
   const height = rows[band][0];
@@ -146,16 +188,32 @@ export function dragPatrolPoint(
       next[i] = columns === 7 ? [...row, interpolateX(a[6]!, b[6]!), interpolateX(a[7]!, b[7]!)] : row;
     }
 
+    function remapY(y: number) {
+      let i = top;
+      while (i + 1 < bottom && rows[i + 1][0] < y) i++;
+      const t = (y - rows[i][0]) / (rows[i + 1][0] - rows[i][0]);
+      return lerp(next[i][0], next[i + 1][0], t);
+    }
+    for (let i = top + 1; i < bottom; i++) {
+      const offsets = rows[i][8];
+      if (offsets) next[i] = withPointOffsets(next[i], offsets.map((_, point) =>
+        roundPatrolCoordinate(remapY(patrolPointY(rows[i], point)) - next[i][0])));
+    }
+
     // A straight segment between new rows can cut off a corner of the old
     // perimeter. Keep the original outline inside it, including at its bends.
     for (const [edge, direction] of [[1, -1], [3, 1]] as const) {
       const padding = new Float64Array(rows.length);
+      const point = edge === 1 ? 0 : columns - 1;
+      const rim = patrolRim(atlas, next, point);
+      if (!rim.every((p, i) => i === 0 || p.y > rim[i - 1].y)) return rows;
       let segment = top;
       for (let i = top + 1; i < bottom; i++) {
-        while (next[segment + 1][0] < rows[i][0]) segment++;
-        const a = next[segment], b = next[segment + 1];
-        const t = (rows[i][0] - a[0]) / (b[0] - a[0]);
-        const excess = (rows[i][edge] - lerp(a[edge], b[edge], t)) * direction;
+        const y = patrolPointY(rows[i], point);
+        while (rim[segment + 1].y < y) segment++;
+        const a = rim[segment], b = rim[segment + 1];
+        const t = (y - a.y) / (b.y - a.y);
+        const excess = (rows[i][edge] - lerp(next[segment][edge], next[segment + 1][edge], t)) * direction;
         if (excess <= 0) continue;
         if (segment > top) padding[segment] = Math.max(padding[segment], excess / (segment + 1 === bottom ? 1 - t : 1));
         if (segment + 1 < bottom) padding[segment + 1] = Math.max(padding[segment + 1], excess / (segment === top ? t : 1));
@@ -169,15 +227,6 @@ export function dragPatrolPoint(
     }
   }
 
-  if (frame !== 0 || point !== Math.floor(columns / 2)) {
-    const row = next[band], xs = patrolBandXs(row, gutter);
-    // Clamp to the column order in the new row. The art bounds also keep
-    // a margin within reach of the source canvas.
-    const halfWidth = patrolSourceSpan(atlas) / 2;
-    const min = Math.min(xs[point], Math.ceil(Math.max(-halfWidth, (xs[point - 1] ?? -Infinity) + .2) * 10) / 10);
-    const max = Math.max(xs[point], Math.floor(Math.min(halfWidth, (xs[point + 1] ?? Infinity) - .2) * 10) / 10);
-    const value = Math.max(min, Math.min(max, roundPatrolCoordinate(x)));
-    if (Math.abs(value - xs[point]) > .0001) next[band] = replaceBandPoint(atlas, row, frame, point, value);
-  }
-  return next.every((row, i) => row === rows[i]) ? rows : next;
+  const moved = dragPatrolPoint(atlas, next, frame, band, point, x, patrolPointY(next[band], point));
+  return moved.every((row, i) => row === rows[i]) ? rows : moved;
 }

@@ -11,7 +11,7 @@ const { DEN_APPROACH, DEN_DURATION, DEN_SCREENS, denScroll } = await server.ssrL
 const { denWaves, denPatrolPose, denPatrolCanFire, denPatrolWarp } = await server.ssrLoadModule('/src/den/patrol.ts');
 const { turn16Hardpoints } = await server.ssrLoadModule('/src/den/patrol-atlas-16.ts');
 const { createDenPatrols } = await server.ssrLoadModule('/src/den/patrol-rig.ts');
-const { createPatrolWarpCard, patrolAtlasFor } = await server.ssrLoadModule('/src/den/patrol-warp.ts');
+const { createPatrolWarpCard, patrolAtlasFor, patrolBandAngle } = await server.ssrLoadModule('/src/den/patrol-warp.ts');
 const { DEN_TURRET_REACH, DEN_TURRET_RECOIL, DEN_MINE_FUSE, createDenTurret, denMinePose,
   denTurretSignal, stepDenTurret } = await server.ssrLoadModule('/src/den/defense.ts');
 
@@ -147,6 +147,29 @@ test('the workshop can adjust one atlas band and isolate either texture on the s
   card.pose(angle);
   assert.deepEqual(mesh(), base);
   texture.dispose();
+  card.root.geometry.dispose();
+  card.root.material.dispose();
+});
+
+test('a lap control point can leave its band height without moving the rest of the band', async () => {
+  const { dragPatrolPoint, meshFoldsNear } = await server.ssrLoadModule('/src/studies/patrol-registration.ts');
+  const atlas = patrolAtlasFor(1254, 1254), card = createPatrolWarpCard();
+  const frame = 1, band = 16, point = 1, x = -50, y = 26.4;
+  const heading = -3 * Math.PI / 180, columns = atlas.grid.columns;
+  card.pose(heading);
+  const uv = card.root.geometry.attributes.nextUV;
+  const before = Array.from(uv.array);
+  const frames = [...atlas.rows];
+  frames[frame] = JSON.parse(JSON.stringify(dragPatrolPoint(atlas, frames[frame], frame, band, point, x, y)));
+  card.setRegistration(atlas, frames);
+  assert.equal(meshFoldsNear(card, frame, frames.length - 1), false);
+  card.pose(heading);
+  const index = band * columns + point;
+  const angle = patrolBandAngle(atlas, frame), c = Math.cos(angle), s = Math.sin(angle);
+  const [,,,, pivotX, pivotY] = atlas.crops[frame];
+  assert(Math.abs(uv.getX(index) * atlas.width - (pivotX + c * x - s * y)) < .0001);
+  assert(Math.abs((1 - uv.getY(index)) * atlas.height - (pivotY + s * x + c * y)) < .0001);
+  assert(uv.array.every((value, i) => Math.floor(i / 2) === index || value === before[i]));
   card.root.geometry.dispose();
   card.root.material.dispose();
 });
