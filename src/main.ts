@@ -14,6 +14,8 @@ import './style.css';
 const menu = document.querySelector<HTMLElement>('#front-menu')!;
 const app = document.querySelector<HTMLElement>('#game-app')!;
 const missionList = document.querySelector<HTMLElement>('#mission-list')!;
+const logo = document.querySelector<HTMLElement>('#menu-title')!;
+const logoUnderline = logo.querySelector<HTMLElement>('.logo-underline')!;
 const briefing = document.querySelector<HTMLElement>('#menu-briefing')!;
 const briefTitle = document.querySelector<HTMLElement>('#brief-title')!;
 const cards = document.querySelector<HTMLElement>('#level-cards')!;
@@ -34,6 +36,17 @@ let session: AbortController | undefined;
 let briefController: AbortController | undefined;
 let pilotPicker: ReturnType<typeof setupPilotPicker> | undefined;
 let reloadBeforePreparation = false;
+
+function moveLogoDiamond(event: PointerEvent) {
+  if (!event.isPrimary || menu.hidden || missionList.hidden) return;
+  const { left, width } = logoUnderline.getBoundingClientRect();
+  if (width === 0) return;
+  const position = Math.max(0, Math.min(1, (event.clientX - left) / width));
+  logo.style.setProperty('--logo-pointer-x', `${position * 100}%`);
+}
+
+window.addEventListener('pointerdown', moveLogoDiamond, { passive: true });
+window.addEventListener('pointermove', moveLogoDiamond, { passive: true });
 
 function savedCampaign() {
   try { return decodeCampaignClears(localStorage.getItem(CAMPAIGN_SAVE_KEY)); }
