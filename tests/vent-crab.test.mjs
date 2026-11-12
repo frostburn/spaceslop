@@ -82,6 +82,30 @@ test('cropped armor overlaps its neighbor at the knee and planted toe through th
   assert(uv.getY(i) > .72 && uv.getY(i) < .95, 'upper leg sampled an open socket end');
 });
 
+test('outer legs attach higher on the shell and neither link stretches through a scurry', () => {
+ const rig = createVentBoss();
+ const start = v.VENT_DURATION + v.VENT_APPROACH;
+ for (let time = 0; time <= 12; time += .05) {
+  rig.pose(1, 0, 0, 0, 0, start + time);
+  for (const side of [0, 1]) {
+   let previous;
+   for (let i = side; i < c.CRAB_LEGS; i += 2) {
+    const upper = rig.root.getObjectByName(`crab-leg-upper-${i}`);
+    const lower = rig.root.getObjectByName(`crab-leg-lower-${i}`);
+    const knee = rig.root.getObjectByName(`crab-knee-${i}`).position.clone();
+    knee.z -= .11;
+    const hip = upper.position.clone().multiplyScalar(2).sub(knee);
+    if (previous) {
+     assert(Math.abs(hip.x) - Math.abs(previous.x) > .2);
+     assert(hip.y - previous.y > .2);
+    }
+    previous = hip;
+    assert(upper.scale.y < 3.1 && lower.scale.y < 3.1);
+   }
+  }
+ }
+});
+
 test('claw and central laser contacts follow posed anchors and recoil after either phase change',()=>{
  const plane=new T.Group(),r=createVentBoss();plane.add(r.root);r.root.position.set(0,4.2,-12);const contact=createBossLaserContact(plane,r.root);
  for(const target of [-c.CRAB_TARGET_X,c.CRAB_TARGET_X,0]){r.pose(1,1,target,target,1,2,[0,0],target===0?1:0);plane.updateMatrixWorld(true);const p=contact(target,22),anchor=r.root.getObjectByName(target<0?'laser_contact_L':target>0?'laser_contact_R':'laser_contact_C'),q=anchor.getWorldPosition(new T.Vector3()),scale=22/(22-q.z);assert(Math.hypot(p.x-q.x*scale,p.y-q.y*scale)<1e-8);assert.equal(q.x,target);}

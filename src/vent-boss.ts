@@ -6,6 +6,14 @@ import {crabFeet,CRAB_LEGS} from './vent-crab';
 type AtlasBounds = readonly [left: number, bottom: number, right: number, top: number];
 type Point3 = { x: number; y: number; z: number };
 
+// Front to rear along the shell. The wall anchors are indexed inner to outer.
+const legMounts = [
+ [2.03, .04, -.20],
+ [1.76, -.24, -.14],
+ [1.46, -.51, -.07],
+ [1.12, -.78, 0],
+] as const;
+
 // The source parts include open sockets at their ends. Sample the armor up
 // to each socket lip, then bury that edge in the adjoining posed part.
 const socketCrops: Partial<Record<number, AtlasBounds>> = {
@@ -86,13 +94,14 @@ export function createVentBoss(fallback?:T.Texture){
  }
  const kneeArmor = atlasGeometry(new T.CircleGeometry(.5, 16), 6, [.32, .36, .68, .64]);
  const legs=Array.from({length:CRAB_LEGS},(_,i)=>{
-  const upper=part(root,3,0,0,0,.8,1,2+i*2),lower=part(root,4,0,0,0,.55,1,3+i*2),toe=part(root,5,0,0,0,.95,1.1,4+i*2);
+  const layer = 2 + (legMounts.length - 1 - Math.floor(i / 2)) * 4;
+  const upper=part(root,3,0,0,0,.8,1,layer),lower=part(root,4,0,0,0,.55,1,layer+1),toe=part(root,5,0,0,0,.95,1.1,layer+2);
   upper.name='crab-leg-upper-'+i;lower.name='crab-leg-lower-'+i;toe.name='crab-foot-'+i;
-  const knee = new T.Mesh(kneeArmor, material(5 + i * 2, 0xc9c7bd));
+  const knee = new T.Mesh(kneeArmor, material(layer + 3, 0xc9c7bd));
   knee.name = 'crab-knee-' + i;
   knee.scale.set(.55, .43, 1);
   root.add(knee);
-  barnacle(upper,0,.15,.05,.55,.4,5+i*2);
+  barnacle(upper,0,.15,.05,.55,.32,layer+3);
   return {upper, lower, toe, knee};
  });
  part(root,0,0,.3,.1,5.4,3.1,25).name='crab-carapace';
@@ -126,12 +135,18 @@ export function createVentBoss(fallback?:T.Texture){
   const feet=crabFeet(reveal,Math.max(0,time-108));
   legs.forEach((leg,i)=>{
    const side = i % 2 ? 1 : -1, row = Math.floor(i / 2);
+   const [x, y, z] = legMounts[legMounts.length - 1 - row];
    foot.copy(feet[i]).divideScalar(VENT_CRAB_SCALE);
-   hip.set(side * 1.7, .15 - row * .12, 0);
-   knee.set(side * (2.9 + row * .65), -.8 - row * .12, foot.z * .35 + .25);
+   hip.set(side * x, y, z);
    ankle.set(foot.x - side * .17, foot.y + .58, foot.z + .11);
-   span(leg.upper, hip, knee, 1.35 - row * .04);
-   span(leg.lower, knee, ankle, 1.12 - row * .025, .47);
+   // Keep the bend between the moving endpoints so a step can't drag
+   // a shin back across an elbow fixed at the edge of the screen.
+   knee.lerpVectors(hip, ankle, .47);
+   knee.x += side * .24;
+   knee.y += .50;
+   knee.z += .18;
+   span(leg.upper, hip, knee, 1.05 + row * .06);
+   span(leg.lower, knee, ankle, .85 + row * .05, .40);
    span(leg.toe, ankle, foot, .92 * side, .16);
    leg.knee.position.copy(knee);
    leg.knee.position.z += .11;
