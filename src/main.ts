@@ -16,6 +16,7 @@ const app = document.querySelector<HTMLElement>('#game-app')!;
 const missionList = document.querySelector<HTMLElement>('#mission-list')!;
 const logo = document.querySelector<HTMLElement>('#menu-title')!;
 const logoUnderline = logo.querySelector<HTMLElement>('.logo-underline')!;
+const reduceLogoMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const briefing = document.querySelector<HTMLElement>('#menu-briefing')!;
 const briefTitle = document.querySelector<HTMLElement>('#brief-title')!;
 const cards = document.querySelector<HTMLElement>('#level-cards')!;
@@ -36,14 +37,41 @@ let session: AbortController | undefined;
 let briefController: AbortController | undefined;
 let pilotPicker: ReturnType<typeof setupPilotPicker> | undefined;
 let reloadBeforePreparation = false;
+let logoPosition = .5;
+let logoPointerX = 0;
+let logoFrame = 0;
+let logoFrameAt = 0;
+
+function drawLogoDiamond(now?: number) {
+  logoFrame = 0;
+  const { left, width } = logoUnderline.getBoundingClientRect();
+  if (width === 0) return;
+  const target = Math.max(0, Math.min(1, (logoPointerX - left) / width));
+  const distance = target - logoPosition;
+  if (now !== undefined && !reduceLogoMotion.matches && Math.abs(distance) * width > .25) {
+    // Touch events only change the target. The easing continues on the frame clock.
+    const elapsed = Math.max(0, now - logoFrameAt);
+    logoPosition += distance * (1 - Math.exp(-elapsed / 24));
+    logoFrameAt = now;
+    logoFrame = requestAnimationFrame(drawLogoDiamond);
+  } else {
+    logoPosition = target;
+  }
+  logo.style.setProperty('--logo-pointer-x', `${logoPosition * 100}%`);
+}
 
 function moveLogoDiamond(event: PointerEvent) {
   if (!event.isPrimary || menu.hidden || missionList.hidden) return;
-  const { left, width } = logoUnderline.getBoundingClientRect();
-  if (width === 0) return;
-  const position = Math.max(0, Math.min(1, (event.clientX - left) / width));
-  logo.classList.toggle('logo-touch', event.pointerType === 'touch');
-  logo.style.setProperty('--logo-pointer-x', `${position * 100}%`);
+  logoPointerX = event.clientX;
+  if (event.pointerType === 'touch' && !reduceLogoMotion.matches) {
+    if (!logoFrame) {
+      logoFrameAt = performance.now();
+      logoFrame = requestAnimationFrame(drawLogoDiamond);
+    }
+  } else {
+    cancelAnimationFrame(logoFrame);
+    drawLogoDiamond();
+  }
 }
 
 window.addEventListener('pointerdown', moveLogoDiamond, { passive: true });

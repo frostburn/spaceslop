@@ -304,16 +304,6 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   text-transform: uppercase;
 }
 .logo-edge-light, .logo-underline { display: none; }
-@property --logo-pointer-x {
-  syntax: '<percentage>';
-  inherits: true;
-  initial-value: 50%;
-}
-@media (prefers-reduced-motion: no-preference) {
-  .menu-heading .logo-touch {
-    transition: --logo-pointer-x 150ms cubic-bezier(.15, .7, .28, 1);
-  }
-}
 @supports (background-clip: text) or (-webkit-background-clip: text) {
   .menu-heading h1 {
     --logo-light-x: clamp(.07em, var(--logo-pointer-x, 50%), calc(100% - .07em));
