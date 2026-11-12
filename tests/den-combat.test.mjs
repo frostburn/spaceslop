@@ -11,7 +11,7 @@ const { DEN_APPROACH, DEN_DURATION, DEN_SCREENS, denScroll } = await server.ssrL
 const { denWaves, denPatrolPose, denPatrolCanFire, denPatrolWarp } = await server.ssrLoadModule('/src/den/patrol.ts');
 const { turn16Hardpoints } = await server.ssrLoadModule('/src/den/patrol-atlas-16.ts');
 const { createDenPatrols } = await server.ssrLoadModule('/src/den/patrol-rig.ts');
-const { createPatrolWarpCard, patrolAtlasFor, patrolGridPoint, patrolGridTurn, patrolInteriorIndex, PATROL_GRID_SIZE } = await server.ssrLoadModule('/src/den/patrol-warp.ts');
+const { createPatrolWarpCard, patrolAtlasFor, patrolGridPadding, patrolGridPoint, patrolGridTurn, PATROL_GRID_SIZE } = await server.ssrLoadModule('/src/den/patrol-warp.ts');
 const { DEN_TURRET_REACH, DEN_TURRET_RECOIL, DEN_MINE_FUSE, createDenTurret, denMinePose,
   denTurretSignal, stepDenTurret } = await server.ssrLoadModule('/src/den/defense.ts');
 
@@ -171,23 +171,35 @@ test('editing a pose grid affects only its handoff and invalid edits are rejecte
   card.root.material.dispose();
 });
 
-test('patrol grids pin their 28 perimeter points to each sprite crop', async () => {
+test('the padded grid rim can move while keeping the painted bike tip inside', async () => {
   const { movePatrolPoint } = await server.ssrLoadModule('/src/studies/patrol-registration.ts');
-  for (const atlas of [patrolAtlasFor(1254, 1254), patrolAtlasFor(1536, 1024)]) {
-    for (const [handoff, grids] of atlas.handoffs.entries()) for (const [side, interior] of grids.entries()) {
-      const frame = handoff + side, crop = atlas.crops[frame], width = crop[2] - crop[0], height = crop[3] - crop[1];
-      assert.equal(interior.length, 36);
-      let perimeter = 0;
-      for (let i = 0; i < PATROL_GRID_SIZE ** 2; i++) {
-        if (patrolInteriorIndex(i) >= 0) continue;
-        const [x, y] = patrolGridPoint(crop, interior, i);
-        assert(x === 0 || y === 0 || Math.abs(x - width) < 1e-8 || Math.abs(y - height) < 1e-8);
-        assert.equal(movePatrolPoint(atlas, frame, interior, i, 20, 40), interior);
-        perimeter++;
-      }
-      assert.equal(perimeter, 28);
-    }
-  }
+  const atlas = patrolAtlasFor(1254, 1254), card = createPatrolWarpCard();
+  const handoff = 0, frame = 1, crop = atlas.crops[frame], pad = patrolGridPadding(crop);
+  const height = crop[3] - crop[1], outgoing = atlas.handoffs[handoff][0], incoming = atlas.handoffs[handoff][1];
+  const rimPoint = 7 * PATROL_GRID_SIZE + 4, tipPoint = rimPoint - PATROL_GRID_SIZE;
+  const [rimX, rimY] = patrolGridPoint(crop, incoming, rimPoint), [tipX] = patrolGridPoint(crop, incoming, tipPoint);
+  assert.equal(rimY, height + pad);
+
+  const movedRim = movePatrolPoint(atlas, frame, incoming, rimPoint, rimX + 3, rimY + 6);
+  assert.deepEqual(movedRim[rimPoint], [Math.round((rimX + 3) * 10) / 10, rimY + 6]);
+  assert.equal(movePatrolPoint(atlas, frame, movedRim, rimPoint, rimX, height - 20)[rimPoint][1], height);
+  const movedTip = movePatrolPoint(atlas, frame, movedRim, tipPoint, tipX, height + 1);
+  assert.equal(movedTip[tipPoint][1], height + 1);
+  const edited = [...atlas.handoffs];
+  edited[handoff] = [outgoing, movedTip];
+  card.setRegistration(atlas, edited);
+  card.pose(-Math.PI / 30);
+  const [x, y] = turn16Hardpoints[frame][2];
+  const actual = patrolPixel(card.root, 'uv', x / atlas.width, 1 - y / atlas.height);
+  const expected = new Vector2((x - crop[4]) * atlas.pixel, -(y - crop[5]) * atlas.pixel).rotateAround(new Vector2(), Math.PI / 30);
+  assert(actual.distanceTo(expected) < .00001);
+
+  const clipped = [...movedTip], invalid = [...edited];
+  clipped[rimPoint] = [rimX, height - 1];
+  invalid[handoff] = [outgoing, clipped];
+  assert.throws(() => card.setRegistration(atlas, invalid), /crosses the sprite crop/);
+  card.root.geometry.dispose();
+  card.root.material.dispose();
 });
 
 test('patrol exhaust sits on the engine pixels through both directions of a warped handoff', () => {

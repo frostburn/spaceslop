@@ -49,7 +49,7 @@
       </section>
       <section class="edit" aria-labelledby="edit-heading">
         <h2 id="edit-heading">Control point</h2>
-        <p>Each handoff has its own pair of 8×8 grids. Drag the interior points. The edge points stay on the sprite bounds and the ring marks the corresponding point.</p>
+        <p>Each handoff has its own pair of 8×8 grids. Drag any point on either grid. Edge points can move outside the dashed sprite bounds. The ring marks the corresponding point.</p>
         <div class="fields">
           <label>Handoff<select id="edit-handoff"></select></label>
           <label>Grid<select id="edit-pose"><option value="0">Outgoing</option><option value="1">Incoming</option></select></label>
@@ -74,7 +74,7 @@
       </section>
       <section class="edit tuning" aria-labelledby="tune-heading">
         <h2 id="tune-heading">Hill-climb</h2>
-        <p>Tunes this pair in both turn directions while penalizing grid distortion. Gold squares mark locked points.</p>
+        <p>Tunes the interior points in both turn directions while penalizing grid distortion. Gold squares mark locked points.</p>
         <div class="fields">
           <label>Search area
             <select id="tune-scope">

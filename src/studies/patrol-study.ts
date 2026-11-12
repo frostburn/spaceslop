@@ -1,11 +1,11 @@
 import * as T from 'three';
 import {
-  createPatrolWarpCard, PATROL_GRID_SIZE as columns, PATROL_VERTEX_COUNT, patrolAtlasFor, patrolGridPoint,
+  createPatrolWarpCard, expandPatrolGrid, PATROL_GRID_SIZE as columns, PATROL_VERTEX_COUNT, patrolAtlasFor, patrolGridPoint,
   patrolGridTurn, patrolInteriorIndex, patrolMirrorPoint, type PatrolGrid, type PatrolPoint, type PatrolRegistration,
 } from '../den/patrol-warp';
 import { loadEncounterTexture } from '../encounter-texture';
 import { createPatrolDifference } from './patrol-difference';
-import { movePatrolPoint, patrolSourceSpan } from './patrol-registration';
+import { movePatrolPoint, patrolPointLimits, patrolSourceSpan } from './patrol-registration';
 import { tunePatrolHandoff } from './patrol-tuning';
 import './patrol-study.css';
 
@@ -142,6 +142,11 @@ function start() {
       context.drawImage(image, left * u, top * v, (right - left) * u, (bottom - top) * v,
         x + left * scale, y + top * scale, (right - left) * scale, (bottom - top) * scale);
     }
+    context.strokeStyle = '#8babb677';
+    context.lineWidth = size / context.canvas.clientWidth;
+    context.setLineDash([4 * context.lineWidth, 4 * context.lineWidth]);
+    context.strokeRect(x + left * scale, y + top * scale, (right - left) * scale, (bottom - top) * scale);
+    context.setLineDash([]);
     const points = Array.from({ length: PATROL_VERTEX_COUNT }, (_, point) => {
       const [u, v] = patrolGridPoint(atlas.crops[frame], registration[handoff][side], point);
       return { x: x + (left + u) * scale, y: y + (top + v) * scale };
@@ -153,17 +158,19 @@ function start() {
   function syncPointControls() {
     const { handoff, side, frame, point } = selected(), crop = atlas.crops[frame];
     const [x, y] = patrolGridPoint(crop, registration[handoff][side], point);
-    const fixed = patrolInteriorIndex(point) < 0, locked = locks[handoff][side].has(point);
+    const locked = locks[handoff][side].has(point), limits = patrolPointLimits(atlas, frame, registration[handoff][side], point);
     const busy = Boolean(tuning);
-    pointX.max = String(crop[2] - crop[0]);
-    pointY.max = String(crop[3] - crop[1]);
+    for (const [field, [min, max]] of [[pointX, limits.x], [pointY, limits.y]] as const) {
+      field.min = String(Math.ceil(min * 10 - 1e-8) / 10);
+      field.max = String(Math.floor(max * 10 + 1e-8) / 10);
+    }
     pointX.value = String(x);
     pointY.value = String(y);
-    pointX.disabled = pointY.disabled = busy || fixed || locked;
+    pointX.disabled = pointY.disabled = busy || locked;
     output('point-x').value = `${rounded(x)} px`;
     output('point-y').value = `${rounded(y)} px`;
-    lockPoint.checked = fixed || locked;
-    lockPoint.disabled = busy || fixed;
+    lockPoint.checked = locked;
+    lockPoint.disabled = busy;
     for (const field of [heading, play, editHandoff, editPose, editPoint, tuneScope]) field.disabled = busy;
     editHandoff.value = String(handoff);
     tune.disabled = tuning ? tuning.signal.aborted : !texture || !difference;
@@ -292,7 +299,7 @@ function start() {
   function editCoordinates(event: Event) {
     if (tuning) return;
     const { handoff, side, frame, point } = selected();
-    if (patrolInteriorIndex(point) < 0 || locks[handoff][side].has(point)) return;
+    if (locks[handoff][side].has(point)) return;
     setPlaying(false);
     const grid = registration[handoff][side];
     const [x, y] = patrolGridPoint(atlas.crops[frame], grid, point);
@@ -383,7 +390,6 @@ function start() {
   });
   lockPoint.addEventListener('change', () => {
     const { handoff, side, frame, point } = selected();
-    if (patrolInteriorIndex(point) < 0) return;
     const points = frame === 0 ? [point, patrolMirrorPoint(point)] : [point];
     for (const p of points) {
       if (lockPoint.checked) locks[handoff][side].add(p);
@@ -412,10 +418,12 @@ function start() {
     if (applyGrid(handoff, side, atlas.handoffs[handoff][side])) locks[handoff][side].clear();
   });
   copy.addEventListener('click', async () => {
-    exportText.value = JSON.stringify(Object.fromEntries([...edited].map(handoff => [handoff, registration[handoff]])), null, 2);
+    exportText.value = JSON.stringify(Object.fromEntries([...edited].map(handoff => [
+      handoff, registration[handoff].map((grid, side) => expandPatrolGrid(atlas.crops[handoff + side], grid)),
+    ])), null, 2);
     try {
       await navigator.clipboard.writeText(exportText.value);
-      status.textContent = 'Copied the outgoing and incoming grids for each edited handoff.';
+      status.textContent = 'Copied both 64-point grids for each edited handoff.';
     } catch {
       exportText.hidden = false;
       exportText.select();
@@ -448,8 +456,8 @@ function start() {
       editPoint.value = String(nearest);
       const { handoff, side, frame } = selected();
       setPlaying(false);
-      if (patrolInteriorIndex(nearest) < 0 || locks[handoff][side].has(nearest)) {
-        status.textContent = patrolInteriorIndex(nearest) < 0 ? 'The edge of the grid is fixed.' : 'This point is locked.';
+      if (locks[handoff][side].has(nearest)) {
+        status.textContent = 'This point is locked.';
         return;
       }
       const interior = registration[handoff][side], origin = patrolGridPoint(atlas.crops[frame], interior, nearest);

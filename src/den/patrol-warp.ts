@@ -50,11 +50,27 @@ export function patrolMirrorPoint(point: number) {
   return point + edge - 2 * (point % PATROL_GRID_SIZE);
 }
 
-export function patrolGridPoint(crop: Crop, interior: PatrolGrid, point: number): PatrolPoint {
-  const i = patrolInteriorIndex(point);
-  if (i >= 0) return interior[i];
+export function patrolGridPadding([left, top, right, bottom]: Crop) {
+  return Math.ceil(Math.max(right - left, bottom - top) * .075);
+}
+
+export function patrolRestPoint(crop: Crop, point: number): PatrolPoint {
   const [left, top, right, bottom] = crop;
-  return [(point % PATROL_GRID_SIZE) * (right - left) / edge, Math.floor(point / PATROL_GRID_SIZE) * (bottom - top) / edge];
+  const column = point % PATROL_GRID_SIZE, row = Math.floor(point / PATROL_GRID_SIZE);
+  const width = right - left, height = bottom - top, pad = patrolGridPadding(crop);
+  const coordinate = (index: number, span: number) => index === 0 ? -pad : index === edge ? span + pad : index * span / edge;
+  return [coordinate(column, width), coordinate(row, height)];
+}
+
+export function patrolGridPoint(crop: Crop, grid: PatrolGrid, point: number): PatrolPoint {
+  if (grid.length === PATROL_VERTEX_COUNT) return grid[point];
+  const i = patrolInteriorIndex(point);
+  return i >= 0 ? grid[i] : patrolRestPoint(crop, point);
+}
+
+export function expandPatrolGrid(crop: Crop, grid: PatrolGrid): PatrolGrid {
+  return grid.length === PATROL_VERTEX_COUNT ? grid
+    : Array.from({ length: PATROL_VERTEX_COUNT }, (_, point) => patrolGridPoint(crop, grid, point));
 }
 
 function uniformInterior([left, top, right, bottom]: Crop) {
@@ -92,8 +108,17 @@ function registerGrid(atlas: PatrolAtlas, frame: number, interior: PatrolGrid) {
     const dx = (x - pivotX) * pixel, dy = (y - pivotY) * pixel;
     return [cos * dx + sin * dy, sin * dx - cos * dy];
   };
-  for (let point = 0; point < PATROL_VERTEX_COUNT; point++) {
-    const [u, v] = patrolGridPoint(crop, interior, point);
+  const grid = expandPatrolGrid(crop, interior);
+  for (const [point, [u, v]] of grid.entries()) {
+    const column = point % PATROL_GRID_SIZE, row = Math.floor(point / PATROL_GRID_SIZE);
+    if ((column === 0 && u > 0) || (column === edge && u < right - left) ||
+        (row === 0 && v > 0) || (row === edge && v < bottom - top)) {
+      throw new Error('Patrol grid edge crosses the sprite crop');
+    }
+    if (((row === 0 || row === edge) && column > 0 && u <= grid[point - 1][0]) ||
+        ((column === 0 || column === edge) && row > 0 && v <= grid[point - PATROL_GRID_SIZE][1])) {
+      throw new Error('Patrol grid edges cross their neighbors');
+    }
     const x = left + u, y = top + v;
     xy.push(...local(x, y));
     uv.push(x / width, 1 - y / height);

@@ -1,6 +1,6 @@
 import * as T from 'three';
 import {
-  createPatrolWarpCard, PATROL_GRID_SIZE, PATROL_VERTEX_COUNT, patrolInteriorIndex, patrolMirrorPoint,
+  createPatrolWarpCard, PATROL_GRID_SIZE, PATROL_VERTEX_COUNT, patrolGridPoint, patrolInteriorIndex, patrolMirrorPoint,
   type PatrolAtlas, type PatrolGridPair, type PatrolRegistration,
 } from '../den/patrol-warp';
 import { createPatrolDifference } from './patrol-difference';
@@ -64,7 +64,7 @@ export async function tunePatrolHandoff({
 
   function nudge({ side, point, axis }: Target, delta: number) {
     const frame = handoff + side, grids = bestRegistration[handoff], interior = grids[side];
-    const [x, y] = interior[patrolInteriorIndex(point)];
+    const [x, y] = patrolGridPoint(atlas.crops[frame], interior, point);
     const next = axis === 0 ? movePatrolPoint(atlas, frame, interior, point, x + delta, y)
       : movePatrolPoint(atlas, frame, interior, point, x, y + delta);
     if (next === interior) return;

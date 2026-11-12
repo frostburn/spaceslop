@@ -40,7 +40,8 @@ export const turn16Hardpoints = [
 ] as const;
 
 // Each handoff stores independent outgoing and incoming interiors in crop-local
-// pixels. The 6 × 6 interiors are in row-major order and the crop pins the rim.
+// pixels. These 6 × 6 interiors use the default padded rim. Edited grids can
+// store all 64 points in row-major order.
 // Fit each pair with a penalty on stretch and shear so the grids stay near rest.
 export const turn16Handoffs = [
   [ // 0°–6°
