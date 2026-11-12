@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Draconian patrol blend · Spaceslop</title>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Draconian patrol blend</h1>
+        <a href="./workshop.html">Asset workshop</a>
+      </header>
+      <section class="sliders" aria-label="Preview controls">
+        <div class="slider">
+          <label for="heading">Heading</label><output id="heading-value" for="heading"></output>
+          <input id="heading" type="range" min="-90" max="90" step=".1" value="-15">
+        </div>
+        <div class="slider">
+          <label for="blend">Crossfade to incoming</label><output id="blend-value" for="blend"></output>
+          <input id="blend" type="range" min="0" max="100" step="1" value="50">
+        </div>
+        <div class="actions">
+          <button id="play" type="button">Play turn</button>
+          <button id="follow" type="button" disabled>Follow heading</button>
+          <label class="check"><input id="show-mesh" type="checkbox"> Preview mesh</label>
+        </div>
+      </section>
+      <section class="views" aria-label="Sprite comparison">
+        <figure>
+          <figcaption id="outgoing">Outgoing pose</figcaption>
+          <canvas id="pose-a" aria-labelledby="outgoing"></canvas>
+        </figure>
+        <figure class="blend-view">
+          <figcaption>Blend preview</figcaption>
+          <div class="preview">
+            <canvas id="preview" aria-label="Live blend using the game shader"></canvas>
+            <canvas id="mesh" aria-hidden="true"></canvas>
+          </div>
+        </figure>
+        <figure>
+          <figcaption id="incoming">Incoming pose</figcaption>
+          <canvas id="pose-b" aria-labelledby="incoming"></canvas>
+        </figure>
+      </section>
+      <section class="edit" aria-labelledby="edit-heading">
+        <h2 id="edit-heading">Control point</h2>
+        <p>Select a point on either atlas view or use the menus. Band Y moves the whole row.</p>
+        <div class="fields">
+          <label>Pose<select id="edit-pose"><option value="0">Outgoing</option><option value="1">Incoming</option></select></label>
+          <label>Band<select id="edit-band"></select></label>
+          <label>Point<select id="edit-point">
+            <option value="0">Left margin</option><option value="1">Left interior</option><option value="2" selected>Center</option>
+            <option value="3">Right interior</option><option value="4">Right margin</option>
+          </select></label>
+        </div>
+        <div class="sliders">
+          <div class="slider">
+            <label for="point-x">Point X</label><output id="point-x-value" for="point-x"></output>
+            <input id="point-x" type="range" step=".1" value="0">
+          </div>
+          <div class="slider">
+            <label for="band-y">Band Y</label><output id="band-y-value" for="band-y"></output>
+            <input id="band-y" type="range" step=".1" value="0">
+          </div>
+          <div class="actions">
+            <button id="reset-pose" type="button" disabled>Reset pose</button>
+            <button id="copy-edits" type="button" disabled>Copy edits</button>
+          </div>
+        </div>
+        <textarea id="export" aria-label="Edited atlas bands" readonly hidden></textarea>
+      </section>
+      <p id="status" role="status">Loading patrol atlas…</p>
+    </main>
+    <script type="module" src="/src/studies/patrol-study.ts"></script>
+  </body>
+</html>

@@ -11,7 +11,7 @@ const { DEN_APPROACH, DEN_DURATION, DEN_SCREENS, denScroll } = await server.ssrL
 const { denWaves, denPatrolPose, denPatrolCanFire, denPatrolWarp } = await server.ssrLoadModule('/src/den/patrol.ts');
 const { turn16Hardpoints } = await server.ssrLoadModule('/src/den/patrol-atlas-16.ts');
 const { createDenPatrols } = await server.ssrLoadModule('/src/den/patrol-rig.ts');
-const { createPatrolWarpCard } = await server.ssrLoadModule('/src/den/patrol-warp.ts');
+const { createPatrolWarpCard, patrolAtlasFor } = await server.ssrLoadModule('/src/den/patrol-warp.ts');
 const { DEN_TURRET_REACH, DEN_TURRET_RECOIL, DEN_MINE_FUSE, createDenTurret, denMinePose,
   denTurretSignal, stepDenTurret } = await server.ssrLoadModule('/src/den/defense.ts');
 
@@ -78,13 +78,17 @@ test('patrol mesh stays continuous through atlas handoffs and straight ahead', (
     const texture = new Texture({ width, height });
     card.setArt(texture);
     const step = Math.PI / (2 * (count - 1));
-    const edge = count === 16 ? .16 : .3;
     const straight = sample(0);
     assert.deepEqual(sample(-epsilon).uv, sample(epsilon).uv);
     assert.notDeepEqual(straight.uv, sample(Math.PI / 2).uv);
-    assert.equal(sample((edge - .01) * step).blend, 0);
-    assert(sample((edge + .01) * step).blend > 0);
-    assert.equal(sample((1 - edge + .01) * step).blend, 1);
+    if (count === 16) {
+      assert(sample(.05 * step).blend > 0);
+      assert(sample(.95 * step).blend < 1);
+    } else {
+      assert.equal(sample(.29 * step).blend, 0);
+      assert(sample(.31 * step).blend > 0);
+      assert.equal(sample(.71 * step).blend, 1);
+    }
     for (const side of [-1, 1]) for (let i = 0; i < count - 1; i++) {
       const angle = side * (i + .5) * step;
       const a = sample(angle - epsilon), b = sample(angle + epsilon);
@@ -103,8 +107,8 @@ test('patrol mesh stays continuous through atlas handoffs and straight ahead', (
       }
       const key = (i + 1) * step;
       const before = sample(side * (key - epsilon)), after = sample(side * (key + epsilon));
-      assert.equal(before.blend, 1);
-      assert.equal(after.blend, 0);
+      assert(Math.abs(before.blend - 1) < 1e-6);
+      assert(Math.abs(after.blend) < 1e-6);
       assert.deepEqual(before.nextUV, after.uv);
     }
     if (count === 16) for (let i = -(count - 2); i < count - 1; i++) {
@@ -115,6 +119,35 @@ test('patrol mesh stays continuous through atlas handoffs and straight ahead', (
     texture.dispose();
   }
   geometry.dispose();
+  card.root.material.dispose();
+});
+
+test('the workshop can adjust one atlas band and isolate either texture on the same posed mesh', () => {
+  const card = createPatrolWarpCard();
+  const texture = new Texture({ width: 627, height: 627 });
+  card.setArt(texture);
+  const angle = -15 * Math.PI / 180;
+  const mesh = () => Array.from(card.root.geometry.attributes.position.array);
+  const weights = card.root.material.uniforms.poseBlend;
+  card.pose(angle, 0);
+  const base = mesh();
+  assert.equal(weights.value, 0);
+  card.pose(angle, 1);
+  assert.equal(weights.value, 1);
+  assert.deepEqual(mesh(), base);
+  const atlas = patrolAtlasFor(627, 627), frames = [...atlas.rows], pose = [...frames[2]];
+  const [y, l, mid, r, il, ir] = pose[12];
+  pose[12] = [y + 1, l, mid - 1, r, il, ir];
+  frames[2] = pose;
+  card.setRegistration(atlas, frames);
+  card.pose(angle);
+  assert(Math.abs(weights.value - .5) < 1e-8);
+  assert.notDeepEqual(mesh(), base);
+  card.setRegistration(atlas);
+  card.pose(angle);
+  assert.deepEqual(mesh(), base);
+  texture.dispose();
+  card.root.geometry.dispose();
   card.root.material.dispose();
 });
 

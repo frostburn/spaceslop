@@ -12,7 +12,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; }
 .workshop-header, .workshop { max-width: 84rem; margin-inline: auto; padding: 1rem; }
-.workshop-header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+.workshop-header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .4rem 1rem; }
 h1 { margin: 0; font-size: clamp(1.15rem, 3vw, 1.55rem); }
 a { color: var(--accent); font-size: .82rem; }
 .workshop { display: grid; grid-template-columns: minmax(0, 1fr) 16rem; gap: 1rem; padding-top: 0; }

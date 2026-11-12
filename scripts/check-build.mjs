@@ -26,8 +26,8 @@ assert(pack.required.includes(pack.entry));
  for(const other of ids)assert(!serviceWorker.includes(`url:"${packs.levels[other].entry}`),'The service worker precaches level code.');
  assert(!serviceWorker.includes('encounters/'),'The service worker eagerly downloads level media.');
 }
-for(const file of ['workshop.html','vent-study.html','io-study.html','heliostat-study.html','biolume-study.html','black-hole-study.html'])await assert.rejects(stat(join(root,file)));
-for(const file of files.filter(f=>f.endsWith('.js'))){const text=await readFile(join(root,'assets',file),'utf8');assert(!text.includes('__qa'),'QA hooks leaked into production.');assert(!/(workshop|vent-study|io-study|heliostat-study|biolume-study|black-hole-study)\.html/.test(text),'Development links leaked into production.');assert(!/Play study|Orbit view|inspect-backdrop|Relief shading/.test(text),'Development renderer leaked into production code.');}
+for(const file of ['workshop.html','patrol-study.html','vent-study.html','io-study.html','heliostat-study.html','biolume-study.html','black-hole-study.html'])await assert.rejects(stat(join(root,file)));
+for(const file of files.filter(f=>f.endsWith('.js'))){const text=await readFile(join(root,'assets',file),'utf8');assert(!text.includes('__qa'),'QA hooks leaked into production.');assert(!/(workshop|patrol-study|vent-study|io-study|heliostat-study|biolume-study|black-hole-study)\.html/.test(text),'Development links leaked into production.');assert(!/Play study|Orbit view|inspect-backdrop|Relief shading|Copy edits/.test(text),'Development renderer leaked into production code.');}
 for(const [id,pack] of Object.entries(packs.levels)){
  assert(!pack.media.some(path=>/biolume-study-(backdrop|foreground)/.test(path)),'DEV plate entered an offline level package.');
  if(id!=='den')assert(!pack.media.some(path=>/draconian-(accretion-disk|biker-atlas|galactic-center|gantry|cliffside|patrol-turns|cliff-props|defenses)/.test(path)),'Den art leaked into another level.');

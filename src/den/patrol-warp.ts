@@ -80,18 +80,26 @@ for (let row = 0; row < rows[0].length - 1; row++) for (let column = 0; column <
 
 type PixelPoint = readonly [number, number];
 type MeshAnchor = { vertices: [number, number, number]; weights: [number, number, number] };
-type Band = readonly [height: number, left: number, center: number, right: number, innerLeft?: number, innerRight?: number];
+export type PatrolBand = readonly [height: number, left: number, center: number, right: number, innerLeft?: number, innerRight?: number];
 
-type AtlasRegistration = {
+export type PatrolAtlas = {
   width: number;
   height: number;
   pixel: number;
   gutter: number;
   crops: readonly (readonly [number, number, number, number, number, number])[];
-  rows: readonly (readonly Band[])[];
+  rows: readonly (readonly PatrolBand[])[];
   bandYaw?: number;
   hardpoints?: readonly (readonly [PixelPoint, PixelPoint, PixelPoint])[];
 };
+
+export function patrolBandXs([, left, center, right, innerLeft = left, innerRight = right]: PatrolBand, gutter: number) {
+  return [left - gutter, innerLeft, center, innerRight, right + gutter];
+}
+
+export function patrolBandAngle(atlas: PatrolAtlas, frame: number) {
+  return (atlas.bandYaw ?? 1) * Math.PI / 2 * frame / (atlas.rows.length - 1);
+}
 
 // An anchor inherits the same triangle deformation as its pixel in the artwork.
 function bindAnchor(xy: number[], x: number, y: number, mirror: boolean): MeshAnchor {
@@ -112,14 +120,16 @@ function bindAnchor(xy: number[], x: number, y: number, mirror: boolean): MeshAn
   throw new Error('Patrol hardpoint lies outside its atlas mesh');
 }
 
-function registerPoses({ width, height, pixel, gutter, crops, rows, bandYaw = 1, hardpoints }: AtlasRegistration) {
+function registerPoses(atlas: PatrolAtlas) {
+  const { width, height, pixel, gutter, crops, rows, hardpoints } = atlas;
   const poses = rows.map((points, i) => {
     const [left, top, right, bottom, pivotX, pivotY] = crops[i];
     const angle = (Math.PI / 2) * i / (rows.length - 1);
-    const band = bandYaw * angle, c = Math.cos(band), s = Math.sin(band);
+    const band = patrolBandAngle(atlas, i), c = Math.cos(band), s = Math.sin(band);
     const turn = band - angle, cos = Math.cos(turn), sin = Math.sin(turn);
     const xy: number[] = [], uv: number[] = [];
-    for (const [y, l, mid, r, innerL = l, innerR = r] of points) for (const x of [l - gutter, innerL, mid, innerR, r + gutter]) {
+    for (const point of points) for (const x of patrolBandXs(point, gutter)) {
+      const y = point[0];
       xy.push((cos * x - sin * y) * pixel, -(sin * x + cos * y) * pixel);
       uv.push((pivotX + c * x - s * y) / width, 1 - (pivotY + s * x + c * y) / height);
     }
@@ -145,11 +155,18 @@ function registerPoses({ width, height, pixel, gutter, crops, rows, bandYaw = 1,
   }));
 }
 
-const legacyPoses = registerPoses({ width: 1536, height: 1024, pixel: .00525, gutter: 42, crops, rows });
-const densePoses = registerPoses({
+const legacyAtlas: PatrolAtlas = { width: 1536, height: 1024, pixel: .00525, gutter: 42, crops, rows };
+const denseAtlas: PatrolAtlas = {
   width: 1254, height: 1254, pixel: .009, gutter: 24, crops: turn16Crops, rows: turn16Rows,
   bandYaw: .35, hardpoints: turn16Hardpoints,
-});
+};
+const legacyPoses = registerPoses(legacyAtlas), densePoses = registerPoses(denseAtlas);
+
+export function patrolAtlasFor(width: number, height: number) {
+  if (width === height && width > 0) return denseAtlas;
+  if (width / height === 1.5) return legacyAtlas;
+  throw new Error('Unsupported patrol atlas layout');
+}
 
 function mirrorColumn(i: number) {
   return i + COLUMNS - 1 - 2 * (i % COLUMNS);
@@ -165,6 +182,7 @@ export function createPatrolWarpCard() {
   geometry.setAttribute('nextUV', nextUV);
   geometry.setIndex(indices);
   let poses = legacyPoses;
+  let dense = false;
   const uniforms = {
     atlas: { value: null as T.Texture | null },
     crop: { value: poses[0].crop }, nextCrop: { value: poses[0].crop }, poseBlend: { value: 0 },
@@ -221,13 +239,20 @@ export function createPatrolWarpCard() {
     }
   }
 
-  function pose(heading: number) {
+  function setRegistration(atlas: PatrolAtlas, bands = atlas.rows) {
+    const next = bands === atlas.rows ? (atlas === denseAtlas ? densePoses : legacyPoses) : registerPoses({ ...atlas, rows: bands });
+    poses = next;
+    dense = atlas === denseAtlas;
+    firstKey = secondKey = Infinity;
+  }
+
+  function pose(heading: number, blendOverride?: number) {
     const turn = denPatrolWarp(heading, poses.length);
     const a = poses[turn.first], b = poses[turn.second];
     const sign = turn.mirror ? -1 : 1;
     const keyA = turn.first * sign, keyB = turn.second * sign;
     const updateFirst = keyA !== firstKey, updateSecond = keyB !== secondKey;
-    const t = turn.fraction, dense = poses === densePoses;
+    const t = turn.fraction;
     const w = dense ? t * t * (3 - 2 * t) : t;
     const tanA = dense ? t * (1 - t) ** 2 : 0;
     const tanB = dense ? t * t * (t - 1) : 0;
@@ -258,7 +283,8 @@ export function createPatrolWarpCard() {
       nextUV.needsUpdate = true;
       uniforms.nextCrop.value = b.crop;
     }
-    uniforms.poseBlend.value = turn.blend;
+    const blend = blendOverride ?? turn.blend;
+    uniforms.poseBlend.value = blend;
     root.rotation.z = turn.angle;
     if (a.mounts && b.mounts) {
       const orientation = turn.mirror ? 'mirrored' : 'forward';
@@ -267,7 +293,7 @@ export function createPatrolWarpCard() {
         const mount = mounts[i];
         placeAnchor(a.mounts[source][orientation], mount);
         placeAnchor(b.mounts[source][orientation], nextMount);
-        mount.lerp(nextMount, turn.blend);
+        mount.lerp(nextMount, blend);
       }
       return mounts;
     }
@@ -275,12 +301,10 @@ export function createPatrolWarpCard() {
 
   return {
     root,
+    setRegistration,
     setArt(texture: T.Texture) {
       const image = texture.image as { width: number; height: number } | undefined;
-      const ratio = image ? image.width / image.height : 0;
-      if (ratio !== 1 && ratio !== 1.5) throw new Error('Unsupported patrol atlas layout');
-      poses = ratio === 1 ? densePoses : legacyPoses;
-      firstKey = secondKey = Infinity;
+      setRegistration(patrolAtlasFor(image?.width ?? 0, image?.height ?? 0));
       uniforms.atlas.value = texture;
       pose(0);
       root.visible = true;
