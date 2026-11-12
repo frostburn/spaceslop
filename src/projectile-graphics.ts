@@ -69,7 +69,7 @@ function energyMaterial(color: number, danger: boolean) {
   });
 }
 
-function trailMaterial(color: number) {
+function trailMaterial(color: T.ColorRepresentation) {
   return new T.ShaderMaterial({
     uniforms: { tint: { value: new T.Color(color) }, clock: { value: 0 } },
     transparent: true, blending: T.AdditiveBlending, depthWrite: false,
@@ -98,16 +98,20 @@ function trailMaterial(color: number) {
 export function createProjectileBatch(kind: ProjectileKind, color = colors[kind]) {
   const root = new T.Group();
   root.name = `projectiles-${kind}`;
+  const capacity = 128;
   const danger = kind === 'hostile' || kind === 'spore' || kind === 'brine';
   const material = kind === 'homing' ? shipAlloy(0xb7c9cc) : energyMaterial(color, danger);
   if (kind === 'homing') material.side = T.DoubleSide;
   const geometry = kind === 'homing' ? missile : kind === 'hostile' ? orb : (kind === 'spore' || kind === 'brine') ? seed : kind === 'cannon' ? slug : pulse;
-  const body = new T.InstancedMesh(geometry, material, 128);
+  const body = new T.InstancedMesh(geometry, material, capacity);
   const glowMaterial = trailMaterial(color);
-  const trails = new T.InstancedMesh(tail, glowMaterial, 128);
+  const trails = new T.InstancedMesh(tail, glowMaterial, capacity);
   const trim = kind === 'homing' || kind === 'omega' ? new T.InstancedMesh(kind === 'homing' ? missileBand : omegaRing,
-    new T.MeshBasicMaterial({ color, side: T.DoubleSide }), 128) : undefined;
+    new T.MeshBasicMaterial({ color, side: T.DoubleSide }), capacity) : undefined;
   const layers = trim ? [body, trails, trim] : [body, trails];
+  const upgradeTrails = kind === 'ship' || danger ? undefined : new T.InstancedMesh(tail,
+    trailMaterial(kind === 'drone' ? 0xb49bff : new T.Color(color).lerp(white, 0.5)), capacity * 2);
+  if (upgradeTrails) layers.push(upgradeTrails);
   for (const mesh of layers) {
     mesh.count = 0;
     mesh.frustumCulled = false;
@@ -116,16 +120,18 @@ export function createProjectileBatch(kind: ProjectileKind, color = colors[kind]
   }
   root.visible = false;
   const matrix = new T.Matrix4(), rotation = new T.Quaternion(), roll = new T.Quaternion();
-  const position = new T.Vector3(), direction = new T.Vector3(), scale = new T.Vector3();
+  const position = new T.Vector3(), direction = new T.Vector3(), scale = new T.Vector3(), offset = new T.Vector3();
   const width = kind === 'omega' ? 0.15 : kind === 'drone' ? 0.067 : kind === 'cannon' ? 0.08 : danger ? 0.16 : 0.065;
   const length = kind === 'omega' ? 0.9 : kind === 'cannon' ? 0.48 : kind === 'drone' ? 0.34 : danger ? 0.16 : 0.46;
   const tailLength = kind === 'omega' ? 1.1 : kind === 'homing' ? 0.55 : danger ? 0.22 : 0.48;
+  const tailWidth = kind === 'omega' ? 0.16 : danger ? 0.085 : 0.07;
 
   function draw(shots: readonly Shot[], time: number) {
-    const count = Math.min(shots.length, 128);
+    const count = Math.min(shots.length, capacity);
     for (const mesh of layers) mesh.count = count;
     root.visible = count > 0;
     glowMaterial.uniforms.clock.value = time;
+    let upgradeTrailCount = 0;
     for (let i = 0; i < count; i++) {
       const shot = shots[i];
       direction.set(shot.vx, shot.vy, shot.vz);
@@ -133,7 +139,8 @@ export function createProjectileBatch(kind: ProjectileKind, color = colors[kind]
       if (speed < 1e-6) direction.copy(forward); else direction.divideScalar(speed);
       rotation.setFromUnitVectors(forward, direction);
       if (kind === 'omega') rotation.multiply(roll.setFromAxisAngle(forward, time * 6 + i));
-      const charge = shot.drone && (shot.damage ?? 1) > 1 ? 1.25 : 1;
+      const hotDock = shot.drone && (shot.damage ?? 1) > 1 ? 1.25 : 1;
+      const charge = hotDock * (shot.upgraded ? 1.4 : 1);
       position.set(shot.x, shot.y, shot.z + 0.12);
       scale.set(kind === 'homing' ? 1 : width, kind === 'homing' ? 1 : length, kind === 'homing' ? 1 : width)
         .multiplyScalar(charge);
@@ -143,13 +150,26 @@ export function createProjectileBatch(kind: ProjectileKind, color = colors[kind]
       }
       position.addScaledVector(direction, kind === 'homing' ? -0.16 : -0.06);
       const flicker = 0.94 + Math.sin(time * 34 + i * 2.4) * 0.06;
-      scale.set((kind === 'omega' ? 0.16 : danger ? 0.085 : 0.07) * charge,
-        tailLength * T.MathUtils.clamp(speed / 15, 0.7, 1.7) * flicker, (kind === 'omega' ? 0.16 : danger ? 0.085 : 0.07) * charge);
+      const wakeWidth = tailWidth * charge;
+      scale.set(wakeWidth, tailLength * T.MathUtils.clamp(speed / 15, 0.7, 1.7) * flicker, wakeWidth);
       matrix.compose(position, rotation, scale); trails.setMatrixAt(i, matrix);
+      if (shot.upgraded && upgradeTrails) {
+        offset.set(wakeWidth * 1.3, 0, 0).applyQuaternion(rotation);
+        scale.set(wakeWidth * 0.55, scale.y * 1.3, wakeWidth * 0.55);
+        matrix.compose(position.add(offset), rotation, scale);
+        upgradeTrails.setMatrixAt(upgradeTrailCount++, matrix);
+        matrix.compose(position.addScaledVector(offset, -2), rotation, scale);
+        upgradeTrails.setMatrixAt(upgradeTrailCount++, matrix);
+      }
+    }
+    if (upgradeTrails) {
+      upgradeTrails.count = upgradeTrailCount;
+      upgradeTrails.visible = upgradeTrailCount > 0;
+      upgradeTrails.material.uniforms.clock.value = time;
     }
     for (const mesh of layers) mesh.instanceMatrix.needsUpdate = true;
   }
-  return { root, draw, prime: () => draw([{ x: 0, y: 0, z: 0, vx: 0, vy: 15, vz: 0 }], 0) };
+  return { root, draw, prime: () => draw([{ x: 0, y: 0, z: 0, vx: 0, vy: 15, vz: 0, upgraded: Boolean(upgradeTrails) }], 0) };
 }
 
 export function createMuzzleFlash(color: number) {
@@ -174,31 +194,37 @@ export function createMuzzleFlash(color: number) {
 export function createContinuousLaser() {
   const root = new T.Group(), beam = new T.Group();
   const material = new T.ShaderMaterial({
-    uniforms: { clock: { value: 0 }, tint: { value: new T.Color(wingWeapons.laser.color) } },
+    uniforms: { clock: { value: 0 }, tint: { value: new T.Color(wingWeapons.laser.color) }, upgraded: { value: 0 } },
     transparent: true, blending: T.AdditiveBlending, depthWrite: false,
     vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-    fragmentShader: `varying vec2 vUv; uniform float clock; uniform vec3 tint;
+    fragmentShader: `varying vec2 vUv; uniform float clock, upgraded; uniform vec3 tint;
       void main() {
-        float edge = pow(max(0.0, 1.0 - abs(vUv.x - 0.5) * 2.0), 1.7);
+        float across = abs(vUv.x - 0.5) * 2.0;
+        float edge = pow(max(0.0, 1.0 - across), 1.7);
         float ripple = 0.35 + 0.3 * pow(0.5 + 0.5 * sin(vUv.y * 55.0 - clock * 31.0), 4.0);
-        gl_FragColor = vec4(tint, edge * ripple);
+        float filament = upgraded * (1.0 - smoothstep(0.035, 0.15, abs(across - 0.38)));
+        gl_FragColor = vec4(mix(tint, vec3(1.0, 0.72, 0.92), filament), max(edge * ripple, filament * 0.96));
         #include <colorspace_fragment>
       }`,
   });
-  beam.add(new T.Mesh(new T.PlaneGeometry(0.24, 1), material),
-    new T.Mesh(new T.PlaneGeometry(0.043, 1), new T.MeshBasicMaterial({ color: 0xffe8fc, transparent: true, opacity: 0.94, depthWrite: false })));
+  const core = new T.Mesh(new T.PlaneGeometry(0.043, 1),
+    new T.MeshBasicMaterial({ color: 0xffe8fc, transparent: true, opacity: 0.94, depthWrite: false }));
+  beam.add(new T.Mesh(new T.PlaneGeometry(0.24, 1), material), core);
   const ablation = createLaserAblation();
   const shield = createLaserShield();
   root.add(beam, ablation.root, shield.root);
   root.visible = false;
-  function draw(origin: { x: number; y: number }, end: { x: number; y: number }, hold: number, time: number, contact: boolean, blocked = false) {
+  function draw(origin: { x: number; y: number }, end: { x: number; y: number }, hold: number, time: number,
+    contact: boolean, { blocked = false, upgraded = false } = {}) {
     const dx = end.x - origin.x, dy = end.y - origin.y;
     beam.position.set((origin.x + end.x) / 2, (origin.y + end.y) / 2, 0);
     beam.rotation.z = Math.atan2(-dx, dy);
-    beam.scale.set(1 + Math.min(hold, 0.85) * 0.75, Math.hypot(dx, dy), 1);
+    beam.scale.set((1 + Math.min(hold, 0.85) * 0.75) * (upgraded ? 1.65 : 1), Math.hypot(dx, dy), 1);
+    core.visible = !upgraded;
     material.uniforms.clock.value = time;
+    material.uniforms.upgraded.value = Number(upgraded);
     ablation.draw(origin, end, hold, time, contact);
     shield.draw(end, time, blocked);
   }
-  return { root, draw, prime() { root.visible = true; draw({ x: 0, y: 0 }, { x: 0, y: 4 }, 1, 0, true, true); } };
+  return { root, draw, prime() { root.visible = true; draw({ x: 0, y: 0 }, { x: 0, y: 4 }, 1, 0, true, { blocked: true }); } };
 }

@@ -73,6 +73,7 @@ type Point = { x: number; y: number };
 type Shot = Point & {
   z: number; vx: number; vy: number; vz: number;
   drone?: boolean; targetsBoss?: boolean; bossSupport?: boolean; crabTarget?:number; wing?: WingProjectile; pierced?: Set<Enemy>; damage?: number;
+  upgraded?: boolean;
   hydraTarget?:HydraSide;hydraPierced?:Map<Enemy,Set<HydraSide>>;
   planarBossHit?: boolean;
 };
@@ -793,7 +794,8 @@ export class Flight {
     const forwardSpeed = spec.speed * 1.8;
     const fonsVelocity = this.isFonsFight ? this.fonsShotVelocity(origin, duration) : undefined;
     this.shots.push({
-      ...origin, z: 0, wing: wing.weapon, damage: spec.damage * (wing.upgraded ? UPGRADED_WING_DAMAGE : 1),
+      ...origin, z: 0, wing: wing.weapon, upgraded: wing.upgraded,
+      damage: spec.damage * (wing.upgraded ? UPGRADED_WING_DAMAGE : 1),
       vx: fonsVelocity?.vx ?? (boss ? origin.x * (1 / BOSS_PROJECTION - 1) / duration : 0),
       vy: fonsVelocity?.vy ?? (boss ? (aimY - origin.y) / duration : tunnel ? forwardSpeed * wormholeForward.y : spec.speed),
       vz: fonsVelocity?.vz ?? (boss ? BOSS_DEPTH / duration : tunnel ? forwardSpeed * wormholeForward.z : 0),
@@ -1477,15 +1479,16 @@ export class Flight {
   }
 
   private fire({ x, y }: Point, drone = false, damage = 1) {
+    const shot = { drone, damage, upgraded: drone && this.droneWeapon === 'towline' };
     if (this.level === 'wormhole' && this.phase === 'stage') {
       const muzzle = drone ? .31 : .89;
       this.shots.push({ x, y: y + muzzle * wormholeForward.y, z: muzzle * wormholeForward.z,
-        vx: 0, vy: 32 * wormholeForward.y, vz: 32 * wormholeForward.z, drone, damage });
+        vx: 0, vy: 32 * wormholeForward.y, vz: 32 * wormholeForward.z, ...shot });
       return;
     }
     if (this.isFonsFight) {
       const origin = { x, y };
-      this.shots.push({ ...origin, z: 0, ...this.fonsShotVelocity(origin, .38), drone, damage });
+      this.shots.push({ ...origin, z: 0, ...this.fonsShotVelocity(origin, .38), ...shot });
       return;
     }
     const targetsBoss = !drone && Math.abs(x) < 1.65;
@@ -1494,7 +1497,7 @@ export class Flight {
     const aimY = depthShot && aimsAtBoss ? this.bossAimY : y;
     const muzzleY = y + (drone ? 0.3 : 0.45);
     if (!depthShot || (this.keepDepthShotsForward && (!aimsAtBoss || muzzleY >= aimY * BOSS_PROJECTION))) {
-      this.shots.push({ x, y: muzzleY, z: 0, vx: 0, vy: 15, vz: 0, drone, damage });
+      this.shots.push({ x, y: muzzleY, z: 0, vx: 0, vy: 15, vz: 0, ...shot });
       return;
     }
 
@@ -1504,7 +1507,7 @@ export class Flight {
     const dx = drone ? x * expansion : (targetsBoss ? (this.level === 'io'||this.level==='vents'||this.level==='summer'||this.level==='wormhole' ? this.exposedCannonX : 0) - x : 0);
     const dy = aimY - y;
     this.shots.push({ x, y, z: 0, vx: dx / duration, vy: dy / duration,
-      vz: BOSS_DEPTH / duration, targetsBoss, bossSupport: this.level === 'io' ? !this.ioLegBroken : undefined, crabTarget:this.level==='vents'?this.crabTargetX:undefined,hydraTarget:this.level==='summer'&&targetsBoss?this.summerTargetHead:undefined, drone, damage });
+      vz: BOSS_DEPTH / duration, targetsBoss, bossSupport: this.level === 'io' ? !this.ioLegBroken : undefined, crabTarget:this.level==='vents'?this.crabTargetX:undefined,hydraTarget:this.level==='summer'&&targetsBoss?this.summerTargetHead:undefined, ...shot });
   }
 
   private advance(shot: Shot, dt: number) {

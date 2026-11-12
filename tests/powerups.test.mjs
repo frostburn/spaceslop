@@ -146,6 +146,22 @@ test('each Mk II sidearm deals 50 percent more damage through its normal weapon 
   }
 });
 
+test('wing and drone shots retain the upgrade state they were fired with', () => {
+  const flight = quietFlight('preserve');
+  collect(flight, 'cannon');
+  const [wing] = flight.wings;
+  flight.stepWing(wing, false, STEP);
+  flight.fire(flight.drone, true, 2);
+
+  collect(flight, 'cannon');
+  collect(flight, 'cannon');
+  wing.cooldown = 0;
+  flight.stepWing(wing, false, STEP);
+  flight.fire(flight.drone, true);
+
+  assert.deepEqual(flight.shots.map(shot => shot.upgraded), [false, false, true, true]);
+});
+
 test('Towline adds an independent three-damage pulse to parked Sentry fire', () => {
   const flight = quietFlight('preserve');
   for (let i = 0; i < 3; i++) collect(flight, 'cannon');
