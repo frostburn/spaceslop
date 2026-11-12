@@ -33,6 +33,7 @@ output { color: #a3ede1; font-variant-numeric: tabular-nums; }
 .views { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 20px 0; }
 figure { margin: 0; min-width: 0; }
 figcaption { margin-bottom: 4px; font-size: .85rem; }
+.blend-view figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 8px; }
 canvas { display: block; width: 100%; aspect-ratio: 1; }
 figure > canvas, .preview {
   border: 1px solid #395460;
@@ -42,6 +43,7 @@ figure > canvas, .preview {
 }
 figure > canvas { cursor: crosshair; }
 .preview { position: relative; }
+.preview.difference { background: #000; }
 #mesh { position: absolute; inset: 0; pointer-events: none; }
 .edit { border-top: 1px solid #395460; padding-top: 14px; }
 .fields { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px; }

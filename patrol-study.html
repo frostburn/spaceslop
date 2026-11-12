@@ -23,6 +23,7 @@
         <div class="actions">
           <button id="play" type="button">Play turn</button>
           <button id="follow" type="button" disabled>Follow heading</button>
+          <label class="check"><input id="show-difference" type="checkbox" disabled> Difference preview</label>
           <label class="check"><input id="show-mesh" type="checkbox"> Preview mesh</label>
         </div>
       </section>
@@ -32,7 +33,10 @@
           <canvas id="pose-a" aria-labelledby="outgoing"></canvas>
         </figure>
         <figure class="blend-view">
-          <figcaption>Blend preview</figcaption>
+          <figcaption>
+            <span id="preview-title">Blend preview</span>
+            <output id="match-score" aria-live="off" title="100% means the sprites match within their combined silhouette." hidden></output>
+          </figcaption>
           <div class="preview">
             <canvas id="preview" aria-label="Live blend using the game shader"></canvas>
             <canvas id="mesh" aria-hidden="true"></canvas>

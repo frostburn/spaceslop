@@ -2,6 +2,7 @@ import * as T from 'three';
 import { denPatrolWarp } from '../den/patrol';
 import { createPatrolWarpCard, patrolAtlasFor, patrolBandAngle, patrolBandXs, type PatrolBand } from '../den/patrol-warp';
 import { loadEncounterTexture } from '../encounter-texture';
+import { createPatrolDifference } from './patrol-difference';
 import './patrol-study.css';
 
 type Point = { x: number; y: number };
@@ -69,6 +70,8 @@ function start() {
   const overlay = element<HTMLCanvasElement>('mesh').getContext('2d')!;
   const sources = ['pose-a', 'pose-b'].map(id => element<HTMLCanvasElement>(id).getContext('2d')!);
   const heading = range('heading'), blend = range('blend'), showMesh = range('show-mesh');
+  const showDifference = range('show-difference'), score = element<HTMLOutputElement>('match-score');
+  const previewTitle = element('preview-title'), viewport = overlay.canvas.parentElement!;
   const play = element<HTMLButtonElement>('play'), follow = element<HTMLButtonElement>('follow');
   const editPose = element<HTMLSelectElement>('edit-pose'), editBand = element<HTMLSelectElement>('edit-band');
   const editPoint = element<HTMLSelectElement>('edit-point'), pointX = range('point-x'), bandY = range('band-y');
@@ -82,11 +85,14 @@ function start() {
   } catch {
     preview.replaceWith(Object.assign(document.createElement('p'), { textContent: 'The live blend needs WebGL 2.' }));
   }
+  const difference = renderer && createPatrolDifference(renderer, scene, camera, card.root);
   let atlas = patrolAtlasFor(1254, 1254), bands = [...atlas.rows];
   let texture: T.Texture | undefined;
   const edited = new Set<number>();
   const sourcePoints: Point[][] = [[], []];
   let manual = false, playing = false, direction = 1, frameId = 0, lastFrame = 0;
+  let measuring = false;
+  let sampled: { angle: number; bands: typeof bands; time: number } | undefined;
   editBand.replaceChildren(...bands[0].map((_, i) => new Option(String(i + 1), String(i))));
   editBand.value = '12';
   card.setRegistration(atlas);
@@ -149,6 +155,25 @@ function start() {
     copy.disabled = !edited.size;
   }
 
+  function measureDifference(angle: number, now: number) {
+    if (!difference || measuring || (sampled?.angle === angle && sampled.bands === bands)) return;
+    if (playing && sampled && now - sampled.time < 100) return;
+    const sample = { angle, bands, time: now };
+    sampled = sample;
+    measuring = true;
+    const stillActive = () => !controller.signal.aborted && showDifference.checked && sampled === sample;
+    void difference.measure().then(value => {
+      if (stillActive() && (playing || (turnAt().angle === angle && bands === sample.bands)))
+        score.value = value === undefined ? 'Match unavailable' : `Match ${value.toFixed(1)}%`;
+    }).catch(() => {
+      if (stillActive()) score.value = 'Match unavailable';
+    }).finally(() => {
+      measuring = false;
+      if (!controller.signal.aborted && showDifference.checked && (sampled !== sample || turnAt().angle !== angle || bands !== sample.bands))
+        requestRender();
+    });
+  }
+
   function render(now: number) {
     frameId = 0;
     if (playing) {
@@ -163,7 +188,12 @@ function start() {
     const weight = manual ? blend.valueAsNumber / 100 : turn.blend;
     output('heading').value = `${heading.valueAsNumber.toFixed(1)}°`;
     output('blend').value = `${Math.round(weight * 100)}%`;
-    follow.disabled = !manual;
+    const comparing = Boolean(difference && texture && showDifference.checked);
+    blend.disabled = comparing;
+    follow.disabled = comparing || !manual;
+    previewTitle.textContent = comparing ? 'Difference preview' : 'Blend preview';
+    viewport.classList.toggle('difference', comparing);
+    score.hidden = !comparing;
     const { band, point } = selected(), active = band * columns + point;
     for (const [pane, index] of [turn.first, turn.second].entries()) {
       const title = pane === 0 ? 'Outgoing' : 'Incoming';
@@ -174,11 +204,16 @@ function start() {
     if (renderer) {
       const size = Math.max(1, Math.round(preview.clientWidth * Math.min(2, devicePixelRatio)));
       if (preview.width !== size || preview.height !== size) renderer.setSize(size, size, false);
-      renderer.render(scene, camera);
+      if (comparing && difference) {
+        difference.render();
+        measureDifference(turn.angle, now);
+      } else renderer.render(scene, camera);
     }
-    const size = square(overlay.canvas);
-    overlay.clearRect(0, 0, size, size);
-    if (showMesh.checked || !texture) {
+    const meshVisible = showMesh.checked || !texture;
+    overlay.canvas.style.visibility = meshVisible ? '' : 'hidden';
+    if (meshVisible) {
+      const size = square(overlay.canvas);
+      overlay.clearRect(0, 0, size, size);
       const cos = Math.cos(turn.angle), sin = Math.sin(turn.angle), scale = size / (2 * halfView);
       const project = (x: number, y: number) => ({
         x: size / 2 + scale * (cos * x - sin * y),
@@ -265,6 +300,11 @@ function start() {
   follow.addEventListener('click', () => { manual = false; requestRender(); });
   play.addEventListener('click', () => setPlaying(!playing));
   showMesh.addEventListener('change', requestRender);
+  showDifference.addEventListener('change', () => {
+    sampled = undefined;
+    score.value = 'Measuring…';
+    requestRender();
+  });
   reset.addEventListener('click', () => { const { frame } = selected(); applyBands(frame, atlas.rows[frame]); });
   copy.addEventListener('click', async () => {
     exportText.value = JSON.stringify(Object.fromEntries([...edited].map(frame => [frame, bands[frame]])), null, 2);
@@ -303,6 +343,7 @@ function start() {
     bands = [...atlas.rows];
     edited.clear();
     texture = map;
+    showDifference.disabled = !difference;
     setPointOptions();
   }, undefined, controller.signal).then(() => {
     if (controller.signal.aborted) return;
@@ -317,6 +358,7 @@ function start() {
     texture?.dispose();
     card.root.geometry.dispose();
     card.root.material.dispose();
+    difference?.dispose();
     renderer?.dispose();
   });
   requestRender();

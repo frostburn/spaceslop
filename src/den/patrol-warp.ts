@@ -188,6 +188,16 @@ function createGeometry({ vertexCount, indices }: PatrolAtlas['grid']) {
   return { geometry, position, uv, nextUV };
 }
 
+export const patrolPoseSampling = `varying vec2 artUV, nextArtUV;
+  uniform sampler2D atlas;
+  uniform vec4 crop, nextCrop;
+  vec4 samplePose(vec2 p, vec4 bounds) {
+    vec4 art = texture2D(atlas, p);
+    if (any(lessThan(p, bounds.xy)) || any(greaterThan(p, bounds.zw))) return vec4(0.0);
+    float a = smoothstep(.27, .54, art.a);
+    return vec4(art.rgb * a, a);
+  }`;
+
 export function createPatrolWarpCard() {
   let layout = denseAtlas.grid, buffers = createGeometry(layout), poses = densePoses;
   let dense = true;
@@ -207,16 +217,8 @@ export function createPatrolWarpCard() {
         nextArtUV = nextUV;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }`,
-    fragmentShader: `varying vec2 artUV, nextArtUV;
-      uniform sampler2D atlas;
-      uniform vec4 crop, nextCrop;
+    fragmentShader: `${patrolPoseSampling}
       uniform float poseBlend;
-      vec4 samplePose(vec2 p, vec4 bounds) {
-        vec4 art = texture2D(atlas, p);
-        if (any(lessThan(p, bounds.xy)) || any(greaterThan(p, bounds.zw))) return vec4(0.0);
-        float a = smoothstep(.27, .54, art.a);
-        return vec4(art.rgb * a, a);
-      }
       void main() {
         vec4 art;
         if (poseBlend <= 0.0) art = samplePose(artUV, crop);
