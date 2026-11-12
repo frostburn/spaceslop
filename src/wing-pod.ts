@@ -1,14 +1,16 @@
 import * as T from 'three';
 import { addBurner, burnerMaterial, poseBurners, shipBurners } from './burners';
 import { shipAlloy } from './encounter-surfaces';
+import type { PilotLivery } from './pilot-data';
 import { part, pivot, plating, polygon } from './rig-geometry';
 import { wingWeapons, type WingWeapon } from './wing';
 
-export function createWingPod(weapon: WingWeapon) {
+export function createWingPod(weapon: WingWeapon, livery?: PilotLivery) {
   const root = new T.Group();
   const color = wingWeapons[weapon].color;
   const steel = shipAlloy(0x95a6ab);
-  const ceramic = shipAlloy(0x354653);
+  const ceramic = shipAlloy(livery?.frame ?? 0x354653);
+  const cladding = livery ? shipAlloy(livery.paint) : steel;
   const signal = new T.MeshBasicMaterial({ color });
   const hot = new T.MeshBasicMaterial({ color: 0xfff0cf });
   const jet = burnerMaterial(color);
@@ -19,7 +21,7 @@ export function createWingPod(weapon: WingWeapon) {
     ceramic, 0, 0, -0.067);
   for (const side of [-1, 1]) {
     const rail = part(hull, plating([[wide * 0.41, -0.23], [wide, -0.28], [wide * 0.71, -0.65],
-      [wide * 0.32, -0.72]], 0.045, 0.015), steel, 0, 0, 0.078);
+      [wide * 0.32, -0.72]], 0.045, 0.015), cladding, 0, 0, 0.078);
     rail.scale.x = side;
     part(hull, new T.BoxGeometry(0.03, 0.18, 0.015), signal, side * wide * 0.6, -0.5, 0.147);
   }

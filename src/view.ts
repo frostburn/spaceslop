@@ -12,6 +12,7 @@ import { createContinuousLaser, createMuzzleFlash, createProjectileBatch, projec
 import { ambusherFeedback } from './preserve-ambusher';
 import { faunaMuzzle } from './vent-fauna';
 import type { LevelId } from './levels';
+import { pilots, type PilotId, type PilotLivery } from './pilot-data';
 import { levelLoaders } from './rendering/loaders';
 import { type LevelFactory, type LevelScene, type LevelFrame } from './rendering/level';
 import { loadCommonTextures } from './rendering/common-textures';
@@ -19,10 +20,10 @@ import { tiltFlightCamera } from './rendering/flight-camera';
 import { boostFriendlyGlow } from './rendering/friendly-glow';
 import { disposeScene } from './rendering/dispose';
 import { addVictoryWingShots, createBossDefeat, createVictoryFlares, SALUTE_ANGLE, SALUTE_START, VICTORY_DURATION, victoryFormation } from './rendering/victory';
-export async function createFlightView(canvas: HTMLCanvasElement, level: LevelId, signal = new AbortController().signal) {
+export async function createFlightView(canvas: HTMLCanvasElement, level: LevelId, signal = new AbortController().signal, pilot?: PilotId) {
   const { createLevel } = await levelLoaders[level]();
   signal.throwIfAborted();
-  return new FlightView(canvas, level, createLevel, signal);
+  return new FlightView(canvas, level, createLevel, signal, pilots.find(entry => entry.id === pilot)?.livery);
 }
 const sceneColor = 0x0b1020;
 const teal = 0x88f2ff;
@@ -77,13 +78,13 @@ export class FlightView {
   private pitch = 0;
   private bank = 0;
   private viewPitch = 0;
-  private player = createFighterRig();
-  private playerBurners = shipBurners(this.player.root);
+  private player: ReturnType<typeof createFighterRig>;
+  private playerBurners: ReturnType<typeof shipBurners>;
   private bubbleSources: T.Mesh[] = [];
-  private drone = createDroneRig();
+  private drone: T.Group;
   private droneYaw = 0;
-  private droneBurners = shipBurners(this.drone);
-  private towlineEmitters = addTowlineEmitters(this.drone);
+  private droneBurners: ReturnType<typeof shipBurners>;
+  private towlineEmitters: T.Group;
   private droneGoal = new T.Mesh(new T.RingGeometry(0.31, 0.38, 4), new T.MeshBasicMaterial({
     color: mint,
     transparent: true,
@@ -106,8 +107,7 @@ export class FlightView {
   private playerMuzzle = createMuzzleFlash(teal);
   private droneMuzzle = createMuzzleFlash(mint);
   private combat = createCombatEffects();
-  private wingPods = Array.from({ length: 2 }, () => (Object.keys(wingWeapons) as WingWeapon[])
-    .map((weapon) => ({ weapon, ...createWingPod(weapon) })));
+  private wingPods: ({ weapon: WingWeapon } & ReturnType<typeof createWingPod>)[][];
   private wingLasers = Array.from({ length: 2 }, createContinuousLaser);
   private laserContact = createLaserContactTrace(this.plane);
   private drops = Array.from({ length: 12 }, createPowerupGraphic);
@@ -142,7 +142,7 @@ export class FlightView {
   private bossHitAt = -1;
   private rotation = new T.Quaternion();
   private axis = new T.Vector3(1, 0, 0);
-  constructor(canvas: HTMLCanvasElement, readonly levelId: LevelId, createLevel: LevelFactory, signal: AbortSignal) {
+  constructor(canvas: HTMLCanvasElement, readonly levelId: LevelId, createLevel: LevelFactory, signal: AbortSignal, livery?: PilotLivery) {
     this.renderer = new T.WebGLRenderer({
       canvas,
       antialias: true,
@@ -150,6 +150,13 @@ export class FlightView {
     });
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = T.PCFShadowMap;
+    this.player = createFighterRig(livery);
+    this.playerBurners = shipBurners(this.player.root);
+    this.drone = createDroneRig(livery);
+    this.droneBurners = shipBurners(this.drone);
+    this.towlineEmitters = addTowlineEmitters(this.drone, livery);
+    this.wingPods = Array.from({ length: 2 }, () => (Object.keys(wingWeapons) as WingWeapon[])
+      .map(weapon => ({ weapon, ...createWingPod(weapon, livery) })));
     this.scene.add(this.plane);
     this.level = createLevel({ plane: this.plane, scene: this.scene, fighter: this.player.root, signal });
     this.defeat = createBossDefeat(this.level.victoryBoss ?? this.level.boss, this.plane, levelId);

@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { addBurner, burnerMaterial } from './burners';
 import { shipAlloy as alloy } from './encounter-surfaces';
+import type { PilotLivery } from './pilot-data';
 import { part, pivot, plating, polygon } from './rig-geometry';
 
 const light = (color: number) => new T.MeshBasicMaterial({ color });
@@ -50,11 +51,11 @@ function stripe(sections: [y: number, width: number, z: number][], x = 0) {
   return geometry;
 }
 
-export function createFighterRig() {
+export function createFighterRig(livery?: PilotLivery) {
   const root = new T.Group();
-  const turquoise = alloy(0x319eaf);
-  const titanium = alloy(0xa1a9ab);
-  const graphite = alloy(0x273745);
+  const paint = alloy(livery?.paint ?? 0x319eaf);
+  const trim = alloy(livery?.trim ?? 0xa1a9ab);
+  const frame = alloy(livery?.frame ?? 0x273745);
   const canopy = new T.MeshStandardMaterial({ color: 0x21435c, metalness: 0.24, roughness: 0.27 });
   const ice = light(0x82d8e5);
   const core = light(0xaffbff);
@@ -62,8 +63,8 @@ export function createFighterRig() {
 
   part(root, fuselage([[-0.7, 0.23, 0.13, -0.11], [-0.19, 0.3, 0.19, -0.13],
     [0.38, 0.23, 0.15, -0.1], [0.78, 0.052, 0.071, -0.025], [0.88, 0.01, 0.033, -0.01]]),
-    turquoise, 0, 0, 0);
-  part(root, stripe([[0.38, 0.038, 0.154], [0.78, 0.017, 0.076], [0.87, 0.005, 0.041]]), titanium, 0, 0, 0);
+    paint, 0, 0, 0);
+  part(root, stripe([[0.38, 0.038, 0.154], [0.78, 0.017, 0.076], [0.87, 0.005, 0.041]]), trim, 0, 0, 0);
   part(root, fuselage([[-0.27, 0.072, 0.027, -0.01], [-0.14, 0.145, 0.1, -0.01],
     [0.25, 0.094, 0.079, -0.01], [0.4, 0.035, 0.016, -0.01]]), canopy, 0, 0, 0.16);
   part(root, stripe([[-0.12, 0.016, 0.263], [0.24, 0.009, 0.244]], 0.026), ice, 0, 0, 0);
@@ -72,15 +73,15 @@ export function createFighterRig() {
     const wing = pivot(root, side < 0 ? 'fighter_wing_L' : 'fighter_wing_R', 0, 0, 0);
     wing.scale.x = side;
     part(wing, plating([[0.18, 0.35], [0.41, 0.31], [0.78, 0.02], [0.82, -0.17],
-      [0.62, -0.24], [0.28, -0.55], [0.19, -0.42]], 0.08, 0.022), titanium, 0, 0, -0.06);
+      [0.62, -0.24], [0.28, -0.55], [0.19, -0.42]], 0.08, 0.022), trim, 0, 0, -0.06);
     part(wing, plating([[0.3, 0.27], [0.7, 0.005], [0.73, -0.1], [0.62, -0.13],
-      [0.32, -0.38], [0.26, -0.19]], 0.043, 0.012), turquoise, 0, 0, 0.042);
+      [0.32, -0.38], [0.26, -0.19]], 0.043, 0.012), paint, 0, 0, 0.042);
     part(wing, polygon([[0.68, -0.11], [0.76, -0.095], [0.75, -0.15], [0.65, -0.18]]), ice, 0, 0, 0.105);
-    part(wing, polygon([[0.31, 0.18], [0.49, 0.084], [0.52, 0.058], [0.36, 0.126]]), titanium, 0, 0, 0.101);
-    part(wing, polygon([[0.32, 0.051], [0.62, -0.051], [0.64, -0.076], [0.33, 0.021]]), graphite, 0, 0, 0.103);
+    part(wing, polygon([[0.31, 0.18], [0.49, 0.084], [0.52, 0.058], [0.36, 0.126]]), trim, 0, 0, 0.101);
+    part(wing, polygon([[0.32, 0.051], [0.62, -0.051], [0.64, -0.076], [0.33, 0.021]]), frame, 0, 0, 0.103);
     part(wing, fuselage([[-0.78, 0.135, 0.11, -0.1], [-0.48, 0.148, 0.15, -0.105],
-      [-0.13, 0.108, 0.128, -0.077], [-0.015, 0.065, 0.06, -0.032]]), graphite, 0.24, 0, 0.015);
-    part(wing, new T.CylinderGeometry(0.092, 0.105, 0.095, 8), titanium, 0.24, -0.774, 0.014);
+      [-0.13, 0.108, 0.128, -0.077], [-0.015, 0.065, 0.06, -0.032]]), frame, 0.24, 0, 0.015);
+    part(wing, new T.CylinderGeometry(0.092, 0.105, 0.095, 8), trim, 0.24, -0.774, 0.014);
     const exhaust = part(wing, new T.CircleGeometry(0.075, 8), core, 0.24, -0.826, 0.014);
     exhaust.rotation.x = Math.PI / 2;
     addBurner(wing, jet, 0.24, -0.827, 0.014, 0.088, 0.92);
@@ -123,10 +124,10 @@ export function createScoutRig() {
   return root;
 }
 
-export function createDroneRig() {
+export function createDroneRig(livery?: PilotLivery) {
   const root = new T.Group();
-  const steel = alloy(0x526875);
-  const casing = alloy(0x9babaa);
+  const steel = alloy(livery?.paint ?? 0x526875);
+  const casing = alloy(livery?.trim ?? 0x9babaa);
   const mint = light(0xa1ffc5);
   const jet = burnerMaterial(0x4bff92);
   const shell = part(root, new T.CylinderGeometry(0.3, 0.36, 0.17, 6), steel, 0, 0, -0.018);
@@ -142,12 +143,12 @@ export function createDroneRig() {
   return root;
 }
 
-export function addTowlineEmitters(root: T.Group) {
+export function addTowlineEmitters(root: T.Group, livery?: PilotLivery) {
   const towlineEmitters = pivot(root, 'towline_emitters', 0, 0, 0);
   const arm = plating([[0.21, -0.145], [0.37, -0.24], [0.49, -0.145], [0.51, 0.14],
     [0.42, 0.235], [0.3, 0.15]], 0.09, 0.025);
   const coil = new T.BoxGeometry(0.069, 0.27, 0.058);
-  const steel = alloy(0x526875);
+  const steel = alloy(livery?.paint ?? 0x526875);
   const violet = light(0xc8afff);
   for (const side of [-1, 1]) {
     part(towlineEmitters, arm, steel, 0, 0, 0.015).scale.x = side;

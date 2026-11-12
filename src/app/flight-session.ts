@@ -352,7 +352,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     start.disabled = true;
     panel.scrollTop = 0;
     syncUI();
-    view = await createFlightView(canvas, selectedLevel,signal);
+    view = await createFlightView(canvas, selectedLevel, signal, loadout.pilot);
     if (signal.aborted) {
       view.dispose();
       return;
