@@ -23,9 +23,9 @@ const update = document.querySelector<HTMLButtonElement>('#menu-update')!;
 const campaignMode = document.querySelector<HTMLButtonElement>('#campaign-mode')!;
 const freeFlightMode = document.querySelector<HTMLButtonElement>('#free-flight-mode')!;
 const droneWeapon = document.querySelector<HTMLSelectElement>('#drone-weapon')!;
-const wingSelectors = Array.from(document.querySelectorAll<HTMLSelectElement>('#test-wing-loadout select'));
+const wingSelectors = ['#left-wing', '#right-wing'].map(selector => document.querySelector<HTMLSelectElement>(selector)!);
 const query = new URLSearchParams(location.search);
-const testingWings = import.meta.env.DEV || query.get('testLoadout') === '1';
+const testingLoadout = import.meta.env.DEV || query.get('testLoadout') === '1';
 let inCampaign = query.get('mode') === 'campaign' || (query.get('mode') !== 'free-flight' && !query.has('level'));
 let cleared = savedCampaign();
 let selected = inCampaign ? campaignSelection() : readLevel(query.get('level'));
@@ -151,7 +151,7 @@ document.querySelector('#brief-back')!.addEventListener('click', returnToMenu);
 document.querySelector('#menu-button')!.addEventListener('click', returnToMenu);
 document.querySelector('#return-menu')!.addEventListener('click', returnToMenu);
 
-if (testingWings) {
+if (testingLoadout) {
   document.querySelector<HTMLElement>('#test-wing-loadout')!.hidden = false;
   for (const select of wingSelectors) {
     select.add(new Option('Empty', ''));
@@ -174,8 +174,8 @@ async function launchFlight(shortcut?: FlightShortcut) {
   const campaignFlight = inCampaign;
   const loadout: FlightLoadout = {
     pilot: pilotPicker.selectedId,
-    drone: droneWeapon.value === 'towline' ? 'towline' : 'sentry',
-    wings: testingWings ? wingSelectors.map(select => readWingWeapon(select.value)) : [],
+    drone: testingLoadout && droneWeapon.value === 'towline' ? 'towline' : 'sentry',
+    wings: testingLoadout ? wingSelectors.map(select => readWingWeapon(select.value)) : [],
   };
   const controller = new AbortController();
   session = controller;

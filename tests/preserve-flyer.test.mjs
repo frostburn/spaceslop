@@ -47,14 +47,14 @@ test('preserve has dinosaurs in every former scout slot, all patterns/drops and 
  const formations=new Set(),drops=new Set();let maximum=0,raptors=0;
  while(f.phase==='stage'){
   f.invulnerable=100;f.step(STEP);maximum=Math.max(maximum,f.enemies.filter(e=>e.flyer).length);raptors=Math.max(raptors,f.enemies.filter(e=>e.raptor).length);
-  for(const e of f.enemies){assert(e.flyer||e.raptor||e.ambusher,'scout ship remains in preserve');if(e.flyer){formations.add(e.flyer.formation);assert.equal(e.fire,Infinity);if(e.drop)drops.add(e.drop);}}
+  for(const e of f.enemies){assert(e.flyer||e.raptor||e.ambusher,'scout ship remains in preserve');if(e.flyer){formations.add(e.flyer.formation);assert.equal(e.fire,Infinity);if (e.reward) drops.add(e.reward.weapon);}}
   assert.equal(f.threats.length,0,'flying dinosaurs should attack by flight instead of firing scout projectiles');
  }
  assert.equal(formations.size,5);assert.equal(drops.size,4);assert(maximum>3&&maximum<=m.FLYER_POOL);assert(raptors>0&&raptors<=3);
  assert.equal(f.phase,'approach');assert.equal(f.enemies.length,0);assert.equal(new Flight('sentry',[],'vex','preserve').nextWave,0);
 });
 
-function enemy(heading=0,y=0){return{x:0,y,heading,lane:0,age:2,fire:Infinity,hp:m.FLYER_HP,flyer:course,drop:'cannon'};}
+function enemy(heading=0,y=0){return{x:0,y,heading,lane:0,age:2,fire:Infinity,hp:m.FLYER_HP,flyer:course,reward:{weapon:'cannon',remaining:1}};}
 // Freeze route integration only in this weapon-focused fixture so each authored
 // orientation can be hit; the complete route test above exercises real motion.
 function quiet(e,drone='sentry') {const f=new Flight(drone,[],'vex','preserve');f.enemies=[e];f.nextWave=f.nextAmbusher=100;f.cooldown=f.droneCooldown=1000;f.time=4;f.stepStage=()=>{};return f;}
@@ -69,7 +69,7 @@ test('rotated feathered anatomy accepts bullets, all sidearms, nearest laser con
   const a=enemy(heading),b=enemy(heading,2),f=quiet(a);f.enemies=[b,a];const w=f.wings[0];w.weapon='laser';
   f.stepLaser(w,{x:0,y:-7},false,.2);assert.equal(w.laserTarget,a);assert(a.hp<m.FLYER_HP);assert.equal(b.hp,m.FLYER_HP);
   f.stepLaser(w,{x:0,y:-7},false,3);assert.equal(a.hp,0);f.stepLaser(w,{x:0,y:-7},false,.2);assert.equal(w.laserTarget,b);
-  const t=enemy(heading),tow=quiet(t,'towline');tow.player={x:0,y:-2};tow.drone={x:0,y:2};tow.droneCooldown=0;tow.step(STEP);assert.equal(t.hp,0);
+  const t=enemy(heading),tow=quiet(t,'towline');tow.player={x:0,y:-2};tow.drone={x:0,y:2};tow.towlineCooldown=0;tow.step(STEP);assert.equal(t.hp,0);
   const p=enemy(heading),pulse=quiet(p);pulse.pulse();assert.equal(p.hp,0);assert.equal(pulse.score,100);assert.equal(pulse.drops.length,1);
  }
 });

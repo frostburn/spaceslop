@@ -58,7 +58,7 @@ test('armed and jumping mines are dodge-only hazards that weapons pass through a
   const shots=[undefined,'drone','homing','cannon','omega'].map(kind=>({x:p.x,y:p.y-.02,z:0,vx:0,vy:20,vz:0,damage:1000,drone:kind==='drone',wing:kind==='drone'?undefined:kind,pierced:kind==='omega'?new Set():undefined}));f.shots=shots;f.step(STEP);assert(shots.every(s=>f.shots.includes(s)),'mine consumed a friendly projectile');assert.equal(e.hp,1);
   const missile={x:e.x+1,y:e.y-2,vx:0,vy:10,z:0,vz:0,wing:'homing'};f.guideMissile(missile,false,STEP);assert.equal(missile.vx,0,'homing missile tracks a mine');
   const wing=f.wings[0];f.stepLaser(wing,{x:e.x,y:e.y-2},false,STEP);assert.equal(wing.laserTarget,undefined);assert.equal(wing.beamEnd.y,8,'mine blocks a laser');
-  f.droneWeapon='towline';f.droneCooldown=0;f.player={x:e.x,y:e.y-1};f.drone={x:e.x,y:e.y+1};f.stepDroneWeapon(STEP);f.damageEnemy(e,1000);f.pulse();assert.equal(e.hp,1);assert(f.enemies.includes(e));assert.equal(f.score,0);assert.equal(state.burstAt,undefined);
+  f.droneWeapon='towline';f.towlineCooldown=0;f.player={x:e.x,y:e.y-1};f.drone={x:e.x,y:e.y+1};f.stepDroneWeapon(STEP);f.damageEnemy(e,1000);f.pulse();assert.equal(e.hp,1);assert(f.enemies.includes(e));assert.equal(f.score,0);assert.equal(state.burstAt,undefined);
  }
 });
 

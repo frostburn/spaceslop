@@ -172,8 +172,8 @@ test('Leviathan locks a readable mouth volley and central weakpoint before firin
 });
 
 test('marine bodies can be hit at the snout and still release their wing drop', () => {
-  const f=new Flight('towline',[],'vex','ice');f.nextWave=100;f.cooldown=100;f.droneCooldown=100;
-  const enemy={x:1,y:1,lane:1,age:0,fire:100,hp:1,marine:'plesiosaur',drop:'laser'};
+  const f=new Flight('towline',[],'vex','ice');f.nextWave=100;f.cooldown=100;f.droneCooldown=f.towlineCooldown=100;
+  const enemy={x:1,y:1,lane:1,age:0,fire:100,hp:1,marine:'plesiosaur',reward:{weapon:'laser',remaining:1}};
   f.enemies=[enemy];f.shots=[{x:1,y:-.5,z:0,vx:0,vy:15,vz:0}];f.step(STEP);
   assert.equal(enemy.hp,0);assert.equal(f.drops[0].weapon,'laser');
 });

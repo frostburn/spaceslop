@@ -73,9 +73,9 @@ test('Omega pierces slag into a carrier once, lasers choose the nearest target, 
  const wing=laser.wings[0];laser.stepLaser(wing,{x:0,y:-3},false,1);
  assert.equal(wing.laserTarget,shield);assert.equal(shield.hp,0);assert.equal(vessel.hp,c.CRUCIBLE_HP);
  laser.stepLaser(wing,{x:0,y:-3},false,1);assert.equal(wing.laserTarget,vessel);assert(vessel.hp<c.CRUCIBLE_HP);
- const tow=combat('towline'),td=slag(0,1),te=carrier(0,3);tow.player={x:0,y:0};tow.drone={x:0,y:5};tow.droneCooldown=0;tow.enemies=[td,te];tow.stepDroneWeapon(STEP);
- assert.equal(td.hp,0);assert.equal(te.hp,8);
- te.drop='cannon';tow.pulse();assert.equal(te.hp,0);assert.equal(tow.enemies.length,0);assert.equal(tow.drops.length,1);assert.equal(tow.score,310);
+ const tow=combat('towline'),td=slag(0,1),te=carrier(0,3);tow.player={x:0,y:0};tow.drone={x:0,y:5};tow.towlineCooldown=0;tow.enemies=[td,te];tow.stepDroneWeapon(STEP);
+ assert.equal(td.hp,0);assert.equal(te.hp,7);
+ te.reward={weapon:'cannon',remaining:1};tow.pulse();assert.equal(te.hp,0);assert.equal(tow.enemies.length,0);assert.equal(tow.drops.length,1);assert.equal(tow.score,310);
 });
 
 test('escaped or upward-moving slag expires, while contact damages hull and removes the hazard',()=>{

@@ -16,7 +16,7 @@ test('complete Heliostat route fits its prewarmed drone/guard pools and grants a
   for(let i=0;i<6001&&f.phase==='stage';i++){
     f.step(STEP);const drones=f.enemies.filter(e=>e.heliostat?.kind==='drone'),guards=f.enemies.filter(e=>e.heliostat?.kind==='guard');
     maxD=Math.max(maxD,drones.length);maxG=Math.max(maxG,guards.length);
-    for(const e of f.enemies){assert(e.heliostat||e.crawler,'prototype fauna leaked into station');encountered.add(e.crawler?'crawler':e.heliostat.kind);if(e.drop)drops.add(e.drop);assert(Number.isFinite(e.x+e.y));}
+    for(const e of f.enemies){assert(e.heliostat||e.crawler,'prototype fauna leaked into station');encountered.add(e.crawler?'crawler':e.heliostat.kind);if (e.reward) drops.add(e.reward.weapon);assert(Number.isFinite(e.x+e.y));}
   }
   assert.equal(f.phase,'approach');assert.equal(f.nextWave,20);assert.equal(f.transitionDuration,8);
   assert.deepEqual([...encountered].sort(),['crawler','drone','guard']);assert.equal(drops.size,4);
@@ -99,7 +99,7 @@ for(const weapon of['homing','cannon','laser','omega','sentry','towline','pulse'
   f.phase='boss';f.invulnerable=1e5;f.cooldown=1e5;f.stepBoss=()=>{};
   if(wing){f.droneCooldown=1e5;f.player.x=-WING_FORMATION.x;}
   if(weapon==='sentry')f.drone={x:0,y:-4};
-  if(weapon==='towline'){f.player={x:-2,y:4.2*BOSS_PROJECTION};f.drone={x:2,y:4.2*BOSS_PROJECTION};}
+  if(weapon==='towline'){f.droneCooldown=1e5;f.towlineCooldown=0;f.player={x:-2,y:4.2*BOSS_PROJECTION};f.drone={x:2,y:4.2*BOSS_PROJECTION};}
   const before=f.bossHealth;if(weapon==='pulse')f.pulse();else for(let i=0;i<180;i++)f.step(STEP);
   assert(f.bossHealth<before,weapon+' missed the boss');
 });

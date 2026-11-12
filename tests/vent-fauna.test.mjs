@@ -77,7 +77,7 @@ test('all weapons damage the extended body, hidden worms ignore aimed fire and l
    f.shots=[{x:0,y:-.4,z:0,vx:0,vy:25,vz:0,...options}];f.step(.1);assert(target.hp<before,JSON.stringify({isWorm,...options}));
   }
   const f=new Flight('towline',[],'vex','vents'),target=isWorm?worm():shrimp();target.x=0;target.y=1;f.enemies=[target];const before=target.hp;f.stepLaser(f.wings[0],{x:0,y:-9},false,1);assert(target.hp<before);assert.equal(f.wings[0].laserTarget,target);
-  target.hp=before;f.player={x:0,y:-9};f.drone={x:0,y:3};f.droneCooldown=0;f.stepDroneWeapon(STEP);assert(target.hp<before);f.pulse();assert.equal(target.hp,0);
+  target.hp=before;f.player={x:0,y:-9};f.drone={x:0,y:3};f.droneCooldown=100;f.towlineCooldown=0;f.stepDroneWeapon(STEP);assert(target.hp<before);f.pulse();assert.equal(target.hp,0);
  }
  const f=new Flight('sentry',[],'vex','vents'),w=worm(),s=shrimp();w.x=s.x=0;w.y=3;s.y=-1;f.enemies=[s,w];f.stepLaser(f.wings[0],{x:0,y:-9},false,.1);assert.equal(f.wings[0].laserTarget,w);
  w.age=0;w.fire=3.6;f.enemies=[w];f.stepLaser(f.wings[0],{x:0,y:-9},false,.1);assert.equal(f.wings[0].laserTarget,undefined);
@@ -87,7 +87,7 @@ test('the full non-shooting route fits prewarmed pools, spawns all fauna and cle
  const f=new Flight('sentry',[],'vex','vents');f.fire=()=>{};f.stepDroneWeapon=()=>{};const forms=new Set(),worms=new Set(),drops=new Set();let maxShrimp=0,maxWorm=0;
  for(let i=0;i<6002;i++){
   f.invulnerable=100;f.step(STEP);maxShrimp=Math.max(maxShrimp,f.enemies.filter(e=>e.shrimp).length);maxWorm=Math.max(maxWorm,f.enemies.filter(e=>e.ventWorm).length);
-  for(const e of f.enemies){if(e.shrimp)forms.add(e.shrimp.formation);if(e.ventWorm)worms.add(e.ventAnchor);if(e.drop)drops.add(e.drop);}
+  for(const e of f.enemies){if(e.shrimp)forms.add(e.shrimp.formation);if(e.ventWorm)worms.add(e.ventAnchor);if (e.reward) drops.add(e.reward.weapon);}
  }
  assert.equal(forms.size,3);assert.equal(worms.size,4);assert.equal(drops.size,4);assert(maxShrimp<=m.SHRIMP_POOL);assert(maxWorm<=m.WORM_POOL);assert.equal(f.phase,'approach');assert.equal(f.enemies.length,0);
 });

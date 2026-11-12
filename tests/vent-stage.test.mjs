@@ -15,7 +15,7 @@ test('Hadal has ten screens of shrimp patrols and rooted threats, a quiet approa
  const f=new Flight('sentry',[],'vex','vents'),drops=new Set(),anchors=new Set();let peak=0,sawApproach=false,sawBoss=false;
  for(let i=0;i<11000&&!['won','lost'].includes(f.phase);i++){
   f.invulnerable=100;f.step(STEP);peak=Math.max(peak,f.enemies.length);
-  for(const e of f.enemies){if(e.ventAnchor!==undefined)anchors.add(e.ventAnchor);if(e.drop)drops.add(e.drop);}
+  for(const e of f.enemies){if(e.ventAnchor!==undefined)anchors.add(e.ventAnchor);if (e.reward) drops.add(e.reward.weapon);}
   if(f.phase==='approach'){sawApproach=true;assert.equal(f.transitionDuration,8);assert.equal(f.enemies.length+f.shots.length+f.threats.length,0);}
   if(f.phase==='boss')sawBoss=true;
  }

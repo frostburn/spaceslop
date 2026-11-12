@@ -47,7 +47,7 @@ for(const weapon of['primary','homing','cannon','laser','omega','sentry','towlin
   const wing=['homing','cannon','laser','omega'].includes(weapon),f=new Flight(weapon==='towline'?'towline':'sentry',wing?[weapon]:[],'vex','heliostat');
   f.time=c.crawlerSites[0].at-1;f.nextCrawler=c.crawlerSites.length;f.nextWave=20;f.invulnerable=1e5;
   const state={site:0,aimY:-6},p=c.crawlerPose(state,f.time),enemy={x:p.x,y:p.y,lane:p.x,age:3,fire:Infinity,hp:c.CRAWLER_HP,crawler:state};f.enemies=[enemy];
-  f.player={x:p.x+(wing?WING_FORMATION.x:0),y:-5.3};f.cooldown=weapon==='primary'?0:1e5;f.droneCooldown=weapon==='sentry'||weapon==='towline'?0:1e5;
+  f.player={x:p.x+(wing?WING_FORMATION.x:0),y:-5.3};f.cooldown=weapon==='primary'?0:1e5;f.droneCooldown=weapon==='sentry'?0:1e5;f.towlineCooldown=0;
   if(weapon==='sentry')f.deployDrone(p.x,p.y-2);
   if(weapon==='towline'){f.player={x:p.x-.8,y:p.y};f.drone={x:p.x+.8,y:p.y};}
   if(weapon==='pulse')f.pulse();else for(let i=0;i<180;i++)f.step(STEP);

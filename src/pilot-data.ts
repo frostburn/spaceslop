@@ -8,8 +8,8 @@ export const pilots = [
     description: `Graze ${CLOSE_CALLS_REQUIRED} enemy shots to earn one extra Pulse.`,
   },
   {
-    id: 'brass', name: 'Brass', color: '#ffbd76', perk: 'Field Repair',
-    description: 'Replace a wing weapon while damaged to repair one hull per stage.',
+    id: 'brass', name: 'Brass', color: '#ffbd76', perk: 'Reinforcement',
+    description: 'Gain one bonus hull from your first surplus weapon pickup each sortie.',
   },
   {
     id: 'glint', name: 'Glint', color: '#dca2f8', perk: 'Hot Dock',

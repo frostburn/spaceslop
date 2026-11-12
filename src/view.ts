@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { poseBurners, shipBurners } from './burners';
-import { createDroneRig, createFighterRig } from './ship-rigs';
+import { addTowlineEmitters, createDroneRig, createFighterRig } from './ship-rigs';
 import { BOSS_MUZZLE_Z } from './encounters';
 import { BOSS_CAMERA_DISTANCE, BOSS_CANNON_RADIUS, BOSS_PROJECTION, BOSS_DEPTH, Flight, HEIGHT, WIDTH } from './game';
 import { WING_FLASH_TIME, wingWeapons, type WingWeapon } from './wing';
@@ -72,6 +72,7 @@ export class FlightView {
   private bubbleSources: T.Mesh[] = [];
   private drone = createDroneRig();
   private droneBurners = shipBurners(this.drone);
+  private towlineEmitters = addTowlineEmitters(this.drone);
   private droneGoal = new T.Mesh(new T.RingGeometry(0.31, 0.38, 4), new T.MeshBasicMaterial({
     color: mint,
     transparent: true,
@@ -205,8 +206,8 @@ export class FlightView {
             node.geometry.computeBoundingBox();
         });
     }
-    const pods = this.wingPods.map(side => side.map(r => r.root));
-    const ordnance = [this.player.root, this.drone, ...Object.values(this.projectiles).map(r => r.root), this.combat.root, this.playerMuzzle.root, this.droneMuzzle.root, ...this.drops.slice(0, 4).map(r => r.root)];
+    const pods = this.wingPods.map(side => side.flatMap(r => [r.root, r.upgrade]));
+    const ordnance = [this.player.root, this.drone, this.towlineEmitters, ...Object.values(this.projectiles).map(r => r.root), this.combat.root, this.playerMuzzle.root, this.droneMuzzle.root, ...this.drops.slice(0, 4).map(r => r.root)];
     const lasers = [...pods[1], ...this.wingLasers.map(r => r.root)];
     this.level.prepare?.();
     for (const objects of [...this.level.warmup, [this.cannonMarker, ...this.markers], pods[0], lasers, ordnance]) {
@@ -345,6 +346,7 @@ export class FlightView {
     this.drone.rotation.y = this.bank;
     this.drone.position.set(flight.drone.x, flight.drone.y, 0.23);
     this.drone.visible = flight.hull > 0;
+    this.towlineEmitters.visible = flight.droneWeapon === 'towline';
     const droneVelocity = this.droneMotion(flight.drone, elapsed, newFlight);
     const droneSpeed = droneVelocity.length();
     if (newFlight)
@@ -435,7 +437,7 @@ export class FlightView {
         const recoil = fighting ? wing.flash / WING_FLASH_TIME : 0;
         const charge = pod.weapon === 'omega' && fighting ? Math.max(0, 1 - wing.cooldown / 0.28) : 0;
         const activity = wing.beamEnd && fighting ? 0.55 + 0.13 * Math.sin(time * 31) : Math.max(recoil, charge);
-        pod.pose(time, throttle, activity, recoil);
+        pod.pose(time, throttle, activity, recoil, wing.upgraded);
       }
       laser.root.visible = fighting && flight.hull > 0 && Boolean(wing.beamEnd);
       if (laser.root.visible && wing.beamEnd) {
@@ -459,11 +461,12 @@ export class FlightView {
         if (flight.isDen) {
           const z = .85;
           laser.root.position.z = z;
-          laser.draw(planarProjectileLayer(origin, z), planarProjectileLayer(end, z), wing.laserHold, this.animationTime, contact);
+          laser.draw(planarProjectileLayer(origin, z), planarProjectileLayer(end, z), wing.laserHold, this.animationTime, contact,
+            { upgraded: wing.upgraded });
         } else {
           const shielded = typeof target === 'number' && flight.fonsShielded;
           laser.draw(origin, end, wing.laserHold, this.animationTime, contact && !shielded,
-            shielded || (flight.phase === 'boss' && target === undefined));
+            { blocked: shielded || (flight.phase === 'boss' && target === undefined), upgraded: wing.upgraded });
         }
       }
     }

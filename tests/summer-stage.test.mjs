@@ -16,7 +16,7 @@ test('full summer route has three hydras, varied aerial formations, repeat drops
  const roster=new Set(),formations=new Set(),drops=new Set(),hydras=new Set(),spirals=new Set();let maxima={scout:0,drone:0,hydra:0,vortex:0};
  for(let i=0;i<6001&&f.phase==='stage';i++){
   f.step(STEP);const counts={scout:0,drone:0,hydra:0,vortex:0};
-  for(const e of f.enemies){assert(e.summer,'wrong sector enemy');roster.add(e.summer.kind);formations.add(e.summer.formation);counts[e.summer.kind]++;if(e.drop)drops.add(e.drop);if(e.summer.kind==='hydra')hydras.add(e.summer.at);assert(Number.isFinite(e.x+e.y));}
+  for(const e of f.enemies){assert(e.summer,'wrong sector enemy');roster.add(e.summer.kind);formations.add(e.summer.formation);counts[e.summer.kind]++;if (e.reward) drops.add(e.reward.weapon);if(e.summer.kind==='hydra')hydras.add(e.summer.at);assert(Number.isFinite(e.x+e.y));}
   for(const kind of Object.keys(counts))maxima[kind]=Math.max(maxima[kind],counts[kind]);
   for(const e of f.enemies)if(e.summer.kind==='vortex')spirals.add(e.summer.at);
  }
@@ -38,13 +38,13 @@ test('river hydras stay rooted to the same meltwater while every visible head ac
   const f=new Flight(weapon==='towline'?'towline':'sentry',weapon==='towline'?[]:[weapon],'vex','summer');f.nextWave=22;f.time=23;f.cooldown=f.droneCooldown=1e5;f.invulnerable=100;
   const p=c.summerMotion(0,0,course,f.time),enemy={...p,lane:0,age:0,fire:1e5,hp:20,summer:course};f.enemies=[enemy];
   const h=riverHydraHead(enemy,f.time,-1);f.player={x:enemy.x+h.x+WING_FORMATION.x,y:-5.3};
-  if(weapon==='towline'){f.player={x:-3,y:enemy.y+h.y};f.drone={x:3,y:enemy.y+h.y};f.droneCooldown=0;}
+  if(weapon==='towline'){f.player={x:-3,y:enemy.y+h.y};f.drone={x:3,y:enemy.y+h.y};f.towlineCooldown=0;}
   for(let i=0;i<180;i++)f.step(STEP);assert(enemy.hp<20,weapon+' missed a visible head');
  }
 });
 
 for(const weapon of['primary','sentry','towline','homing','cannon','laser','omega'])test('lotus hydra takes '+weapon+' damage on its central crown',()=>{
- const wing=['homing','cannon','laser','omega'].includes(weapon),f=new Flight(weapon==='towline'?'towline':'sentry',wing?[undefined,weapon]:[],'vex','summer');f.phase='boss';f.invulnerable=100;f.cooldown=weapon==='primary'?0:1e5;f.droneCooldown=weapon==='sentry'||weapon==='towline'?0:1e5;
+ const wing=['homing','cannon','laser','omega'].includes(weapon),f=new Flight(weapon==='towline'?'towline':'sentry',wing?[undefined,weapon]:[],'vex','summer');f.phase='boss';f.invulnerable=100;f.cooldown=weapon==='primary'?0:1e5;f.droneCooldown=weapon==='sentry'?0:1e5;f.towlineCooldown=0;
  const x=f.exposedCannonX*BOSS_PROJECTION;
  if(wing)f.player.x=x-WING_FORMATION.x;
  if(weapon==='sentry'){f.drone={x,y:-3};f.droneTarget={...f.drone};}

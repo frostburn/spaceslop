@@ -73,6 +73,7 @@ type Point = { x: number; y: number };
 type Shot = Point & {
   z: number; vx: number; vy: number; vz: number;
   drone?: boolean; targetsBoss?: boolean; bossSupport?: boolean; crabTarget?:number; wing?: WingProjectile; pierced?: Set<Enemy>; damage?: number;
+  upgraded?: boolean;
   hydraTarget?:HydraSide;hydraPierced?:Map<Enemy,Set<HydraSide>>;
   planarBossHit?: boolean;
 };
@@ -91,24 +92,27 @@ type Enemy = Point & {
   mine?: BoulevardMine; interceptorAim?:number; interceptorHeading?:number;
   flyer?: FlyerCourse;
   ambusher?: AmbusherState;
-  lane: number; age: number; fire: number; hp: number; drop?: WingWeapon; raptor?: boolean; ant?: 'worker' | 'soldier'; marine?: MarineKind; school?: MarineSchool;
+  lane: number; age: number; fire: number; hp: number; reward?: FormationReward; raptor?: boolean; ant?: 'worker' | 'soldier'; marine?: MarineKind; school?: MarineSchool;
   centipede?: CentipedeLink; cicada?: CicadaCourse; skipper?: boolean; crucible?: boolean; slag?: {vx:number;vy:number}; ventAnchor?:number; ventScale?:number; slot?: number; mortarAngle?:number; ventWorm?:boolean; shrimp?:ShrimpCourse; wormReach?:number; wormBend?:number; wormLocked?:boolean;
   course?: number; courseAt?: number; heading?: number; laserDamage?: number;
 };
 type Drop = Point & { weapon: WingWeapon };
+type FormationReward = { weapon: WingWeapon; remaining: number; forfeited?: boolean };
 type Wing = {
-  side: WingSide; weapon?: WingWeapon; cooldown: number; flash: number;
+  side: WingSide; weapon?: WingWeapon; upgraded: boolean; cooldown: number; flash: number;
   beamEnd?: Point; laserTarget?: Enemy | number; laserHold: number;
   laserHead?:HydraSide;
 };
 
-const MAX_HULL = 4;
+const STARTING_HULL = 4;
+const SURPLUS_PICKUP_SCORE = 250;
+const UPGRADED_WING_DAMAGE = 1.5;
 const SHIP_SPEED = 6.5;
 const DRONE_SPEED = 4 * SHIP_SPEED;
 const DRONE_FIRE_INTERVAL = 0.44;
 const TOWLINE_INTERVAL = 1.05;
-const TOWLINE_DURATION = 0.2;
-const TOWLINE_DAMAGE = 2;
+const TOWLINE_DURATION = 0.3;
+const TOWLINE_DAMAGE = 3;
 const BOSS_IMPACT_TRAVEL = 0.48;
 const wormholeForward = { y: Math.cos(WORMHOLE_PITCH), z: -Math.sin(WORMHOLE_PITCH) };
 
@@ -117,13 +121,17 @@ function projectShot({ x, y, z }: Point & { z: number }): Point {
   return { x: x * scale, y: y * scale };
 }
 
+function formationReward(weapon: WingWeapon | undefined, remaining = 1): FormationReward | undefined {
+  return weapon ? { weapon, remaining } : undefined;
+}
+
 const wingShots = {
   homing: { interval: 0.72, damage: 0.5, speed: 11, bossTravel: 0.68 },
   cannon: { interval: 0.36, damage: 1, speed: 18, bossTravel: 0.32 },
   omega: { interval: 1.7, damage: 4, speed: 20, bossTravel: 0.36 },
 };
 
-type Wave = { time: number; lanes: number[]; carrier?: number; drop?: WingWeapon;
+type Wave = { time: number; lanes: number[]; drop?: WingWeapon;
   grove?:Omit<GroveCourse,'slot'>;
   summer?:Omit<SummerCourse,'slot'>;
   heliostat?: Omit<HeliostatCourse,'slot'>;
@@ -135,36 +143,36 @@ type Wave = { time: number; lanes: number[]; carrier?: number; drop?: WingWeapon
 const stageWaves: Wave[] = preserveWaves.map(wave => ({ ...wave, lanes: [...wave.lanes] }));
 
 const hiveWaves: Wave[] = [
-  { time: 0.8, lanes: [-2.6, 0, 2.6], ant: 'worker', carrier: 1, drop: 'homing' },
-  { time: 4.8, lanes: [-1.9, 1.9], ant: 'soldier', carrier: 1, drop: 'cannon' },
-  { time: 9.2, lanes: [-3, -0.8, 1.6], ant: 'worker', carrier: 0, drop: 'laser' },
-  { time: 13.5, lanes: [-2.4, 1.2], ant: 'soldier', carrier: 0, drop: 'omega' },
-  { time: 18.2, lanes: [-2.8, 0, 2.8], ant: 'worker' },
-  { time: 22.2, lanes: [-2, 2], ant: 'soldier' },
+  { time: 0.8, lanes: [-2.6, 0, 2.6], ant: 'worker', drop: 'cannon' },
+  { time: 4.8, lanes: [-1.9, 1.9], ant: 'soldier', drop: 'cannon' },
+  { time: 9.2, lanes: [-3, -0.8, 1.6], ant: 'worker', drop: 'cannon' },
+  { time: 13.5, lanes: [-2.4, 1.2], ant: 'soldier', drop: 'cannon' },
+  { time: 18.2, lanes: [-2.8, 0, 2.8], ant: 'worker', drop: 'homing' },
+  { time: 22.2, lanes: [-2, 2], ant: 'soldier', drop: 'laser' },
 ];
 
 // Ten-screen patrol: varied formations, recovery gaps, and repeat weapon opportunities.
 export const iceWaves: Wave[] = [
-  { marine: 'ichthyosaur', time: 1, formation: 'pincer', mirror: 1, lanes: [-1.8, 1.8], carrier: 0, drop: 'homing' },
-  { marine: 'ichthyosaur', time: 5, formation: 'chevron', mirror: 1, lanes: [-1.8, 0, 1.8], carrier: 2, drop: 'cannon' },
-  { time: 9, lanes: [0], marine: 'plesiosaur' },
-  { marine: 'ichthyosaur', time: 13, formation: 'loop', mirror: 1, lanes: [0, 0, 0, 0, 0], carrier: 1, drop: 'laser' },
-  { marine: 'ichthyosaur', time: 17, formation: 'pincer', mirror: 1, lanes: [-1.8, 1.8], carrier: 1, drop: 'omega' },
-  { marine: 'ichthyosaur', time: 22, formation: 'slalom', mirror: 1, lanes: [0, 0, 0] },
-  { time: 26, lanes: [-1.4, 1.4], marine: 'plesiosaur', carrier: 0, drop: 'homing' },
-  { marine: 'ichthyosaur', time: 30, formation: 'chevron', mirror: 1, lanes: [-1.8, 0, 1.8], carrier: 0, drop: 'cannon' },
+  { marine: 'ichthyosaur', time: 1, formation: 'pincer', mirror: 1, lanes: [-1.8, 1.8], drop: 'homing' },
+  { marine: 'ichthyosaur', time: 5, formation: 'chevron', mirror: 1, lanes: [-1.8, 0, 1.8], drop: 'cannon' },
+  { time: 9, lanes: [0], marine: 'plesiosaur', drop: 'homing' },
+  { marine: 'ichthyosaur', time: 13, formation: 'loop', mirror: 1, lanes: [0, 0, 0, 0, 0], drop: 'homing' },
+  { marine: 'ichthyosaur', time: 17, formation: 'pincer', mirror: 1, lanes: [-1.8, 1.8], drop: 'omega' },
+  { marine: 'ichthyosaur', time: 22, formation: 'slalom', mirror: 1, lanes: [0, 0, 0], drop: 'laser' },
+  { time: 26, lanes: [-1.4, 1.4], marine: 'plesiosaur', drop: 'homing' },
+  { marine: 'ichthyosaur', time: 30, formation: 'chevron', mirror: 1, lanes: [-1.8, 0, 1.8], drop: 'cannon' },
   { marine: 'ichthyosaur', time: 34, formation: 'pincer', mirror: 1, lanes: [-1.8, 1.8, -1.8, 1.8] },
-  { marine: 'ichthyosaur', time: 39, formation: 'loop', mirror: -1, lanes: [0, 0, 0, 0, 0], carrier: 2, drop: 'laser' },
+  { marine: 'ichthyosaur', time: 39, formation: 'loop', mirror: -1, lanes: [0, 0, 0, 0, 0], drop: 'laser' },
   { time: 43, lanes: [-1.4, 1.4], marine: 'plesiosaur' },
-  { marine: 'ichthyosaur', time: 47, formation: 'slalom', mirror: -1, lanes: [0, 0, 0], carrier: 1, drop: 'omega' },
-  { marine: 'ichthyosaur', time: 52, formation: 'pincer', mirror: 1, lanes: [-1.8, 1.8], carrier: 0, drop: 'homing' },
-  { marine: 'ichthyosaur', time: 56, formation: 'chevron', mirror: 1, lanes: [-1.8, 0, 1.8], carrier: 2, drop: 'cannon' },
+  { marine: 'ichthyosaur', time: 47, formation: 'slalom', mirror: -1, lanes: [0, 0, 0], drop: 'omega' },
+  { marine: 'ichthyosaur', time: 52, formation: 'pincer', mirror: 1, lanes: [-1.8, 1.8], drop: 'homing' },
+  { marine: 'ichthyosaur', time: 56, formation: 'chevron', mirror: 1, lanes: [-1.8, 0, 1.8], drop: 'cannon' },
   { time: 60, lanes: [0], marine: 'plesiosaur' },
-  { marine: 'ichthyosaur', time: 64, formation: 'loop', mirror: 1, lanes: [0, 0, 0, 0, 0], carrier: 0, drop: 'laser' },
-  { marine: 'ichthyosaur', time: 69, formation: 'pincer', mirror: 1, lanes: [-1.8, 1.8, -1.8, 1.8], carrier: 1, drop: 'omega' },
+  { marine: 'ichthyosaur', time: 64, formation: 'loop', mirror: 1, lanes: [0, 0, 0, 0, 0], drop: 'laser' },
+  { marine: 'ichthyosaur', time: 69, formation: 'pincer', mirror: 1, lanes: [-1.8, 1.8, -1.8, 1.8], drop: 'omega' },
   { marine: 'ichthyosaur', time: 73, formation: 'slalom', mirror: -1, lanes: [0, 0, 0] },
-  { time: 77, lanes: [0], marine: 'plesiosaur', carrier: 0, drop: 'homing' },
-  { marine: 'ichthyosaur', time: 81, formation: 'chevron', mirror: 1, lanes: [-1.8, 0, 1.8], carrier: 1, drop: 'laser' },
+  { time: 77, lanes: [0], marine: 'plesiosaur', drop: 'homing' },
+  { marine: 'ichthyosaur', time: 81, formation: 'chevron', mirror: 1, lanes: [-1.8, 0, 1.8], drop: 'laser' },
 ];
 
 // Five breakable crawlers alternate with aerial chevrons, sweeps and dives.
@@ -213,7 +221,7 @@ export class Flight {
   player = { x: 0, y: -5.3 };
   drone = { x: -1.15, y: -6.15 };
   droneTarget?: Point;
-  hull = MAX_HULL;
+  hull = STARTING_HULL;
   invulnerable = 0;
   charges = 2;
   score = 0;
@@ -242,15 +250,15 @@ export class Flight {
   towlineFlash = 0;
   drops: Drop[] = [];
   wings: [Wing, Wing] = [
-    { side: -1, cooldown: 0, flash: 0, laserHold: 0 },
-    { side: 1, cooldown: 0, flash: 0, laserHold: 0 },
+    { side: -1, upgraded: false, cooldown: 0, flash: 0, laserHold: 0 },
+    { side: 1, upgraded: false, cooldown: 0, flash: 0, laserHold: 0 },
   ];
   pickupTime = 0;
   pickupMessage = '';
   perkTime = 0;
   perkMessage = '';
   private closeCalls = 0;
-  private repairUsed = false;
+  private reinforcementUsed = false;
   private droneLaunch?: Point;
   private stageProgress = 0;
   private obstacles?: HiveCollision | IceCollision;
@@ -264,6 +272,7 @@ export class Flight {
   private nextAmbusher = 0;
   private cooldown = 0;
   private droneCooldown = 0;
+  private towlineCooldown = 0;
   private volley = 0;
   private heliostatAimCycle = -1;
   private heliostatCancelledCycle = -1;
@@ -287,7 +296,7 @@ export class Flight {
   private towlineHydraHits=new Map<Enemy,Set<HydraSide>>();
   private towlineBossHeads=new Set<HydraSide>();
 
-  readonly droneWeapon: DroneWeapon;
+  droneWeapon: DroneWeapon;
   readonly pilot: PilotId;
 
   constructor(
@@ -310,7 +319,7 @@ export class Flight {
     if (this.isCicadaFight) this.bossHealth=CICADA_HP;
     if (level === 'broodlock') this.obstacles = new HiveCollision();
     if (level === 'ice') { this.obstacles = new IceCollision(); this.bossHealth=LEVIATHAN_HP; }
-    if (droneWeapon === 'towline') this.droneCooldown = TOWLINE_INTERVAL;
+    if (droneWeapon === 'towline') this.towlineCooldown = TOWLINE_INTERVAL;
     for (const [index, wing] of this.wings.entries()) {
       const weapon = loadout[index];
       if (weapon) this.equip(wing, weapon);
@@ -424,7 +433,7 @@ export class Flight {
         return this.closeCalls >= CLOSE_CALLS_REQUIRED
           ? 'Close Call · Pulse earned' : `Close Call · ${this.closeCalls}/${CLOSE_CALLS_REQUIRED} grazes`;
       case 'brass':
-        return this.repairUsed ? 'Field Repair · Used' : 'Field Repair · Available';
+        return this.reinforcementUsed ? 'Reinforcement · Used' : 'Reinforcement · Ready';
       case 'glint':
         if (this.hotDockReady) return 'Hot Dock · Charged';
         return this.hotDockCooldown > 0 ? 'Hot Dock · Cooling down' : 'Hot Dock · Awaiting redeploy';
@@ -643,7 +652,19 @@ export class Flight {
       this.shots = [];
       return;
     }
-    this.enemies = this.enemies.filter((enemy) => (enemy.hp > 0 || enemy.mine?.burstAt!==undefined&&this.time-enemy.mine.burstAt<MINE_BURST_TIME || enemy.ambusher?.defeatedAt!==undefined && this.time-enemy.ambusher.defeatedAt<AMBUSHER_CORPSE_TIME) && (enemy.ambusher ? ambusherHome(enemy.ambusher.site,this.time).y > -12 : enemy.y > (enemy.heliostat?.kind==='guard'?-10.6:-9)) && (!enemy.centipede || Math.abs(enemy.x) < 5.8) && (!(enemy.crucible || enemy.slag) || Math.abs(enemy.x)<6.8) && (!enemy.slag || (enemy.y<10 && enemy.age<10)));
+    this.enemies = this.enemies.filter(enemy => {
+      const active = enemy.hp > 0 ||
+        (enemy.mine?.burstAt !== undefined && this.time - enemy.mine.burstAt < MINE_BURST_TIME) ||
+        (enemy.ambusher?.defeatedAt !== undefined && this.time - enemy.ambusher.defeatedAt < AMBUSHER_CORPSE_TIME);
+      const onRoute = (enemy.ambusher ? ambusherHome(enemy.ambusher.site, this.time).y > -12 : enemy.y > (enemy.heliostat?.kind === 'guard' ? -10.6 : -9)) &&
+        (!enemy.centipede || Math.abs(enemy.x) < 5.8) &&
+        (!(enemy.crucible || enemy.slag) || Math.abs(enemy.x) < 6.8) &&
+        (!enemy.slag || (enemy.y < 10 && enemy.age < 10));
+      const keep = active && onRoute;
+      // Damage clears the member's reward reference. Anything else that removes it forfeits the formation.
+      if (!keep && enemy.reward) enemy.reward.forfeited = true;
+      return keep;
+    });
 
     this.threats = this.threats.filter((shot) => {
       this.advance(shot, dt);
@@ -704,6 +725,7 @@ export class Flight {
 
   private equip(wing: Wing, weapon: WingWeapon) {
     wing.weapon = weapon;
+    wing.upgraded = false;
     wing.cooldown = weapon === 'omega' ? wingShots.omega.interval : 0;
     wing.flash = 0;
     wing.beamEnd = undefined;
@@ -712,21 +734,41 @@ export class Flight {
   }
 
   private collectDrops(dt: number) {
-    this.drops = this.drops.filter((drop) => {
+    this.drops = this.drops.filter(drop => {
       drop.y -= 3.35 * dt;
       if (!near(drop, this.player, 0.78)) return drop.y > -9;
-      const nearbyWing = this.wings[drop.x <= this.player.x ? 0 : 1];
-      const wing = nearbyWing.weapon ? (this.wings.find((slot) => !slot.weapon) ?? nearbyWing) : nearbyWing;
-      if (this.pilot === 'brass' && wing.weapon && !this.repairUsed && this.hull < MAX_HULL) {
-        this.hull++;
-        this.repairUsed = true;
-        this.announcePerk('Field Repair · +1 Hull');
-      }
-      this.equip(wing, drop.weapon);
-      this.pickupMessage = `${wing.side < 0 ? 'Left' : 'Right'} wing · ${wingWeapons[drop.weapon].name}`;
-      this.pickupTime = 1.6;
+      this.collectWeapon(drop);
       return false;
     });
+  }
+
+  private collectWeapon(drop: Drop) {
+    const nearbyWing = this.wings[drop.x <= this.player.x ? 0 : 1];
+    const matching = nearbyWing.weapon === drop.weapon ? nearbyWing : this.wings.find(wing => wing.weapon === drop.weapon);
+    const name = wingWeapons[drop.weapon].name;
+    let message: string;
+    if (!matching) {
+      const wing = nearbyWing.weapon ? (this.wings.find(slot => !slot.weapon) ?? nearbyWing) : nearbyWing;
+      this.equip(wing, drop.weapon);
+      message = `${wing.side < 0 ? 'Left' : 'Right'} wing · ${name}`;
+    } else if (!matching.upgraded) {
+      matching.upgraded = true;
+      message = `${matching.side < 0 ? 'Left' : 'Right'} wing · ${name} II`;
+    } else if (this.droneWeapon === 'sentry') {
+      this.droneWeapon = 'towline';
+      this.towlineCooldown = 0;
+      message = 'Drone upgraded · Towline';
+    } else if (this.pilot === 'brass' && !this.reinforcementUsed) {
+      this.reinforcementUsed = true;
+      this.hull++;
+      this.announcePerk('Reinforcement · +1 Hull');
+      return;
+    } else {
+      this.score += SURPLUS_PICKUP_SCORE;
+      message = `Surplus pickup · +${SURPLUS_PICKUP_SCORE} points`;
+    }
+    this.pickupMessage = message;
+    this.pickupTime = 1.6;
   }
 
   private stepWing(wing: Wing, boss: boolean, dt: number) {
@@ -752,7 +794,8 @@ export class Flight {
     const forwardSpeed = spec.speed * 1.8;
     const fonsVelocity = this.isFonsFight ? this.fonsShotVelocity(origin, duration) : undefined;
     this.shots.push({
-      ...origin, z: 0, wing: wing.weapon, damage: spec.damage,
+      ...origin, z: 0, wing: wing.weapon, upgraded: wing.upgraded,
+      damage: spec.damage * (wing.upgraded ? UPGRADED_WING_DAMAGE : 1),
       vx: fonsVelocity?.vx ?? (boss ? origin.x * (1 / BOSS_PROJECTION - 1) / duration : 0),
       vy: fonsVelocity?.vy ?? (boss ? (aimY - origin.y) / duration : tunnel ? forwardSpeed * wormholeForward.y : spec.speed),
       vz: fonsVelocity?.vz ?? (boss ? BOSS_DEPTH / duration : tunnel ? forwardSpeed * wormholeForward.z : 0),
@@ -835,7 +878,7 @@ export class Flight {
     wing.laserHold = !shielded && target !== undefined && target === wing.laserTarget && head===wing.laserHead ? wing.laserHold + dt : 0;
     wing.laserTarget = target;
     wing.laserHead=head;
-    const damage = (1 + 2.5 * Math.min(wing.laserHold / 0.85, 1)) * dt;
+    const damage = (1 + 2.5 * Math.min(wing.laserHold / 0.85, 1)) * dt * (wing.upgraded ? UPGRADED_WING_DAMAGE : 1);
     if (enemy) this.damageEnemy(enemy, damage, true,head);
     if (boss && typeof target==='number') this.damageBoss(damage, true,head);
   }
@@ -891,21 +934,20 @@ export class Flight {
   private stepDroneWeapon(dt: number) {
     if (!this.weaponsActive) return;
     this.droneCooldown = Math.max(0, this.droneCooldown - dt);
-    if (this.droneWeapon === 'sentry') {
-      if (!this.droneTarget && this.droneCooldown === 0) {
-        this.droneCooldown = DRONE_FIRE_INTERVAL;
-        this.fire(this.drone, true, this.droneDamage(1));
-      }
-      return;
-    }
+    this.towlineCooldown = Math.max(0, this.towlineCooldown - dt);
+    if (this.towlineLinked) this.stepTowline(dt);
+    else this.towlineFlash = 0;
 
-    if (!this.towlineLinked) {
-      this.towlineFlash = 0;
-      return;
+    if (this.weaponsActive && !this.droneTarget && this.droneCooldown === 0) {
+      this.droneCooldown = DRONE_FIRE_INTERVAL;
+      this.fire(this.drone, true, this.droneDamage(1));
     }
+  }
+
+  private stepTowline(dt: number) {
     this.towlineFlash = Math.max(0, this.towlineFlash - dt);
-    if (this.droneCooldown === 0) {
-      this.droneCooldown = TOWLINE_INTERVAL;
+    if (this.towlineCooldown === 0) {
+      this.towlineCooldown = TOWLINE_INTERVAL;
       this.towlineFlash = TOWLINE_DURATION;
       this.towlineDamage = this.droneDamage(TOWLINE_DAMAGE);
       this.towlineEnemies.clear();
@@ -971,7 +1013,7 @@ export class Flight {
     if(this.level==='heliostat')while(this.nextCrawler<crawlerSites.length){
       const crawler={site:this.nextCrawler},p=crawlerPose(crawler,this.time);if(p.physicalY>23)break;
       this.nextCrawler++;if(p.y<-10)continue;
-      this.enemies.push({x:p.x,y:p.y,lane:p.x,age:0,fire:Infinity,hp:CRAWLER_HP,crawler,drop:crawler.site%2?'omega':'laser'});
+      this.enemies.push({x:p.x,y:p.y,lane:p.x,age:0,fire:Infinity,hp:CRAWLER_HP,crawler,reward:formationReward(crawler.site%2?'omega':'laser')});
     }
     if(this.level==='heliostat')for(let site=0;site<electricSites.length;site++)if(electricHits(site,this.time,this.time-dt,this.player))this.hit();
     // Mines are invulnerable scenery hazards; hp is only their active/spent flag.
@@ -980,16 +1022,17 @@ export class Flight {
       const site=this.nextAmbusher,home=ambusherHome(site,this.time);if(home.y>AMBUSHER_SPAWN_LEAD)break;this.nextAmbusher++;
       if(home.y<-12)continue;
       const ambusher=createAmbusherState(site),pose=ambusherPose(ambusher,this.time);
-      this.enemies.push({x:pose.head.x,y:pose.head.y,lane:home.x,age:0,fire:Infinity,hp:AMBUSHER_HP,ambusher,drop:ambusherSites[site].drop as WingWeapon});
+      this.enemies.push({x:pose.head.x,y:pose.head.y,lane:home.x,age:0,fire:Infinity,hp:AMBUSHER_HP,ambusher,reward:formationReward(ambusherSites[site].drop as WingWeapon)});
     }
     const wave: Wave | undefined = (this.level==='biolume'?groveWaves:this.level==='summer'?summerWaves:this.level==='heliostat'?heliostatWaves:this.level==='boulevard'?boulevardWaves:this.level === 'broodlock' ? hiveWaves : this.level === 'ice' ? iceWaves : this.level === 'vents' ? ventWaves : this.level === 'io' ? ioWaves : this.level === 'titan' ? titanWaves : stageWaves)[this.nextWave];
     if (wave && this.time >= wave.time-(wave.grove?GROVE_SPAWN_LEAD:wave.summer?3:wave.heliostat?HELIOSTAT_SPAWN_LEAD:wave.boulevard?BOULEVARD_SPAWN_LEAD:0)) {
       this.nextWave++;
+      const reward = formationReward(wave.drop, wave.centipede ?? wave.lanes.length);
       if (wave.centipede) {
         const parts: Enemy[] = Array.from({ length: wave.centipede }, (_, i) => ({
           x: wave.lanes[0], y: 8.6 + i * CENTIPEDE_SPACING, lane: wave.lanes[0], age: 0,
           fire: i === 0 ? 1.6 : Infinity, hp: i === 0 ? 4 : 2, heading: Math.PI,
-          drop: i === wave.carrier ? wave.drop : undefined,
+          reward,
         }));
         bindCentipede(parts);
         this.enemies.push(...parts);
@@ -1008,7 +1051,7 @@ export class Flight {
           x: start.x, y: start.y, lane, hydra:summer?.kind==='hydra'?createHydraState():undefined, age: grove||boulevard||heliostat||summer?courseAge:wave.ventAnchor!==undefined?-VENT_SPAWN_LEAD:0, grove,frog:grove?.kind==='frog'?createFrogState(lane):undefined,summer,heliostat,boulevard,flyer, school, cicada: course, skipper: wave.skipper, crucible: wave.crucible, ventAnchor:wave.ventAnchor, ventWorm:wave.ventWorm, shrimp, slot: index,
           fire: grove?2.15+index*.3:summer?(summer.kind==='vortex'?VORTEX_FIRE:summer.kind==='hydra'?2.7:1.8+index*.25):heliostat?(heliostat.kind==='guard'?HELIOSTAT_GUARD_FIRE+index*.35:1.85+index*.25):boulevard?1.7+index*.22:flyer ? Infinity : shrimp ? SHRIMP_FIRST_FIRE+index*.25 : wave.ventWorm ? WORM_FIRST_ATTACK : wave.ventAnchor!==undefined ? MORTAR_FIRST_FIRE : wave.crucible ? CRUCIBLE_FIRST_POUR : schoolDelay(school) + (wave.marine === 'plesiosaur' ? 1.8 : wave.ant === 'soldier' ? 1.6 : 1.1) + index * 0.28,
           hp: grove?(grove.kind==='frog'?FROG_HP:grove.kind==='sentry'?6:grove.kind==='skimmer'?2:3):summer?(summer.kind==='vortex'?VORTEX_HP:summer.kind==='hydra'?HYDRA_HEAD_HP*3:summer.kind==='drone'?4:2):heliostat?(heliostat.kind==='guard'?8:3):boulevard?(boulevard.formation==='intercept'?5:boulevard.heavy?6:3):flyer ? FLYER_HP : shrimp ? SHRIMP_HP : wave.ventWorm ? WORM_HP : wave.ventAnchor!==undefined ? MORTAR_HP : wave.crucible ? CRUCIBLE_HP : wave.marine ? marineSpecs[wave.marine].hp : wave.ant === 'soldier' ? 5 : 2, ant: wave.ant, marine: wave.marine,
-          drop: index === wave.carrier ? wave.drop : undefined,
+          reward,
           raptor: index === wave.raptor,
         };
       }));
@@ -1165,12 +1208,13 @@ export class Flight {
     while (this.nextWave < fleetWaves.length && this.time >= fleetWaves[this.nextWave].at) {
       const wave = fleetWaves[this.nextWave++];
       if (this.time - wave.at > FLEET_SAUCER_LIFE) continue;
+      const reward = formationReward(wave.drop, wave.lanes.length);
       for (const [slot, lane] of wave.lanes.entries()) {
         const fleet: FleetSaucer = { course: wave.course, side: wave.side, slot, heavy: slot === wave.guard };
         const age = this.time - wave.at - slot * FLEET_SAUCER_STAGGER - dt;
         const pose = saucerPose(age, lane, fleet);
         this.enemies.push({ x: pose.x, y: pose.y, lane, age, fleet, fire: Infinity,
-          hp: fleet.heavy ? 7 : 3, drop: slot === (wave.guard ?? 0) ? wave.drop : undefined });
+          hp: fleet.heavy ? 7 : 3, reward });
       }
     }
 
@@ -1211,12 +1255,13 @@ export class Flight {
     const wave = denWaves[this.nextWave];
     if (wave && this.time >= wave.time) {
       this.nextWave++;
+      const reward = formationReward(wave.drop, wave.lanes.length);
       for (const [slot, lane] of wave.lanes.entries()) {
         const den: DenPatrol = { course: wave.course, side: wave.side, slot, heavy: slot === wave.guard };
         const age = this.time - wave.time - slot * DEN_PATROL_STAGGER - dt;
         const pose = denPatrolPose(age, lane, den);
         this.enemies.push({ x: pose.x, y: pose.y, heading: pose.heading, lane, age, den, fire: Infinity,
-          hp: den.heavy ? 7 : 3, drop: slot === (wave.guard ?? 0) ? wave.drop : undefined });
+          hp: den.heavy ? 7 : 3, reward });
       }
     }
 
@@ -1434,15 +1479,16 @@ export class Flight {
   }
 
   private fire({ x, y }: Point, drone = false, damage = 1) {
+    const shot = { drone, damage, upgraded: drone && this.droneWeapon === 'towline' };
     if (this.level === 'wormhole' && this.phase === 'stage') {
       const muzzle = drone ? .31 : .89;
       this.shots.push({ x, y: y + muzzle * wormholeForward.y, z: muzzle * wormholeForward.z,
-        vx: 0, vy: 32 * wormholeForward.y, vz: 32 * wormholeForward.z, drone, damage });
+        vx: 0, vy: 32 * wormholeForward.y, vz: 32 * wormholeForward.z, ...shot });
       return;
     }
     if (this.isFonsFight) {
       const origin = { x, y };
-      this.shots.push({ ...origin, z: 0, ...this.fonsShotVelocity(origin, .38), drone, damage });
+      this.shots.push({ ...origin, z: 0, ...this.fonsShotVelocity(origin, .38), ...shot });
       return;
     }
     const targetsBoss = !drone && Math.abs(x) < 1.65;
@@ -1451,7 +1497,7 @@ export class Flight {
     const aimY = depthShot && aimsAtBoss ? this.bossAimY : y;
     const muzzleY = y + (drone ? 0.3 : 0.45);
     if (!depthShot || (this.keepDepthShotsForward && (!aimsAtBoss || muzzleY >= aimY * BOSS_PROJECTION))) {
-      this.shots.push({ x, y: muzzleY, z: 0, vx: 0, vy: 15, vz: 0, drone, damage });
+      this.shots.push({ x, y: muzzleY, z: 0, vx: 0, vy: 15, vz: 0, ...shot });
       return;
     }
 
@@ -1461,7 +1507,7 @@ export class Flight {
     const dx = drone ? x * expansion : (targetsBoss ? (this.level === 'io'||this.level==='vents'||this.level==='summer'||this.level==='wormhole' ? this.exposedCannonX : 0) - x : 0);
     const dy = aimY - y;
     this.shots.push({ x, y, z: 0, vx: dx / duration, vy: dy / duration,
-      vz: BOSS_DEPTH / duration, targetsBoss, bossSupport: this.level === 'io' ? !this.ioLegBroken : undefined, crabTarget:this.level==='vents'?this.crabTargetX:undefined,hydraTarget:this.level==='summer'&&targetsBoss?this.summerTargetHead:undefined, drone, damage });
+      vz: BOSS_DEPTH / duration, targetsBoss, bossSupport: this.level === 'io' ? !this.ioLegBroken : undefined, crabTarget:this.level==='vents'?this.crabTargetX:undefined,hydraTarget:this.level==='summer'&&targetsBoss?this.summerTargetHead:undefined, ...shot });
   }
 
   private advance(shot: Shot, dt: number) {
@@ -1482,7 +1528,15 @@ export class Flight {
       if(enemy.ventWorm&&enemy.ventAnchor!==undefined)this.defeatedVentWorms.add(enemy.ventAnchor);
       if (enemy.centipede) severCentipede(enemy);
       this.score += enemy.ambusher?200:enemy.crucible?300:enemy.slag?10:enemy.ventWorm?250:enemy.denTurret||enemy.ventAnchor!==undefined?150:enemy.shrimp?125:100;
-      if (enemy.drop) this.drops.push({ x: enemy.x, y: enemy.y, weapon: enemy.drop });
+      const reward = enemy.reward;
+      enemy.reward = undefined;
+      if (reward && !reward.forfeited && --reward.remaining === 0 && this.phase === 'stage') {
+        // Keep a late or offscreen kill's pickup within the fighter's reach.
+        const drop = { x: enemy.x, y: Math.max(-4, enemy.y), weapon: reward.weapon };
+        moveWithinField(drop, 0, 0);
+        this.obstacles?.move(drop, 0, 0, FIGHTER_HULL);
+        this.drops.push(drop);
+      }
     }
   }
 
@@ -1539,6 +1593,7 @@ export class Flight {
       this.threats = [];
       this.enemies = [];
       this.drops = [];
+      this.towlineFlash = 0;
       for (const wing of this.wings) {
         wing.flash = 0;
         wing.beamEnd = undefined;
@@ -1548,7 +1603,8 @@ export class Flight {
     }
     if (phase === 'boss'&&this.level!=='biolume') {
       this.cooldown = 0;
-      this.droneCooldown = this.droneWeapon === 'towline' ? TOWLINE_INTERVAL : 0;
+      this.droneCooldown = 0;
+      this.towlineCooldown = TOWLINE_INTERVAL;
     }
   }
 }

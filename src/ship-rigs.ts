@@ -141,3 +141,18 @@ export function createDroneRig() {
   }
   return root;
 }
+
+export function addTowlineEmitters(root: T.Group) {
+  const towlineEmitters = pivot(root, 'towline_emitters', 0, 0, 0);
+  const arm = plating([[0.21, -0.145], [0.37, -0.24], [0.49, -0.145], [0.51, 0.14],
+    [0.42, 0.235], [0.3, 0.15]], 0.09, 0.025);
+  const coil = new T.BoxGeometry(0.069, 0.27, 0.058);
+  const steel = alloy(0x526875);
+  const violet = light(0xc8afff);
+  for (const side of [-1, 1]) {
+    part(towlineEmitters, arm, steel, 0, 0, 0.015).scale.x = side;
+    part(towlineEmitters, coil, violet, side * 0.42, 0.015, 0.128).rotation.z = -side * 0.17;
+  }
+  towlineEmitters.visible = false;
+  return towlineEmitters;
+}

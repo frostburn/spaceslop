@@ -31,7 +31,7 @@ test('all wings, main gun, drone, Towline and Pulse damage claw and core phases'
   for(const mode of ['ship','drone','towline','pulse']){
    const f=new Flight(mode==='towline'?'towline':'sentry',[],'vex','vents');f.phase='boss';for(let i=0;i<phase;i++)f.damageBoss(12);const before=f.bossHealth;
    if(mode==='pulse')f.pulse();
-   else if(mode==='towline'){const x=f.exposedCannonX*BOSS_PROJECTION,y=f.bossAimY*BOSS_PROJECTION;f.player={x,y:y-2};f.drone={x,y:y+2};f.droneCooldown=0;f.stepDroneWeapon(STEP);}
+   else if(mode==='towline'){const x=f.exposedCannonX*BOSS_PROJECTION,y=f.bossAimY*BOSS_PROJECTION;f.player={x,y:y-2};f.drone={x,y:y+2};f.droneCooldown=100;f.towlineCooldown=0;f.stepDroneWeapon(STEP);}
    else {f.cooldown=f.droneCooldown=1000;f.fire(mode==='drone'?{x:f.exposedCannonX*BOSS_PROJECTION,y:f.bossAimY*BOSS_PROJECTION}:f.player,mode==='drone');for(let i=0;i<28;i++){f.invulnerable=100;f.step(STEP);}}
    assert(f.bossHealth<before,mode+' phase '+phase);
   }

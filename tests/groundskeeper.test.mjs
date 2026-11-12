@@ -53,7 +53,7 @@ test('ordinary fire, sentry, every sidearm, Towline and Pulse damage the animal 
   for(let i=0;i<50;i++)f.step(STEP);assert(f.bossHealth<160,kind);
  }
  const laser=quiet();laser.stepLaser(laser.wings[0],{x:0,y:-5.3},true,.5);assert(laser.bossHealth<160);assert(laser.bossLaserDamage>0);
- const tow=quiet();tow.player={x:0,y:-5.3};tow.drone={x:0,y:3};tow.droneCooldown=0;Object.defineProperty(tow,'droneWeapon',{value:'towline'});tow.stepDroneWeapon(STEP);assert.equal(tow.bossHealth,158);
+ const tow=quiet();tow.player={x:0,y:-5.3};tow.drone={x:0,y:3};tow.towlineCooldown=0;tow.droneWeapon='towline';tow.stepDroneWeapon(STEP);assert.equal(tow.bossHealth,157);
  const pulse=quiet();pulse.time=2.8;pulse.pulse();assert.equal(pulse.bossHealth,154);pulse.damageBoss(1000);assert.equal(pulse.phase,'won');assert.equal(pulse.score,1000);assert.equal(pulse.groundskeeperTime,2.8);pulse.step(10);assert.equal(pulse.groundskeeperTime,2.8);
 });
 

@@ -62,6 +62,15 @@ export function createWingPod(weapon: WingWeapon) {
       part(breech, new T.BoxGeometry(0.096, 0.19, 0.037), signal, 0, -0.32, 0.145);
       break;
   }
+  const upgrade = pivot(breech, 'mk_ii_rails', 0, 0, 0);
+  const brace = plating([[wide * 0.55, -0.12], [wide * 1.14, -0.16], [wide * 1.22, -0.29],
+    [wide * 0.91, -0.46], [wide * 0.55, -0.41]], 0.13, 0.017);
+  const stripe = new T.BoxGeometry(0.062, 0.22, 0.046);
+  for (const side of [-1, 1]) {
+    part(upgrade, brace, ceramic, 0, 0, 0.044).scale.x = side;
+    part(upgrade, stripe, hot, side * wide * 0.9, -0.27, 0.2);
+  }
+  upgrade.visible = false;
   const flash = pivot(root, 'muzzle_flash', 0, -0.015, 0.025);
   const glow = new T.MeshBasicMaterial({ color, transparent: true, opacity: 0.68,
     blending: T.AdditiveBlending, depthWrite: false });
@@ -70,11 +79,13 @@ export function createWingPod(weapon: WingWeapon) {
   part(flash, bloom, hot, 0, 0, 0).scale.set(0.48, 0.9, 0.46);
 
   return {
-    root,
-    pose(time: number, throttle: number, activity: number, recoil: number) {
+    root, upgrade,
+    pose(time: number, throttle: number, activity: number, recoil: number, upgraded = false) {
       poseBurners(burners, time, throttle);
       breech.position.y = -recoil * (weapon === 'omega' ? 0.13 : 0.064);
-      flash.scale.setScalar(Math.max(0.001, activity * (weapon === 'omega' ? 1.4 : 0.9)));
+      upgrade.visible = upgraded;
+      const flashSize = (weapon === 'omega' ? 1.4 : 0.9) * (upgraded ? 1.25 : 1);
+      flash.scale.setScalar(Math.max(0.001, activity * flashSize));
     },
   };
 }

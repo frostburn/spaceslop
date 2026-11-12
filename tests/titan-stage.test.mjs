@@ -36,7 +36,7 @@ test('insect patrols span the route, fit their model pools, repeat accessories a
       assert(enemy.cicada || enemy.centipede, 'no prototype ship patrols remain');
       if (enemy.cicada) formations.add(enemy.cicada.formation);
       if (enemy.centipede) sawCentipede = true;
-      if (enemy.drop) observed.add(enemy.drop);
+      if (enemy.reward) observed.add(enemy.reward.weapon);
     }
     assert.notEqual(f.phase,'boss');
     maxEnemies = Math.max(maxEnemies, f.enemies.length);

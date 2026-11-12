@@ -1,14 +1,19 @@
 # Controls and weapons
 
-From the main menu, choose a sector and select **Prepare flight**. Choose a pilot, drone and optional test loadout in the hangar, then launch. Use **Menu** to leave the run and choose another sector.
+From the main menu, choose a sector and select **Open briefing**. Pick a pilot and select **Launch**. Use **Menu** to leave the run and choose another sector.
 
 Tap or click the playfield to send the drone to that point. It parks and fires automatically. Drag from the same touch to steer the ship while the drone covers its lane. On a keyboard use WASD or the arrow keys. Guns fire automatically. Use Pulse or Space to clear incoming fire, and Pause or Escape to pause. In the boss fight, line up horizontally to lock on with the ship. Put the drone on the green target marker (Leviathan’s mouth, or a cannon on the other bosses), and keep the ship clear of amber warning rings. The other bosses switch exposed cannons after each volley.
 
-In Vite dev mode, **Launch at boss** starts the selected level at its normal approach transition with your chosen pilot, drone and test wing loadout. The shortcut is absent from production builds; ordinary **Launch** always starts the scrolling stage.
+In Vite dev mode, **Launch at boss** starts the selected level at its normal boss approach. Expand **Test loadout** to pre-equip a wing weapon or start with Towline. The test loadout is also available with `?testLoadout=1`.
 
-Choose **Sentry** or **Towline** before launch. With Towline equipped, park the drone and drag the ship to sweep the arc through enemy formations. The arc pulses automatically while the drone is parked. Against the boss, sweep the line across the green target during a pulse.
+The drone starts with **Sentry** fire. **Towline** adds a pulsing arc between the ship and the parked drone. Drag the ship to sweep the arc through enemies or across a boss weak point. Each pulse deals 3 damage per target during a 0.3-second window.
 
-Enemies can drop wing weapons. Fly through a pickup to equip a pod that flies alongside your ship. An empty slot takes priority, and with both occupied the pickup replaces the pod on the side where you collected it. For testing, expand **Test wing loadout** before launch to equip either wing immediately. The picker is available in Vite dev and on builds opened with `?testLoadout=1`.
+Clearing a formation with a reward drops one pickup at the last kill. Pulse counts toward the clear. Escapes and rams forfeit the reward. Fly through the pickup to collect it.
+
+1. A new weapon equips on the side where the ship catches it. The opposite wing takes it if that wing is the only empty slot. With both slots occupied, the pickup replaces the weapon on the collection side.
+2. A matching pickup upgrades the equipped weapon to Mk II for 50% more damage, regardless of which side catches it.
+3. Another match for a Mk II weapon unlocks Towline for the rest of the sortie.
+4. With Towline unlocked, further matches for a Mk II weapon award 250 points. Brass's **Reinforcement** grants +1 hull on the first surplus pickup each sortie, even at full starting hull. Later surplus pickups award 250 points.
 
 - **Homing Cannon** fires weak guided missiles.
 - **Standard Cannon** fires straight down its lane.

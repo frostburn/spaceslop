@@ -1,3 +1,4 @@
+import { wingRewardForWave } from '../wing';
 import {groveScroll} from './route';
 export type GroveCourse={kind:'glider'|'skimmer'|'sentry'|'frog';anchor?:number;formation:'weave'|'train'|'sweep';slot:number;mirror:number};
 export const GROVE_ENEMY_POOL=18,GROVE_SPAWN_LEAD=2.5;
@@ -29,10 +30,10 @@ const drops=['homing','cannon','laser','omega']as const;
 const aerialWaves=Array.from({length:20},(_,i)=>{
   const time=3+i*4.45,kind=i%5===3?'sentry':i>=8&&i<=12?'skimmer':'glider';
   const formation=(['weave','sweep','train','weave']as const)[i%4];
-  return{time,lanes:kind==='sentry'?[-2.65,2.65]:formation==='train'?[0,0,0,0]:[-2,0,2],carrier:kind==='sentry'?i%2:1,drop:drops[i%4],
+  return{time,lanes:kind==='sentry'?[-2.65,2.65]:formation==='train'?[0,0,0,0]:[-2,0,2],drop:wingRewardForWave(drops,i),
     grove:{kind,formation,mirror:i%2?1:-1}as Omit<GroveCourse,'slot'>};
 });
 
 // Bank-perched frogs are registered to the raster route, not aerial paths.
-const frogWaves=[[22,1.8],[36,-2.6],[48,2.5],[62,-2.4],[75,2.5],[85,-2.6]].map(([time,lane],i)=>({time,lanes:[lane],carrier:0,drop:drops[(i+1)%4],grove:{kind:'frog',formation:'weave',slot:0,mirror:1,anchor:time}as GroveCourse}));
+const frogWaves=[[22,1.8],[36,-2.6],[48,2.5],[62,-2.4],[75,2.5],[85,-2.6]].map(([time,lane],i)=>({time,lanes:[lane],drop:drops[(i+1)%4],grove:{kind:'frog',formation:'weave',slot:0,mirror:1,anchor:time}as GroveCourse}));
 export const groveWaves=[...aerialWaves,...frogWaves].sort((a,b)=>a.time-b.time);

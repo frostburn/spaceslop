@@ -8,7 +8,7 @@ const {Flight,STEP,BOSS_PROJECTION}=await server.ssrLoadModule('/src/game.ts');
 const ray=await server.ssrLoadModule('/src/biolume/lantern-ray.ts');
 const {createLanternRay,createRaySeekerAssets,createRaySeekerRig}=await server.ssrLoadModule('/src/biolume/lantern-ray-rig.ts');
 function orb(x=0,y=-2){return{x,y,lane:x,age:0,fire:Infinity,hp:ray.RAY_SEEKER_HP,rayOrb:{heading:0,previousX:x,previousY:y}};}
-function quiet(weapon){const wing=['homing','cannon','laser','omega'].includes(weapon),f=new Flight(weapon==='towline'?'towline':'sentry',wing?[weapon]:[],'vex','biolume');f.phase='boss';f.stepBoss=()=>{};f.invulnerable=1000;f.cooldown=weapon==='primary'?0:1e5;f.droneCooldown=weapon==='sentry'?0:weapon==='towline'?0:1e5;for(const w of f.wings)w.cooldown=0;return f;}
+function quiet(weapon){const wing=['homing','cannon','laser','omega'].includes(weapon),f=new Flight(weapon==='towline'?'towline':'sentry',wing?[weapon]:[],'vex','biolume');f.phase='boss';f.stepBoss=()=>{};f.invulnerable=1000;f.cooldown=weapon==='primary'?0:1e5;f.droneCooldown=weapon==='sentry'?0:1e5;f.towlineCooldown=0;for(const w of f.wings)w.cooldown=0;return f;}
 
 test('the Lantern Ray bends wings and tail from rest, updates finite normals and skips frozen uploads',()=>{
  const r=createLanternRay(),g=r.mesh.geometry,p=g.attributes.position,n=g.attributes.normal;

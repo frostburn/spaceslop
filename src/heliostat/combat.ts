@@ -1,3 +1,4 @@
+import { wingRewardForWave } from '../wing';
 import { levels } from '../levels';
 
 // Pure simulation data: the menu never imports models, media or Three.js.
@@ -50,7 +51,7 @@ const weapons = ['homing','cannon','laser','omega'] as const;
 export const heliostatWaves = Array.from({length:20},(_,i) => {
   const guard = i === 1 || i === 9 || i === 17, formation = (i%4 === 1 ? 'cross' : i%4 === 2 ? 'line' : i%4 === 3 ? 'weave' : 'vee') as HeliostatCourse['formation'];
   return { time: 2 + i*4.8-(i===19?2:0), lanes: guard ? [-2.15,2.15] : formation === 'line' ? [0,0,0,0] : [-2,0,2],
-    carrier: guard ? 0 : 1, drop: weapons[i%4], heliostat: {kind: guard ? 'guard' as const : 'drone' as const, formation, mirror: i%2 ? 1 : -1} };
+    drop: wingRewardForWave(weapons, i), heliostat: {kind: guard ? 'guard' as const : 'drone' as const, formation, mirror: i%2 ? 1 : -1} };
 });
 
 // Fixed capacitor gates sit in the same world frame as the station. Their gap is
