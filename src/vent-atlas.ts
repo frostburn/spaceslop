@@ -1,4 +1,5 @@
 import * as T from 'three';
+import type { VentFormation } from './vent-formations';
 import {VENT_STAGE_PITCH} from './vent-layout';
 
 // Eight independent cells: four overhead formations, four head-on formations.
@@ -46,4 +47,11 @@ export function ventCardGeometry(cell:number){
  const positions=g.attributes.position;for(let i=0;i<uv.count;i++){const relief=ventCardRelief(cell,uv.getY(i));positions.setZ(i,relief);positions.setY(i,positions.getY(i)-relief*Math.tan(VENT_STAGE_PITCH)/7.5);}g.computeVertexNormals();
  for(let i=0;i<uv.count;i++)uv.setXY(i,(col+pad+uv.getX(i)*(1-pad*2))/4,1-(row+1-pad-uv.getY(i)*(1-pad*2))/2);
  return g;
+}
+
+export function poseVentCard(formation: VentFormation, placement: T.Object3D) {
+ placement.position.set(formation.x, formation.y, formation.z);
+ placement.rotation.set(formation.front ? Math.PI / 2 : 0, 0, formation.angle, formation.front ? 'ZXY' : 'XYZ');
+ placement.scale.set(formation.w, formation.h, ventTallCell(formation.cell) ? formation.h / 7.5 : 1);
+ placement.updateMatrix();
 }
