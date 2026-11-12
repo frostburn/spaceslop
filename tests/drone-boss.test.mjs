@@ -31,7 +31,7 @@ test('an off-center shot in Broodlock does not recede toward the middle of the s
   assert(shot.y > 1.5);
 });
 
-for (const level of ['broodlock', 'summer', 'wormhole']) {
+for (const level of ['broodlock', 'summer']) {
   test(`${level}: shots and beams fired past the boss keep going up`, () => {
     for (const weapon of ['homing', 'cannon', 'omega', 'laser']) {
       const flight = quietBoss(level, [weapon]);
@@ -62,17 +62,32 @@ for (const level of ['broodlock', 'summer', 'wormhole']) {
   });
 }
 
-test('Fons sidearms stay on the flight plane during combat', () => {
-  const flight = new Flight('sentry', ['cannon', 'omega'], 'vex', 'wormhole');
+for (const finale of [false, true]) {
+  test(`wormhole projectiles recede into the screen during ${finale ? 'Fons' : 'the cicada rematch'}`, () => {
+    const flight = new Flight('sentry', ['cannon', 'omega'], 'vex', 'wormhole');
+    if (finale) flight.startFonsApproach();
+    flight.phase = 'boss';
+    flight.player = { x: 0, y: 6 };
+    flight.fire(flight.player);
+    flight.fire({ x: 0, y: 6 }, true);
+    for (const wing of flight.wings) {
+      wing.cooldown = 0;
+      flight.stepWing(wing, true, STEP);
+    }
+    assert.equal(flight.shots.length, 4);
+    assert(flight.shots.every(shot => shot.vz < 0));
+  });
+}
+
+test('Fons accepts a receding shot that crosses the projected mirror', () => {
+  const flight = quietBoss('wormhole');
   flight.startFonsApproach();
   flight.phase = 'boss';
-  for (const wing of flight.wings) {
-    wing.cooldown = 0;
-    flight.stepWing(wing, true, STEP);
-  }
-  assert.equal(flight.shots.length, 2);
-  for (const shot of flight.shots) {
-    assert.equal(shot.vz, 0);
-    assert(shot.vy > 0);
-  }
+  flight.fire({ x: 0, y: -4 });
+  const [shot] = flight.shots;
+  const health = flight.bossHealth;
+  for (let i = 0; i < 24 && flight.shots.includes(shot); i++) flight.step(STEP);
+  assert(shot.z < 0);
+  assert.equal(flight.bossHealth, health - 1);
+  assert(!flight.shots.includes(shot));
 });

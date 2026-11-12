@@ -469,7 +469,7 @@ export class FlightView {
     }
   }
   private drawProjectiles(flight: Flight) {
-    const shots = flight.planarBoss ? flight.shots.map(s => ({ ...s, ...planarProjectileLayer(s, .85) })) : flight.shots;
+    const shots = flight.planarBoss && !flight.isFonsFight ? flight.shots.map(s => ({ ...s, ...planarProjectileLayer(s, .85) })) : flight.shots;
     this.projectiles.ship.draw(shots.filter((shot) => !shot.drone && !shot.wing), this.animationTime);
     this.projectiles.drone.draw(shots.filter((shot) => shot.drone), this.animationTime);
     for (const weapon of ['homing', 'cannon', 'omega'] as const) {
