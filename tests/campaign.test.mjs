@@ -32,7 +32,7 @@ test('the briefing route visits each sector once and takes Io, Europa and Titan 
 
 test('campaign clears advance in order and promote at the agreed milestones', () => {
   let cleared = decodeCampaignClears('not JSON');
-  assert.deepEqual(campaignStatus(cleared), { next: 'broodlock', rank: 'specialist4' });
+  assert.deepEqual(campaignStatus(cleared), { next: 'broodlock', rank: 'specialist3' });
   assert.equal(recordCampaignClear(cleared, 'wormhole').cleared.size, 0);
   const promotions = [];
   for (const mission of campaign) {
@@ -45,15 +45,18 @@ test('campaign clears advance in order and promote at the agreed milestones', ()
     assert.equal(recordCampaignClear(cleared, mission.level).promoted, undefined);
   }
   assert.deepEqual(promotions, [
-    ['titan', 'sergeant'], ['heliostat', 'secondLt'], ['preserve', 'firstLt'],
+    ['broodlock', 'specialist4'], ['titan', 'sergeant'], ['heliostat', 'secondLt'], ['preserve', 'firstLt'],
     ['fleet', 'captain'], ['wormhole', 'major'],
   ]);
   assert.deepEqual(campaignStatus(cleared), { next: undefined, rank: 'major' });
   assert.equal(cleared.size, campaign.length);
 });
 
-test('all campaign and briefing ranks fit in distinct atlas cells', () => {
+test('Specialist 3 is drawn separately and existing ranks fit in distinct atlas cells', () => {
   const used = new Set([...campaign.map(mission => mission.pilotRank), ...Object.values(officers).map(officer => officer.rank), 'major']);
+  assert(used.delete('specialist3'));
+  assert.equal(rankAtlasCell('specialist3'), undefined);
+  assert.deepEqual(rankAtlasCell('specialist4'), { row: 0, column: 0 });
   assert.deepEqual(new Set(rankAtlasOrder), used);
   const cells = rankAtlasOrder.map(rankAtlasCell);
   assert(cells.every(({ row, column }) => row < RANK_ATLAS_ROWS && column < RANK_ATLAS_COLUMNS));

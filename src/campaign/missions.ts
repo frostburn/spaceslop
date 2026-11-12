@@ -25,7 +25,7 @@ type Mission = {
 
 export const campaign: readonly Mission[] = [
   {
-    level: 'broodlock', pilotRank: 'specialist4', officer: 'davi-morel',
+    level: 'broodlock', pilotRank: 'specialist3', officer: 'davi-morel',
     brief: 'Belt Depot Omicron has sent a distress signal. Help the crew clear the loading tunnels.',
     objective: 'Cross the infected hive and take down the Brood Guardian.',
   },

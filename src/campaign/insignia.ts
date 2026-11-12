@@ -41,7 +41,7 @@ function star(cx: number, cy: number, tips: number, outer: number, inner: number
   }));
 }
 
-function enlisted(ctx: CanvasRenderingContext2D, sergeant: boolean) {
+function enlisted(ctx: CanvasRenderingContext2D, rank: 'specialist3' | 'specialist4' | 'sergeant') {
   const shield = polygon([[64, 13], [105, 37], [105, 88], [64, 112], [23, 88], [23, 37]]);
   ctx.fillStyle = '#18334e';
   ctx.fill(shield);
@@ -49,9 +49,9 @@ function enlisted(ctx: CanvasRenderingContext2D, sergeant: boolean) {
   ctx.lineWidth = 3.8;
   ctx.stroke(shield);
   pin(ctx, polygon([[64, 30], [83, 60], [64, 54], [45, 60]]), silver);
-  for (const y of [66, 77, 88]) {
+  for (const y of rank === 'specialist3' ? [77, 88] : [66, 77, 88]) {
     const x = y === 88 ? 42 : 36;
-    if (sergeant)
+    if (rank === 'sergeant')
       pin(ctx, polygon([[x, y - 3], [64, y + 5], [128 - x, y - 3], [128 - x, y + 2], [64, y + 11], [x, y + 2]]), silver);
     else bar(ctx, x, y, 128 - x * 2, 4, silver);
   }
@@ -92,9 +92,10 @@ export function drawRankInsignia(ctx: CanvasRenderingContext2D, rank: Rank, x = 
   ctx.translate(x, y);
   ctx.scale(size / RANK_ATLAS_CELL, size / RANK_ATLAS_CELL);
   switch (rank) {
+    case 'specialist3':
     case 'specialist4':
     case 'sergeant':
-      enlisted(ctx, rank === 'sergeant');
+      enlisted(ctx, rank);
       break;
     case 'secondLt':
     case 'firstLt':

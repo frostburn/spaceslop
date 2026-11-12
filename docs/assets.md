@@ -8,7 +8,7 @@ Pilot portraits are optional square PNGs at `public/pilots/vex.png`, `public/pil
 
 Briefing officer portraits go at `public/officers/<officer-id>.png`, as opaque 512 × 512 PNGs. Officer IDs are in `src/campaign/missions.ts`. Only the selected officer's image is requested, with initials as the fallback.
 
-The optional `public/officers/rank-insignia.png` is a transparent 512 × 384 RGBA PNG. Keep the full 4 × 3 grid, 128 × 128 cells, and empty last cell. A proportional resize with square cells also works. The hangar reads these cells in the following order. A code-drawn copy supplies the badges when the sheet is absent or invalid.
+The optional `public/officers/rank-insignia.png` is a transparent 512 × 384 RGBA PNG. Keep the full 4 × 3 grid, 128 × 128 cells, and empty last cell. A proportional resize with square cells also works. The hangar reads these cells in the following order. Specialist 3 is drawn in code. The other badges are also drawn when the sheet is absent or invalid.
 
 | Row | Column 1 | Column 2 | Column 3 | Column 4 |
 | --- | --- | --- | --- | --- |

@@ -21,8 +21,9 @@ export function createRankDisplays(signal: AbortSignal) {
     if (!ctx) return;
     const size = canvas.width;
     ctx.clearRect(0, 0, size, size);
-    if (atlas && atlasCellSize) {
-      const { column, row } = rankAtlasCell(rank);
+    const cell = rankAtlasCell(rank);
+    if (atlas && atlasCellSize && cell) {
+      const { column, row } = cell;
       ctx.drawImage(atlas, column * atlasCellSize, row * atlasCellSize, atlasCellSize, atlasCellSize, 0, 0, size, size);
     } else drawRankInsignia(ctx, rank);
   }
