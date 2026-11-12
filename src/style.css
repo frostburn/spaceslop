@@ -91,6 +91,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   text-transform: uppercase;
   color: #eef8ff;
 }
+#heading .loading-copper { color: #eda081; }
+#heading .loading-brass, #status.preparing-graphics { color: #f5d38b; }
 #panel > p { max-width: 27ch; font-size: .83rem; line-height: 1.4; margin: .9rem 0; }
 #panel small { max-width: 32ch; color: var(--muted); font-size: .68rem; margin-top: .8rem; }
 #panel.victory-results {

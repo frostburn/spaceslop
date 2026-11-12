@@ -123,8 +123,10 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
       perkReadout.textContent = flight.perkReadout;
     }
     selectedPortrait.classList.toggle('perk-flash', active && flight.perkTime > 1.15);
+    const preparingGraphics = preparing !== undefined || screen === 'loading';
+    status.classList.toggle('preparing-graphics', preparingGraphics);
     let tip = 'Tap for drone · Drag to steer';
-    if (preparing || screen === 'loading')
+    if (preparingGraphics)
       tip = 'Preparing graphics…';
     else if (flight.isFonsFight && flight.phase === 'boss') {
       const storm = fonsPhase(flight.fonsTime);
