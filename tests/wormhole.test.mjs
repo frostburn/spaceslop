@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { Color } from 'three';
+import { Color, Euler, Vector3 } from 'three';
 import { createServer } from 'vite';
 
 const server = await createServer({
@@ -15,8 +15,10 @@ const { wormholeFrame, WORMHOLE_APPROACH } = await server.ssrLoadModule('/src/wo
 const { CICADA_FIRE, CICADA_HP, CICADA_WINDUP } = await server.ssrLoadModule('/src/cicada.ts');
 const { wormholeReflectionPose, createWormholeReflection } = await server.ssrLoadModule('/src/wormhole/reflection.ts');
 const { createFighterRig } = await server.ssrLoadModule('/src/ship-rigs.ts');
-const { FONS_APPROACH, FONS_HP, FONS_RAIN_AT, FONS_RAIN_END, fonsPhase, fonsPose, fonsRocks, fonsSheltered, fonsBeamHits, fonsBeams } =
+const { FONS_APPROACH, FONS_HP, FONS_CYCLE, FONS_RAIN_AT, FONS_RAIN_END, fonsPhase, fonsPose, fonsRocks, fonsSheltered, fonsTuskPaths } =
   await server.ssrLoadModule('/src/wormhole/fons/combat.ts');
+const { fonsBeams, fonsBeamHits, fonsCrownfireFlash, fonsTuskTip, fonsVolleys } =
+  await server.ssrLoadModule('/src/wormhole/fons/attacks.ts');
 const { createFonsMantle } = await server.ssrLoadModule('/src/wormhole/fons/mantle.ts');
 const { createFonsLightning } = await server.ssrLoadModule('/src/wormhole/fons/lightning.ts');
 
@@ -165,6 +167,7 @@ test('defeating the cicada flows into Fons with the same flight and continuous t
   while (flight.phase === 'approach') flight.step(STEP);
   assert.equal(flight.phase, 'boss');
   assert(flight.isFonsFight && flight.planarBoss);
+  assert.equal(flight.fonsVariant, 'normal');
   assert(Math.abs(flight.fonsTime) < 1e-8);
   flight.bossHealth = 6;
   flight.pulse();
@@ -261,6 +264,59 @@ test('Fons blocks pulse and direct fire as the cloak closes before the rain', ()
   fire(FONS_RAIN_END + 1.25);
   assert(!flight.fonsShielded);
   assert.equal(flight.bossHealth, FONS_HP - 1);
+});
+
+test('both royal variants fire Crownfire in two interleaved fans from their tusk tips', () => {
+  const player = { x: 0, y: -5.35 };
+  const outside = 1.38, inside = 1.98;
+  const volley = (time, variant) => fonsVolleys(time + STEP / 2, STEP, player, variant);
+  assert.equal(fonsCrownfireFlash(outside - .1, 'rex').tusks, 'outer');
+  assert.equal(fonsCrownfireFlash(inside - .1, 'invictus').tusks, 'inner');
+  assert.equal(fonsCrownfireFlash(outside - .1, 'normal'), undefined);
+  assert.deepEqual(volley(outside, 'normal'), []);
+  const first = volley(outside, 'rex'), second = volley(inside, 'rex');
+  assert.equal(first.length, 6);
+  assert.equal(second.length, 5);
+  assert.deepEqual(first, volley(outside, 'invictus'));
+  assert.deepEqual(second, volley(inside, 'invictus'));
+  const atLane = shot => shot.x + shot.vx * (player.y - shot.y) / shot.vy;
+  for (const [index, shot] of second.entries()) {
+    assert(Math.abs(atLane(shot) - (atLane(first[index]) + atLane(first[index + 1])) / 2) < 1e-10);
+  }
+  const pose = fonsPose(outside);
+  const [x, y, z] = fonsTuskPaths.outer[4];
+  const tip = new Vector3(-x, y, z).applyEuler(new Euler(pose.pitch, pose.yaw, pose.bank));
+  const scale = pose.scale * (1 - pose.depth / BOSS_CAMERA_DISTANCE);
+  tip.multiplyScalar(scale).add(new Vector3(pose.x * scale / pose.scale, pose.y * scale / pose.scale, pose.depth));
+  tip.multiplyScalar(1 / (1 - tip.z / BOSS_CAMERA_DISTANCE));
+  assert(Math.hypot(first[0].x - tip.x, first[0].y - tip.y) < 1e-10);
+  assert.deepEqual(fonsTuskTip(pose, -1, 'outer'), { x: first[0].x, y: first[0].y });
+});
+
+test('only Invictus damages the reflected path after the False Horizon warning', () => {
+  const warning = fonsBeams(5.46, 'invictus');
+  const start = fonsBeams(5.63, 'invictus');
+  assert(warning[0].active && warning[1].warning > .9 && !warning[1].active);
+  assert(warning[1].impact > 0 && start[1].active);
+  assert.deepEqual(warning[0].to, start[1].from);
+  assert.deepEqual(warning[1].to, start[1].to);
+  const time = 5.96;
+  const { from, to } = fonsBeams(time, 'invictus')[1];
+  const hit = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+  assert(fonsBeamHits(time, hit, 'invictus'));
+  assert(!fonsBeamHits(time, { x: 3.5, y: -5.5 }, 'invictus'));
+  assert.equal(fonsBeams(FONS_CYCLE + time, 'invictus')[1].from.x, -from.x);
+  for (const variant of ['normal', 'rex', 'invictus']) {
+    const flight = new Flight('sentry', [], 'vex', 'wormhole');
+    flight.startFonsApproach(variant);
+    while (flight.phase === 'approach') flight.step(STEP);
+    assert.equal(flight.fonsVariant, variant);
+    Object.assign(flight.player, hit);
+    flight.time = time - STEP;
+    const hull = flight.hull;
+    flight.step(STEP);
+    assert.equal(flight.hull, variant === 'invictus' ? hull - 1 : hull);
+  }
 });
 
 test('entry lightning redraws its branches on the presentation clock and clears before combat', () => {

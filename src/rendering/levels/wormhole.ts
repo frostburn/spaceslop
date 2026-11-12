@@ -59,7 +59,7 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
     skyIntensity: 1.35,
     friendlyGlow: 1.17,
     contacts: [boss.root, fons.root],
-    warmup: [[tunnel.root, boss.root], [fons.root, attacks.root, lightning.root]],
+    warmup: [[tunnel.root, boss.root], [fons.root, attacks.root, lightning.root, ...fons.ornaments, ...attacks.royalFlashes]],
     prepare() {
       // Prime the rematch at its settled depth before the entrance animates it.
       boss.root.position.set(0, BOSS_Y, BOSS_DEPTH);
@@ -91,9 +91,14 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
       tunnel.pose(frame, mirror);
       fons.root.visible = flight.isFonsFight && fonsTime >= -FONS_APPROACH + .61 && flight.bossHealth > 0;
       attacks.root.visible = flight.isFonsFight && fonsTime >= -1.7 && flight.bossHealth > 0;
-      if (fons.root.visible) fons.update(fonsTime, distance, newFlight);
+      if (fons.root.visible) {
+        fons.setVariant(flight.fonsVariant);
+        fons.update(fonsTime, distance, newFlight);
+      }
       const storm = attacks.root.visible ? fonsPhase(fonsTime) : undefined;
-      const rocks = attacks.root.visible ? attacks.update(fonsTime, distance, flight.threats, flight.phase === 'boss' || flight.phase === 'lost') : undefined;
+      const rocks = attacks.root.visible
+        ? attacks.update(fonsTime, distance, flight.threats, flight.phase === 'boss' || flight.phase === 'lost', flight.fonsVariant)
+        : undefined;
       tunnel.setFons(fonsTime, finale, storm, rocks);
       lightning.root.visible = false;
       const crackle = flight.isFonsFight && fonsTime < 0 ? lightning.update(fonsTime, distance) : 0;

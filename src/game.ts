@@ -45,19 +45,20 @@ import { ICE_CAMERA_DISTANCE } from './ice-layout';
 import { DRONE_HULL, FIGHTER_HULL, HiveCollision, POD_BOUNDS, POD_HULL } from './hive-collision';
 import { HIVE_CAMERA_DISTANCE } from './hive-layout';
 import { steerHiveAnt } from './ant-navigation';
-import { HEIGHT, WIDTH } from './playfield';
+import { BOSS_CAMERA_DISTANCE, HEIGHT, WIDTH } from './playfield';
 import { GROUNDSKEEPER_HP, GROUNDSKEEPER_RADIUS, groundskeeperContact, groundskeeperAttack, groundskeeperHits } from './groundskeeper';
 import { PRESERVE_APPROACH } from './preserve-layout';
 import { CLOSE_CALLS_REQUIRED, HOT_DOCK_COOLDOWN, HOT_DOCK_DISTANCE, type PilotId } from './pilot-data';
 import { WING_FLASH_TIME, WING_FORMATION, wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
 import { WORMHOLE_APPROACH } from './wormhole/route';
-import { FONS_APPROACH, FONS_HP, fonsBeamHits, fonsBodyEntry, fonsPhase, fonsPose, fonsRockHits, fonsRocks, fonsSheltered, fonsVolleys } from './wormhole/fons/combat';
+import { FONS_APPROACH, FONS_HP, fonsBodyEntry, fonsPhase, fonsPose, fonsRockHits, fonsRocks, fonsSheltered } from './wormhole/fons/combat';
+import { fonsBeamHits, fonsVolleys } from './wormhole/fons/attacks';
+import type { FonsVariant } from './wormhole/fons/variants';
 
-export { HEIGHT, WIDTH } from './playfield';
+export { BOSS_CAMERA_DISTANCE, HEIGHT, WIDTH } from './playfield';
 export const STEP = 1 / 60;
 export const BOSS_DEPTH = -12;
 export const BOSS_Y = 4.2;
-export const BOSS_CAMERA_DISTANCE = 22;
 export const BOSS_PROJECTION = BOSS_CAMERA_DISTANCE / (BOSS_CAMERA_DISTANCE - BOSS_DEPTH);
 export const WORMHOLE_PITCH = Math.atan2(BOSS_CAMERA_DISTANCE, BOSS_Y * BOSS_PROJECTION);
 export const BOSS_CANNON_X = 2.4;
@@ -270,6 +271,7 @@ export class Flight {
   readonly fleetBossAttack = createFleetBossAttack();
   private fleetFinalTime = 0;
   private fonsAt = -1;
+  private fonsForm: FonsVariant = 'normal';
   private wormholeFinalTime = 0;
   private heliostatEscalationAt=Infinity;
   private heliostatEscalationCycle=Infinity;
@@ -315,6 +317,7 @@ export class Flight {
   get isFleet() { return this.level === 'fleet'; }
   get isCicadaFight() { return this.level === 'titan' || (this.level === 'wormhole' && !this.isFonsFight); }
   get isFonsFight() { return this.fonsAt >= 0; }
+  get fonsVariant() { return this.fonsForm; }
   get fonsShielded() { return this.isFonsFight && fonsPhase(this.fonsTime).shielded; }
   get planarBoss() { return this.level === 'biolume' || this.isDen || this.isFleet || this.isFonsFight; }
   get weaponsActive() { return this.phase === 'stage' || this.phase === 'boss' || ((this.isDen || this.isFleet) && this.phase === 'approach'); }
@@ -336,9 +339,10 @@ export class Flight {
     return this.isFonsFight ? this.wormholeTime - this.fonsAt - FONS_APPROACH : -FONS_APPROACH;
   }
 
-  startFonsApproach() {
+  startFonsApproach(variant: FonsVariant = 'normal') {
     if (this.level !== 'wormhole' || this.isFonsFight) return;
     this.fonsAt = Math.max(this.wormholeTime, this.stageDuration + WORMHOLE_APPROACH);
+    this.fonsForm = variant;
     this.bossHealth = FONS_HP;
     this.bossRecoil = 0;
     this.markers = [];
@@ -1220,9 +1224,9 @@ export class Flight {
   private stepBoss(dt: number) {
     if (this.isFonsFight) {
       const time = this.fonsTime, rocks = fonsRocks(time);
-      if (fonsRockHits(rocks, this.player) || fonsBeamHits(time, this.player) ||
+      if (fonsRockHits(rocks, this.player) || fonsBeamHits(time, this.player, this.fonsVariant) ||
           (fonsPhase(time).rain && !fonsSheltered(rocks, this.player))) this.hit();
-      if (this.phase === 'boss') this.threats.push(...fonsVolleys(time, dt, this.player));
+      if (this.phase === 'boss') this.threats.push(...fonsVolleys(time, dt, this.player, this.fonsVariant));
       return;
     }
     if (this.isFleet) {

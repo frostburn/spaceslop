@@ -13,7 +13,9 @@ import { createFlightView, type FlightView } from '../view';
 import { levels, readLevel, type LevelId } from '../levels';
 import { iceSection } from '../ice-layout';
 import { readWingWeapon, wingWeapons } from '../wing';
-import { FONS_NAME, FONS_RAIN_END, fonsPhase } from '../wormhole/fons/combat';
+import { FONS_RAIN_END, fonsPhase } from '../wormhole/fons/combat';
+import { fonsAttackCue } from '../wormhole/fons/attacks';
+import { fonsNames, fonsVariants, type FonsVariant } from '../wormhole/fons/variants';
 export async function openFlightSession(selectedLevel: LevelId, signal: AbortSignal) {
   function element<T extends HTMLElement>(id: string) {
     const node = document.getElementById(id);
@@ -25,20 +27,20 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
   const canvas = previousCanvas.cloneNode(false) as HTMLCanvasElement;
   previousCanvas.replaceWith(canvas);
   const panel = element('panel');
-  type Shortcut = 'boss' | 'trench' | 'fons';
+  type Shortcut = 'boss' | 'trench' | FonsVariant;
   let devLaunch: Shortcut | undefined;
+  const fonsStarts: HTMLButtonElement[] = [];
   if (import.meta.env.DEV) {
     panel.querySelector('#dev-tools')?.remove();
     const devTools = document.createElement('div');
     devTools.id = 'dev-tools';
     devTools.className='dev-links';
     panel.append(devTools);
-    function launchShortcut(mode: Shortcut) {
+    function launchShortcut(mode: Shortcut, id: string, label: string) {
       const button = document.createElement('button');
-      button.id = 'dev-' + mode;
+      button.id = id;
       button.type = 'button';
-      button.textContent = 'Launch at ' + mode;
-      button.style.marginTop = '.75rem';
+      button.textContent = label;
       button.disabled = true;
       button.addEventListener('click', () => {
         if (screen !== 'title' && screen !== 'results') return;
@@ -47,10 +49,14 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
         devLaunch = undefined;
       }, { signal });
       devTools.append(button);
+      return button;
     }
-    launchShortcut('boss');
-    launchShortcut('trench');
-    launchShortcut('fons');
+    launchShortcut('boss', 'dev-boss', 'Launch at boss');
+    launchShortcut('trench', 'dev-trench', 'Launch at trench');
+    for (const variant of fonsVariants) {
+      const id = variant === 'normal' ? 'dev-fons' : 'dev-fons-' + variant;
+      fonsStarts.push(launchShortcut(variant, id, 'Launch at ' + fonsNames[variant]));
+    }
     const workshop = document.createElement('a');
     workshop.href = import.meta.env.BASE_URL + 'workshop.html';
     workshop.textContent = 'Asset workshop';
@@ -132,7 +138,7 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     bossHud.hidden = flight.phase !== 'boss';
     bossHealth.max = flight.bossMaxHealth;
     bossHealth.value = flight.bossHealth;
-    bossName.textContent = flight.isFonsFight ? FONS_NAME : levels[flight.level].boss+(flight.level==='summer'?' · '+flight.summerHeadsAlive+(flight.summerHeadsAlive===1?' HEAD':' HEADS'):'');
+    bossName.textContent = flight.isFonsFight ? fonsNames[flight.fonsVariant].toUpperCase() : levels[flight.level].boss+(flight.level==='summer'?' · '+flight.summerHeadsAlive+(flight.summerHeadsAlive===1?' HEAD':' HEADS'):'');
     pulse.disabled = !active || !fighting || flight.charges === 0;
     pause.hidden = !active;
     panel.hidden = active;
@@ -143,10 +149,10 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
       const trenchStart = element<HTMLButtonElement>('dev-trench');
       trenchStart.hidden = !betweenRuns || !flight.isFleet;
       trenchStart.disabled = start.disabled || !view;
-      const fonsStart = element<HTMLButtonElement>('dev-fons');
-      fonsStart.hidden = !betweenRuns || flight.level !== 'wormhole';
-      fonsStart.disabled = start.disabled || !view;
-      fonsStart.textContent = 'Launch at Fons Inversus';
+      for (const fonsStart of fonsStarts) {
+        fonsStart.hidden = !betweenRuns || flight.level !== 'wormhole';
+        fonsStart.disabled = start.disabled || !view;
+      }
       element('vent-study').hidden = !betweenRuns || flight.level !== 'vents';
       element('io-study').hidden = !betweenRuns || flight.level !== 'io';
       bossStart.textContent = flight.isDen || flight.isCicadaFight || flight.level === 'wormhole' || flight.level === 'summer' || flight.level === 'heliostat' || flight.level === 'boulevard' || flight.level === 'preserve' || flight.level === 'vents' || flight.level === 'io' ? 'Launch at transition' : 'Launch at boss';
@@ -170,7 +176,8 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
       else if (storm.shielded) tip = storm.age < FONS_RAIN_END ? 'Fons shielded · Find cover' : 'Cloak opening';
       else if (storm.wrap > 0 && storm.age < FONS_RAIN_END) tip = 'Cloak closing · Find cover';
       else if (storm.openingRifts) tip = 'Wall rifts opening · Watch for falling cover';
-      else tip = flight.droneWeapon === 'towline' ? 'Sweep the arc across the mirror' : 'Fire into the mirror · Dodge the sweeps';
+      else tip = fonsAttackCue(storm.age, flight.fonsVariant) ??
+        (flight.droneWeapon === 'towline' ? 'Sweep the arc across the mirror' : 'Fire into the mirror · Dodge the sweeps');
     }
     else if (flight.isDen && flight.phase === 'boss')
       tip = flight.droneWeapon === 'towline' ? 'Sweep the arc across the bike.' : 'Watch the engines · Dodge the sweeping bursts';
@@ -251,11 +258,10 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     if (screen !== 'paused') {
       flight = new Flight(droneWeapon.value === 'towline' ? 'towline' : 'sentry', testingWings ? wingSelectors.map((select) => readWingWeapon(select.value)) : [], pilotPicker.selectedId, readLevel(levelSelector.value));
       if (import.meta.env.DEV && devLaunch) {
-        if (devLaunch === 'fons') flight.startFonsApproach();
-        else {
+        if (devLaunch === 'boss' || devLaunch === 'trench') {
           flight.time = devLaunch === 'trench' ? FLEET_TRENCH_AT : flight.stageDuration;
           flight.step(0);
-        }
+        } else flight.startFonsApproach(devLaunch);
       }
     }
     screen = 'active';

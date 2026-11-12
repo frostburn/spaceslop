@@ -1,23 +1,22 @@
 import * as T from 'three';
-import { fonsPhase, fonsPose } from './combat';
+import { fonsPhase, fonsPose, fonsTuskPaths, type FonsTusk } from './combat';
 import { createFonsMane } from './mane';
 import { createFonsMantle } from './mantle';
+import { createFonsRegalia } from './regalia';
+import type { FonsVariant } from './variants';
 
-function tusk(side: number, small: boolean) {
-  const points = small ? [
-    [.44, -1.02, .47], [.49, -1.41, .77], [.77, -1.53, .94], [.98, -1.29, .93], [.99, -.91, .86],
-  ] : [
-    [.68, -.56, .40], [1.12, -.86, .68], [1.61, -.70, .91], [1.83, -.17, 1.01], [1.71, .50, .91],
-  ];
-  const curve = new T.CatmullRomCurve3(points.map(([x, y, z]) => new T.Vector3(side * x, y, z)));
+function tusk(side: number, kind: FonsTusk) {
+  const curve = new T.CatmullRomCurve3(fonsTuskPaths[kind].map(([x, y, z]) => new T.Vector3(side * x, y, z)));
+  const small = kind === 'inner';
   const spans = 42, sides = 18;
   const rootWidth = small ? .168 : .271;
+  const widthAt = (t: number) => rootWidth * Math.max(.010, (1 - t) ** .69);
   const frame = curve.computeFrenetFrames(spans, false);
   const positions: number[] = [], colors: number[] = [], index: number[] = [];
   const bone = new T.Color(0xe1cca3), root = new T.Color(0x997b58), color = new T.Color();
   for (let i = 0; i <= spans; i++) {
     const t = i / spans, center = curve.getPointAt(t);
-    const width = rootWidth * Math.max(.010, (1 - t) ** .69);
+    const width = widthAt(t);
     for (let j = 0; j < sides; j++) {
       const a = j * Math.PI * 2 / sides;
       const flute = .055 * Math.sin(a * 4.0 + t * 3.0) + .035 * Math.sin(a * 7.0 - t * 5.0);
@@ -40,7 +39,7 @@ function tusk(side: number, small: boolean) {
   geometry.computeVertexNormals();
   const base = curve.getPointAt(0);
   const axis = curve.getPointAt(small ? .20 : .13).sub(base).normalize();
-  return { geometry, base, axis, rootWidth };
+  return { geometry, base, axis, rootWidth, curve, widthAt };
 }
 
 export function createFonsRig(environment: T.Texture) {
@@ -108,40 +107,51 @@ export function createFonsRig(environment: T.Texture) {
       diffuseColor.rgb *= 1.0 - pit * seed * .24 - grain * .09;
     `);
   };
-  const platinum = new T.MeshPhysicalMaterial({ color: 0xe4e6ec, metalness: .95, roughness: .19, clearcoat: .64 });
-  platinum.onBeforeCompile = shader => {
-    shader.uniforms.platinumSky = surroundings;
-    shader.fragmentShader = 'uniform sampler2D platinumSky;\n' + shader.fragmentShader.replace('#include <opaque_fragment>', `
-      vec3 metalRay = reflect(-normalize(vViewPosition), normal);
-      vec2 metalUV = clamp(vec2(.50,.56) + metalRay.xy * vec2(-.44,.38), .002, .998);
-      vec3 reflectedSky = texture2D(platinumSky,metalUV).rgb;
-      float strip = exp(-abs(dot(metalRay,vec3(.73,.57,-.37))-.34)*18.0);
-      float fill = exp(-abs(dot(metalRay,vec3(-.42,.74,.52))+.31)*7.0);
-      outgoingLight += vec3(.08,.10,.13) + reflectedSky*.63 + vec3(.99,1.02,1.08)*(strip*1.47 + fill*.24);
-      #include <opaque_fragment>
-    `);
-  };
+  const regalia = createFonsRegalia(surroundings);
+  const diamonds = new T.Group();
+  diamonds.name = 'fons-invictus-tusk-diamonds';
   const cuff = new T.LatheGeometry([
     [1.00, -.28], [1.37, -.20], [1.50, -.04], [1.51, .16], [1.38, .34],
     [1.24, .50], [1.23, .62], [1.37, .72], [1.34, .90], [1.22, 1.0], [.94, 1.0],
   ].map(([r, y]) => new T.Vector2(r, y)), 36);
   const up = new T.Vector3(0, 1, 0);
-  for (const side of [-1, 1]) for (const small of [false, true]) {
-    const { geometry, base, axis, rootWidth } = tusk(side, small);
-    const name = (side < 0 ? 'left-' : 'right-') + (small ? 'inner' : 'outer');
+  for (const side of [-1, 1]) for (const kind of ['outer', 'inner'] as const) {
+    const { geometry, base, axis, rootWidth, curve, widthAt } = tusk(side, kind);
+    const name = (side < 0 ? 'left-' : 'right-') + kind;
     const mesh = new T.Mesh(geometry, tooth);
     mesh.name = 'fons-tusk-' + name;
-    const mount = new T.Mesh(cuff, platinum);
-    mount.name = 'fons-platinum-mount-' + name;
+    const mount = new T.Mesh(cuff, regalia.socket);
+    mount.name = 'fons-tusk-socket-' + name;
     mount.position.copy(base);
     mount.quaternion.setFromUnitVectors(up, axis);
-    mount.scale.set(rootWidth, small ? .245 : .335, rootWidth);
+    mount.scale.set(rootWidth, kind === 'inner' ? .245 : .335, rootWidth);
     root.add(mesh, mount);
+    if (kind === 'outer') {
+      for (const [t, size] of [[.32, .166], [.49, .133], [.66, .103]]) {
+        const tangent = curve.getTangentAt(t);
+        const facing = new T.Vector3(0, 0, 1).addScaledVector(tangent, -tangent.z).normalize();
+        const center = curve.getPointAt(t).addScaledVector(facing, widthAt(t) * .95);
+        diamonds.add(regalia.tuskDiamond(center, facing, size));
+      }
+    }
   }
-  root.add(mantle.root, collar, mirror, mane.root);
+  const ornaments = [regalia.tiara, regalia.crown, diamonds];
+  for (const ornament of ornaments) ornament.visible = false;
+  root.add(mantle.root, collar, mirror, mane.root, ...ornaments);
+  let form: FonsVariant = 'normal';
   return {
     root,
+    ornaments,
     setMane: mane.setArt,
+    setVariant(variant: FonsVariant) {
+      if (form === variant) return;
+      form = variant;
+      const invictus = form === 'invictus';
+      regalia.tiara.visible = form === 'rex';
+      regalia.crown.visible = diamonds.visible = invictus;
+      regalia.gildSockets(invictus);
+      mantle.setVariant(form);
+    },
     update(time: number, distance: number, reset: boolean) {
       const pose = fonsPose(time);
       const projection = 1 - pose.depth / distance;

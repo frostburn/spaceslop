@@ -3,14 +3,18 @@ import { WIDTH } from '../../playfield';
 
 type Point = { x: number; y: number };
 type Side = -1 | 1;
-export const FONS_NAME = 'FONS INVERSUS';
 export const FONS_HP = 124;
 export const FONS_APPROACH = 3.25;
 export const FONS_CYCLE = 18.6;
 export const FONS_RAIN_AT = 11.65;
 export const FONS_RAIN_END = 14.65;
 const BREACH_AT = 7.12;
-const shotsAt = [1.02, 2.12, 3.22] as const;
+
+export const fonsTuskPaths = {
+  inner: [[.44, -1.02, .47], [.49, -1.41, .77], [.77, -1.53, .94], [.98, -1.29, .93], [.99, -.91, .86]],
+  outer: [[.68, -.56, .40], [1.12, -.86, .68], [1.61, -.70, .91], [1.83, -.17, 1.01], [1.71, .50, .91]],
+} as const;
+export type FonsTusk = keyof typeof fonsTuskPaths;
 
 const clamp = (n: number, min = 0, max = 1) => Math.min(max, Math.max(min, n));
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -60,51 +64,6 @@ export function fonsEmitter(pose: ReturnType<typeof fonsPose>, side: Side) {
   const x = side * 1.22, y = -.88;
   const c = Math.cos(pose.bank), s = Math.sin(pose.bank);
   return { x: pose.x + x * c - y * s, y: pose.y + x * s + y * c };
-}
-
-export function fonsBeams(time: number, pose = fonsPose(time)) {
-  const { age, cycle } = fonsPhase(time);
-  const order: Side = cycle % 2 ? 1 : -1;
-  return [0, 1].map(index => {
-    const side: Side = index === 0 ? order : order === -1 ? 1 : -1;
-    const start = index === 0 ? 4.12 : 5.61;
-    const stop = start + 1.04;
-    const active = age >= start && age < stop;
-    const warning = age < start ? fonsEase(start - .78, start - .06, age) : 0;
-    const sweep = fonsEase(start, stop, age);
-    return {
-      from: fonsEmitter(pose, side),
-      to: { x: side * (index === 0 ? mix(5.2, -.56, sweep) : mix(-.56, 5.2, sweep)), y: -8.7 },
-      width: index === 0 ? .27 : .32,
-      active, warning,
-    };
-  });
-}
-
-export function fonsBeamHits(time: number, player: Point) {
-  return fonsBeams(time).some(({ from, to, width, active }) => {
-    if (!active) return false;
-    const dx = to.x - from.x, dy = to.y - from.y;
-    const t = clamp(((player.x - from.x) * dx + (player.y - from.y) * dy) / (dx * dx + dy * dy));
-    return Math.hypot(player.x - from.x - dx * t, player.y - from.y - dy * t) < width + .18;
-  });
-}
-
-export function fonsVolleys(time: number, dt: number, player: Point) {
-  const { age, cycle } = fonsPhase(time);
-  const shots: (Point & { z: number; vx: number; vy: number; vz: number; planar: true })[] = [];
-  for (const [index, at] of shotsAt.entries()) {
-    if (at <= age - dt || at > age) continue;
-    const side: Side = (index + cycle) % 2 === 0 ? -1 : 1;
-    const origin = fonsEmitter(fonsPose(cycle * FONS_CYCLE + at), side);
-    const aim = Math.atan2(clamp(player.x, -2.9, 2.9) - origin.x, Math.max(2.9, origin.y - player.y));
-    for (let i = -3; i <= 3; i++) {
-      const angle = aim + i * .17;
-      const speed = 5.35 + .24 * Math.abs(i);
-      shots.push({ ...origin, z: 0, vx: speed * Math.sin(angle), vy: -speed * Math.cos(angle), vz: 0, planar: true });
-    }
-  }
-  return shots;
 }
 
 const wallSites = [

@@ -1,10 +1,22 @@
 import * as T from 'three';
 import { fonsPhase, fonsPose } from './combat';
+import type { FonsVariant } from './variants';
 
 const columns = 17, rows = 20;
 const step = 1 / 90;
 const clothFront = -1.02;
 type Seam = { a: number; b: number; length: number; stiffness: number };
+
+// Linear colors for the shadow, weave, sheen, lining, charge and closed seam.
+const dyes = {
+  normal: [[.006, .010, .016], [.018, .025, .031], [.013, .11, .18], [.003, .16, .061], [.012, .30, .45], [.26, .04, .50]],
+  rex: [[.043, .004, .009], [.16, .017, .024], [.43, .055, .075], [.28, .012, .028], [.43, .043, .088], [.56, .09, .13]],
+  invictus: [[.004, .014, .060], [.021, .066, .24], [.055, .16, .53], [.012, .091, .26], [.042, .28, .64], [.16, .21, .60]],
+};
+
+function mantleDye(variant: FonsVariant) {
+  return dyes[variant].map(([r, g, b]) => new T.Vector3(r, g, b));
+}
 
 function makePanel(side: number, material: T.ShaderMaterial) {
   const rest: number[] = [], uv: number[] = [], indices: number[] = [];
@@ -124,7 +136,7 @@ export function createFonsMantle() {
   const wrapped = { value: 0 };
   const material = new T.ShaderMaterial({
     side: T.DoubleSide,
-    uniforms: { charge, wrapped },
+    uniforms: { charge, wrapped, dye: { value: mantleDye('normal') }, goldTrim: { value: false } },
     vertexShader: /* glsl */ `
       varying vec2 cloth;
       varying vec3 surfaceNormal, eye;
@@ -140,6 +152,8 @@ export function createFonsMantle() {
       varying vec2 cloth;
       varying vec3 surfaceNormal, eye;
       uniform float charge, wrapped;
+      uniform vec3 dye[6];
+      uniform bool goldTrim;
       void main() {
         vec3 n = normalize(surfaceNormal) * (gl_FrontFacing ? 1.0 : -1.0);
         vec3 v = normalize(eye);
@@ -150,12 +164,21 @@ export function createFonsMantle() {
         float stripe = .82 + .18 * sin(cloth.x * 148.0 + 1.6 * sin(cloth.y * 23.0));
         float lining = smoothstep(.23, .86, -.18 * n.y + .55 * n.x + .27) *
           (.60 + .40 * sin(cloth.x * 12.4 + cloth.y * 3.0));
-        vec3 color = vec3(.006, .010, .016) + vec3(.018, .025, .031) * diffuse * stripe;
-        color += vec3(.013, .11, .18) * (shine * .52 + rim * .6);
-        color += vec3(.003, .16, .061) * lining * (.70 + .52 * charge);
-        color += vec3(.012, .30, .45) * (.8 * rim + .3 * shine) * charge * .42;
+        vec3 color = dye[0] + dye[1] * diffuse * stripe;
+        color += dye[2] * (shine * .52 + rim * .6);
+        color += dye[3] * lining * (.70 + .52 * charge);
+        color += dye[4] * (.8 * rim + .3 * shine) * charge * .42;
         float hem = smoothstep(.966, .993, cloth.x);
-        color += vec3(.26, .04, .50) * wrapped * (hem * .53 + rim * .14);
+        color += dye[5] * wrapped * (hem * .53 + rim * .14);
+        if(goldTrim){
+          float dist=min(1.0-cloth.x,cloth.y*.90);
+          float along=(1.0-cloth.x<cloth.y*.90)?cloth.y:cloth.x;
+          float braid=.65+.35*cos(along*220.0+dist*85.0);
+          float binding=1.0-smoothstep(.029,.045,dist);
+          float piping=exp(-abs(dist-.064)*156.0)*.66;
+          vec3 gold=vec3(.86,.45,.083)*(.42+.54*diffuse+.56*shine+.22*braid);
+          color=mix(color,gold,max(binding,piping));
+        }
         gl_FragColor = vec4(color, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -169,6 +192,10 @@ export function createFonsMantle() {
   let last = -Infinity;
   return {
     root,
+    setVariant(variant: FonsVariant) {
+      material.uniforms.dye.value = mantleDye(variant);
+      material.uniforms.goldTrim.value = variant === 'invictus';
+    },
     update(time: number, reset: boolean) {
       const { lift, wrap } = fonsPhase(time);
       charge.value = lift;
