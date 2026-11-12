@@ -78,9 +78,14 @@ test('Lantern Ray stays above the floor and its moving organ contacts agree with
  const plane=new T.Group(),scene=new T.Scene();scene.add(plane);const level=createLevel({plane,scene,signal:new AbortController().signal});plane.add(level.root);await level.ready;
  assert.equal(level.keyIntensity,0);assert.equal(level.skyIntensity,0);assert.equal(level.fixedCamera,true);
  let lights=0;level.root.traverse(n=>{if(n.isPointLight)lights++;});assert.equal(lights,8);
- const f=new Flight('sentry',[],'vex','biolume');f.phase='boss';
- for(const t of[0,1.8,6.2,15.7]){f.time=t;level.update({flight:f,time:106+t,reveal:1,animationTime:t,distance:22,elapsed:0,newFlight:false,fighterSpeed:0,droneSpeed:0});plane.updateMatrixWorld(true);
-  for(const side of[-1,1]){const a=level.contact(side,BOSS_CAMERA_DISTANCE,f),b=ray.rayOrgan(t,side);assert(Math.hypot(a.x-b.x,a.y-b.y)<1e-8);}
+ const f=new Flight('sentry',[],'vex','biolume');
+ const update = time => level.update({flight:f,time,reveal:f.phase==='boss'?1:0,animationTime:time,distance:22,elapsed:0,newFlight:false,fighterSpeed:0,droneSpeed:0});
+ f.time=f.stageDuration-1;update(f.time);assert.equal(level.boss.visible,false);
+ f.phase='boss';
+ for(const t of[0,.55,1,1.8,6.2,15.7]){f.time=t;update(f.stageDuration+t);plane.updateMatrixWorld(true);
+  assert.equal(level.boss.visible,true);
+  assert.equal(level.boss.position.y,ray.rayRoot(f.rayTime).y);
+  for(const side of[-1,1]){const a=level.contact(side,BOSS_CAMERA_DISTANCE,f),b=ray.rayOrgan(f.rayTime,side);assert(Math.hypot(a.x-b.x,a.y-b.y)<1e-8);}
   const p=level.contact(f.exposedCannonX,22,f);assert(Math.abs(p.y-f.bossAimY*ray.RAY_PROJECTION)<1e-8);
  }
  const bounds=new T.Box3().setFromObject(level.boss);assert(bounds.min.z>route.GROVE_GROUND_Z+1,'Backdrop hides the boss');

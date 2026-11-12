@@ -8,7 +8,7 @@ const {Flight,STEP,BOSS_PROJECTION}=await server.ssrLoadModule('/src/game.ts');
 const ray=await server.ssrLoadModule('/src/biolume/lantern-ray.ts');
 const {createLanternRay,createRaySeekerAssets,createRaySeekerRig}=await server.ssrLoadModule('/src/biolume/lantern-ray-rig.ts');
 function orb(x=0,y=-2){return{x,y,lane:x,age:0,fire:Infinity,hp:ray.RAY_SEEKER_HP,rayOrb:{heading:0,previousX:x,previousY:y}};}
-function quiet(weapon){const wing=['homing','cannon','laser','omega'].includes(weapon),f=new Flight(weapon==='towline'?'towline':'sentry',wing?[weapon]:[],'vex','biolume');f.phase='boss';f.stepBoss=()=>{};f.invulnerable=1000;f.cooldown=weapon==='primary'?0:1e5;f.droneCooldown=weapon==='sentry'?0:1e5;f.towlineCooldown=0;for(const w of f.wings)w.cooldown=0;return f;}
+function quiet(weapon){const wing=['homing','cannon','laser','omega'].includes(weapon),f=new Flight(weapon==='towline'?'towline':'sentry',wing?[weapon]:[],'vex','biolume');f.phase='boss';f.time=ray.RAY_ENTRANCE;f.stepBoss=()=>{};f.invulnerable=1000;f.cooldown=weapon==='primary'?0:1e5;f.droneCooldown=weapon==='sentry'?0:1e5;f.towlineCooldown=0;for(const w of f.wings)w.cooldown=0;return f;}
 
 test('the Lantern Ray bends wings and tail from rest, updates finite normals and skips frozen uploads',()=>{
  const r=createLanternRay(),g=r.mesh.geometry,p=g.attributes.position,n=g.attributes.normal;
@@ -21,7 +21,7 @@ test('the Lantern Ray bends wings and tail from rest, updates finite normals and
 
 test('organ anchors follow exactly the same deformed coordinates and projection as combat',()=>{
  assert.equal(ray.RAY_PROJECTION,BOSS_PROJECTION);const r=createLanternRay();
- for(const time of[0,1.2,4.1,7,19]){r.pose(time);r.root.updateMatrixWorld(true);for(const side of[-1,1]){const p=r.root.getObjectByName(side<0?'laser_contact_L':'laser_contact_R').getWorldPosition(new T.Vector3()),a=ray.rayShotPoint(p),b=ray.rayOrgan(time,side);assert(Math.hypot(a.x-b.x,a.y-b.y)<1e-8);}}
+ for(const time of[-1.2,-.8,-.4,0,1.2,4.1,7,19]){r.pose(time);r.root.updateMatrixWorld(true);for(const side of[-1,1]){const p=r.root.getObjectByName(side<0?'laser_contact_L':'laser_contact_R').getWorldPosition(new T.Vector3()),a=ray.rayShotPoint(p),b=ray.rayOrgan(time,side);assert(Math.hypot(a.x-b.x,a.y-b.y)<1e-8);}}
  r.release();r.mesh.geometry.dispose();r.mesh.material.dispose();
 });
 
@@ -38,7 +38,7 @@ test('the Lantern Ray fills more of its warned fan below half health', () => {
     flight.phase = 'boss';
     flight.bossHealth = health;
     flight.cooldown = flight.droneCooldown = Infinity;
-    while (flight.time < ray.RAY_FAN_AT) flight.step(STEP);
+    while (flight.rayTime < ray.RAY_FAN_AT) flight.step(STEP);
     assert.equal(flight.threats.length, count);
     assert(flight.threats.every(shot => shot.planar));
   }
@@ -70,7 +70,8 @@ test('relative swept interception catches a fast crossing and rejects a distant 
 
 test('Pulse clears seekers without a secondary burst, and victory freezes the pose and clears hazards',()=>{
  const f=quiet('primary');f.time=9.4;f.enemies=[orb()];f.threats=ray.raySeekerBurst({x:3,y:3},0);f.pulse();assert(f.enemies.every(e=>e.hp===0));assert.equal(f.threats.length,0);f.step(0);assert.equal(f.enemies.length,0);
- f.enemies=[orb()];f.damageBoss(1000);assert.equal(f.phase,'won');assert.equal(f.enemies.length,0);assert.equal(f.threats.length,0);const time=f.rayTime;f.step(2);assert.equal(f.rayTime,time);assert.equal(time,9.4);
+ const time=f.rayTime;
+ f.enemies=[orb()];f.damageBoss(1000);assert.equal(f.phase,'won');assert.equal(f.enemies.length,0);assert.equal(f.threats.length,0);f.step(2);assert.equal(f.rayTime,time);assert.equal(time,9.4-ray.RAY_ENTRANCE);
  const fresh=new Flight('sentry',[],'vex','biolume');assert.equal(fresh.bossHealth,ray.RAY_HP);assert.equal(fresh.enemies.length,0);
 });
 
@@ -92,4 +93,23 @@ test('the direct phase boundary retains existing shots, threats and firing coold
  f.cooldown=f.droneCooldown=10;f.fire({x:3,y:-4});const s=f.shots[0];const threat={x:3,y:4,z:0,vx:0,vy:-2,vz:0};f.threats.push(threat);
  f.step(STEP);assert.equal(f.phase,'boss');assert(f.shots.includes(s));assert(f.threats.includes(threat));assert(f.cooldown>9);assert(f.droneCooldown>9);
  f.step(STEP);assert(f.shots.includes(s));assert(f.threats.includes(threat));assert.equal(s.x,3);assert.equal(s.z,0);
+});
+
+test('a round already in flight hits the entering ray before its first warning', () => {
+ const f = new Flight('sentry', [], 'vex', 'biolume');
+ f.time = f.stageDuration - STEP / 2;
+ f.cooldown = f.droneCooldown = Infinity;
+ f.fire({ x: .5, y: -4 });
+ const [round] = f.shots;
+ f.step(STEP);
+ assert.equal(f.phase, 'boss');
+ assert(f.shots.includes(round));
+ while (f.rayTime < 0 && f.shots.includes(round)) {
+  f.step(STEP);
+  assert.equal(f.markers.length, 0);
+  assert.equal(f.threats.length, 0);
+ }
+ assert(f.rayTime < 0);
+ assert.equal(f.bossHealth, ray.RAY_HP - 1);
+ assert(!f.shots.includes(round));
 });

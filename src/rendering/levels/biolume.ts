@@ -16,7 +16,7 @@ import {createSeedPods} from '../../biolume/modules';
 import {createLanternRay,createRaySeekerAssets,createRaySeekerRig} from '../../biolume/lantern-ray-rig';
 import {RAY_SEEKER_POOL} from '../../biolume/lantern-ray';
 import {GROVE_ENEMY_POOL,groveEnemySize,groveMotion} from '../../biolume/combat';
-import {groveScroll,GROVE_DISTANCE,GROVE_POD_POOL,grovePods,groveSitePoint} from '../../biolume/route';
+import {GROVE_DISTANCE,GROVE_POD_POOL,grovePods,groveSitePoint} from '../../biolume/route';
 
 export const createLevel:LevelFactory=({plane,scene,signal})=>{
   const root=new T.Group();root.name='lantern-grove-level';
@@ -48,16 +48,15 @@ export const createLevel:LevelFactory=({plane,scene,signal})=>{
     capture:water.capture,
     contact:createBossLaserContact(plane,boss.root),
     update(frame){
-      const {flight:f,time,reveal,animationTime}=frame;plates.update(time);water.update(time,animationTime);
+      const {flight:f,time,animationTime}=frame;plates.update(time);water.update(time,animationTime);
       let pi=0;
       for(const mesh of pods.meshes)mesh.visible=false;
       for(const site of grovePods){const p=groveSitePoint(site,time,.3);if(Math.abs(p.y)>10)continue;
         const mesh=pods.meshes[pi++];if(!mesh)break;mesh.visible=true;mesh.scale.setScalar(site.size);mesh.position.set(p.x,p.y+.49*site.size,p.z);
         mesh.rotation.z=.025*Math.sin(animationTime*.8+site.at);
       }
-      const offset=(9-groveScroll(time))*16;
-      boss.root.visible=offset<16||reveal>0;
-      if(boss.root.visible){boss.pose(f.rayTime,1,f.bossHealth<=0);boss.root.position.y+=offset;}
+      boss.root.visible=time>=f.stageDuration;
+      if(boss.root.visible)boss.pose(f.rayTime,f.bossHealth<=0);
       for(const r of actors)r.root.visible=false;models.length=f.enemies.length;models.fill(undefined);let gi=0,si=0,fi=0;
       for(const[i,enemy]of f.enemies.entries()){
         if(enemy.rayOrb&&enemy.hp>0){const rig=seekers[si++];if(rig){rig.root.visible=true;rig.pose(enemy as typeof enemy&{rayOrb:NonNullable<typeof enemy.rayOrb>});models[i]=rig.root;}continue;}

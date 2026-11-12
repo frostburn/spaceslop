@@ -1,4 +1,5 @@
 export const RAY_HP=112,RAY_SIZE=8.6,RAY_CYCLE=5.45,RAY_FAN_AT=1.8,RAY_SEEKER_AT=4.15;
+export const RAY_ENTRANCE = 1.55;
 export const RAY_PROJECTION=22/34,RAY_ORGAN_RADIUS=.58,RAY_SEEKER_RADIUS=.34,RAY_SEEKER_HP=3,RAY_SEEKER_POOL=6;
 export const RAY_SEEKER_SPEED = 2.55;
 type Point={x:number;y:number};
@@ -10,9 +11,21 @@ export function raySignal(time:number){
  const t=Math.max(0,time),cycle=Math.floor(t/RAY_CYCLE),phase=t%RAY_CYCLE;
  return{cycle,phase,side:cycle%2?1:-1,fan:time>=0&&phase<RAY_FAN_AT?smooth((phase-.65)/1.15):0,seeker:time>=0&&phase<RAY_SEEKER_AT?smooth((phase-3.2)/.95):0};
 }
-export function rayRoot(time:number,reveal=1){return{x:.16*Math.sin(time*.41),y:3.15+.10*Math.sin(time*.53)+17*(1-smooth(reveal)),angle:.025*Math.sin(time*.47),sx:1+.012*Math.sin(time*.91),sy:1+.018*Math.sin(time*.91+.3)};}
-export function rayVertex(x:number,y:number,time:number,reveal=1,out={x:0,y:0,z:0}){
- const span=clamp((Math.abs(x)-.9)/3.3),phase=time*.95-span*1.7,fold=.32+.68*smooth(reveal);
+export function rayArrival(time: number) {
+ return smooth(1 + time / RAY_ENTRANCE);
+}
+export function rayRoot(time: number, arrival = rayArrival(time)) {
+ const remaining = 1 - arrival;
+ return {
+  x: .16 * Math.sin(time * .41) + .95 * remaining,
+  y: 3.15 + .10 * Math.sin(time * .53) + 10 * remaining,
+  angle: .025 * Math.sin(time * .47) - .13 * remaining,
+  sx: 1 + .012 * Math.sin(time * .91),
+  sy: 1 + .018 * Math.sin(time * .91 + .3),
+ };
+}
+export function rayVertex(x:number,y:number,time:number,arrival=rayArrival(time),out={x:0,y:0,z:0}){
+ const span=clamp((Math.abs(x)-.9)/3.3),phase=time*.95-span*1.7,fold=.32+.68*arrival;
  out.x=x*(1-span*.10*(.5+.5*Math.sin(phase)))*(1-span*(1-fold));
  out.x+=.22*Math.sin(time*.8-y*.55)*smooth((y-1.5)/2.6)*Math.exp(-x*x*3);
  out.y=y+.10*span*Math.sin(phase+.6);
@@ -43,9 +56,12 @@ export function raySeekerBurst(point:Point,heading:number){return Array.from({le
 
 // First contact with the animated body, in the top-down flight plane.
 export function rayBodyEntry(time:number,a:Point,b:Point){
- let first=Infinity;const root=rayRoot(time);
- for(const [x,y,rx,ry]of[[0,-.35,1.17,2],[0,-2.35,.35,.33],[-2.05,-.85,1.25,.8],[2.05,-.85,1.25,.8]]){
-  const p=rayVertex(x,y,time),c=Math.cos(root.angle),s=Math.sin(root.angle),k=22/(22-p.z);
+ const arrival = rayArrival(time), root = rayRoot(time, arrival);
+ const c = Math.cos(root.angle), s = Math.sin(root.angle);
+ let first=Infinity;
+ for(const [x,y,radius,ry]of[[0,-.35,1.17,2],[0,-2.35,.35,.33],[-2.05,-.85,1.25,.8],[2.05,-.85,1.25,.8]]){
+  const p=rayVertex(x,y,time,arrival),k=22/(22-p.z);
+  const rx = x === 0 ? radius : radius * (.68 + .32 * arrival);
   const cx=(root.x+p.x*root.sx*c-p.y*root.sy*s)*k,cy=(root.y+p.x*root.sx*s+p.y*root.sy*c)*k;
   const ax=(a.x-cx)/rx,ay=(a.y-cy)/ry,dx=(b.x-a.x)/rx,dy=(b.y-a.y)/ry;
   const cc=ax*ax+ay*ay-1,aa=dx*dx+dy*dy,bb=ax*dx+ay*dy,disc=bb*bb-aa*cc;

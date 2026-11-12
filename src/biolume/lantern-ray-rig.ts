@@ -1,5 +1,5 @@
 import * as T from 'three';
-import {RAY_SIZE,rayRoot,rayVertex,rayLocalOrgan,raySignal,RAY_SEEKER_RADIUS,type RayOrb} from './lantern-ray';
+import {RAY_SIZE,rayArrival,rayRoot,rayVertex,rayLocalOrgan,raySignal,RAY_SEEKER_RADIUS,type RayOrb} from './lantern-ray';
 
 function rayFallback(){
  const c=document.createElement('canvas');c.width=c.height=512;const p=c.getContext('2d')!;p.scale(512,512);
@@ -34,14 +34,15 @@ export function createLanternRay(){
  material.customProgramCacheKey=()=> 'lantern-ray-patterns-v1';
  const mesh=new T.Mesh(geometry,material);mesh.name='lantern-ray-raster';root.add(mesh);
  const anchors=[-1,1].map(side=>{const a=new T.Object3D();a.name=side<0?'laser_contact_L':'laser_contact_R';root.add(a);return a;});
- let last=NaN,lastReveal=NaN,lastDead=false;const point={x:0,y:0,z:0};
- function pose(time:number,reveal=1,dead=false){
-  const r=rayRoot(time,reveal),signal=raySignal(time);root.position.set(r.x,r.y,dead?-.25:0);root.rotation.z=r.angle;root.scale.set(r.sx,r.sy,1);
+ let last=NaN,lastDead=false;const point={x:0,y:0,z:0};
+ function pose(time:number,dead=false){
+  const arrival=rayArrival(time),r=rayRoot(time,arrival),signal=raySignal(time);root.position.set(r.x,r.y,dead?-.25:0);root.rotation.z=r.angle;root.scale.set(r.sx,r.sy,1);
   glow.clock.value=time;glow.fan.value=signal.fan;glow.seeker.value=signal.seeker;glow.side.value=signal.side;glow.life.value=dead?.12:1;
-  if(time===last&&reveal===lastReveal&&dead===lastDead)return;last=time;lastReveal=reveal;lastDead=dead;
-  for(let i=0;i<position.count;i++){rayVertex((uv.getX(i)-.5)*RAY_SIZE,(uv.getY(i)-.5)*RAY_SIZE,time,dead?.7:reveal,point);position.setXYZ(i,point.x,point.y,point.z);}
+  if(time===last&&dead===lastDead)return;last=time;lastDead=dead;
+  const wingSpread=dead?arrival*.784:arrival;
+  for(let i=0;i<position.count;i++){rayVertex((uv.getX(i)-.5)*RAY_SIZE,(uv.getY(i)-.5)*RAY_SIZE,time,wingSpread,point);position.setXYZ(i,point.x,point.y,point.z);}
   position.needsUpdate=true;geometry.computeVertexNormals();
-  anchors.forEach((a,i)=>{const p=rayLocalOrgan(i?1:-1);rayVertex(p.x,p.y,time,reveal,point);a.position.set(point.x,point.y,point.z);});
+  anchors.forEach((a,i)=>{const p=rayLocalOrgan(i?1:-1);rayVertex(p.x,p.y,time,wingSpread,point);a.position.set(point.x,point.y,point.z);});
  }
  pose(0);
  return{root,mesh,glow,fallback,pose,setArt(map:T.Texture){material.map=map;},release(){material.map=null;fallback.dispose();}};
