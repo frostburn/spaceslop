@@ -169,10 +169,10 @@ export function createDenBiker() {
       if (body.visible) twistThrottle(pose.rev);
       else grip.rotation.set(-.96 * pose.rev, 0, -.57 * pose.rev);
       for (const deform of bend) deform(time, pose.throttle, pose.bank);
-      poseBurners(plumes, time, pose.throttle);
+      poseBurners(plumes, time, alive ? pose.throttle : 0);
       flashMaterial.opacity = pose.flash;
       flashes.forEach((flash, index) => {
-        flash.visible = index === pose.firingGun;
+        flash.visible = alive && index === pose.firingGun;
         flash.scale.setScalar(.66 + .85 * pose.flash);
       });
     },

@@ -3,7 +3,7 @@ import { poseBurners, shipBurners } from './burners';
 import { addTowlineEmitters, createDroneRig, createFighterRig } from './ship-rigs';
 import { BOSS_MUZZLE_Z } from './encounters';
 import { BOSS_CAMERA_DISTANCE, BOSS_CANNON_RADIUS, BOSS_PROJECTION, BOSS_DEPTH, Flight, HEIGHT, WIDTH } from './game';
-import { WING_FLASH_TIME, wingWeapons, type WingWeapon } from './wing';
+import { WING_FLASH_TIME, WING_FORMATION, wingWeapons, type WingWeapon } from './wing';
 import { createWingPod } from './wing-pod';
 import { createCombatEffects } from './combat-effects';
 import { createLaserContactTrace } from './laser-contact';
@@ -18,6 +18,7 @@ import { loadCommonTextures } from './rendering/common-textures';
 import { tiltFlightCamera } from './rendering/flight-camera';
 import { boostFriendlyGlow } from './rendering/friendly-glow';
 import { disposeScene } from './rendering/dispose';
+import { createBossDefeat, createVictoryFlares, SALUTE_ANGLE, VICTORY_DURATION, victoryFormation, victoryMuzzleFlash } from './rendering/victory';
 export async function createFlightView(canvas: HTMLCanvasElement, level: LevelId, signal = new AbortController().signal) {
   const { createLevel } = await levelLoaders[level]();
   signal.throwIfAborted();
@@ -27,6 +28,7 @@ const sceneColor = 0x0b1020;
 const teal = 0x88f2ff;
 const orange = 0xff885d;
 const mint = 0xa1ffc5;
+const victoryShipY = -2.25;
 function planarProjectileLayer({x, y}: { x: number; y: number }, z: number) {
   const scale = (BOSS_CAMERA_DISTANCE - z) / BOSS_CAMERA_DISTANCE;
   return { x: x * scale, y: y * scale, z };
@@ -62,6 +64,12 @@ export class FlightView {
   private keyLight?: T.DirectionalLight;
   private skyLight?: T.HemisphereLight;
   private level: LevelScene;
+  private defeat: ReturnType<typeof createBossDefeat>;
+  private victoryFlares = createVictoryFlares();
+  private victoryFacing = new T.Quaternion();
+  private saluteFacing = new T.Quaternion();
+  private saluteRoll = new T.Quaternion();
+  private rollAxis = new T.Vector3(0, 0, 1);
   private disposed = false;
   private levelTime = 0;
   private pitch = 0;
@@ -71,6 +79,7 @@ export class FlightView {
   private playerBurners = shipBurners(this.player.root);
   private bubbleSources: T.Mesh[] = [];
   private drone = createDroneRig();
+  private droneYaw = 0;
   private droneBurners = shipBurners(this.drone);
   private towlineEmitters = addTowlineEmitters(this.drone);
   private droneGoal = new T.Mesh(new T.RingGeometry(0.31, 0.38, 4), new T.MeshBasicMaterial({
@@ -141,6 +150,7 @@ export class FlightView {
     this.renderer.shadowMap.type = T.PCFShadowMap;
     this.scene.add(this.plane);
     this.level = createLevel({ plane: this.plane, scene: this.scene, fighter: this.player.root, signal });
+    this.defeat = createBossDefeat(this.level.victoryBoss ?? this.level.boss, this.plane, levelId);
     this.perspective.far = this.level.farDistance ?? 240;
     this.perspective.updateProjectionMatrix();
     this.cannonMarker.renderOrder = 12;
@@ -177,6 +187,7 @@ export class FlightView {
     this.player.root.add(this.playerMuzzle.root);
     this.drone.add(this.droneMuzzle.root);
     this.plane.add(p.root, this.player.root, this.drone, this.droneGoal, this.towline, this.cannonMarker, this.pulse, ...this.markers, ...ammo, this.combat.root, ...pods, ...this.wingLasers.map(r => r.root), ...this.drops.map(r => r.root));
+    this.plane.add(...this.victoryFlares.map(flare => flare.root));
   }
   async warmup(signal: AbortSignal, repaint: () => void) {
     const nextFrame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
@@ -207,7 +218,7 @@ export class FlightView {
         });
     }
     const pods = this.wingPods.map(side => side.flatMap(r => [r.root, r.upgrade]));
-    const ordnance = [this.player.root, this.drone, this.towlineEmitters, ...Object.values(this.projectiles).map(r => r.root), this.combat.root, this.playerMuzzle.root, this.droneMuzzle.root, ...this.drops.slice(0, 4).map(r => r.root)];
+    const ordnance = [this.player.root, this.drone, this.towlineEmitters, ...Object.values(this.projectiles).map(r => r.root), this.combat.root, this.playerMuzzle.root, this.droneMuzzle.root, ...this.drops.slice(0, 4).map(r => r.root), ...this.victoryFlares.map(flare => flare.root)];
     const lasers = [...pods[1], ...this.wingLasers.map(r => r.root)];
     this.level.prepare?.();
     for (const objects of [...this.level.warmup, [this.cannonMarker, ...this.markers], pods[0], lasers, ordnance]) {
@@ -220,6 +231,7 @@ export class FlightView {
         this.combat.prime();
         this.playerMuzzle.prime();
         this.droneMuzzle.prime();
+        for (const flare of this.victoryFlares) flare.pose(VICTORY_DURATION);
         (Object.keys(wingWeapons) as WingWeapon[]).forEach((weapon, i) => this.drops[i].pose(weapon, 0));
       }
       if (objects === lasers)
@@ -268,16 +280,19 @@ export class FlightView {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
     this.renderer.setSize(width, height, false);
   }
-  render(flight: Flight, elapsed = 0) {
+  render(flight: Flight, elapsed = 0, victoryTime?: number) {
     if (this.disposed || !this.surfacesReady)
       return;
     if (flight.level !== this.levelId)
       throw new Error('A flight view belongs to one level.');
+    victoryTime = flight.phase === 'won' ? victoryTime ?? 0 : undefined;
+    const formation = victoryTime === undefined ? 0 : victoryFormation(victoryTime);
     const newFlight = flight !== this.lastFlight;
     this.lastFlight = flight;
     this.animationTime = newFlight ? 0 : this.animationTime + elapsed;
     if (newFlight) {
       this.levelTime = 0;
+      this.defeat.reset();
       this.seenShots = new WeakSet();
       this.seenDrops = new WeakMap();
       this.previousDrops = [];
@@ -294,14 +309,14 @@ export class FlightView {
       this.levelTime = flight.time;
     if (flight.phase === 'approach')
       this.levelTime = flight.stageDuration + flight.time;
-    if (flight.phase === 'boss')
-      this.levelTime = flight.stageDuration + flight.transitionDuration + flight.time;
+    if (flight.phase === 'boss' || flight.phase === 'won')
+      this.levelTime = flight.stageDuration + flight.transitionDuration + flight.bossTime;
     if (flight.level === 'wormhole') this.levelTime = flight.wormholeTime;
     if (flight.phase === 'stage')
       this.swing = 0;
     if (flight.phase === 'approach')
       this.swing = Math.min(flight.time / flight.transitionDuration, 1);
-    if (flight.phase === 'boss')
+    if (flight.phase === 'boss' || flight.phase === 'won')
       this.swing = 1;
     const normal = this.swing ** 2 * (3 - 2 * this.swing);
     const eased = this.level.reveal?.(this.levelTime, normal) ?? normal;
@@ -335,27 +350,30 @@ export class FlightView {
       camera.up.set(0, 1, 0).applyQuaternion(this.rotation);
       camera.lookAt(0, 0, 0);
     }
-    this.player.root.position.set(flight.player.x, flight.player.y, 0);
-    this.player.root.rotation.x = orientation ? -this.pitch : -(this.level.shipPitch ?? 1.18) * eased;
-    this.player.root.rotation.y = this.bank;
-    this.player.root.visible = flight.hull > 0 && Math.floor(flight.invulnerable * 12) % 2 === 0;
-    const fighterVelocity = this.fighterMotion(flight.player, elapsed, newFlight);
+    if (victoryTime !== undefined) this.victoryFacing.copy(this.plane.quaternion).invert().multiply(camera.quaternion);
+    this.player.root.position.set(T.MathUtils.lerp(flight.player.x, 0, formation),
+      T.MathUtils.lerp(flight.player.y, victoryShipY, formation), 0);
+    this.player.root.rotation.set(orientation ? -this.pitch : -(this.level.shipPitch ?? 1.18) * eased, this.bank, 0);
+    if (formation > 0) this.player.root.quaternion.slerp(this.victoryFacing, formation);
+    this.player.root.visible = flight.hull > 0 && (victoryTime !== undefined || Math.floor(flight.invulnerable * 12) % 2 === 0);
+    const fighterVelocity = this.fighterMotion(this.player.root.position, elapsed, newFlight);
     const fighterSpeed = fighterVelocity.length();
     poseBurners(this.playerBurners, this.animationTime, Math.min(1, 0.36 + fighterSpeed * 0.1 + 0.34 * Math.sin(eased * Math.PI)));
-    this.drone.rotation.x = orientation ? -this.pitch : -(this.level.dronePitch ?? 0) * eased;
-    this.drone.rotation.y = this.bank;
-    this.drone.position.set(flight.drone.x, flight.drone.y, 0.23);
+    this.drone.position.set(T.MathUtils.lerp(flight.drone.x, 0, formation),
+      T.MathUtils.lerp(flight.drone.y, victoryShipY - 1.4, formation), 0.23);
     this.drone.visible = flight.hull > 0;
     this.towlineEmitters.visible = flight.droneWeapon === 'towline';
-    const droneVelocity = this.droneMotion(flight.drone, elapsed, newFlight);
+    const droneVelocity = this.droneMotion(this.drone.position, elapsed, newFlight);
     const droneSpeed = droneVelocity.length();
     if (newFlight)
-      this.drone.rotation.z = 0;
+      this.droneYaw = 0;
     if (droneSpeed > 0.9) {
-      const delta = Math.atan2(-droneVelocity.x, droneVelocity.y) - this.drone.rotation.z;
+      const delta = Math.atan2(-droneVelocity.x, droneVelocity.y) - this.droneYaw;
       const turn = Math.atan2(Math.sin(delta), Math.cos(delta));
-      this.drone.rotation.z += turn * (1 - Math.exp(-21 * elapsed));
+      this.droneYaw += turn * (1 - Math.exp(-21 * elapsed));
     }
+    this.drone.rotation.set(orientation ? -this.pitch : -(this.level.dronePitch ?? 0) * eased, this.bank, this.droneYaw);
+    if (formation > 0) this.drone.quaternion.slerp(this.victoryFacing, formation);
     poseBurners(this.droneBurners, this.animationTime, Math.min(1, 0.1 + droneSpeed * 0.044));
     this.droneGoal.visible = Boolean(flight.droneTarget) && this.drone.visible;
     if (flight.droneTarget)
@@ -382,7 +400,8 @@ export class FlightView {
       elapsed,
       newFlight,
       fighterSpeed,
-      droneSpeed
+      droneSpeed,
+      victory: victoryTime === undefined ? undefined : { time: victoryTime, fighter: this.player.root.position, drone: this.drone.position },
     };
     this.level.update(levelFrame);
     this.cannonMarker.visible = flight.phase === 'boss' && !flight.planarBoss;
@@ -391,7 +410,7 @@ export class FlightView {
       this.cannonMarker.position.set(p.x, p.y, 0);
       this.cannonMarker.scale.setScalar(Math.min(1.25, flight.bossTargetRadius / BOSS_CANNON_RADIUS));
     }
-    this.drawWings(flight, eased, fighterVelocity, flight.level === 'titan' ? (eased > 0 ? distance / eased : undefined) : distance);
+    this.drawWings(flight, eased, fighterVelocity, flight.level === 'titan' ? (eased > 0 ? distance / eased : undefined) : distance, victoryTime);
     for (const [index, model] of this.drops.entries()) {
       const drop = flight.drops[index];
       model.root.visible = Boolean(drop);
@@ -404,6 +423,8 @@ export class FlightView {
     }
     this.drawProjectiles(flight);
     this.drawFeedback(flight, elapsed);
+    if (victoryTime !== undefined && this.defeat.pose(victoryTime, (point, tint) => this.combat.emit('defeat', point, tint)))
+      this.combat.update(0);
     for (const [index, ring] of this.markers.entries()) {
       const marker = flight.markers[index];
       ring.visible = Boolean(marker) && flight.phase === 'boss';
@@ -412,32 +433,49 @@ export class FlightView {
         ring.material.opacity = 0.7 + 0.3 * Math.sin(flight.time * 18);
       }
     }
-    this.pulse.visible = flight.pulseFlash > 0;
+    const pulse = Math.max(0, flight.pulseFlash - (victoryTime ?? 0));
+    this.pulse.visible = pulse > 0;
     this.pulse.position.copy(this.player.root.position);
-    this.pulse.scale.setScalar(1 + (0.3 - flight.pulseFlash) * 25);
-    this.pulse.material.opacity = flight.pulseFlash / 0.3;
+    this.pulse.scale.setScalar(1 + (0.3 - pulse) * 25);
+    this.pulse.material.opacity = pulse / 0.3;
     this.level.effects?.(this.plane, this.bubbleSources, levelFrame, this.renderer);
     this.level.capture?.(this.renderer, camera);
     if (this.level.present) this.level.present(this.renderer, this.scene, camera);
     else this.renderer.render(this.scene, camera);
   }
-  private drawWings(flight: Flight, reveal: number, velocity: T.Vector2, distance?: number) {
+  private drawWings(flight: Flight, reveal: number, velocity: T.Vector2, distance?: number, victoryTime?: number) {
     const fighting = flight.weaponsActive;
     const throttle = Math.min(1, 0.38 + velocity.length() * 0.12 + 0.24 * Math.sin(reveal * Math.PI));
+    const formation = victoryTime === undefined ? 0 : victoryFormation(victoryTime);
+    const saluteFlash = victoryTime === undefined ? 0 : victoryMuzzleFlash(victoryTime);
     for (const [index, wing] of flight.wings.entries()) {
       const laser = this.wingLasers[index];
       const origin = flight.wingOrigin(wing.side);
+      if (victoryTime !== undefined)
+        this.saluteFacing.copy(this.victoryFacing).multiply(this.saluteRoll.setFromAxisAngle(this.rollAxis, -wing.side * SALUTE_ANGLE));
       for (const pod of this.wingPods[index]) {
         pod.root.visible = flight.hull > 0 && wing.weapon === pod.weapon;
         if (!pod.root.visible)
           continue;
         const time = this.animationTime + index * 0.47;
-        pod.root.position.set(origin.x, origin.y, 0);
+        pod.root.position.set(T.MathUtils.lerp(origin.x, wing.side * WING_FORMATION.x, formation),
+          T.MathUtils.lerp(origin.y, victoryShipY + WING_FORMATION.y, formation), 0);
         pod.root.rotation.set((this.level.orientation ? -this.pitch : -(this.level.shipPitch ?? 1.18) * reveal) + 0.09 * Math.sin(time * 6), this.bank - 0.046 * velocity.x + 0.14 * Math.sin(time * 5), 0.08 * Math.sin(time * 4));
+        if (formation > 0) pod.root.quaternion.slerp(this.saluteFacing, formation);
         const recoil = fighting ? wing.flash / WING_FLASH_TIME : 0;
         const charge = pod.weapon === 'omega' && fighting ? Math.max(0, 1 - wing.cooldown / 0.28) : 0;
         const activity = wing.beamEnd && fighting ? 0.55 + 0.13 * Math.sin(time * 31) : Math.max(recoil, charge);
-        pod.pose(time, throttle, activity, recoil, wing.upgraded);
+        pod.pose(time, throttle, Math.max(activity, saluteFlash), recoil, wing.upgraded);
+      }
+      const salute = this.victoryFlares[index];
+      salute.pose(victoryTime);
+      if (salute.root.visible) {
+        const pod = this.wingPods[index].find(model => model.weapon === wing.weapon);
+        const launcher = pod?.root ?? this.player.root;
+        // Empty slots use the fighter's wingtip signal flares.
+        const muzzle = salute.root.position.set(pod ? 0 : wing.side * .72, pod ? .08 : -.04, .11);
+        this.plane.worldToLocal(launcher.localToWorld(muzzle));
+        salute.root.quaternion.copy(this.saluteFacing);
       }
       laser.root.visible = fighting && flight.hull > 0 && Boolean(wing.beamEnd);
       if (laser.root.visible && wing.beamEnd) {
@@ -522,8 +560,8 @@ export class FlightView {
           at: -1
         });
     const bossLaserDamage = flight.bossLaserDamage - this.previousBossLaserDamage;
-    if (this.previousBossHealth - flight.bossHealth - bossLaserDamage > 1e-6 && this.animationTime - this.bossHitAt > 0.07) {
-      this.combat.emit(flight.bossHealth === 0 ? 'kill' : 'hit', flight.level==='summer'&&flight.summerLastHit?flight.summerLastHit:flight.isFleet||flight.isFonsFight?
+    if (flight.phase !== 'won' && this.previousBossHealth - flight.bossHealth - bossLaserDamage > 1e-6 && this.animationTime - this.bossHitAt > 0.07) {
+      this.combat.emit('hit', flight.level==='summer'&&flight.summerLastHit?flight.summerLastHit:flight.isFleet||flight.isFonsFight?
         planarProjectileLayer({ x: flight.exposedCannonX, y: flight.bossAimY }, .85):{
         x: flight.exposedCannonX,
         y: flight.bossAimY,

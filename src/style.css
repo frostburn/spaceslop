@@ -93,6 +93,22 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 }
 #panel > p { max-width: 27ch; font-size: .83rem; line-height: 1.4; margin: .9rem 0; }
 #panel small { max-width: 32ch; color: var(--muted); font-size: .68rem; margin-top: .8rem; }
+#panel.victory-results {
+  align-content: stretch;
+  grid-template-rows: auto auto auto minmax(.75rem, 1fr) auto auto;
+  padding-top: clamp(.7rem, 5cqh, 2.8rem);
+  background: linear-gradient(#080d18f0, #080d1870 24%, transparent 41%, transparent 68%, #080d18ee);
+}
+#panel.victory-results h1 {
+  font-size: clamp(1.2rem, 7cqw, 2.5rem);
+  color: #fff4dc;
+  text-shadow: 0 2px 8px #080b14;
+}
+#panel.victory-results > p { max-width: 100%; margin: .45rem 0 0; text-shadow: 0 1px 5px #080b14; }
+#panel.victory-results #promotion-subtitle { color: #b7f4f4; font-weight: 700; }
+#panel.victory-results .flight-actions { grid-row: 5; }
+#panel.victory-results #return-menu { grid-row: 6; }
+#panel.victory-results small { display: none; }
 .flight-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; }
 #start, #next-mission { background: #b7f4f4; border-color: #b7f4f4; color: #06111b; font-weight: bold; }
 #next-mission:not([hidden]) + #start { background: #16202f; border-color: var(--line); color: inherit; font-weight: normal; }
@@ -214,6 +230,10 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .hud, .controls { flex-direction: column; align-items: start; justify-content: center; align-self: center; }
   .controls { align-items: end; text-align: right; }
   #panel small { display: none; }
+  #panel.victory-results > p { font-size: .72rem; }
+  #panel.victory-results .flight-actions { width: 100%; flex-wrap: nowrap; gap: .25rem; }
+  #panel.victory-results .flight-actions button { min-width: 0; padding-inline: .35rem; font-size: .7rem; }
+  #panel.victory-results #return-menu { margin-top: .35rem; }
 }
 
 

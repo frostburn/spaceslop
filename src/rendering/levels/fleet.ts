@@ -68,8 +68,9 @@ export const createLevel: LevelFactory = ({ signal }) => {
       scenery.update(time, animationTime, distance);
       distant.update(time, distance);
       pursuit.update(time, distance);
-      boss.root.visible = time >= FLEET_DURATION && flight.bossHealth > 0;
-      if (boss.root.visible) boss.pose(flight.fleetBossTime, flight.fleetBossAttack.rapid, distance);
+      const alive = flight.bossHealth > 0;
+      boss.root.visible = time >= FLEET_DURATION && (alive || flight.phase === 'won');
+      if (boss.root.visible) boss.pose(flight.fleetBossTime, flight.fleetBossAttack.rapid, distance, alive);
       for (const [part, depth] of [[guns.root, -1.42], [traffic.root, -.59]] as const) {
         const factor = 1 - depth / distance;
         part.position.z = depth;

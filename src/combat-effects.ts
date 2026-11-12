@@ -1,8 +1,9 @@
 import * as T from 'three';
 
-type Kind = 'hit' | 'kill' | 'pickup';
+type Kind = 'hit' | 'kill' | 'pickup' | 'defeat';
 const specs = { hit: { life: 0.22, size: 0.1, spread: 1.5, sparks: 4 },
   kill: { life: 0.42, size: 0.22, spread: 2.2, sparks: 8 },
+  defeat: { life: 0.62, size: 0.33, spread: 3.2, sparks: 8 },
   pickup: { life: 0.55, size: 0.28, spread: 1.65, sparks: 8 } };
 const material = new T.MeshBasicMaterial({ color: 0xffffff, transparent: true,
   blending: T.AdditiveBlending, opacity: 0.85, depthTest: false, depthWrite: false });

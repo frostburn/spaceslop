@@ -46,6 +46,7 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
   return {
     root,
     boss: boss.root,
+    victoryBoss: fons.root,
     models: [],
     ready,
     stageDistance: BOSS_CAMERA_DISTANCE,
@@ -81,15 +82,15 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
       environment.dispose();
     },
     contact: createBossLaserContact(plane, boss.root),
-    update({ flight, time, distance, newFlight }) {
+    update({ flight, time, distance, newFlight, victory }) {
       const frame = wormholeFrame(time, flight.stageDuration);
       const fonsTime = flight.fonsTime;
       const finale = flight.isFonsFight ? fonsEase(-FONS_APPROACH, -1.2, fonsTime) : 0;
       frame.echo *= 1 - finale;
       frame.lensStrength += finale * .32 * (1 - fonsEase(-1.2, .8, fonsTime));
-      mirror = fighter.visible ? wormholeReflectionPose(flight.player.x, flight.player.y, apertureY * halfHeight) : undefined;
+      mirror = fighter.visible ? wormholeReflectionPose(fighter.position.x, fighter.position.y, apertureY * halfHeight) : undefined;
       tunnel.pose(frame, mirror);
-      fons.root.visible = flight.isFonsFight && fonsTime >= -FONS_APPROACH + .61 && flight.bossHealth > 0;
+      fons.root.visible = flight.isFonsFight && fonsTime >= -FONS_APPROACH + .61 && (flight.bossHealth > 0 || victory !== undefined);
       attacks.root.visible = flight.isFonsFight && fonsTime >= -1.7 && flight.bossHealth > 0;
       if (fons.root.visible) {
         fons.setVariant(flight.fonsVariant);
@@ -102,7 +103,7 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
       tunnel.setFons(fonsTime, finale, storm, rocks);
       lightning.root.visible = false;
       const crackle = flight.isFonsFight && fonsTime < 0 ? lightning.update(fonsTime, distance) : 0;
-      const shipRadius = Math.hypot(flight.player.x / halfHeight - frame.lensX, flight.player.y / halfHeight - apertureY - frame.lensY);
+      const shipRadius = Math.hypot(fighter.position.x / halfHeight - frame.lensX, fighter.position.y / halfHeight - apertureY - frame.lensY);
       const waveLight = frame.waveStrength * Math.exp(-8 * Math.abs(frame.waveRadius - shipRadius));
       rim.color.copy(amber).lerp(cyan, finale).lerp(violet, crackle * .68);
       rim.intensity = .54 + frame.echo * 1.65 + waveLight * 1.8 + finale * 1.4 + crackle * .82;
