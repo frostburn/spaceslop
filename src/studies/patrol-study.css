@@ -41,7 +41,8 @@ figure > canvas, .preview {
   background-image: linear-gradient(#87a5ad11 1px, transparent 1px), linear-gradient(90deg, #87a5ad11 1px, transparent 1px);
   background-size: 10% 10%;
 }
-figure > canvas { cursor: crosshair; }
+figure > canvas { cursor: grab; touch-action: none; }
+figure > canvas:active { cursor: grabbing; }
 .preview { position: relative; }
 .preview.difference { background: #000; }
 #mesh { position: absolute; inset: 0; pointer-events: none; }

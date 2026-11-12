@@ -3,7 +3,7 @@ import { denPatrolWarp } from '../den/patrol';
 import { createPatrolWarpCard, patrolAtlasFor, patrolBandAngle, patrolBandXs, type PatrolBand } from '../den/patrol-warp';
 import { loadEncounterTexture } from '../encounter-texture';
 import { createPatrolDifference } from './patrol-difference';
-import { bandHasLock, bandLimits, meshFoldsNear, pointLimits, replaceBandPoint, roundPatrolCoordinate, type PatrolBands } from './patrol-registration';
+import { bandHasLock, bandLimits, dragPatrolPoint, meshFoldsNear, patrolSourceSpan, pointLimits, replaceBandPoint, roundPatrolCoordinate, type PatrolBands } from './patrol-registration';
 import { tunePatrolHandoff } from './patrol-tuning';
 import './patrol-study.css';
 
@@ -135,7 +135,7 @@ function start() {
   function paintSource(context: CanvasRenderingContext2D, frame: number, pane: number, selectedPoint: number) {
     const size = square(context.canvas);
     const [left, top, right, bottom, pivotX, pivotY] = atlas.crops[frame];
-    const scale = size / (atlas.width === atlas.height ? 336 : 570);
+    const scale = size / patrolSourceSpan(atlas);
     const x = size / 2 - pivotX * scale, y = size / 2 - pivotY * scale;
     context.clearRect(0, 0, size, size);
     const image = texture?.image as HTMLImageElement | undefined;
@@ -282,7 +282,7 @@ function start() {
     requestRender();
   }
 
-  function applyBands(frame: number, next: readonly PatrolBand[]) {
+  function applyBands(frame: number, next: readonly PatrolBand[], quiet = false) {
     const candidate = [...bands];
     candidate[frame] = next;
     try {
@@ -292,7 +292,7 @@ function start() {
       return true;
     } catch {
       card.setRegistration(atlas, bands);
-      status.textContent = 'That edit would fold the mesh or move an anchor outside it.';
+      if (!quiet) status.textContent = 'That edit would fold the mesh or move an anchor outside it.';
       requestRender();
       return false;
     }
@@ -421,23 +421,83 @@ function start() {
       exportText.select();
     }
   });
-  sources.forEach(({ canvas }, pane) => canvas.addEventListener('pointerdown', event => {
-    if (tuning) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = (event.clientX - rect.left) * canvas.width / rect.width;
-    const y = (event.clientY - rect.top) * canvas.height / rect.height;
-    let nearest = -1, distance = 12 * canvas.width / rect.width;
-    for (const [i, point] of sourcePoints[pane].entries()) {
-      const d = Math.hypot(x - point.x, y - point.y);
-      if (d < distance) { distance = d; nearest = i; }
+  sources.forEach(({ canvas }, pane) => {
+    let drag: {
+      pointer: number; frame: number; band: number; point: number;
+      rows: readonly PatrolBand[]; start: Point; origin: Point; last: Point; moved: boolean;
+    } | undefined;
+
+    function canvasPosition(event: PointerEvent) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (event.clientX - rect.left - canvas.clientLeft) * canvas.width / canvas.clientWidth,
+        y: (event.clientY - rect.top - canvas.clientTop) * canvas.height / canvas.clientHeight,
+      };
     }
-    if (nearest < 0) return;
-    const { columns } = atlas.grid;
-    editPose.value = String(pane);
-    editBand.value = String(Math.floor(nearest / columns));
-    editPoint.value = String(nearest % columns);
-    setPlaying(false);
-  }));
+
+    canvas.addEventListener('pointerdown', event => {
+      if (tuning || drag || !event.isPrimary || event.button !== 0) return;
+      const start = canvasPosition(event);
+      let nearest = -1, distance = 12 * canvas.width / canvas.clientWidth;
+      for (const [i, point] of sourcePoints[pane].entries()) {
+        const d = Math.hypot(start.x - point.x, start.y - point.y);
+        if (d < distance) { distance = d; nearest = i; }
+      }
+      if (nearest < 0) return;
+      const { columns } = atlas.grid;
+      const band = Math.floor(nearest / columns), point = nearest % columns;
+      editPose.value = String(pane);
+      editBand.value = String(band);
+      editPoint.value = String(point);
+      const { frame } = selected();
+      setPlaying(false);
+      if (locks[frame].has(nearest)) {
+        status.textContent = 'This point is locked.';
+        return;
+      }
+      const rows = bands[frame], row = rows[band];
+      const origin = { x: patrolBandXs(row, atlas.gutter)[point], y: row[0] };
+      drag = { pointer: event.pointerId, frame, band, point, rows, start, origin, last: origin, moved: false };
+      canvas.setPointerCapture(event.pointerId);
+    });
+
+    canvas.addEventListener('pointermove', event => {
+      if (!drag || drag.pointer !== event.pointerId || tuning) return;
+      const { frame, band, point, rows, start, origin, last } = drag;
+      if (selected().frame !== frame) return;
+      const position = canvasPosition(event), scale = patrolSourceSpan(atlas) / canvas.width;
+      const angle = patrolBandAngle(atlas, frame), cos = Math.cos(angle), sin = Math.sin(angle);
+      const dx = position.x - start.x, dy = position.y - start.y;
+      if (!drag.moved && Math.hypot(dx, dy) < 2 * canvas.width / canvas.clientWidth) return;
+      drag.moved = true;
+      const target = { x: origin.x + (cos * dx + sin * dy) * scale, y: origin.y + (-sin * dx + cos * dy) * scale };
+      const attempt = ({ x, y }: Point) => {
+        const next = dragPatrolPoint(atlas, rows, locks[frame], frame, band, point, x, y);
+        return next === bands[frame] || applyBands(frame, next, true);
+      };
+      if (attempt(target)) {
+        drag.last = target;
+        if (Math.abs(bands[frame][band][0] - target.y) > .2) {
+          status.textContent = 'Drag reached a locked band or the edge of the mesh.';
+        }
+        return;
+      }
+      // A fast pointer motion can land past the valid region. Keep the
+      // farthest valid position along that move instead of dropping the drag.
+      let lower = 0, upper = 1;
+      for (let i = 0; i < 7; i++) {
+        const t = (lower + upper) / 2;
+        const step = { x: T.MathUtils.lerp(last.x, target.x, t), y: T.MathUtils.lerp(last.y, target.y, t) };
+        if (attempt(step)) {
+          lower = t;
+          drag.last = step;
+        } else upper = t;
+      }
+      status.textContent = 'Drag limited by the mesh or an anchor.';
+    });
+
+    canvas.addEventListener('lostpointercapture', () => { drag = undefined; });
+  });
 
   const resize = new ResizeObserver(requestRender);
   resize.observe(sources[0].canvas);
