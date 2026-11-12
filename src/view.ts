@@ -454,6 +454,7 @@ export class FlightView {
           const hullEnd = this.laserContact(origin, { x: origin.x, y: 9 }, this.level.boss, distance);
           if (hullEnd.y < 9 - 1e-5) end = hullEnd;
         }
+        if (flight.phase === 'boss' && flight.keepDepthShotsForward && end.y < origin.y) end = wing.beamEnd;
         const contact = typeof target === 'number' || Boolean(model);
         if (flight.isDen) {
           const z = .85;
@@ -468,7 +469,7 @@ export class FlightView {
     }
   }
   private drawProjectiles(flight: Flight) {
-    const shots = flight.planarBoss ? flight.shots.map(s => ({ ...s, ...planarProjectileLayer(s, .85) })) : flight.shots;
+    const shots = flight.planarBoss && !flight.isFonsFight ? flight.shots.map(s => ({ ...s, ...planarProjectileLayer(s, .85) })) : flight.shots;
     this.projectiles.ship.draw(shots.filter((shot) => !shot.drone && !shot.wing), this.animationTime);
     this.projectiles.drone.draw(shots.filter((shot) => shot.drone), this.animationTime);
     for (const weapon of ['homing', 'cannon', 'omega'] as const) {
