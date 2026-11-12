@@ -11,12 +11,14 @@ assert((await stat(join(root,'assets',entry))).size<40000,'The menu bundle grew 
 const serviceWorker=await readFile(join(root,'sw.js'),'utf8');
 assert(!serviceWorker.includes('url:"assets/three-'),'The menu precaches the 3D engine.');
 assert(!serviceWorker.includes('url:"assets/flight-session-'),'The menu precaches the flight runtime.');
+assert(!serviceWorker.includes('officers/'),'The menu precaches briefing artwork.');
 const precacheFiles=[...serviceWorker.matchAll(/url:"([^"]+)"/g)].map(match=>match[1]);
 let shellBytes=0;for(const file of precacheFiles)shellBytes+=(await stat(join(root,file))).size;
 assert(shellBytes<80000,'The precached menu grew beyond 80 KB.');
 
 for(const id of ids){
  const pack=packs.levels[id];assert(pack.required.length>1);
+ assert(pack.media.filter(path=>path.startsWith('officers/')&&!path.startsWith('officers/rank-insignia.png?')).length<=1, 'Unrelated officers entered a level package.');
  assert.equal(new Set(pack.media).size,pack.media.length,'Duplicate media in offline package');
  for(const file of pack.media){const url=new URL(file,'https://assets.invalid/');const hash=createHash('sha256').update(await readFile(join(root,url.pathname))).digest('hex').slice(0,12);assert.equal(url.searchParams.get('v'),hash,'Unversioned or stale media URL: '+file);}
 assert(pack.required.includes(pack.entry));

@@ -1,11 +1,11 @@
 import type { Plugin } from 'vite';
 import type { OutputChunk, OutputBundle } from 'rollup';
 import { levels, type LevelId } from '../src/levels';
-import { levelTextures } from '../src/assets/catalog';
+import { levelBriefingFiles, levelTextures } from '../src/assets/catalog';
 // Only the static dependency closure of the menu is precached. Each dynamic
 // level entry has its own offline package; following dynamicImports here would
 // silently download the entire game again.
-export function levelPackages(media: Record<string, string>, portraits: string[]) {
+export function levelPackages(media: Record<string, string>, portraits: string[], briefings: Record<string, string>) {
   const shellFiles = new Set<string>(['index.html', 'level-packages.json']);
   const plugin: Plugin = {
     name: 'spaceslop-level-packages',
@@ -47,7 +47,11 @@ export function levelPackages(media: Record<string, string>, portraits: string[]
         return [id, {
           entry: levelEntry,
           required: [...required].sort(),
-          media: [...portraits, ...levelTextures[id].map(key => media[key]).filter(Boolean)]
+          media: [
+            ...portraits,
+            ...levelBriefingFiles(id).map(path => briefings[path]).filter(Boolean),
+            ...levelTextures[id].map(key => media[key]).filter(Boolean),
+          ],
         }];
       }));
       this.emitFile({

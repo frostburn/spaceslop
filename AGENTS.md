@@ -15,6 +15,6 @@
 ## Architecture and maintenance
 
 - Read `docs/architecture.md` before changing startup, loading, level rendering or offline behavior. `src/assets/catalog.ts` owns media paths and per-level requirements.
-- Keep the main menu free of renderer/game imports and media requests. Construct, load and warm only the chosen level through `src/rendering/levels/` and its typed contract.
+- Keep the menu free of renderer/game imports and the mission list free of media requests. An opened briefing can load its portrait and the shared pilot portraits. Construct, load and warm only the chosen level on launch through `src/rendering/levels/` and its typed contract.
 - Preserve scoped session cleanup, procedural fallbacks, fixed-step simulation and pause/results freezing. Own offscreen targets and release them when leaving a level.
 - Run `npm test`, `npm run build` and `npm run test:build` for relevant changes. Loading/PWA changes also need browser checks for level isolation, cancellation/switching, and production offline play with and without media.

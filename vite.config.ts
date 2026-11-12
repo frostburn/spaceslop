@@ -2,7 +2,8 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { createHash } from 'node:crypto';
-import { textureFiles, studyTextureFiles } from './src/assets/catalog';
+import { officerPortraitFile, rankInsigniaFile, textureFiles, studyTextureFiles } from './src/assets/catalog';
+import { officers, type OfficerId } from './src/campaign/missions';
 import { levelPackages } from './scripts/level-packages';
 
 const icons = [192, 512].flatMap((size) => {
@@ -31,7 +32,10 @@ function versioned(src: string) {
 }
 const encounterTextures = Object.fromEntries(Object.entries(textureFiles).filter(([, src]) => existsSync(new URL('./public/' + src, import.meta.url))).map(([key, src]) => [key, versioned(src)]));
 const portraitUrls = Object.fromEntries(portraits.map(src => [src, versioned(src)]));
-const packages = levelPackages(encounterTextures, Object.values(portraitUrls));
+const briefingPaths = [rankInsigniaFile, ...(Object.keys(officers) as OfficerId[]).map(officerPortraitFile)];
+const briefingUrls = Object.fromEntries(briefingPaths.filter(src => existsSync(new URL('./public/' + src, import.meta.url)))
+  .map(src => [src, versioned(src)]));
+const packages = levelPackages(encounterTextures, Object.values(portraitUrls), briefingUrls);
 
 export default defineConfig(({ command }) => ({
 
@@ -40,6 +44,8 @@ export default defineConfig(({ command }) => ({
     __PILOT_PORTRAITS__: JSON.stringify(portraits),
 
     __PILOT_URLS__: JSON.stringify(portraitUrls),
+
+    __BRIEFING_URLS__: JSON.stringify(briefingUrls),
 
     __ENCOUNTER_TEXTURES__: JSON.stringify(encounterTextures),
 

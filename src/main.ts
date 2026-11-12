@@ -1,115 +1,238 @@
 import { registerSW } from 'virtual:pwa-register';
-import { levels, readLevel, type LevelId } from './levels';
+import { setupBriefing } from './app/briefing';
+import type { FlightLoadout, FlightShortcut } from './app/flight-session';
 import { saveLevelOffline, savedLevels, clearSavedLevels } from './app/offline';
+import { campaign } from './campaign/missions';
+import { CAMPAIGN_SAVE_KEY, campaignStatus, decodeCampaignClears, recordCampaignClear } from './campaign/progress';
+import { ranks } from './campaign/ranks';
+import { levels, readLevel, type LevelId } from './levels';
+import { setupPilotPicker } from './pilots';
+import { readWingWeapon, wingWeapons } from './wing';
+import { fonsNames, fonsVariants } from './wormhole/fons/variants';
 import './style.css';
+
 const menu = document.querySelector<HTMLElement>('#front-menu')!;
 const app = document.querySelector<HTMLElement>('#game-app')!;
+const missionList = document.querySelector<HTMLElement>('#mission-list')!;
+const briefing = document.querySelector<HTMLElement>('#menu-briefing')!;
+const briefTitle = document.querySelector<HTMLElement>('#brief-title')!;
 const cards = document.querySelector<HTMLElement>('#level-cards')!;
 const prepare = document.querySelector<HTMLButtonElement>('#prepare-flight')!;
 const status = document.querySelector<HTMLElement>('#menu-status')!;
 const update = document.querySelector<HTMLButtonElement>('#menu-update')!;
-let selected = readLevel(new URLSearchParams(location.search).get('level'));
+const campaignMode = document.querySelector<HTMLButtonElement>('#campaign-mode')!;
+const freeFlightMode = document.querySelector<HTMLButtonElement>('#free-flight-mode')!;
+const droneWeapon = document.querySelector<HTMLSelectElement>('#drone-weapon')!;
+const wingSelectors = Array.from(document.querySelectorAll<HTMLSelectElement>('#test-wing-loadout select'));
+const query = new URLSearchParams(location.search);
+const testingWings = import.meta.env.DEV || query.get('testLoadout') === '1';
+let inCampaign = query.get('mode') === 'campaign' || (query.get('mode') !== 'free-flight' && !query.has('level'));
+let cleared = savedCampaign();
+let selected = inCampaign ? campaignSelection() : readLevel(query.get('level'));
+let saved = new Set<LevelId>();
 let session: AbortController | undefined;
+let briefController: AbortController | undefined;
+let pilotPicker: ReturnType<typeof setupPilotPicker> | undefined;
 let reloadBeforePreparation = false;
-const descriptions: Record<LevelId, string> = {
-  wormhole: 'Follow Titan’s echo through the wormhole, then face Fons Inversus and shelter from its rain behind falling bismuth.',
-  fleet: 'Dodge broadsides through a botched prisoner exchange, enter the Pleiadian flagship through its open stern, and fight the Gray command saucer.',
-  den: 'Fly the cliffside docks and rookeries, then face the Gantry Chief above the black hole.',
-  biolume:'Fly beneath translucent luminous leaves, over tangled root bridges and blackwater pools. Lantern gliders guard the nursery; the enormous Lantern Ray waits in the Dark Crown.',
-  summer:'Grazing mammoths, flower-rich meadows and thawing glacier gardens. Follow the river into the glass-covered lotus palace.',
-  heliostat:'Fly through an artificial-star power plant above Uranus. Dodge capacitor discharges, cyborg man o’wars and inspection drones, then disable the Sunspot Regulator.',
-  boulevard:'A rain-polished neon resort, luminous wireframe architecture and a pursuit cruiser beneath an artificial sunset.',
-  vents: 'Mineral gardens, black smokers and the abyss. An articulated crab guards the drop.',
-  io: 'Sulfur works, flowing lava and the Caldera Engine.',
-  titan: 'An overgrown research station beneath amber haze. Rise to face the cicada.',
-  ice: 'Tumbling ice, remote industry and ancient marine predators.',
-  broodlock: 'An infected ant hive threaded with parasitic growth.',
-  preserve: 'Enter an orbital greenhouse through its spaceport, cross flooded ravines and cycad terraces, then face the Groundskeeper.',
-};
-function select(id: LevelId) {
-  selected = id;
-  for (const button of cards.querySelectorAll<HTMLButtonElement>('button'))
-    button.setAttribute('aria-pressed', String(button.dataset.level === id));
-  const url = new URL(location.href);
-  url.searchParams.set('level', id);
-  history.replaceState(null, '', url);
-  status.textContent = descriptions[id];
+
+function savedCampaign() {
+  try { return decodeCampaignClears(localStorage.getItem(CAMPAIGN_SAVE_KEY)); }
+  catch { return new Set<LevelId>(); }
 }
-function levelDetail(id: LevelId, saved = false) {
-  const level = levels[id];
-  return `${level.duration} second route · ${saved ? 'Saved offline' : level.boss}`;
+
+function campaignSelection() {
+  return campaignStatus(cleared).next ?? campaign.at(-1)!.level;
 }
-for (const [id, level] of Object.entries(levels)) {
+
+const levelCards = campaign.map(({ level: id }, index) => {
   const button = document.createElement('button');
+  const title = document.createElement('strong');
+  const detail = document.createElement('span');
   button.type = 'button';
   button.dataset.level = id;
   button.className = 'level-card';
-  const title = document.createElement('strong');
-  const detail = document.createElement('span');
-  title.textContent = level.name;
-  detail.textContent = levelDetail(id as LevelId);
   button.append(title, detail);
-  button.addEventListener('click', () => select(id as LevelId));
+  button.addEventListener('click', () => select(id));
   cards.append(button);
-}
-async function refreshSavedLevels() {
-  const ready = await savedLevels();
-  for (const card of cards.querySelectorAll<HTMLButtonElement>('button')) {
-    const id = card.dataset.level as LevelId;
-    const saved = ready.includes(id);
-    card.classList.toggle('saved-offline', saved);
-    card.querySelector('span')!.textContent = levelDetail(id, saved);
+  return { id, number: String(index + 1).padStart(2, '0'), button, title, detail };
+});
+
+function updateCards() {
+  const { next } = campaignStatus(cleared);
+  for (const card of levelCards) {
+    const { id, button, title, detail } = card;
+    const complete = cleared.has(id);
+    button.disabled = inCampaign && !complete && id !== next;
+    button.setAttribute('aria-pressed', String(id === selected));
+    button.classList.toggle('saved-offline', saved.has(id));
+    title.textContent = inCampaign ? `${card.number} · ${levels[id].name}` : levels[id].name;
+    const note = inCampaign ? (complete ? 'Cleared' : id === next ? 'Ready' : 'Locked') : `${levels[id].duration} second route`;
+    detail.textContent = saved.has(id) ? `${note} · Saved offline` : note;
   }
 }
+
+function showMenuStatus() {
+  const { rank, next } = campaignStatus(cleared);
+  const progress = next ? `${cleared.size}/${campaign.length} cleared` : 'Campaign complete';
+  status.textContent = inCampaign ? `Return to Sender · ${ranks[rank].name} · ${progress}` : levels[selected].name;
+}
+
+function select(id: LevelId) {
+  selected = id;
+  campaignMode.setAttribute('aria-pressed', String(inCampaign));
+  freeFlightMode.setAttribute('aria-pressed', String(!inCampaign));
+  const url = new URL(location.href);
+  if (inCampaign) {
+    url.searchParams.set('mode', 'campaign');
+    url.searchParams.delete('level');
+  } else {
+    url.searchParams.delete('mode');
+    url.searchParams.set('level', id);
+  }
+  history.replaceState(null, '', url);
+  updateCards();
+  showMenuStatus();
+}
+
+async function refreshSavedLevels() {
+  saved = new Set(await savedLevels());
+  updateCards();
+}
+
+campaignMode.addEventListener('click', () => {
+  if (inCampaign) return;
+  inCampaign = true;
+  select(campaignSelection());
+});
+freeFlightMode.addEventListener('click', () => {
+  if (!inCampaign) return;
+  inCampaign = false;
+  select(selected);
+});
 select(selected);
 void refreshSavedLevels();
+
+function closeBriefing() {
+  briefController?.abort();
+  briefController = undefined;
+  pilotPicker = undefined;
+  briefing.hidden = true;
+  missionList.hidden = false;
+  menu.setAttribute('aria-labelledby', 'menu-title');
+}
+
+function openBriefing() {
+  if (reloadBeforePreparation) { location.reload(); return; }
+  briefController = new AbortController();
+  const { signal } = briefController;
+  briefTitle.textContent = levels[selected].name;
+  setupBriefing(selected, briefing, signal);
+  pilotPicker = setupPilotPicker(document.querySelector('#pilot-choices')!, document.querySelector('#pilot-perk-description')!, signal);
+  if (import.meta.env.DEV) updateShortcuts(selected);
+  missionList.hidden = true;
+  briefing.hidden = false;
+  menu.setAttribute('aria-labelledby', 'brief-title');
+  window.scrollTo(0, 0);
+  briefTitle.focus({ preventScroll: true });
+}
+
 function returnToMenu() {
   session?.abort();
   session = undefined;
   app.hidden = true;
   menu.hidden = false;
-  prepare.disabled = false;
-  status.textContent = descriptions[selected];
+  closeBriefing();
+  showMenuStatus();
   prepare.focus();
   void refreshSavedLevels();
 }
+prepare.addEventListener('click', openBriefing);
+document.querySelector('#brief-back')!.addEventListener('click', returnToMenu);
 document.querySelector('#menu-button')!.addEventListener('click', returnToMenu);
 document.querySelector('#return-menu')!.addEventListener('click', returnToMenu);
-prepare.addEventListener('click', async () => {
-  if (session) return;
-  // Failed module loads can remain in the browser's module map until reload.
-  if (reloadBeforePreparation) { location.reload(); return; }
+
+if (testingWings) {
+  document.querySelector<HTMLElement>('#test-wing-loadout')!.hidden = false;
+  for (const select of wingSelectors) {
+    select.add(new Option('Empty', ''));
+    for (const [key, weapon] of Object.entries(wingWeapons)) select.add(new Option(weapon.name, key));
+  }
+}
+
+function completeMission(id: LevelId) {
+  const outcome = recordCampaignClear(new Set([...cleared, ...savedCampaign()]), id);
+  cleared = outcome.cleared;
+  try { localStorage.setItem(CAMPAIGN_SAVE_KEY, JSON.stringify([...cleared])); }
+  catch { /* Progress remains available in this tab. */ }
+  updateCards();
+  return outcome;
+}
+
+async function launchFlight(shortcut?: FlightShortcut) {
+  if (session || !pilotPicker) return;
+  const id = selected;
+  const campaignFlight = inCampaign;
+  const loadout: FlightLoadout = {
+    pilot: pilotPicker.selectedId,
+    drone: droneWeapon.value === 'towline' ? 'towline' : 'sentry',
+    wings: testingWings ? wingSelectors.map(select => readWingWeapon(select.value)) : [],
+  };
   const controller = new AbortController();
   session = controller;
-  prepare.disabled = true;
+  closeBriefing();
   menu.hidden = true;
+  document.querySelector<HTMLElement>('#panel')!.hidden = false;
+  document.querySelector('#heading')!.textContent = 'Preparing flight';
+  document.querySelector('#message')!.textContent = levels[id].name;
+  document.querySelector<HTMLButtonElement>('#pause')!.hidden = true;
+  document.querySelector<HTMLButtonElement>('#pulse')!.disabled = true;
+  document.querySelector<HTMLElement>('#boss-hud')!.hidden = true;
+  document.querySelector<HTMLElement>('#status')!.textContent = 'Preparing graphics…';
+  document.querySelector<HTMLButtonElement>('#start')!.hidden = true;
+  document.querySelector<HTMLButtonElement>('#next-mission')!.hidden = true;
   app.hidden = false;
-  // Disable the old session's launch control before the async import yields.
-  document.querySelector<HTMLButtonElement>('#start')!.disabled = true;
+  document.querySelector<HTMLButtonElement>('#menu-button')!.focus({ preventScroll: true });
   try {
     const { openFlightSession } = await import('./app/flight-session');
-    if (controller.signal.aborted)
-      return;
-    const handle = await openFlightSession(selected, controller.signal);
+    if (controller.signal.aborted) return;
+    const handle = await openFlightSession(id, loadout, controller.signal, shortcut, campaignFlight ? {
+      onClear: () => completeMission(id),
+      onNext(next) {
+        if (session !== controller) return;
+        returnToMenu();
+        select(next);
+        openBriefing();
+      },
+    } : undefined);
     if (handle && !controller.signal.aborted)
-      void saveLevelOffline(selected, controller.signal).then(ready => {
+      void saveLevelOffline(id, controller.signal).then(ready => {
         if (!controller.signal.aborted)
           handle.setOfflineReady(ready);
         void refreshSavedLevels();
       });
   }
   catch {
-    if (controller.signal.aborted)
-      return;
+    if (controller.signal.aborted) return;
     returnToMenu();
-    reloadBeforePreparation = true; prepare.textContent = 'Reload menu';
+    reloadBeforePreparation = true;
+    prepare.textContent = 'Reload menu';
     status.textContent = 'This sector could not be prepared. Check your connection or WebGL support, then reload the menu to retry. Apply an available update if needed.';
   }
-});
+}
+document.querySelector('#launch-flight')!.addEventListener('click', () => void launchFlight());
+
+function updateShortcuts(id: LevelId) {
+  const boss = document.querySelector<HTMLButtonElement>('#dev-boss')!;
+  const hasTransition: LevelId[] = ['den', 'titan', 'wormhole', 'summer', 'heliostat', 'boulevard', 'preserve', 'vents', 'io'];
+  boss.textContent = id === 'fleet' ? 'Launch at breach' : hasTransition.includes(id) ? 'Launch at transition' : 'Launch at boss';
+  document.querySelector<HTMLElement>('#dev-trench')!.hidden = id !== 'fleet';
+  for (const button of briefing.querySelectorAll<HTMLElement>('[data-fons-start]')) button.hidden = id !== 'wormhole';
+}
+
 document.querySelector('#clear-offline')!.addEventListener('click', async () => {
-  const cleared = await clearSavedLevels();
+  const removed = await clearSavedLevels();
   await refreshSavedLevels();
-  status.textContent = cleared ? 'Saved level files cleared. The menu remains available offline.' : 'Offline storage could not be cleared on this device.';
+  status.textContent = removed ? 'Saved level files cleared. Campaign progress is retained.' : 'Offline storage could not be cleared on this device.';
 });
 if (import.meta.env.DEV) {
   const links=document.createElement('nav');
@@ -118,14 +241,38 @@ if (import.meta.env.DEV) {
     const link=document.createElement('a');link.href=import.meta.env.BASE_URL+path;link.textContent=label;links.append(link);
   }
   menu.querySelector('.menu-actions')!.append(links);
+
+  const shortcuts = document.createElement('details');
+  shortcuts.className = 'brief-shortcuts';
+  const summary = document.createElement('summary');
+  summary.textContent = 'Dev launch shortcuts';
+  const actions = document.createElement('div');
+  actions.className = 'dev-links';
+  function addShortcut(id: string, label: string, shortcut: FlightShortcut) {
+    const button = document.createElement('button');
+    button.id = id;
+    button.type = 'button';
+    button.textContent = label;
+    button.addEventListener('click', () => void launchFlight(shortcut));
+    actions.append(button);
+    return button;
+  }
+  addShortcut('dev-boss', 'Launch at boss', 'boss');
+  addShortcut('dev-trench', 'Launch at trench', 'trench');
+  for (const variant of fonsVariants) {
+    const id = variant === 'normal' ? 'dev-fons' : 'dev-fons-' + variant;
+    addShortcut(id, 'Launch at ' + fonsNames[variant], variant).dataset.fonsStart = '';
+  }
+  shortcuts.append(summary, actions);
+  briefing.querySelector('.brief-actions')!.before(shortcuts);
 }
 const applyUpdate = registerSW({
   onNeedRefresh() {
     update.hidden = false;
-  }, onOfflineReady() {
-    if (!session && !reloadBeforePreparation)
-      status.textContent = 'Menu available offline. Prepare a sector to save its flight.';
-  }
+  },
+  onOfflineReady() {
+    void refreshSavedLevels();
+  },
 });
 update.addEventListener('click', () => {
   void applyUpdate(true);

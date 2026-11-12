@@ -93,7 +93,16 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 }
 #panel > p { max-width: 27ch; font-size: .83rem; line-height: 1.4; margin: .9rem 0; }
 #panel small { max-width: 32ch; color: var(--muted); font-size: .68rem; margin-top: .8rem; }
-#start { background: #b7f4f4; border-color: #b7f4f4; color: #06111b; font-weight: bold; }
+.flight-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; }
+#start, #next-mission { background: #b7f4f4; border-color: #b7f4f4; color: #06111b; font-weight: bold; }
+#next-mission:not([hidden]) + #start { background: #16202f; border-color: var(--line); color: inherit; font-weight: normal; }
+.rank-badge { display: inline-flex; justify-content: center; align-items: center; gap: .25rem; color: #c5d8e8; font-size: .7rem; }
+.rank-badge canvas { width: 1.65rem; height: 1.65rem; flex: none; }
+.officer-rank { justify-content: flex-start; color: var(--accent); }
+#pilot-rank-hud { flex: none; flex-direction: column; gap: 0; }
+#pilot-rank-hud canvas { width: 1.5rem; height: 1.5rem; }
+#pilot-rank-hud > span { font-size: .59rem; letter-spacing: .04em; }
+#pilot-rank { margin: 0 auto; }
 #update { margin-top: .75rem; }
 
 #boss-hud { position: absolute; inset: .55rem 1rem auto; display: grid; gap: .2rem; pointer-events: none; }
@@ -101,22 +110,20 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #pulse { flex-shrink: 0; white-space: nowrap; }
 #pulse b { color: var(--accent); }
 
-#mobile-picker { width: min(100%, 14rem); margin-bottom: .7rem; }
-#mobile-picker:empty, #mobile-picker:has(> #loadout-picker[hidden]) { display: none; }
 #pilot-picker { min-width: 0; margin: 0; padding: 0; border: 0; }
 #pilot-picker legend {
   width: 100%;
   margin-bottom: .45rem;
   color: var(--muted);
-  font-size: .7rem;
+  font-size: .8rem;
   letter-spacing: .08em;
   text-transform: uppercase;
 }
 #pilot-perk-description {
-  margin: .45rem 0;
+  margin: .65rem 0;
   color: var(--muted);
-  font-size: .7rem;
-  line-height: 1.35;
+  font-size: .82rem;
+  line-height: 1.45;
 }
 .loadout-field {
   display: flex;
@@ -125,7 +132,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   gap: .4rem;
   margin-top: .55rem;
   color: var(--muted);
-  font-size: .7rem;
+  font-size: .84rem;
   text-align: start;
 }
 .loadout-field select {
@@ -138,7 +145,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   background: #16202f;
   color: #eef8ff;
   font: inherit;
-  font-size: .8rem;
+  font-size: 1rem;
 }
 .loadout-field select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -171,7 +178,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   border-radius: 4px;
   color: var(--muted);
   text-align: center;
-  font-size: clamp(.61rem, 2.5cqw, .76rem);
+  font-size: .84rem;
 }
 #pilot-choices label:hover .pilot-card { background: #16202f; }
 #pilot-choices input:checked + .pilot-card { border-color: var(--accent); background: #172731; color: #eef8ff; }
@@ -241,6 +248,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     padding: 0;
     text-align: start;
   }
+  #pilot-rank-hud { display: none; }
   .pilot-console {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -276,29 +284,36 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     letter-spacing: .14em;
     text-transform: uppercase;
   }
-  .pilot-card { font-size: .76rem; }
   #panel small { display: block; }
 }
 
-/* The menu has no canvas, WebGL context, animated loop or level media. */
+/* The mission list loads no artwork. The briefing uses portraits and 2D insignias. */
 .main-menu {
   display: flex; flex-direction: column; align-items: stretch; justify-content: safe center;
   width: min(100%, 68rem); height: auto; min-height: 100dvh; margin: auto;
   padding: max(1.25rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right)) max(1.25rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left)); gap: 1.4rem;
 }
+.mission-list { display: grid; gap: 1.4rem; }
 .menu-heading h1 {font: italic 900 clamp(2.8rem,8vw,5.2rem)/1 system-ui,sans-serif;letter-spacing:-.065em;text-transform:uppercase;margin:0;color:#eef8ff;}
-.menu-heading p {color:var(--muted);font-size:.85rem;line-height:1.5;}
-.menu-heading .eyebrow {font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);}
+.menu-controls {display:grid;gap:.6rem;}
+.menu-modes {display:flex;gap:.45rem;}
+.menu-modes button[aria-pressed=true] {border-color:var(--accent);background:#19313c;color:#eef8ff;}
+.mission-action {display:flex;justify-content:space-between;align-items:center;gap:.75rem;padding:.5rem .65rem;border:1px solid var(--line);border-radius:4px;background:#101a29;}
 .level-cards {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem;}
-.level-card {text-align:left;min-height:6.2rem;padding:1rem;display:grid;align-content:center;gap:.6rem;background:#101a29;}
+.level-card {text-align:left;min-height:4.85rem;padding:.7rem .9rem;display:grid;align-content:center;gap:.35rem;background:#101a29;}
 .level-card strong {font-size:1rem;font-weight:normal;color:#eef8ff;}
 .level-card span {font-size:.68rem;color:var(--muted);line-height:1.4;}
 .level-card[aria-pressed=true] {border-color:var(--accent);background:#172b35;box-shadow:inset 3px 0 var(--accent);}
 .menu-actions {display:grid;justify-items:start;gap:.5rem;}
-#prepare-flight {background:#b7f4f4;color:#06111b;border-color:#b7f4f4;font-weight:bold;padding:.6rem 1.5rem;}
-#menu-status {font-size:.78rem;color:var(--muted);line-height:1.5;min-height:2.5em;margin:0;max-width:70ch;}
+#prepare-flight {background:#b7f4f4;color:#06111b;border-color:#b7f4f4;font-weight:bold;padding:.45rem .8rem;flex:none;}
+#menu-status {font-size:.78rem;color:var(--muted);line-height:1.5;margin:0;max-width:68ch;}
 #return-menu {margin-top:.7rem;font-size:.7rem;}
-@media(max-width:520px){.main-menu{gap:1rem;justify-content:flex-start;}.level-cards{grid-template-columns:1fr;gap:.45rem;}.level-card{min-height:4.4rem;padding:.75rem;gap:.35rem;}.menu-heading p{margin:.5rem 0;}}
+@media(max-width:520px){.main-menu{justify-content:flex-start;}.mission-list{gap:1rem;}.level-cards{grid-template-columns:1fr;gap:.45rem;}.level-card{min-height:4.4rem;padding:.75rem;gap:.35rem;}}
+@media(max-width:520px) {
+  .menu-controls {position:sticky;top:0;z-index:1;background:#080b14;padding:.5rem 0;}
+  .mission-action {align-items:start;}
+  #prepare-flight {font-size:.73rem;}
+}
 .offline-settings {font-size:.75rem;color:var(--muted);max-width:42ch;}
 .offline-settings summary {padding:.7rem 0;cursor:pointer;}
 .offline-settings p {line-height:1.5;}
@@ -307,4 +322,56 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .dev-links {display:grid;gap:.65rem;justify-items:start;margin-top:.65rem;}
 .dev-links a {display:block;color:var(--accent);font-size:.75rem;line-height:1.4;}
-#dev-tools {justify-items:center;}
+
+#menu-briefing { display: grid; gap: 1rem; }
+#brief-back { justify-self: start; background: transparent; }
+#brief-title {
+  margin: 0;
+  color: #eef8ff;
+  font: italic 900 clamp(1.85rem, 5vw, 3.6rem)/1.06 system-ui, sans-serif;
+  letter-spacing: -.04em;
+  text-wrap: balance;
+}
+.brief-grid { display: grid; gap: .85rem; }
+.mission-brief, .brief-loadout {
+  min-width: 0;
+  padding: clamp(1rem, 2.6vw, 1.75rem);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #101b2b;
+}
+.mission-brief { border-inline-start: 3px solid var(--accent); }
+.brief-officer { display: flex; gap: .9rem; align-items: center; }
+.brief-portrait { flex: 0 0 clamp(4.4rem, 14vw, 6rem); border: 1px solid var(--line); font-size: 1.35rem; }
+.officer-name { display: block; margin-top: .15rem; color: #eef8ff; font: 700 1.25rem/1.15 system-ui, sans-serif; }
+.officer-rank, #brief-pilot-rank { font-size: .82rem; }
+.brief-quote, .brief-objective p {
+  max-width: 57ch;
+  margin: .85rem 0 0;
+  font: 1.06rem/1.5 system-ui, sans-serif;
+}
+.brief-objective { margin-top: .95rem; padding-top: .8rem; border-top: 1px solid var(--line); }
+.brief-objective h2 { margin: 0; color: var(--accent); font-size: .8rem; font-weight: 600; }
+.brief-objective p { margin-top: .3rem; }
+#brief-pilot-rank { justify-content: flex-start; margin-bottom: .45rem; }
+.brief-shortcuts summary { width: fit-content; padding-block: .65rem; color: var(--muted); cursor: pointer; }
+.brief-shortcuts .dev-links { display: flex; flex-wrap: wrap; }
+.brief-actions { display: flex; justify-content: flex-end; }
+#launch-flight { min-width: 10rem; min-height: 48px; background: #b7f4f4; color: #06111b; border-color: #b7f4f4; font-weight: bold; }
+
+@media (min-width: 740px) {
+  .brief-grid { grid-template-columns: minmax(0, 1fr) minmax(18rem, .56fr); align-items: start; }
+  .brief-quote { font-size: 1.2rem; }
+}
+@media (max-width: 739px) {
+  #menu-briefing { width: min(100%, 34rem); align-self: center; }
+  .brief-actions {
+    position: sticky;
+    inset-block-end: 0;
+    margin: 0 -1px;
+    padding: .6rem 1px max(.6rem, env(safe-area-inset-bottom));
+    background: #080b14;
+    border-top: 1px solid var(--line);
+  }
+  #launch-flight { width: 100%; }
+}

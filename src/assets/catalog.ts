@@ -1,4 +1,10 @@
 import type { LevelId } from '../levels';
+import { missionFor, type OfficerId } from '../campaign/missions';
+
+export const rankInsigniaFile = 'officers/rank-insignia.png';
+export const officerPortraitFile = (id: OfficerId) => `officers/${id}.png`;
+export const levelBriefingFiles = (id: LevelId) => [officerPortraitFile(missionFor[id].officer), rankInsigniaFile];
+
 export const textureFiles = {
   fonsMane: 'encounters/fons-mane.png',
   fleetSky: 'encounters/fleet-starfield.png',
