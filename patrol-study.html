@@ -65,11 +65,31 @@
             <input id="band-y" type="range" step=".1" value="0">
           </div>
           <div class="actions">
-            <button id="reset-pose" type="button" disabled>Reset pose</button>
+            <label class="check"><input id="lock-point" type="checkbox"> Lock selected point</label>
+            <button id="reset-pose" type="button" title="Restore the selected pose and clear its locks" disabled>Reset pose</button>
             <button id="copy-edits" type="button" disabled>Copy edits</button>
           </div>
         </div>
         <textarea id="export" aria-label="Edited atlas bands" readonly hidden></textarea>
+      </section>
+      <section class="edit tuning" aria-labelledby="tune-heading">
+        <h2 id="tune-heading">Hill-climb</h2>
+        <p>Tunes the outgoing and incoming poses in both turn directions. Gold squares mark locked points. A lock also pins the band height.</p>
+        <div class="fields">
+          <label>Search area
+            <select id="tune-scope">
+              <option value="nearby">Selected band ± 2</option>
+              <option value="all">Whole handoff</option>
+            </select>
+          </label>
+        </div>
+        <div class="actions">
+          <button id="tune-start" type="button" disabled>Tune handoff</button>
+          <button id="tune-undo" type="button" disabled>Undo tune</button>
+          <progress id="tune-progress" aria-label="Hill-climb progress" hidden></progress>
+          <output id="tune-score" aria-live="off"></output>
+        </div>
+        <p id="tune-status" role="status"></p>
       </section>
       <p id="status" role="status">Loading patrol atlas…</p>
     </main>

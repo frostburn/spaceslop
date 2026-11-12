@@ -2,7 +2,7 @@ import * as T from 'three';
 import { patrolPoseSampling } from '../den/patrol-warp';
 
 export function createPatrolDifference(
-  renderer: T.WebGLRenderer, scene: T.Scene, camera: T.Camera, sprite: T.Mesh<T.BufferGeometry, T.ShaderMaterial>,
+  renderer: T.WebGLRenderer, scene: T.Scene, camera: T.Camera, sprite: T.Mesh<T.BufferGeometry, T.ShaderMaterial>, sampleGrid = 1,
 ) {
   const blendMaterial = sprite.material;
   const { atlas, crop, nextCrop } = blendMaterial.uniforms;
@@ -21,8 +21,10 @@ export function createPatrolDifference(
       }`,
   });
   const size = 256;
-  const target = new T.WebGLRenderTarget(size, size, { depthBuffer: false });
-  const pixels = new Uint8Array(size * size * 4);
+  const width = size * sampleGrid;
+  const target = new T.WebGLRenderTarget(width, width, { depthBuffer: false });
+  target.scissorTest = sampleGrid > 1;
+  const pixels = new Uint8Array(width * width * 4);
 
   function renderPass(destination: T.WebGLRenderTarget | null) {
     const previous = renderer.getRenderTarget();
@@ -39,9 +41,15 @@ export function createPatrolDifference(
 
   return {
     render() { renderPass(null); },
-    async measure() {
-      renderPass(target);
-      await renderer.readRenderTargetPixelsAsync(target, 0, 0, size, size, pixels);
+    async measure(pose?: (sample: number) => void) {
+      // Put each heading in its own tile so a trial needs just one GPU readback.
+      for (let i = 0; i < sampleGrid ** 2; i++) {
+        pose?.(i);
+        target.viewport.set(i % sampleGrid * size, Math.floor(i / sampleGrid) * size, size, size);
+        target.scissor.copy(target.viewport);
+        renderPass(target);
+      }
+      await renderer.readRenderTargetPixelsAsync(target, 0, 0, width, width, pixels);
       let error = 0, coverage = 0;
       for (let i = 0; i < pixels.length; i += 4) {
         error += pixels[i];

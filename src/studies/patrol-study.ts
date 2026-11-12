@@ -3,6 +3,8 @@ import { denPatrolWarp } from '../den/patrol';
 import { createPatrolWarpCard, patrolAtlasFor, patrolBandAngle, patrolBandXs, type PatrolBand } from '../den/patrol-warp';
 import { loadEncounterTexture } from '../encounter-texture';
 import { createPatrolDifference } from './patrol-difference';
+import { bandHasLock, bandLimits, meshFoldsNear, pointLimits, replaceBandPoint, roundPatrolCoordinate, type PatrolBands } from './patrol-registration';
+import { tunePatrolHandoff } from './patrol-tuning';
 import './patrol-study.css';
 
 type Point = { x: number; y: number };
@@ -11,7 +13,7 @@ const degrees = Math.PI / 180;
 const element = <E extends HTMLElement>(id: string) => document.getElementById(id) as E;
 const range = (id: string) => element<HTMLInputElement>(id);
 const output = (id: string) => element<HTMLOutputElement>(id + '-value');
-const rounded = (value: number) => Math.round(value * 10) / 10;
+const rounded = roundPatrolCoordinate;
 
 function square(canvas: HTMLCanvasElement) {
   const size = Math.max(1, Math.round(canvas.clientWidth * Math.min(2, devicePixelRatio)));
@@ -19,7 +21,7 @@ function square(canvas: HTMLCanvasElement) {
   return size;
 }
 
-function drawMesh(context: CanvasRenderingContext2D, points: readonly Point[], columns: number, selected = -1, paired = false) {
+function drawMesh(context: CanvasRenderingContext2D, points: readonly Point[], columns: number, selected = -1, paired = false, locked?: ReadonlySet<number>) {
   const grid = context.canvas.width / context.canvas.clientWidth;
   context.beginPath();
   for (const [i, p] of points.entries()) {
@@ -41,6 +43,12 @@ function drawMesh(context: CanvasRenderingContext2D, points: readonly Point[], c
     const detail = columns === 7 && (i % columns === 1 || i % columns === 5);
     context.fillStyle = detail ? '#a7aaff' : '#a5f6e4';
     context.fill();
+    if (locked?.has(i)) {
+      const radius = grid * (i === selected ? 6 : 3.7);
+      context.strokeStyle = '#ffd280';
+      context.lineWidth = grid * 1.3;
+      context.strokeRect(p.x - radius, p.y - radius, radius * 2, radius * 2);
+    }
   }
   const point = points[selected];
   if (!point) return;
@@ -76,6 +84,10 @@ function start() {
   const editPose = element<HTMLSelectElement>('edit-pose'), editBand = element<HTMLSelectElement>('edit-band');
   const editPoint = element<HTMLSelectElement>('edit-point'), pointX = range('point-x'), bandY = range('band-y');
   const reset = element<HTMLButtonElement>('reset-pose'), copy = element<HTMLButtonElement>('copy-edits');
+  const lockPoint = range('lock-point'), tuneScope = element<HTMLSelectElement>('tune-scope');
+  const tune = element<HTMLButtonElement>('tune-start'), undoTune = element<HTMLButtonElement>('tune-undo');
+  const tuneProgress = element<HTMLProgressElement>('tune-progress');
+  const tuneScore = element<HTMLOutputElement>('tune-score'), tuneStatus = element('tune-status');
   const exportText = element<HTMLTextAreaElement>('export'), status = element('status');
   let renderer: T.WebGLRenderer | undefined;
   try {
@@ -86,7 +98,10 @@ function start() {
     preview.replaceWith(Object.assign(document.createElement('p'), { textContent: 'The live blend needs WebGL 2.' }));
   }
   const difference = renderer && createPatrolDifference(renderer, scene, camera, card.root);
-  let atlas = patrolAtlasFor(1254, 1254), bands = [...atlas.rows];
+  let atlas = patrolAtlasFor(1254, 1254), bands: PatrolBands = atlas.rows;
+  let locks = bands.map(() => new Set<number>());
+  let tuning: AbortController | undefined, tuneTask: Promise<void> | undefined;
+  let beforeTune: PatrolBands | undefined;
   let texture: T.Texture | undefined;
   const edited = new Set<number>();
   const sourcePoints: Point[][] = [[], []];
@@ -135,33 +150,43 @@ function start() {
       y: size / 2 + scale * (sin * u + cos * row[0]),
     })));
     sourcePoints[pane] = points;
-    drawMesh(context, points, atlas.grid.columns, selectedPoint, pane !== Number(editPose.value));
+    drawMesh(context, points, atlas.grid.columns, selectedPoint, pane !== Number(editPose.value), locks[frame]);
   }
 
   function syncPointControls() {
     const { frame, band, point } = selected();
-    const row = bands[frame][band], base = atlas.rows[frame][band];
-    const xs = patrolBandXs(row, atlas.gutter), originalX = patrolBandXs(base, atlas.gutter)[point];
-    pointX.min = String(rounded(Math.min(xs[point], Math.max(originalX - 28, (xs[point - 1] ?? -Infinity) + .2))));
-    pointX.max = String(rounded(Math.max(xs[point], Math.min(originalX + 28, (xs[point + 1] ?? Infinity) - .2))));
-    pointX.disabled = frame === 0 && point === Math.floor(atlas.grid.columns / 2);
+    const row = bands[frame][band], { columns } = atlas.grid;
+    const xs = patrolBandXs(row, atlas.gutter);
+    const locked = locks[frame].has(band * columns + point);
+    const busy = Boolean(tuning);
+    const [minX, maxX] = pointLimits(atlas, row, frame, band, point);
+    const [minY, maxY] = bandLimits(atlas, bands[frame], frame, band);
+    pointX.min = String(minX);
+    pointX.max = String(maxX);
+    pointX.disabled = busy || locked || (frame === 0 && point === Math.floor(columns / 2));
     pointX.value = String(xs[point]);
-    bandY.min = String(rounded(Math.max(base[0] - 18, (bands[frame][band - 1]?.[0] ?? -Infinity) + .2)));
-    bandY.max = String(rounded(Math.min(base[0] + 18, (bands[frame][band + 1]?.[0] ?? Infinity) - .2)));
+    bandY.min = String(minY);
+    bandY.max = String(maxY);
+    bandY.disabled = busy || bandHasLock(locks[frame], columns, band);
     bandY.value = String(row[0]);
     output('point-x').value = `${rounded(xs[point])} px`;
     output('band-y').value = `${rounded(row[0])} px`;
-    reset.disabled = !edited.has(frame);
-    copy.disabled = !edited.size;
+    lockPoint.checked = locked;
+    for (const field of [heading, play, editPose, editBand, editPoint, lockPoint, tuneScope]) field.disabled = busy;
+    const turn = turnAt();
+    tune.disabled = tuning ? tuning.signal.aborted : !texture || !difference || turn.first === turn.second;
+    reset.disabled = busy || (!edited.has(frame) && !locks[frame].size);
+    copy.disabled = busy || !edited.size;
+    undoTune.disabled = busy || !beforeTune;
   }
 
   function measureDifference(angle: number, now: number) {
-    if (!difference || measuring || (sampled?.angle === angle && sampled.bands === bands)) return;
+    if (!difference || tuning || measuring || (sampled?.angle === angle && sampled.bands === bands)) return;
     if (playing && sampled && now - sampled.time < 100) return;
     const sample = { angle, bands, time: now };
     sampled = sample;
     measuring = true;
-    const stillActive = () => !controller.signal.aborted && showDifference.checked && sampled === sample;
+    const stillActive = () => !controller.signal.aborted && !tuning && showDifference.checked && sampled === sample;
     void difference.measure().then(value => {
       if (stillActive() && (playing || (turnAt().angle === angle && bands === sample.bands)))
         score.value = value === undefined ? 'Match unavailable' : `Match ${value.toFixed(1)}%`;
@@ -245,52 +270,104 @@ function start() {
     requestRender();
   }
 
-  function meshFoldsNear(frame: number) {
-    const { index, attributes: { position } } = card.root.geometry;
-    const last = bands.length - 1;
-    for (const sign of [-1, 1]) {
-      for (let t = Math.max(0, frame - 1); t <= Math.min(last, frame + 1); t += .125) {
-        card.pose(sign * t * (Math.PI / 2) / last);
-        for (let i = 0; i < index!.count; i += 3) {
-          const a = index!.getX(i), b = index!.getX(i + 1), c = index!.getX(i + 2);
-          const ax = position.getX(a), ay = position.getY(a);
-          if ((position.getX(b) - ax) * (position.getY(c) - ay) -
-              (position.getY(b) - ay) * (position.getX(c) - ax) <= 0) return true;
-        }
-      }
-    }
-    return false;
+  function commitBands(next: PatrolBands, changedFrame?: number) {
+    card.setRegistration(atlas, next);
+    if (changedFrame !== undefined && meshFoldsNear(card, changedFrame, bands.length - 1)) throw new Error('Folded mesh');
+    bands = next;
+    edited.clear();
+    bands.forEach((rows, frame) => {
+      if (rows !== atlas.rows[frame]) edited.add(frame);
+    });
+    exportText.hidden = true;
+    requestRender();
   }
 
   function applyBands(frame: number, next: readonly PatrolBand[]) {
     const candidate = [...bands];
     candidate[frame] = next;
     try {
-      card.setRegistration(atlas, candidate);
-      if (meshFoldsNear(frame)) throw new Error('Folded mesh');
-      bands = candidate;
-      if (next === atlas.rows[frame]) edited.delete(frame);
-      else edited.add(frame);
-      exportText.hidden = true;
+      commitBands(candidate, frame);
+      clearTuneHistory();
       status.textContent = texture ? '' : 'Patrol atlas unavailable. Control points are still editable.';
+      return true;
     } catch {
       card.setRegistration(atlas, bands);
       status.textContent = 'That edit would fold the mesh or move an anchor outside it.';
+      requestRender();
+      return false;
     }
-    requestRender();
   }
 
-  function editCoordinates() {
+  function editCoordinates(event: Event) {
+    if (tuning) return;
     setPlaying(false);
     const { frame, band, point } = selected();
-    const { columns } = atlas.grid, center = Math.floor(columns / 2);
-    const next = [...bands[frame]], xs = patrolBandXs(next[band], atlas.gutter);
-    xs[point] = pointX.valueAsNumber;
-    if (frame === 0) xs[columns - 1 - point] = -xs[point];
-    const base = [bandY.valueAsNumber, rounded(xs[0] + atlas.gutter), xs[center],
-      rounded(xs[columns - 1] - atlas.gutter), xs[center - 1], xs[center + 1]] as const;
-    next[band] = columns === 7 ? [...base, xs[1], xs[5]] : base;
+    const next = [...bands[frame]], row = next[band];
+    const [, ...rest] = row;
+    next[band] = event.target === bandY ? [bandY.valueAsNumber, ...rest]
+      : replaceBandPoint(atlas, row, frame, point, pointX.valueAsNumber);
     applyBands(frame, next);
+  }
+
+  function clearTuneHistory() {
+    beforeTune = undefined;
+    tuneScore.value = '';
+    tuneStatus.textContent = '';
+  }
+
+  async function startTune() {
+    const { first, second } = turnAt();
+    if (!renderer || !texture || !difference || first === second) return;
+    const initial = bands;
+    const run = new AbortController();
+    tuning = run;
+    const { band } = selected();
+    setPlaying(false);
+    showDifference.checked = true;
+    sampled = undefined;
+    score.value = 'Tuning…';
+    tuneStatus.textContent = '';
+    tuneScore.value = '';
+    tuneProgress.removeAttribute('value');
+    tuneProgress.hidden = false;
+    tune.textContent = 'Stop tuning';
+    syncPointControls();
+    let finished = false, measured = false;
+    try {
+      await tunePatrolHandoff({
+        renderer, texture, camera, atlas, initial, locks, first, selectedBand: band,
+        wholeHandoff: tuneScope.value === 'all', signal: run.signal,
+        onProgress: (next, before, best, completed, total) => {
+          measured = true;
+          if (next !== bands) {
+            commitBands(next);
+            beforeTune = initial;
+          }
+          tuneProgress.max = total;
+          tuneProgress.value = completed;
+          tuneScore.value = `Handoff match ${before.toFixed(2)}% → ${best.toFixed(2)}%`;
+        },
+      });
+      finished = true;
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        console.error(error);
+        tuneStatus.textContent = 'The handoff could not be measured.';
+      }
+    } finally {
+      tuning = undefined;
+      if (!controller.signal.aborted) {
+        if (finished) {
+          tuneStatus.textContent = run.signal.aborted ? 'Tuning stopped.' : !measured ? 'All points in the search area are locked.'
+            : bands === initial ? 'No improving move found.' : 'Tuning complete.';
+        }
+        tuneProgress.hidden = true;
+        tune.textContent = 'Tune handoff';
+        sampled = undefined;
+        score.value = 'Measuring…';
+        requestRender();
+      }
+    }
   }
 
   for (const field of [pointX, bandY]) field.addEventListener('input', editCoordinates);
@@ -302,10 +379,38 @@ function start() {
   showMesh.addEventListener('change', requestRender);
   showDifference.addEventListener('change', () => {
     sampled = undefined;
-    score.value = 'Measuring…';
+    score.value = tuning ? 'Tuning…' : 'Measuring…';
     requestRender();
   });
-  reset.addEventListener('click', () => { const { frame } = selected(); applyBands(frame, atlas.rows[frame]); });
+  lockPoint.addEventListener('change', () => {
+    const { frame, band, point } = selected();
+    const { columns } = atlas.grid;
+    const points = frame === 0 ? [point, columns - 1 - point] : [point];
+    for (const p of points) {
+      const index = band * columns + p;
+      if (lockPoint.checked) locks[frame].add(index);
+      else locks[frame].delete(index);
+    }
+    clearTuneHistory();
+    setPlaying(false);
+  });
+  tune.addEventListener('click', () => {
+    if (tuning) {
+      tuning.abort();
+      tune.disabled = true;
+    } else tuneTask = startTune();
+  });
+  undoTune.addEventListener('click', () => {
+    if (!tuning && beforeTune) {
+      commitBands(beforeTune);
+      clearTuneHistory();
+      tuneStatus.textContent = 'Tuning undone.';
+    }
+  });
+  reset.addEventListener('click', () => {
+    const { frame } = selected();
+    if (applyBands(frame, atlas.rows[frame])) locks[frame].clear();
+  });
   copy.addEventListener('click', async () => {
     exportText.value = JSON.stringify(Object.fromEntries([...edited].map(frame => [frame, bands[frame]])), null, 2);
     try {
@@ -317,6 +422,7 @@ function start() {
     }
   });
   sources.forEach(({ canvas }, pane) => canvas.addEventListener('pointerdown', event => {
+    if (tuning) return;
     const rect = canvas.getBoundingClientRect();
     const x = (event.clientX - rect.left) * canvas.width / rect.width;
     const y = (event.clientY - rect.top) * canvas.height / rect.height;
@@ -340,7 +446,9 @@ function start() {
     const image = map.image as HTMLImageElement;
     card.setArt(map);
     atlas = patrolAtlasFor(image.width, image.height);
-    bands = [...atlas.rows];
+    bands = atlas.rows;
+    locks = bands.map(() => new Set<number>());
+    clearTuneHistory();
     edited.clear();
     texture = map;
     showDifference.disabled = !difference;
@@ -353,13 +461,18 @@ function start() {
   window.addEventListener('pagehide', event => {
     if (event.persisted) return;
     controller.abort();
+    tuning?.abort();
     resize.disconnect();
     cancelAnimationFrame(frameId);
-    texture?.dispose();
-    card.root.geometry.dispose();
-    card.root.material.dispose();
-    difference?.dispose();
-    renderer?.dispose();
+    const dispose = () => {
+      texture?.dispose();
+      card.root.geometry.dispose();
+      card.root.material.dispose();
+      difference?.dispose();
+      renderer?.dispose();
+    };
+    if (tuning && tuneTask) void tuneTask.finally(dispose);
+    else dispose();
   });
   requestRender();
 }
