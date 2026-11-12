@@ -1,5 +1,6 @@
 import type { LevelId } from '../levels';
 export const textureFiles = {
+  fonsMane: 'encounters/fons-mane.png',
   fleetSky: 'encounters/fleet-starfield.png',
   fleetPlanets: 'encounters/fleet-planet-pair.png',
   fleetFlagship: 'encounters/fleet-pleiadian-flagship.png',
@@ -69,6 +70,7 @@ export const studyTextureFiles = {
 export type StudyTexture = keyof typeof studyTextureFiles;
 
 export const levelTextures: Record<LevelId, readonly EncounterTexture[]> = {
+  wormhole: ['armor', 'titanChitin', 'fonsMane'],
   fleet: ['armor', 'fleetSky', 'fleetPlanets', 'fleetFlagship', 'fleetTrench', 'fleetSaucer'],
   den: ['armor', 'denCliff', 'denDisk', 'denBiker', 'denGantry', 'denSky', 'denPatrol', 'denProps', 'denDefenses'],
   biolume:['armor','biolumeBackdrop','biolumeForeground','biolumeEnemy','biolumePods','biolumeBoss','biolumeFrog'],

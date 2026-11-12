@@ -139,7 +139,7 @@ export class FlightView {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = T.PCFShadowMap;
     this.scene.add(this.plane);
-    this.level = createLevel({ plane: this.plane, scene: this.scene, signal });
+    this.level = createLevel({ plane: this.plane, scene: this.scene, fighter: this.player.root, signal });
     this.perspective.far = this.level.farDistance ?? 240;
     this.perspective.updateProjectionMatrix();
     this.cannonMarker.renderOrder = 12;
@@ -295,6 +295,7 @@ export class FlightView {
       this.levelTime = flight.stageDuration + flight.time;
     if (flight.phase === 'boss')
       this.levelTime = flight.stageDuration + flight.transitionDuration + flight.time;
+    if (flight.level === 'wormhole') this.levelTime = flight.wormholeTime;
     if (flight.phase === 'stage')
       this.swing = 0;
     if (flight.phase === 'approach')
@@ -459,7 +460,9 @@ export class FlightView {
           laser.root.position.z = z;
           laser.draw(planarProjectileLayer(origin, z), planarProjectileLayer(end, z), wing.laserHold, this.animationTime, contact);
         } else {
-          laser.draw(origin, end, wing.laserHold, this.animationTime, contact, flight.phase === 'boss' && target === undefined);
+          const shielded = typeof target === 'number' && flight.fonsShielded;
+          laser.draw(origin, end, wing.laserHold, this.animationTime, contact && !shielded,
+            shielded || (flight.phase === 'boss' && target === undefined));
         }
       }
     }
@@ -473,7 +476,7 @@ export class FlightView {
     }
     const hostile = flight.isDen ? flight.threats.map(s => ({ ...s, ...planarProjectileLayer(s, .85) }))
       : flight.level === 'fleet' ? flight.threats.filter(s => !s.broadside) : flight.threats;
-    this.projectiles.hostile.draw(flight.level !== 'ice' && flight.level !== 'broodlock' ? hostile : [], this.animationTime);
+    this.projectiles.hostile.draw(flight.level !== 'ice' && flight.level !== 'broodlock' && !flight.isFonsFight ? hostile : [], this.animationTime);
     this.projectiles.brine.draw(flight.level === 'ice' ? flight.threats : [], this.animationTime);
     this.projectiles.spore.draw(flight.level === 'broodlock' ? flight.threats : [], this.animationTime);
   }
@@ -516,7 +519,7 @@ export class FlightView {
         });
     const bossLaserDamage = flight.bossLaserDamage - this.previousBossLaserDamage;
     if (this.previousBossHealth - flight.bossHealth - bossLaserDamage > 1e-6 && this.animationTime - this.bossHitAt > 0.07) {
-      this.combat.emit(flight.bossHealth === 0 ? 'kill' : 'hit', flight.level==='summer'&&flight.summerLastHit?flight.summerLastHit:flight.isFleet?
+      this.combat.emit(flight.bossHealth === 0 ? 'kill' : 'hit', flight.level==='summer'&&flight.summerLastHit?flight.summerLastHit:flight.isFleet||flight.isFonsFight?
         planarProjectileLayer({ x: flight.exposedCannonX, y: flight.bossAimY }, .85):{
         x: flight.exposedCannonX,
         y: flight.bossAimY,
