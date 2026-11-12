@@ -24,6 +24,8 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
     models,
     ready,
     stageDistance: HIVE_CAMERA_DISTANCE,
+    fixedCamera: true,
+    shipPitch: 0,
     contacts: [boss.root, ...ants.map(r => r.root)],
     warmup: [[hive.root, boss.root, ...ants.map(r => r.root)]],
     contact: createBossLaserContact(plane, boss.root),

@@ -454,6 +454,7 @@ export class FlightView {
           const hullEnd = this.laserContact(origin, { x: origin.x, y: 9 }, this.level.boss, distance);
           if (hullEnd.y < 9 - 1e-5) end = hullEnd;
         }
+        if (flight.phase === 'boss' && flight.keepDepthShotsForward && end.y < origin.y) end = wing.beamEnd;
         const contact = typeof target === 'number' || Boolean(model);
         if (flight.isDen) {
           const z = .85;

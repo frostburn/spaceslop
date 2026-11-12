@@ -320,6 +320,8 @@ export class Flight {
   get fonsVariant() { return this.fonsForm; }
   get fonsShielded() { return this.isFonsFight && fonsPhase(this.fonsTime).shielded; }
   get planarBoss() { return this.level === 'biolume' || this.isDen || this.isFleet || this.isFonsFight; }
+  // These encounters keep their depth-based hit tests with a fixed view of the flight plane.
+  get keepDepthShotsForward() { return this.level === 'broodlock' || this.level === 'summer' || this.level === 'wormhole'; }
   get weaponsActive() { return this.phase === 'stage' || this.phase === 'boss' || ((this.isDen || this.isFleet) && this.phase === 'approach'); }
   get denBossTime() {
     if (this.phase === 'approach') return this.time - DEN_APPROACH;
@@ -592,6 +594,7 @@ export class Flight {
         return shot.y<10&&Math.abs(shot.x)<5;
       }
       if (boss) {
+        if (shot.vz === 0) return shot.y < 10 && Math.abs(shot.x) < 5;
         if (shot.z > BOSS_DEPTH) return true;
         const untilImpact = (BOSS_DEPTH - shot.z) / shot.vz;
         const impact = { x: shot.x + shot.vx * untilImpact, y: shot.y + shot.vy * untilImpact };
@@ -730,16 +733,20 @@ export class Flight {
     wing.cooldown = spec.interval;
     wing.flash = WING_FLASH_TIME;
     boss &&= !this.planarBoss;
+    const hydraTarget = boss && this.level === 'summer' && wing.weapon === 'homing'
+      ? nearestHydraHead(this.summerHydra, origin.x / BOSS_PROJECTION, true) : undefined;
+    const aimY = boss ? (hydraTarget === undefined ? this.bossAimY : hydraBossHead(this.time, hydraTarget).y) : 0;
+    if (boss && this.keepDepthShotsForward && origin.y + .1 >= aimY * BOSS_PROJECTION) boss = false;
     const duration = spec.bossTravel;
-    const tunnel = !boss && this.level === 'wormhole';
+    const tunnel = this.phase === 'stage' && this.level === 'wormhole';
     const forwardSpeed = spec.speed * 1.8;
     this.shots.push({
       ...origin, z: 0, wing: wing.weapon, damage: spec.damage,
       vx: boss ? origin.x * (1 / BOSS_PROJECTION - 1) / duration : 0,
-      vy: boss ? (this.bossAimY - origin.y) / duration : tunnel ? forwardSpeed * wormholeForward.y : spec.speed,
+      vy: boss ? (aimY - origin.y) / duration : tunnel ? forwardSpeed * wormholeForward.y : spec.speed,
       vz: boss ? BOSS_DEPTH / duration : tunnel ? forwardSpeed * wormholeForward.z : 0,
       pierced: wing.weapon === 'omega' ? new Set<Enemy>() : undefined,
-      hydraTarget:boss&&this.level==='summer'&&wing.weapon==='homing'?nearestHydraHead(this.summerHydra,origin.x/BOSS_PROJECTION,true):undefined,
+      hydraTarget: boss ? hydraTarget : undefined,
     });
   }
 
@@ -757,14 +764,17 @@ export class Flight {
     if(boss&&this.level==='summer'){
       const native={x:origin.x/BOSS_PROJECTION,y:origin.y/BOSS_PROJECTION};
       const hit=hydraBossContact(this.summerHydra,this.time,native,{x:native.x,y:15});
-      head=hit?.side;target=head;endY=hit?hydraBossHead(this.time,hit.side).y*BOSS_PROJECTION:8;
+      head=hit?.side;target=head;endY=hit?Math.max(origin.y,hydraBossHead(this.time,hit.side).y*BOSS_PROJECTION):8;
     }else if (boss && this.planarBoss) {
       const t = this.planarBossEntry(origin, { x: origin.x, y: 10 });
       if(Number.isFinite(t)){target=0;endY=origin.y+(10-origin.y)*t;}
     }else if (boss) {
-      endY = this.bossAimY * BOSS_PROJECTION;
-      if (Math.abs(origin.x - this.exposedCannonX * BOSS_PROJECTION) < this.bossTargetRadius * BOSS_PROJECTION) {
-        target = this.exposedCannonX;
+      const aimY = this.bossAimY * BOSS_PROJECTION;
+      if (!this.keepDepthShotsForward || aimY > origin.y) {
+        endY = aimY;
+        if (Math.abs(origin.x - this.exposedCannonX * BOSS_PROJECTION) < this.bossTargetRadius * BOSS_PROJECTION) {
+          target = this.exposedCannonX;
+        }
       }
     } else if (this.level === 'fleet') {
       let first = Infinity;
@@ -820,7 +830,7 @@ export class Flight {
   }
 
   private guideMissile(shot: Shot, boss: boolean, dt: number) {
-    boss &&= !this.planarBoss;
+    boss &&= !this.planarBoss && shot.vz < 0;
     if (boss) {
       const remaining = Math.max(dt, (BOSS_DEPTH - shot.z) / shot.vz);
       const steer = Math.min(1, 10 * dt);
@@ -845,7 +855,10 @@ export class Flight {
         distance = squared;
       }
     }
-    if(!closest&&this.level==='biolume'&&this.phase==='boss')closest=rayOrgan(this.rayTime,raySignal(this.rayTime).side);
+    if (!closest && this.level === 'biolume' && this.phase === 'boss') {
+      const target = rayOrgan(this.rayTime, raySignal(this.rayTime).side);
+      if (shot.y < target.y) closest = target;
+    }
     if (!closest && this.isFonsFight && this.phase === 'boss') {
       const target = fonsPose(this.fonsTime);
       if (shot.y < target.y) closest = target;
@@ -1410,17 +1423,21 @@ export class Flight {
         vx: 0, vy: 32 * wormholeForward.y, vz: 32 * wormholeForward.z, drone, damage });
       return;
     }
-    if (this.phase === 'stage' || this.planarBoss) {
-      this.shots.push({ x, y: y + (drone ? 0.3 : 0.45), z: 0, vx: 0, vy: 15, vz: 0, drone, damage });
+    const targetsBoss = !drone && Math.abs(x) < 1.65;
+    const aimsAtBoss = drone || targetsBoss;
+    const depthShot = this.phase !== 'stage' && !this.planarBoss;
+    const aimY = depthShot && aimsAtBoss ? this.bossAimY : y;
+    const muzzleY = y + (drone ? 0.3 : 0.45);
+    if (!depthShot || (this.keepDepthShotsForward && (!aimsAtBoss || muzzleY >= aimY * BOSS_PROJECTION))) {
+      this.shots.push({ x, y: muzzleY, z: 0, vx: 0, vy: 15, vz: 0, drone, damage });
       return;
     }
 
     const duration = 0.38;
-    const targetsBoss = !drone && Math.abs(x) < 1.65;
     // Preserve horizontal drone placement while advancing visibly toward boss depth.
     const expansion = 1 / BOSS_PROJECTION - 1;
     const dx = drone ? x * expansion : (targetsBoss ? (this.level === 'io'||this.level==='vents'||this.level==='summer'||this.level==='wormhole' ? this.exposedCannonX : 0) - x : 0);
-    const dy = drone || targetsBoss ? this.bossAimY - y : 0;
+    const dy = aimY - y;
     this.shots.push({ x, y, z: 0, vx: dx / duration, vy: dy / duration,
       vz: BOSS_DEPTH / duration, targetsBoss, bossSupport: this.level === 'io' ? !this.ioLegBroken : undefined, crabTarget:this.level==='vents'?this.crabTargetX:undefined,hydraTarget:this.level==='summer'&&targetsBoss?this.summerTargetHead:undefined, drone, damage });
   }
