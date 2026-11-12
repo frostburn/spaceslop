@@ -1,8 +1,8 @@
 // Combat-plane coordinates; scenery and optional textures never affect these.
-export const CRUCIBLE_HP=10;
+export const CRUCIBLE_HP=8;
 export const CRUCIBLE_RADIUS=.9;
 export const CRUCIBLE_FIRST_POUR=1.8;
-export const CRUCIBLE_POUR_INTERVAL=2.6;
+export const CRUCIBLE_POUR_INTERVAL=3.4;
 export const CRUCIBLE_WINDUP=.7;
 export const CRUCIBLE_MUZZLE_Y=-.98;
 export const CRUCIBLE_POOL=2;

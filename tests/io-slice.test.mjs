@@ -9,6 +9,7 @@ const {Flight,STEP,BOSS_PROJECTION}=await server.ssrLoadModule('/src/game.ts');
 const {createCaldera,createSkipper}=await server.ssrLoadModule('/src/io-rigs.ts');
 const {createIoScenery}=await server.ssrLoadModule('/src/io-scenery.ts');
 const {readLevel}=await server.ssrLoadModule('/src/levels.ts');
+const coreHealth = layout.IO_HP - layout.IO_LEG_HP;
 
 test('Io is a ten-screen route with eighteen Skipper patrols, five Crucibles and a quiet eight-second approach',()=>{
  assert.equal(readLevel('io'),'io');assert.equal(layout.IO_DURATION,100);assert.equal(layout.ioWaves.filter(w=>w.skipper).length,18);assert.equal(layout.ioWaves.filter(w=>w.crucible).length,5);
@@ -16,7 +17,7 @@ test('Io is a ten-screen route with eighteen Skipper patrols, five Crucibles and
  for(let i=0;i<6002;i++){f.invulnerable=100;f.step(STEP);for(const e of f.enemies){assert(e.skipper||e.crucible||e.slag);if (e.reward) drops.add(e.reward.weapon);}maximum=Math.max(maximum,f.enemies.length);}
  assert.equal(drops.size,4);assert(maximum<=layout.IO_SKIPPER_POOL);assert.equal(f.phase,'approach');
  assert.equal(f.transitionDuration,8);assert.equal(f.enemies.length+f.shots.length+f.threats.length,0);
- while(f.phase==='approach'){assert.equal(f.threats.length+f.shots.length,0);f.step(STEP);}assert.equal(f.phase,'boss');assert.equal(f.bossHealth,72);
+ while(f.phase==='approach'){assert.equal(f.threats.length+f.shots.length,0);f.step(STEP);}assert.equal(f.phase,'boss');assert.equal(f.bossHealth,layout.IO_HP);
 });
 
 test('world travel coasts to rest without a velocity discontinuity and all anchored scenery retains world distances',()=>{
@@ -32,10 +33,10 @@ test('world travel coasts to rest without a velocity discontinuity and all ancho
  const below=ioWorld(layout.IO_FINAL_SCROLL,-3,layout.IO_DURATION+layout.IO_APPROACH,1);assert(below.z<0);
 });
 
-test('support absorbs exactly 20 damage before one failure, reveals the core, and collapse remains frozen at results',()=>{
+test('support caps damage at its break point, reveals the core, and collapse remains frozen at results',()=>{
  const f=new Flight('sentry',[],'vex','io');f.phase='boss';
- f.damageBoss(19);assert(!f.ioLegBroken);assert.equal(f.exposedCannonX,-2.4);
- f.damageBoss(10,true);assert(f.ioLegBroken);assert.equal(f.bossHealth,52);assert.equal(f.bossLaserDamage,1);assert.equal(f.ioCollapse,0);
+ f.damageBoss(layout.IO_LEG_HP-1);assert(!f.ioLegBroken);assert.equal(f.exposedCannonX,-2.4);
+ f.damageBoss(10,true);assert(f.ioLegBroken);assert.equal(f.bossHealth,coreHealth);assert.equal(f.bossLaserDamage,1);assert.equal(f.ioCollapse,0);
  f.invulnerable=100;f.cooldown=f.droneCooldown=100;for(let i=0;i<73;i++)f.step(STEP);
  assert.equal(f.ioCollapse,1);assert(Math.abs(f.exposedCannonX)<.1);assert(f.bossAimY<4);
  f.damageBoss(100);assert.equal(f.phase,'won');assert.equal(f.score,1000);const collapse=f.ioCollapse;f.step(100);assert.equal(f.ioCollapse,collapse);
@@ -45,22 +46,22 @@ test('ship, sentry, homing, cannon, omega, laser, Towline and Pulse all damage t
  for(const kind of ['ship','drone','homing','cannon','omega']){
   const f=new Flight('sentry',[],'vex','io');f.phase='boss';f.cooldown=f.droneCooldown=100;
   f.shots=[{x:f.exposedCannonX,y:f.bossAimY,z:-11.9,vx:0,vy:0,vz:-12,damage:1,targetsBoss:kind==='ship',bossSupport:true,drone:kind==='drone',wing:['homing','cannon','omega'].includes(kind)?kind:undefined}];
-  f.step(STEP);assert.equal(f.bossHealth,71,kind);
+  f.step(STEP);assert.equal(f.bossHealth,layout.IO_HP-1,kind);
  }
  const laser=new Flight('sentry',['laser'],'vex','io');laser.phase='boss';laser.cooldown=laser.droneCooldown=100;
- laser.player.x=laser.exposedCannonX*BOSS_PROJECTION+1.22;laser.step(STEP);assert(laser.bossHealth<72);assert(laser.bossLaserDamage>0);
+ laser.player.x=laser.exposedCannonX*BOSS_PROJECTION+1.22;laser.step(STEP);assert(laser.bossHealth<layout.IO_HP);assert(laser.bossLaserDamage>0);
  const tow=new Flight('towline',[],'vex','io');tow.phase='boss';tow.cooldown=100;tow.droneCooldown=100;tow.towlineCooldown=0;tow.player={x:-3,y:tow.bossAimY*BOSS_PROJECTION};tow.drone={x:3,y:tow.player.y};
- tow.step(STEP);assert.equal(tow.bossHealth,69);
- for(let i=0;i<5;i++)tow.step(STEP);assert.equal(tow.bossHealth,69,'same Towline pulse cannot repeat damage');
+ tow.step(STEP);assert.equal(tow.bossHealth,layout.IO_HP-3);
+ for(let i=0;i<5;i++)tow.step(STEP);assert.equal(tow.bossHealth,layout.IO_HP-3,'same Towline pulse cannot repeat damage');
  const pulse=new Flight('sentry',[],'vex','io');pulse.phase='boss';pulse.charges=5;
- for(let i=0;i<4;i++)pulse.pulse();assert.equal(pulse.bossHealth,52);assert(pulse.ioLegBroken);pulse.pulse();assert.equal(pulse.bossHealth,46);
+ for(let i=0;i<Math.ceil(layout.IO_LEG_HP/6);i++)pulse.pulse();assert.equal(pulse.bossHealth,coreHealth);assert(pulse.ioLegBroken);pulse.pulse();assert.equal(pulse.bossHealth,coreHealth-6);
 });
 
 test('Caldera warnings lock before rotating wheel shots fire and the broken support changes attack spacing',()=>{
  const patterns=[];
  for(const broken of [false,true]){
   const f=new Flight('sentry',[],'vex','io');f.phase='boss';f.cooldown=f.droneCooldown=100;f.invulnerable=100;
-  if(broken)f.damageBoss(20);
+  if(broken)f.damageBoss(layout.IO_LEG_HP);
   for(let i=0;i<55;i++)f.step(STEP);assert.equal(f.markers.length,3);const locked=f.markers.map(p=>({...p}));
   f.player.x=3;for(let i=0;i<45;i++)f.step(STEP);assert.deepEqual(f.markers,locked);assert.equal(f.threats.length,3);
   patterns.push(locked.map(p=>p.y));assert(f.threats.every(t=>t.vz>0&&Number.isFinite(t.vx+t.vy)));
@@ -110,14 +111,14 @@ test('a media-free simulation reaches the boss, visibly breaks its support, wins
  const f=new Flight('sentry',[],'vex','io');let sawSupport=false;
  for(let i=0;i<12000&&!['won','lost'].includes(f.phase);i++){f.invulnerable=100;f.step(STEP);sawSupport ||= f.ioLegBroken;}
  assert.equal(f.phase,'won');assert(sawSupport);assert(f.score>=1000);
- const again=new Flight('sentry',[],'vex','io');assert.equal(again.bossHealth,72);assert(!again.ioLegBroken);assert.equal(again.time,0);
+ const again=new Flight('sentry',[],'vex','io');assert.equal(again.bossHealth,layout.IO_HP);assert(!again.ioLegBroken);assert.equal(again.time,0);
 });
 
 test('ship shots already committed to the failed support cannot damage the newly exposed core',()=>{
  const f=new Flight('sentry',[],'vex','io');f.phase='boss';f.cooldown=f.droneCooldown=100;
- f.fire(f.player);assert.equal(f.shots[0].bossSupport,true);f.damageBoss(20);assert.equal(f.bossHealth,52);
- for(let i=0;i<30;i++)f.step(STEP);assert.equal(f.bossHealth,52);
- f.fire(f.player);assert.equal(f.shots[0].bossSupport,false);for(let i=0;i<30;i++)f.step(STEP);assert(f.bossHealth<52);
+ f.fire(f.player);assert.equal(f.shots[0].bossSupport,true);f.damageBoss(layout.IO_LEG_HP);assert.equal(f.bossHealth,coreHealth);
+ for(let i=0;i<30;i++)f.step(STEP);assert.equal(f.bossHealth,coreHealth);
+ f.fire(f.player);assert.equal(f.shots[0].bossSupport,false);for(let i=0;i<30;i++)f.step(STEP);assert(f.bossHealth<coreHealth);
 });
 
 test('Io dust remains finite, camera-facing and pooled throughout the route and camera approach',()=>{

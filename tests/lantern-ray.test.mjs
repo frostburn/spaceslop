@@ -26,10 +26,22 @@ test('organ anchors follow exactly the same deformed coordinates and projection 
 });
 
 test('seekers curve at a capped turn rate and expire within the warmed pool budget',()=>{
- const e=orb(1,2);e.rayOrb.heading=Math.PI-.001;const before=e.rayOrb.heading;ray.stepRaySeeker(e,{x:-2,y:6},STEP);assert(Math.abs(e.rayOrb.heading-before)<=.82*STEP+1e-12);assert(Math.abs(Math.hypot(e.x-1,e.y-2)-2.25*STEP)<1e-12);
- const f=new Flight('sentry',[],'vex','biolume');f.phase='boss';f.bossHealth=40;f.cooldown=f.droneCooldown=1e5;f.invulnerable=1e5;let maximum=0,shots=0;
+ const e=orb(1,2);e.rayOrb.heading=Math.PI-.001;const before=e.rayOrb.heading;ray.stepRaySeeker(e,{x:-2,y:6},STEP);assert(Math.abs(e.rayOrb.heading-before)<=.82*STEP+1e-12);assert(Math.abs(Math.hypot(e.x-1,e.y-2)-ray.RAY_SEEKER_SPEED*STEP)<1e-12);
+ const f=new Flight('sentry',[],'vex','biolume');f.phase='boss';f.bossHealth=ray.RAY_HP/2-1;f.cooldown=f.droneCooldown=1e5;f.invulnerable=1e5;let maximum=0,shots=0;
  for(let i=0;i<3600;i++){f.player.x=3*Math.sin(i*STEP*.4);f.step(STEP);maximum=Math.max(maximum,f.enemies.length);shots=Math.max(shots,f.threats.length);for(const e of f.enemies)assert(e.rayOrb&&e.age<=8);}
  assert(maximum>1&&maximum<=ray.RAY_SEEKER_POOL);assert(shots<128);
+});
+
+test('the Lantern Ray fills more of its warned fan below half health', () => {
+  for (const [health, count] of [[ray.RAY_HP, 5], [ray.RAY_HP / 2 - 1, 7]]) {
+    const flight = new Flight('sentry', [], 'vex', 'biolume');
+    flight.phase = 'boss';
+    flight.bossHealth = health;
+    flight.cooldown = flight.droneCooldown = Infinity;
+    while (flight.time < ray.RAY_FAN_AT) flight.step(STEP);
+    assert.equal(flight.threats.length, count);
+    assert(flight.threats.every(shot => shot.planar));
+  }
 });
 
 for(const weapon of['primary','sentry','homing','cannon','laser','omega','towline'])test(`${weapon} destroys a seeking lantern into one eight-bullet straight burst`,()=>{

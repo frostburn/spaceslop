@@ -57,8 +57,8 @@ for(const weapon of['primary','homing','cannon','laser','omega','sentry','towlin
 test('half-health escalation preserves locked attacks, alternates the leading lens and keeps late channels collidable',()=>{
   const f=new Flight('sentry',[],'vex','heliostat');f.phase='boss';f.cooldown=f.droneCooldown=1e5;f.invulnerable=1e5;
   const stepTo=t=>{while(f.time<t-1e-8)f.step(STEP);};
-  stepTo(1);const old=structuredClone(f.markers);f.bossHealth=60;f.step(STEP);assert(!f.heliostatUnstable);
-  f.bossHealth=59;f.step(STEP);assert(f.heliostatUnstable);assert.equal(f.heliostatPattern,0);assert.deepEqual(f.markers,old);
+  stepTo(1);const old=structuredClone(f.markers);f.bossHealth=combat.HELIOSTAT_HP/2;f.step(STEP);assert(!f.heliostatUnstable);
+  f.bossHealth=combat.HELIOSTAT_HP/2-1;f.step(STEP);assert(f.heliostatUnstable);assert.equal(f.heliostatPattern,0);assert.deepEqual(f.markers,old);
   stepTo(5.1);assert.equal(f.heliostatPattern,1);assert.deepEqual(f.markers,combat.heliostatLockTargets(f.player,1));
   stepTo(6.7);assert(combat.heliostatPlasmaPhase(f.time,1,f.heliostatPattern).hot);assert(!combat.heliostatPlasmaPhase(f.time,-1,f.heliostatPattern).hot);
   const locked=structuredClone(f.markers);f.invulnerable=0;f.player={...locked[0]};f.step(STEP);assert.equal(f.hull,4);

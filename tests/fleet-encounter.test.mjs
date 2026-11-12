@@ -67,6 +67,8 @@ test('a broadside has a visible windup, leaves its own barrel and only fires onc
       && Math.abs(shot.y - fleetViewY(gun.y, at)) < 1e-6 && Math.sign(shot.vx) === gun.side));
     assert(!broadsideShots(at, at + STEP).some(shot => Math.abs(shot.y - fleetViewY(gun.y, at + STEP)) < 1e-6));
   }
+  assert(broadsideGuns.slice(0, -4).every(gun => gun.fires.length === 3));
+  assert(broadsideGuns.slice(-4).every(gun => gun.fires.length === 6));
 });
 
 test('tractor motion and hull contact share a continuous pose', () => {

@@ -1,4 +1,4 @@
-export const WORM_HP=8,WORM_POOL=4,WORM_FIRST_ATTACK=3.6,WORM_INTERVAL=6.6,WORM_WINDUP=.9;
+export const WORM_HP=6,WORM_POOL=4,WORM_FIRST_ATTACK=3.6,WORM_INTERVAL=6.6,WORM_WINDUP=.9;
 export const WORM_STRIKE=.65,WORM_HOLD=.3,WORM_RETREAT=1.3,WORM_REACH=13.5,WORM_SEGMENTS=34;
 const smooth=(v:number)=>{const t=Math.max(0,Math.min(1,v));return t*t*(3-2*t);};
 
