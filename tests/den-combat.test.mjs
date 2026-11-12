@@ -11,7 +11,7 @@ const { DEN_APPROACH, DEN_DURATION, DEN_SCREENS, denScroll } = await server.ssrL
 const { denWaves, denPatrolPose, denPatrolCanFire, denPatrolWarp } = await server.ssrLoadModule('/src/den/patrol.ts');
 const { turn16Hardpoints } = await server.ssrLoadModule('/src/den/patrol-atlas-16.ts');
 const { createDenPatrols } = await server.ssrLoadModule('/src/den/patrol-rig.ts');
-const { createPatrolWarpCard, patrolAtlasFor, patrolGridPadding, patrolGridPoint, patrolGridTurn, PATROL_GRID_SIZE } = await server.ssrLoadModule('/src/den/patrol-warp.ts');
+const { createPatrolWarpCard, patrolAtlasFor, patrolGridPadding, patrolGridPoint, patrolGridTurn, patrolRestPoint, PATROL_GRID_SIZE } = await server.ssrLoadModule('/src/den/patrol-warp.ts');
 const { DEN_TURRET_REACH, DEN_TURRET_RECOIL, DEN_MINE_FUSE, createDenTurret, denMinePose,
   denTurretSignal, stepDenTurret } = await server.ssrLoadModule('/src/den/defense.ts');
 
@@ -178,7 +178,8 @@ test('the padded grid rim can move while keeping the painted bike tip inside', a
   const height = crop[3] - crop[1], outgoing = atlas.handoffs[handoff][0], incoming = atlas.handoffs[handoff][1];
   const rimPoint = 7 * PATROL_GRID_SIZE + 4, tipPoint = rimPoint - PATROL_GRID_SIZE;
   const [rimX, rimY] = patrolGridPoint(crop, incoming, rimPoint), [tipX] = patrolGridPoint(crop, incoming, tipPoint);
-  assert.equal(rimY, height + pad);
+  assert.equal(patrolRestPoint(crop, rimPoint)[1], height + pad);
+  assert(rimY > height);
 
   const movedRim = movePatrolPoint(atlas, frame, incoming, rimPoint, rimX + 3, rimY + 6);
   assert.deepEqual(movedRim[rimPoint], [Math.round((rimX + 3) * 10) / 10, rimY + 6]);
