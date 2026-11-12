@@ -14,7 +14,7 @@
       <section class="sliders" aria-label="Preview controls">
         <div class="slider">
           <label for="heading">Heading</label><output id="heading-value" for="heading"></output>
-          <input id="heading" type="range" min="-90" max="90" step=".1" value="-15">
+          <input id="heading" type="range" min="-90" max="90" step=".1" value="-3">
         </div>
         <div class="slider">
           <label for="blend">Crossfade to incoming</label><output id="blend-value" for="blend"></output>
@@ -49,25 +49,19 @@
       </section>
       <section class="edit" aria-labelledby="edit-heading">
         <h2 id="edit-heading">Control point</h2>
-        <p>Drag a point on either atlas view. Use Band mode to redistribute rows between locked bands. The ring marks the corresponding point in the other pose.</p>
+        <p>Drag any interior point on either 8×8 grid. The 28 edge points are fixed to the sprite bounds. The ring marks the corresponding point in the other pose.</p>
         <div class="fields">
           <label>Pose<select id="edit-pose"><option value="0">Outgoing</option><option value="1">Incoming</option></select></label>
-          <label>Band<select id="edit-band"></select></label>
           <label>Point<select id="edit-point"></select></label>
-          <label>Drag mode<select id="drag-mode"><option value="point">Point</option><option value="band">Band</option></select></label>
         </div>
         <div class="sliders">
           <div class="slider">
             <label for="point-x">Point X</label><output id="point-x-value" for="point-x"></output>
-            <input id="point-x" type="range" step=".1" value="0">
+            <input id="point-x" type="range" min="0" step=".1" value="0">
           </div>
           <div class="slider">
             <label for="point-y">Point Y</label><output id="point-y-value" for="point-y"></output>
-            <input id="point-y" type="range" step=".1" value="0">
-          </div>
-          <div class="slider">
-            <label for="band-y">Band Y</label><output id="band-y-value" for="band-y"></output>
-            <input id="band-y" type="range" step=".1" value="0">
+            <input id="point-y" type="range" min="0" step=".1" value="0">
           </div>
           <div class="actions">
             <label class="check"><input id="lock-point" type="checkbox"> Lock selected point</label>
@@ -75,15 +69,15 @@
             <button id="copy-edits" type="button" disabled>Copy edits</button>
           </div>
         </div>
-        <textarea id="export" aria-label="Edited atlas bands" readonly hidden></textarea>
+        <textarea id="export" aria-label="Edited atlas interior points" readonly hidden></textarea>
       </section>
       <section class="edit tuning" aria-labelledby="tune-heading">
         <h2 id="tune-heading">Hill-climb</h2>
-        <p>Tunes the outgoing and incoming poses in both turn directions. Gold squares mark locked points. A lock also pins the band height.</p>
+        <p>Tunes the outgoing and incoming poses in both turn directions. Gold squares mark locked points. The head-on pose mirrors edits and locks.</p>
         <div class="fields">
           <label>Search area
             <select id="tune-scope">
-              <option value="nearby">Selected band ± 2</option>
+              <option value="nearby">Selected point and neighbors</option>
               <option value="all">Whole handoff</option>
             </select>
           </label>

@@ -11,7 +11,7 @@ const { DEN_APPROACH, DEN_DURATION, DEN_SCREENS, denScroll } = await server.ssrL
 const { denWaves, denPatrolPose, denPatrolCanFire, denPatrolWarp } = await server.ssrLoadModule('/src/den/patrol.ts');
 const { turn16Hardpoints } = await server.ssrLoadModule('/src/den/patrol-atlas-16.ts');
 const { createDenPatrols } = await server.ssrLoadModule('/src/den/patrol-rig.ts');
-const { createPatrolWarpCard, patrolAtlasFor, patrolBandAngle } = await server.ssrLoadModule('/src/den/patrol-warp.ts');
+const { createPatrolWarpCard, patrolAtlasFor, patrolGridPoint, patrolInteriorIndex, PATROL_GRID_SIZE } = await server.ssrLoadModule('/src/den/patrol-warp.ts');
 const { DEN_TURRET_REACH, DEN_TURRET_RECOIL, DEN_MINE_FUSE, createDenTurret, denMinePose,
   denTurretSignal, stepDenTurret } = await server.ssrLoadModule('/src/den/defense.ts');
 
@@ -122,70 +122,57 @@ test('patrol mesh stays continuous through atlas handoffs and straight ahead', (
   card.root.material.dispose();
 });
 
-test('the workshop can adjust one atlas band and isolate either texture on the same posed mesh', () => {
+test('the workshop can edit a grid point and isolate either texture on the same posed mesh', async () => {
+  const { movePatrolPoint, meshFoldsNear } = await server.ssrLoadModule('/src/studies/patrol-registration.ts');
   const card = createPatrolWarpCard();
   const texture = new Texture({ width: 627, height: 627 });
   card.setArt(texture);
-  const angle = -15 * Math.PI / 180;
-  const mesh = () => Array.from(card.root.geometry.attributes.position.array);
+  const heading = -15 * Math.PI / 180, frame = 2, point = 3 * PATROL_GRID_SIZE + 4;
+  const { position, uv } = card.root.geometry.attributes;
   const weights = card.root.material.uniforms.poseBlend;
-  card.pose(angle, 0);
-  const base = mesh();
+  card.pose(heading, 0);
+  const base = Array.from(position.array), originalUV = Array.from(uv.array);
   assert.equal(weights.value, 0);
-  card.pose(angle, 1);
+  card.pose(heading, 1);
   assert.equal(weights.value, 1);
-  assert.deepEqual(mesh(), base);
-  const atlas = patrolAtlasFor(627, 627), frames = [...atlas.rows], pose = [...frames[2]];
-  const [y, l, mid, r, il, ir, detailL, detailR] = pose[12];
-  pose[12] = [y + 1, l, mid, r, il, ir, detailL, detailR - 1];
-  frames[2] = pose;
-  card.setRegistration(atlas, frames);
-  card.pose(angle);
-  assert(Math.abs(weights.value - .5) < 1e-8);
-  assert.notDeepEqual(mesh(), base);
-  card.setRegistration(atlas);
-  card.pose(angle);
-  assert.deepEqual(mesh(), base);
-  texture.dispose();
-  card.root.geometry.dispose();
-  card.root.material.dispose();
-});
+  assert.deepEqual(Array.from(position.array), base);
 
-test('a lap control point can leave its band height without moving the rest of the band', async () => {
-  const { dragPatrolPoint, meshFoldsNear } = await server.ssrLoadModule('/src/studies/patrol-registration.ts');
-  const atlas = patrolAtlasFor(1254, 1254), card = createPatrolWarpCard();
-  const frame = 1, band = 16, point = 1, x = -50, y = 26.4;
-  const heading = -3 * Math.PI / 180, columns = atlas.grid.columns;
-  card.pose(heading);
-  const uv = card.root.geometry.attributes.nextUV;
-  const before = Array.from(uv.array);
-  const frames = [...atlas.rows];
-  frames[frame] = JSON.parse(JSON.stringify(dragPatrolPoint(atlas, frames[frame], frame, band, point, x, y)));
+  const atlas = patrolAtlasFor(627, 627), frames = [...atlas.interiors], crop = atlas.crops[frame];
+  const [x, y] = patrolGridPoint(crop, frames[frame], point);
+  frames[frame] = JSON.parse(JSON.stringify(movePatrolPoint(atlas, frame, frames[frame], point, x - 1, y + 2)));
   card.setRegistration(atlas, frames);
   assert.equal(meshFoldsNear(card, frame, frames.length - 1), false);
   card.pose(heading);
-  const index = band * columns + point;
-  const angle = patrolBandAngle(atlas, frame), c = Math.cos(angle), s = Math.sin(angle);
-  const [,,,, pivotX, pivotY] = atlas.crops[frame];
-  assert(Math.abs(uv.getX(index) * atlas.width - (pivotX + c * x - s * y)) < .0001);
-  assert(Math.abs((1 - uv.getY(index)) * atlas.height - (pivotY + s * x + c * y)) < .0001);
-  assert(uv.array.every((value, i) => Math.floor(i / 2) === index || value === before[i]));
+  assert(Math.abs(weights.value - .5) < 1e-8);
+  assert.notDeepEqual(Array.from(position.array), base);
+  assert(Math.abs(uv.getX(point) * atlas.width - (crop[0] + x - 1)) < .0001);
+  assert(Math.abs((1 - uv.getY(point)) * atlas.height - (crop[1] + y + 2)) < .0001);
+  assert(uv.array.every((value, i) => Math.floor(i / 2) === point || value === originalUV[i]));
+  card.setRegistration(atlas);
+  card.pose(heading);
+  assert.deepEqual(Array.from(position.array), base);
+  texture.dispose();
   card.root.geometry.dispose();
   card.root.material.dispose();
 });
 
-test('profile warp vertices follow the rear exhaust cap, lower housing and armor rail', () => {
-  const card = createPatrolWarpCard(), texture = new Texture({ width: 627, height: 627 });
-  card.setArt(texture);
-  card.pose(-Math.PI / 2);
-  const uv = card.root.geometry.getAttribute('uv');
-  for (const [band, x, y] of [[6, 1185, 1121], [9, 1165, 1148], [13, 1143, 1161]]) {
-    const index = band * 7 + 5;
-    assert(Math.hypot(uv.getX(index) * 1254 - x, (1 - uv.getY(index)) * 1254 - y) < 2);
+test('patrol grids pin their 28 perimeter points to each sprite crop', async () => {
+  const { movePatrolPoint } = await server.ssrLoadModule('/src/studies/patrol-registration.ts');
+  for (const atlas of [patrolAtlasFor(1254, 1254), patrolAtlasFor(1536, 1024)]) {
+    for (const [frame, crop] of atlas.crops.entries()) {
+      const interior = atlas.interiors[frame], width = crop[2] - crop[0], height = crop[3] - crop[1];
+      assert.equal(interior.length, 36);
+      let perimeter = 0;
+      for (let i = 0; i < PATROL_GRID_SIZE ** 2; i++) {
+        if (patrolInteriorIndex(i) >= 0) continue;
+        const [x, y] = patrolGridPoint(crop, interior, i);
+        assert(x === 0 || y === 0 || Math.abs(x - width) < 1e-8 || Math.abs(y - height) < 1e-8);
+        assert.equal(movePatrolPoint(atlas, frame, interior, i, 20, 40), interior);
+        perimeter++;
+      }
+      assert.equal(perimeter, 28);
+    }
   }
-  texture.dispose();
-  card.root.geometry.dispose();
-  card.root.material.dispose();
 });
 
 test('patrol exhaust sits on the engine pixels through both directions of a warped handoff', () => {
