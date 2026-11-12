@@ -17,27 +17,33 @@ function savedPilot() {
   }
 }
 
-function portrait(pilot: Pilot) {
+export function createPortrait(initials: string, color: string, url?: string, signal?: AbortSignal) {
   const frame = document.createElement('span');
   frame.className = 'portrait';
   frame.setAttribute('aria-hidden', 'true');
-  frame.style.setProperty('--pilot-color', pilot.color);
+  frame.style.setProperty('--pilot-color', color);
 
   const fallback = document.createElement('span');
   fallback.className = 'portrait-fallback';
-  fallback.textContent = pilot.name[0];
+  fallback.textContent = initials;
   frame.append(fallback);
 
-  const path = `pilots/${pilot.id}.png`;
-  if (__PILOT_PORTRAITS__.includes(path)) {
+  if (url && !signal?.aborted) {
     const image = document.createElement('img');
     image.alt = '';
-    image.addEventListener('error', () => image.remove(), { once: true });
-    image.src = import.meta.env.BASE_URL + __PILOT_URLS__[path];
+    image.addEventListener('error', () => image.remove(), { once: true, signal });
+    signal?.addEventListener('abort', () => image.removeAttribute('src'), { once: true });
+    image.src = url;
     frame.append(image);
   }
 
   return frame;
+}
+
+function portrait(pilot: Pilot) {
+  const path = `pilots/${pilot.id}.png`;
+  const url = __PILOT_PORTRAITS__.includes(path) ? import.meta.env.BASE_URL + __PILOT_URLS__[path] : undefined;
+  return createPortrait(pilot.name[0], pilot.color, url);
 }
 
 export function setupPilots(

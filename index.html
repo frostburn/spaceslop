@@ -8,9 +8,19 @@
   </head>
   <body>
     <main id="front-menu" class="main-menu" aria-labelledby="menu-title">
-      <div class="menu-heading"><p class="eyebrow">Vertical arcade shooter</p><h1 id="menu-title">Spaceslop</h1><p>Choose your next sector.</p></div>
-      <div id="level-cards" class="level-cards" role="group" aria-label="Select a level"></div>
-      <div class="menu-actions"><button id="prepare-flight" type="button">Prepare flight</button><p id="menu-status" role="status">Select a sector to prepare its flight.</p><details class="offline-settings"><summary>Offline storage</summary><p>Prepared levels are saved on this device. Clearing them keeps the menu and pilot choice.</p><button id="clear-offline" type="button">Clear saved levels</button></details><button id="menu-update" type="button" hidden>Apply update</button></div>
+      <div class="menu-heading"><h1 id="menu-title">Spaceslop</h1></div>
+      <div class="menu-controls">
+        <div class="menu-modes" role="group" aria-label="Flight mode">
+          <button id="campaign-mode" type="button" aria-pressed="true">Campaign</button>
+          <button id="free-flight-mode" type="button" aria-pressed="false">Free Flight</button>
+        </div>
+        <div class="mission-action">
+          <p id="menu-status" role="status"></p>
+          <button id="prepare-flight" type="button">Open briefing</button>
+        </div>
+      </div>
+      <div id="level-cards" class="level-cards" role="group" aria-label="Select a mission"></div>
+      <div class="menu-actions"><details class="offline-settings"><summary>Offline storage</summary><p>Prepared levels are saved on this device. Clearing them keeps your campaign progress and pilot choice.</p><button id="clear-offline" type="button">Clear saved levels</button></details><button id="menu-update" type="button" hidden>Apply update</button></div>
       <noscript>Enable JavaScript to launch Spaceslop.</noscript>
     </main>
     <main id="game-app" hidden>
@@ -18,6 +28,7 @@
         <header class="hud" aria-label="Flight status">
           <div><span id="sector">SECTOR 01</span><strong id="score">000000</strong></div>
           <div><span>HULL</span><strong id="hull">04</strong></div>
+          <span id="pilot-rank-hud" class="rank-badge"></span>
           <button id="menu-button" type="button">Menu</button>
           <button id="pause" type="button" hidden>Pause</button>
         </header>
@@ -26,6 +37,7 @@
             <div id="selected-portrait"></div>
             <figcaption>
               <strong id="selected-pilot"></strong>
+              <span id="pilot-rank" class="rank-badge"></span>
               <span id="pilot-perk-readout" hidden></span>
             </figcaption>
           </figure>
@@ -42,13 +54,19 @@
           <div id="boss-hud" hidden><span id="boss-name">INTERCEPTOR</span><progress id="boss-health" aria-label="Boss health"></progress></div>
           <section id="panel" aria-labelledby="heading">
             <h1 id="heading">Spaceslop</h1>
+            <div id="mission-brief" class="mission-brief" aria-label="Mission briefing" role="group" hidden>
+              <div class="brief-officer">
+                <div class="brief-portrait"></div>
+                <div>
+                  <span class="officer-rank rank-badge"></span>
+                  <strong class="officer-name"></strong>
+                </div>
+              </div>
+              <p class="brief-quote"></p>
+            </div>
             <p id="message">Tap to place the drone. Drag to steer.</p>
             <div id="mobile-picker">
               <div id="loadout-picker">
-                <label class="loadout-field">
-                  Level
-                  <select id="level"></select>
-                </label>
                 <fieldset id="pilot-picker">
                   <legend>Select pilot</legend>
                   <div id="pilot-choices"></div>
@@ -68,7 +86,10 @@
                 </details>
               </div>
             </div>
-            <button id="start" type="button" disabled>Launch</button>
+            <div class="flight-actions">
+              <button id="next-mission" type="button" hidden>Next briefing</button>
+              <button id="start" type="button" disabled>Launch</button>
+            </div>
             <small>Keyboard · WASD or arrows · Space for pulse</small>
             <button id="return-menu" type="button">Choose another sector</button>
           </section>

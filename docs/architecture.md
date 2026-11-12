@@ -4,7 +4,9 @@
 
 | Location | Responsibility |
 | --- | --- |
-| `src/main.ts` | Lightweight sector menu, session entry/exit and update prompt. No renderer or game imports. |
+| `src/main.ts` | Lightweight Campaign and Free Flight menus, session entry/exit and update prompt. No renderer or game imports. |
+| `src/campaign/` | Mission order, briefing text, cast, ranks, save rules and procedural rank insignias. |
+| `src/app/briefing.ts` | The active mission's portrait and officer/pilot rank displays. |
 | `src/levels.ts` | Small menu catalog, shared route durations and level IDs; layout modules derive their duration from it. Keep it independent of scene constructors. |
 | `src/app/flight-session.ts` | One hangar/run: HUD, preparation, simulation clock, pause/results and context recovery. |
 | `src/app/input.ts` | Scoped keyboard and pointer controls. All listeners end with the session's abort signal. |
@@ -20,6 +22,10 @@
 | `scripts/check-build.mjs` | Enforce menu budget, package isolation and production exclusions. |
 
 Existing level geometry, rig and layout modules retain their descriptive prefixes (`preserve-*`, `vent-*`, `io-*`, `titan-*`, `ice-*`, `hive-*`, marine/ant helpers). The renderer entry point shows which pieces a stage uses. Shared effects stay separate from simulation geometry. The asset workshop intentionally loads the full model collection and its texture helper; it is a development entry point only.
+
+`campaign/missions.ts` orders Return to Sender from Broodlock, Io and Europa through The Return Channel. The campaign save stores cleared level IDs, with the first uncleared entry as the next mission. A normal Campaign victory records progress. Free Flight and dev shortcuts are practice runs. The hangar shows the rank assigned to that mission and the results announce earned promotions. The lightweight menu derives the career rank from the frontier, including Major after the finale.
+
+The active hangar requests its briefing officer portrait and the optional shared rank sheet. The selected level package caches those files alongside existing pilot portraits and stage media. Missing portraits use initials and the rank displays can draw their badges directly. The menu loads no media. Europa’s survey cable and junction lamps sit on Hadal’s seabed in the existing scenery coordinates.
 
 `rendering/levels/heliostat.ts` owns the playable Uranus factory. Shared station construction, camera math, combat schedules, actors, gates and backdrop live in `src/heliostat/`; only the standalone study UI and loader remain in `src/studies/`. `heliostat/combat.ts` contains no Three.js or media imports. The 100-second straight route decelerates into an eight-second turn, with a single physical world for machinery, capacitor posts, regulator and star. Twenty waves use bounded, prewarmed drone/man o’war pools; six fixed capacitor sites share their gap, warning and discharge clocks with collision. Boss target locks precede continuous curved plasma channels; their first intersection with the flight plane supplies damage, and Pulse interrupts the current channel. The same control points drive the preallocated GPU tubes, with bright cores and broad halos; source feeds meet two registered sunspots. Laser contacts follow the physical aperture. The narrow playable view looks down onto lowered side machinery; overhead headers stop before containment so the collector stays visible. The full route shares four templates and culls by bay. A second, deeper network repeats three shared service-platform templates along fifteen islands: annular decks, complete truss bridges, generator piers, radiator banks and transfer pipes. It stays below flight altitude and is prewarmed before launch. Capacitor gates remain energized after charging and leave view only through physical scrolling. Raster man o’war parts share one optional 2×2 atlas, preserve the modeled fallback and delay fire until the complete body and charge are visible.
 

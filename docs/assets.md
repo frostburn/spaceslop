@@ -6,6 +6,16 @@ The source of truth for file paths and level ownership is [catalog.ts](../src/as
 
 Pilot portraits are optional square PNGs at `public/pilots/vex.png`, `public/pilots/brass.png` and `public/pilots/glint.png`. They load in the selected level's hangar and fall back to callsign tiles. PWA install icons are optional `public/icons/spaceslop-192.png` and `public/icons/spaceslop-512.png`.
 
+Briefing officer portraits go at `public/officers/<officer-id>.png`, as opaque 512 × 512 PNGs. Officer IDs are in `src/campaign/missions.ts`. Only the selected officer's image is requested, with initials as the fallback.
+
+The optional `public/officers/rank-insignia.png` is a transparent 512 × 384 RGBA PNG. Keep the full 4 × 3 grid, 128 × 128 cells, and empty last cell. A proportional resize with square cells also works. The hangar reads these cells in the following order. A code-drawn copy supplies the badges when the sheet is absent or invalid.
+
+| Row | Column 1 | Column 2 | Column 3 | Column 4 |
+| --- | --- | --- | --- | --- |
+| Top | Specialist 4 | Sergeant | Second Lieutenant | First Lieutenant |
+| Middle | Captain | Major | Colonel | Brigadier General |
+| Bottom | Solar Marshal | Sector Marshal | Galactic Marshal | Empty |
+
 Per-level atlas layouts are in the [level reference](level-reference.md). Shared surfaces and plates follow.
 
 The encounter textures and backdrops are optional PNGs. Add the reviewed files and rebuild. Only the selected level downloads them, and preparing that level saves its files for offline use. The workshop also shows the model textures.

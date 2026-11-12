@@ -93,7 +93,32 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 }
 #panel > p { max-width: 27ch; font-size: .83rem; line-height: 1.4; margin: .9rem 0; }
 #panel small { max-width: 32ch; color: var(--muted); font-size: .68rem; margin-top: .8rem; }
-#start { background: #b7f4f4; border-color: #b7f4f4; color: #06111b; font-weight: bold; }
+.flight-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; }
+#start, #next-mission { background: #b7f4f4; border-color: #b7f4f4; color: #06111b; font-weight: bold; }
+#next-mission:not([hidden]) + #start { background: #16202f; border-color: var(--line); color: inherit; font-weight: normal; }
+#panel:has(.mission-brief:not([hidden])) h1 { font-size: clamp(1.15rem, 5.2vw, 2rem); max-width: 20ch; }
+#panel:has(.mission-brief:not([hidden])) > p { max-width: 35ch; margin: .55rem 0 .65rem; }
+.mission-brief {
+  width: min(100%, 25rem);
+  margin-top: .7rem;
+  padding: .65rem .75rem;
+  border: 1px solid #35465f;
+  border-left: 2px solid var(--accent);
+  border-radius: 4px;
+  background: #101b2b;
+  text-align: start;
+}
+.brief-officer { display: flex; gap: .65rem; align-items: center; }
+.brief-portrait { flex: 0 0 3.45rem; border: 1px solid var(--line); }
+.officer-name { display: block; margin-top: .15rem; color: #eef8ff; font-size: .9rem; }
+.brief-quote { margin: .55rem 0 0; font-size: .78rem; line-height: 1.47; }
+.rank-badge { display: inline-flex; justify-content: center; align-items: center; gap: .25rem; color: #c5d8e8; font-size: .7rem; }
+.rank-badge canvas { width: 1.65rem; height: 1.65rem; flex: none; }
+.officer-rank { justify-content: flex-start; color: var(--accent); }
+#pilot-rank-hud { flex: none; flex-direction: column; gap: 0; }
+#pilot-rank-hud canvas { width: 1.5rem; height: 1.5rem; }
+#pilot-rank-hud > span { font-size: .59rem; letter-spacing: .04em; }
+#pilot-rank { margin: 0 auto; }
 #update { margin-top: .75rem; }
 
 #boss-hud { position: absolute; inset: .55rem 1rem auto; display: grid; gap: .2rem; pointer-events: none; }
@@ -241,6 +266,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     padding: 0;
     text-align: start;
   }
+  #pilot-rank-hud { display: none; }
   .pilot-console {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -287,18 +313,25 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   padding: max(1.25rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right)) max(1.25rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left)); gap: 1.4rem;
 }
 .menu-heading h1 {font: italic 900 clamp(2.8rem,8vw,5.2rem)/1 system-ui,sans-serif;letter-spacing:-.065em;text-transform:uppercase;margin:0;color:#eef8ff;}
-.menu-heading p {color:var(--muted);font-size:.85rem;line-height:1.5;}
-.menu-heading .eyebrow {font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);}
+.menu-controls {display:grid;gap:.6rem;}
+.menu-modes {display:flex;gap:.45rem;}
+.menu-modes button[aria-pressed=true] {border-color:var(--accent);background:#19313c;color:#eef8ff;}
+.mission-action {display:flex;justify-content:space-between;align-items:center;gap:.75rem;padding:.5rem .65rem;border:1px solid var(--line);border-radius:4px;background:#101a29;}
 .level-cards {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem;}
-.level-card {text-align:left;min-height:6.2rem;padding:1rem;display:grid;align-content:center;gap:.6rem;background:#101a29;}
+.level-card {text-align:left;min-height:4.85rem;padding:.7rem .9rem;display:grid;align-content:center;gap:.35rem;background:#101a29;}
 .level-card strong {font-size:1rem;font-weight:normal;color:#eef8ff;}
 .level-card span {font-size:.68rem;color:var(--muted);line-height:1.4;}
 .level-card[aria-pressed=true] {border-color:var(--accent);background:#172b35;box-shadow:inset 3px 0 var(--accent);}
 .menu-actions {display:grid;justify-items:start;gap:.5rem;}
-#prepare-flight {background:#b7f4f4;color:#06111b;border-color:#b7f4f4;font-weight:bold;padding:.6rem 1.5rem;}
-#menu-status {font-size:.78rem;color:var(--muted);line-height:1.5;min-height:2.5em;margin:0;max-width:70ch;}
+#prepare-flight {background:#b7f4f4;color:#06111b;border-color:#b7f4f4;font-weight:bold;padding:.45rem .8rem;flex:none;}
+#menu-status {font-size:.78rem;color:var(--muted);line-height:1.5;margin:0;max-width:68ch;}
 #return-menu {margin-top:.7rem;font-size:.7rem;}
-@media(max-width:520px){.main-menu{gap:1rem;justify-content:flex-start;}.level-cards{grid-template-columns:1fr;gap:.45rem;}.level-card{min-height:4.4rem;padding:.75rem;gap:.35rem;}.menu-heading p{margin:.5rem 0;}}
+@media(max-width:520px){.main-menu{gap:1rem;justify-content:flex-start;}.level-cards{grid-template-columns:1fr;gap:.45rem;}.level-card{min-height:4.4rem;padding:.75rem;gap:.35rem;}}
+@media(max-width:520px) {
+  .menu-controls {position:sticky;top:0;z-index:1;background:#080b14;padding:.5rem 0;}
+  .mission-action {align-items:start;}
+  #prepare-flight {font-size:.73rem;}
+}
 .offline-settings {font-size:.75rem;color:var(--muted);max-width:42ch;}
 .offline-settings summary {padding:.7rem 0;cursor:pointer;}
 .offline-settings p {line-height:1.5;}

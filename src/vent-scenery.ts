@@ -1,6 +1,7 @@
 import * as T from 'three';
 import {createVentFormations,ventTierTint,type VentFormation} from './vent-formations';
 import {createVentGeology} from './vent-geology';
+import {createVentCable} from './vent-cable';
 import {createVentAtlas,ventCardGeometry,ventCardRelief,ventTallCell} from './vent-atlas';
 import {loadEncounterTexture} from './encounter-texture';
 import {type createMortarAssets} from './vent-mortar-rig';
@@ -12,7 +13,7 @@ import {VENT_SHAFT_Y,VENT_STAGE_PITCH,ventFrame,ventWorld,ventBossPose} from './
 function random(seed:number){return()=>{seed=(Math.imul(seed,1664525)+1013904223)|0;return(seed>>>0)/4294967296;};}
 export function createVentScenery(molluskAssets:ReturnType<typeof createMortarAssets>,signal?:AbortSignal){
  const root=new T.Group();root.name='hydrothermal-vents';root.visible=false;
- const world=new T.Group();root.add(world);world.add(createVentGeology());
+ const world=new T.Group();root.add(world);world.add(createVentGeology(),createVentCable());
  const colonies=createVentColonies(molluskAssets);world.add(colonies.root);
  const atlas=createVentAtlas(),material=new T.MeshBasicMaterial({map:atlas,alphaTest:.15,side:T.DoubleSide});
  const extraMaterial=material.clone();extraMaterial.map=createVentAtlas(true);

@@ -3,6 +3,9 @@ import { DEN_SCREENS, denSection } from '../den/route';
 import {boulevardSection} from '../boulevard';
 import {summerSection} from '../summer/layout';
 import { fleetSection, FLEET_TRENCH_AT } from '../fleet/route';
+import { missionFor } from '../campaign/missions';
+import { ranks, type Rank } from '../campaign/ranks';
+import { setupBriefing } from './briefing';
 import { bindFlightInput } from './input';
 import { ventSection } from '../vent-layout';
 import { ioSection, IO_SCREENS } from '../io-layout';
@@ -10,13 +13,19 @@ import { titanSection } from '../titan-layout';
 import { BOSS_HP, Flight, STEP } from '../game';
 import { setupPilots } from '../pilots';
 import { createFlightView, type FlightView } from '../view';
-import { levels, readLevel, type LevelId } from '../levels';
+import { levels, type LevelId } from '../levels';
 import { iceSection } from '../ice-layout';
 import { readWingWeapon, wingWeapons } from '../wing';
 import { FONS_RAIN_END, fonsPhase } from '../wormhole/fons/combat';
 import { fonsAttackCue } from '../wormhole/fons/attacks';
 import { fonsNames, fonsVariants, type FonsVariant } from '../wormhole/fons/variants';
-export async function openFlightSession(selectedLevel: LevelId, signal: AbortSignal) {
+
+type CampaignRun = {
+  onClear(): { next?: LevelId; promoted?: Rank };
+  onNext(level: LevelId): void;
+};
+
+export async function openFlightSession(selectedLevel: LevelId, signal: AbortSignal, campaignRun?: CampaignRun) {
   function element<T extends HTMLElement>(id: string) {
     const node = document.getElementById(id);
     if (!node)
@@ -74,7 +83,13 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
   }
   const heading = element('heading');
   const message = element('message');
+  const mission = missionFor[selectedLevel];
+  const briefing = element('mission-brief');
+  const setPilotRank = setupBriefing(selectedLevel, briefing, [element('pilot-rank'), element('pilot-rank-hud')], signal);
+  setPilotRank(mission.pilotRank);
   const start = element<HTMLButtonElement>('start');
+  const nextMission = element<HTMLButtonElement>('next-mission');
+  element('return-menu').textContent = campaignRun ? 'Mission list' : 'Choose another sector';
   const pause = element<HTMLButtonElement>('pause');
   const pulse = element<HTMLButtonElement>('pulse');
   const status = element('status');
@@ -86,10 +101,6 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
   const bossName = element('boss-name');
   const bossHealth = element<HTMLProgressElement>('boss-health');
   const droneWeapon = element<HTMLSelectElement>('drone-weapon');
-  const levelSelector = element<HTMLSelectElement>('level');
-  levelSelector.replaceChildren(...Object.entries(levels).map(([id,level])=>new Option(level.name,id)));
-  levelSelector.value = selectedLevel;
-  levelSelector.disabled = true;
   const testingWings = import.meta.env.DEV || new URLSearchParams(location.search).get('testLoadout') === '1';
   element('test-wing-loadout').hidden = !testingWings;
   const wingSelectors = ['left-wing', 'right-wing'].map((id) => element<HTMLSelectElement>(id));
@@ -105,7 +116,9 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
   const pilotPicker = setupPilots(element('loadout-picker'), element('pilot-choices'), selectedPortrait, element('selected-pilot'), element('pilot-perk-description'), element('desktop-picker'), element('mobile-picker'), signal);
   type Screen = 'title' | 'active' | 'paused' | 'results';
   let screen: Screen = 'title';
-  let flight = new Flight('sentry', [], pilotPicker.selectedId, readLevel(levelSelector.value));
+  let flight = new Flight('sentry', [], pilotPicker.selectedId, selectedLevel);
+  let nextLevel: LevelId | undefined;
+  let progressOnClear = false;
   let offlineReady = false;
   let view: FlightView | undefined;
   let preparing: AbortController | undefined;
@@ -142,6 +155,8 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     pulse.disabled = !active || !fighting || flight.charges === 0;
     pause.hidden = !active;
     panel.hidden = active;
+    briefing.hidden = screen !== 'title';
+    nextMission.hidden = screen !== 'results' || !nextLevel;
     const betweenRuns = screen === 'title' || screen === 'results';
     if (import.meta.env.DEV) {
       const bossStart = element<HTMLButtonElement>('dev-boss');
@@ -166,7 +181,7 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     }
     selectedPortrait.classList.toggle('perk-flash', active && flight.perkTime > 1.15);
     let tip = 'Tap for drone · Drag to steer';
-    if (preparing)
+    if (preparing || (screen === 'title' && !view))
       tip = 'Preparing graphics…';
     else if (screen === 'title')
       tip = offlineReady ? 'Level ready offline' : 'Ready to launch';
@@ -245,18 +260,37 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
     syncUI();
   }
   function showResults() {
+    if (screen !== 'active') return;
     screen = 'results';
     input.reset();
     heading.textContent = flight.phase === 'won' ? 'Sector clear' : 'Ship lost';
-    message.textContent = `Score ${flight.score}`;
+    const report = [`Score ${flight.score}`];
+    if (flight.phase === 'won' && progressOnClear && campaignRun) {
+      const result = campaignRun.onClear();
+      nextLevel = result.next;
+      if (result.promoted) {
+        setPilotRank(result.promoted);
+        report.push(`Promoted to ${ranks[result.promoted].name}`);
+      }
+      if (nextLevel) report.push(levels[nextLevel].name);
+      else report.push('Campaign complete');
+    }
+    message.textContent = report.join(' · ');
     start.textContent = 'Fly again';
+    panel.scrollTop = 0;
     syncUI();
   }
+  nextMission.addEventListener('click', () => {
+    if (screen === 'results' && nextLevel) campaignRun?.onNext(nextLevel);
+  }, { signal });
   start.addEventListener('click', () => {
     if (!view || start.disabled || screen === 'active')
       return;
     if (screen !== 'paused') {
-      flight = new Flight(droneWeapon.value === 'towline' ? 'towline' : 'sentry', testingWings ? wingSelectors.map((select) => readWingWeapon(select.value)) : [], pilotPicker.selectedId, readLevel(levelSelector.value));
+      flight = new Flight(droneWeapon.value === 'towline' ? 'towline' : 'sentry', testingWings ? wingSelectors.map((select) => readWingWeapon(select.value)) : [], pilotPicker.selectedId, selectedLevel);
+      progressOnClear = !devLaunch;
+      nextLevel = undefined;
+      setPilotRank(mission.pilotRank);
       if (import.meta.env.DEV && devLaunch) {
         if (devLaunch === 'boss' || devLaunch === 'trench') {
           flight.time = devLaunch === 'trench' ? FLEET_TRENCH_AT : flight.stageDuration;
@@ -349,10 +383,12 @@ export async function openFlightSession(selectedLevel: LevelId, signal: AbortSig
   }
   signal.addEventListener('abort', cleanup, { once: true });
   try {
-    heading.textContent = 'Spaceslop';
-    message.textContent = 'Tap to place the drone. Drag to steer.';
+    heading.textContent = levels[selectedLevel].name;
+    message.textContent = mission.objective;
     start.textContent = 'Launch';
     start.disabled = true;
+    panel.scrollTop = 0;
+    syncUI();
     view = await createFlightView(canvas, selectedLevel,signal);
     if (signal.aborted) {
       view.dispose();
