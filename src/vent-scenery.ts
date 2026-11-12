@@ -2,7 +2,7 @@ import * as T from 'three';
 import {createVentFormations,ventTierTint,type VentFormation} from './vent-formations';
 import {createVentGeology} from './vent-geology';
 import {createVentCable} from './vent-cable';
-import {createVentAtlas,ventCardGeometry,ventCardRelief,ventTallCell} from './vent-atlas';
+import {createVentAtlas,ventCardGeometry,ventCardRelief,ventTallCell,poseVentCard} from './vent-atlas';
 import {loadEncounterTexture} from './encounter-texture';
 import {type createMortarAssets} from './vent-mortar-rig';
 import {createVentColonies} from './vent-colonies';
@@ -19,7 +19,7 @@ export function createVentScenery(molluskAssets:ReturnType<typeof createMortarAs
  const extraMaterial=material.clone();extraMaterial.map=createVentAtlas(true);
  const ready=Promise.all([loadEncounterTexture('ventAtlas',texture=>{texture.anisotropy=4;material.map=texture;material.needsUpdate=true;}, undefined, signal),loadEncounterTexture('ventExtras',texture=>{texture.anisotropy=4;extraMaterial.map=texture;extraMaterial.needsUpdate=true;}, undefined, signal)]);
  const rng=random(52391),formations=createVentFormations(),batches=Array.from({length:16},()=>[] as VentFormation[]),emitters:{x:number;y:number;z:number;pale:boolean}[]=[];
- const matrix=new T.Matrix4(),p=new T.Vector3(),q=new T.Quaternion(),scale=new T.Vector3();
+ const matrix=new T.Matrix4(),p=new T.Vector3(),q=new T.Quaternion(),scale=new T.Vector3(),placement=new T.Object3D();
  for(const f of formations){
   batches[f.cell].push(f);
   if(ventTallCell(f.cell))for(const offset of f.cell===10?[-.19,0,.19]:[0])emitters.push({x:f.x+offset*f.w,y:f.y+f.h*.27-ventCardRelief(f.cell,.77)*f.h/7.5*Math.tan(VENT_STAGE_PITCH),z:f.z+ventCardRelief(f.cell,.77)*f.h/7.5+.1,pale:f.cell===3});
@@ -28,7 +28,7 @@ export function createVentScenery(molluskAssets:ReturnType<typeof createMortarAs
  for(let cell=0;cell<16;cell++){
   const mesh=new T.InstancedMesh(ventCardGeometry(cell),cell<8?material:extraMaterial,batches[cell].length);mesh.name=`vent-raster-layer-${cell}`;mesh.frustumCulled=false;
   batches[cell].forEach((f,i)=>{
-   p.set(f.x,f.y,f.z);q.setFromEuler(new T.Euler(f.front?Math.PI/2:0,0,f.angle,f.front?'ZXY':'XYZ'));scale.set(f.w,f.h,ventTallCell(f.cell)?f.h/7.5:1);matrix.compose(p,q,scale);mesh.setMatrixAt(i,matrix);
+   poseVentCard(f,placement);mesh.setMatrixAt(i,placement.matrix);
    const tint=ventTierTint[f.tier],depth=f.front?Math.max(.2,1+Math.min(0,f.z)*.015):1;mesh.setColorAt(i,new T.Color().setRGB(tint[0]*depth,tint[1]*depth,tint[2]*depth));
   });world.add(mesh);
  }

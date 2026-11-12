@@ -58,6 +58,30 @@ test('raster rig has independent claws/apron, continuous limbs, extra barnacles 
  const meshes=[];r.root.traverse(o=>{if(o.isMesh)meshes.push(o);});assert(meshes.filter(m=>m.name==='crab-barnacle-colony').length>=20);const texture=new T.Texture();r.setAtlas(texture);for(const mesh of meshes)if(mesh.material.map)assert.equal(mesh.material.map,texture);
 });
 
+test('cropped armor overlaps its neighbor at the knee and planted toe through the descent and scurry', () => {
+ const rig = createVentBoss();
+ const part = (name, i) => rig.root.getObjectByName(`crab-${name}-${i}`);
+ const inPart = (point, mesh) => mesh.worldToLocal(rig.root.localToWorld(point.clone()));
+ for (const [reveal, time] of [[.25,106], [1,108], [1,110], [1,114.5]]) {
+  rig.pose(reveal, .6, -2.4, -2.4, 1, time);
+  rig.root.updateMatrixWorld(true);
+  const feet = c.crabFeet(reveal, Math.max(0, time - v.VENT_DURATION - v.VENT_APPROACH));
+  for (let i = 0; i < c.CRAB_LEGS; i++) {
+   const upper = part('leg-upper', i), lower = part('leg-lower', i), toe = part('foot', i);
+   const knee = part('knee', i).position.clone();
+   knee.z -= .11;
+   const tip = new T.Vector3().copy(feet[i]).divideScalar(v.VENT_CRAB_SCALE);
+   const ankle = new T.Vector3(0, .39, 0).applyMatrix4(toe.matrix);
+   assert(Math.abs(inPart(knee, upper).y) < .48 && Math.abs(inPart(knee, lower).y) < .48);
+   assert(Math.abs(inPart(ankle, lower).y) < .5);
+   assert(inPart(tip, toe).y > -.5 && inPart(tip, toe).y < -.3);
+  }
+ }
+ const uv = part('leg-upper', 0).geometry.attributes.uv;
+ for (let i = 0; i < uv.count; i++)
+  assert(uv.getY(i) > .72 && uv.getY(i) < .95, 'upper leg sampled an open socket end');
+});
+
 test('claw and central laser contacts follow posed anchors and recoil after either phase change',()=>{
  const plane=new T.Group(),r=createVentBoss();plane.add(r.root);r.root.position.set(0,4.2,-12);const contact=createBossLaserContact(plane,r.root);
  for(const target of [-c.CRAB_TARGET_X,c.CRAB_TARGET_X,0]){r.pose(1,1,target,target,1,2,[0,0],target===0?1:0);plane.updateMatrixWorld(true);const p=contact(target,22),anchor=r.root.getObjectByName(target<0?'laser_contact_L':target>0?'laser_contact_R':'laser_contact_C'),q=anchor.getWorldPosition(new T.Vector3()),scale=22/(22-q.z);assert(Math.hypot(p.x-q.x*scale,p.y-q.y*scale)<1e-8);assert.equal(q.x,target);}

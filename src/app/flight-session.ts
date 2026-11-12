@@ -221,12 +221,12 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     screen = 'results';
     input.reset();
     heading.textContent = flight.phase === 'won' ? 'Mission Complete' : 'Ship lost';
-    const report = [`Score ${flight.score}`];
+    const report = [levels[selectedLevel].name, `Score ${flight.score}`];
     if (flight.phase === 'won' && progressOnClear && campaignRun) {
       if (promotion) setPilotRank(promotion);
-      if (nextLevel) report.push(levels[nextLevel].name);
-      else report.push('Campaign complete');
+      if (!nextLevel) report.push('Campaign complete');
     }
+    nextMission.textContent = nextLevel ? `Next briefing · ${levels[nextLevel].name}` : 'Next briefing';
     promotionSubtitle.textContent = promotion ? `Promoted to ${ranks[promotion].name}` : '';
     message.textContent = report.join(' · ');
     start.textContent = 'Fly again';
