@@ -10,7 +10,7 @@ export const officers = {
   'leda-tran': { name: 'Leda Tran', rank: 'major' },
   'malik-adebayo': { name: 'Malik Adebayo', rank: 'brigadier' },
   'vaelith-oruen': { name: 'Vaelith Oruen', rank: 'sectorMarshal' },
-  arruv: { name: 'Arruv', rank: 'galacticMarshal' },
+  arruv: { name: 'Arruv vån Kethar', rank: 'galacticMarshal' },
 } as const satisfies Record<string, { name: string; rank: Rank }>;
 
 export type OfficerId = keyof typeof officers;
