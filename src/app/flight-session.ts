@@ -113,6 +113,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     pulse.disabled = !active || !fighting || flight.charges === 0;
     pause.hidden = !active;
     panel.hidden = active;
+    heading.classList.toggle('preparing-flight', screen === 'loading');
     const victoryResults = screen === 'results' && flight.phase === 'won';
     panel.classList.toggle('victory-results', victoryResults);
     promotionSubtitle.hidden = !victoryResults || promotion === undefined;

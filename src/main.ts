@@ -224,13 +224,9 @@ async function launchFlight(shortcut?: FlightShortcut) {
   closeBriefing();
   menu.hidden = true;
   document.querySelector<HTMLElement>('#panel')!.hidden = false;
-  const preparingLabel = document.createElement('span');
-  preparingLabel.className = 'loading-copper';
-  preparingLabel.textContent = 'Preparing';
-  const flightLabel = document.createElement('span');
-  flightLabel.className = 'loading-brass';
-  flightLabel.textContent = 'flight';
-  document.querySelector('#heading')!.replaceChildren(preparingLabel, ' ', flightLabel);
+  const heading = document.querySelector<HTMLElement>('#heading')!;
+  heading.classList.add('preparing-flight');
+  heading.textContent = 'Preparing flight';
   document.querySelector('#message')!.textContent = levels[id].name;
   document.querySelector<HTMLButtonElement>('#pause')!.hidden = true;
   document.querySelector<HTMLButtonElement>('#pulse')!.disabled = true;
