@@ -583,7 +583,7 @@ export class FlightView {
         });
     const bossLaserDamage = flight.bossLaserDamage - this.previousBossLaserDamage;
     if (flight.phase !== 'won' && this.previousBossHealth - flight.bossHealth - bossLaserDamage > 1e-6 && this.animationTime - this.bossHitAt > 0.07) {
-      this.combat.emit('hit', flight.level==='summer'&&flight.summerLastHit?flight.summerLastHit:flight.isFleet||flight.isFonsFight?
+      this.combat.emit('hit', flight.isCicadaFight ? flight.cicadaMuzzle() : flight.level==='summer'&&flight.summerLastHit?flight.summerLastHit:flight.isFleet||flight.isFonsFight?
         planarProjectileLayer({ x: flight.exposedCannonX, y: flight.bossAimY }, .85):{
         x: flight.exposedCannonX,
         y: flight.bossAimY,

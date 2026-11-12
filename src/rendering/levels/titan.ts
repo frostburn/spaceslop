@@ -5,6 +5,7 @@ import { loadEncounterTexture } from '../../encounter-texture';
 import { BOSS_RECOIL_TIME } from '../../encounters';
 import { createTitanScenery } from '../../titan-scenery';
 import { createCicada } from '../../cicada-rig';
+import { cicadaFlight } from '../../cicada';
 import { createCicadaScout, createCentipedeSection } from '../../titan-insect-rigs';
 import { CICADA_SCOUT_POOL, cicadaMotion } from '../../titan-insects';
 import { CENTIPEDE_POOL } from '../../centipede';
@@ -39,9 +40,10 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
     contact: createBossLaserContact(plane, boss.root),
     update({ flight, reveal: eased, time: titanTime, distance }) {
       const point = titanBossPoint(eased);
+      const motion = cicadaFlight(titanTime - flight.stageDuration - flight.transitionDuration);
       boss.root.visible = flight.bossHealth > 0;
-      boss.root.position.set(0, point.y, point.z);
-      boss.root.rotation.x = TITAN_PITCH - titanFrame(eased).pitch;
+      boss.root.position.set(motion.x, point.y + motion.y, point.z + motion.z);
+      boss.root.rotation.set(TITAN_PITCH - titanFrame(eased).pitch, motion.yaw, motion.bank, 'ZYX');
       boss.pose(eased, flight.cannonWindup, flight.exposedCannonX, flight.firedCannonX, flight.bossRecoil / BOSS_RECOIL_TIME, Math.max(0, titanTime - flight.stageDuration));
       const coast = Math.min(flight.transitionDuration, Math.max(0, titanTime - flight.stageDuration));
       const progress = Math.min(1, flight.hiveProgress + 1.6 / 144 * (coast - coast * coast / (2 * flight.transitionDuration)));

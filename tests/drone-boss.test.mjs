@@ -7,7 +7,11 @@ for(const level of ['summer','heliostat','boulevard','vents','io','titan','ice',
  const f=new Flight('sentry',[],'vex',level);f.phase='boss';f.stepBoss=()=>{};f.cooldown=f.droneCooldown=1e6;f.invulnerable=100;
  const x=f.exposedCannonX*BOSS_PROJECTION,y=-4;f.fire({x,y},true);const s=f.shots[0];assert.equal(s.targetsBoss,false);let previous=y;
  for(let t=.02;t<=.38;t+=.02){const z=s.z+s.vz*t,k=BOSS_CAMERA_DISTANCE/(BOSS_CAMERA_DISTANCE-z),px=(s.x+s.vx*t)*k,py=(s.y+s.vy*t)*k;assert(Math.abs(px-x)<1e-9);assert(py>previous);previous=py;}
- const duration=BOSS_DEPTH/s.vz;assert(Math.abs(s.y+s.vy*duration-f.bossAimY)<1e-9);
+ const duration=BOSS_DEPTH/s.vz;
+ const fireTime=f.time;
+ if(f.isCicadaFight)f.time+=duration;
+ assert(Math.abs(s.y+s.vy*duration-f.bossAimY)<1e-9);
+ f.time=fireTime;
  const before=f.bossHealth;for(let i=0;i<30;i++)f.step(STEP);assert(f.bossHealth<before);
  const g=new Flight('sentry',[],'vex',level);g.phase='boss';g.stepBoss=()=>{};g.cooldown=g.droneCooldown=1e6;g.invulnerable=100;g.fire({x:4,y},true);const hp=g.bossHealth;for(let i=0;i<30;i++)g.step(STEP);assert.equal(g.bossHealth,hp,'off-target drone acquired a horizontal lock');
 });

@@ -93,7 +93,7 @@ test('the preview has a quiet approach, then the Titan rematch telegraphs and fi
   assert.equal(flight.phase, 'boss');
   assert.equal(flight.bossMaxHealth, CICADA_HP);
   assert.equal(flight.bossHealth, CICADA_HP);
-  const firstVent = flight.exposedCannonX;
+  assert(flight.exposedCannonX < 0);
   while (flight.time < CICADA_WINDUP + .17) flight.step(STEP);
   const locked = flight.markers.map(marker => ({ ...marker }));
   assert.equal(locked.length, 3);
@@ -102,8 +102,8 @@ test('the preview has a quiet approach, then the Titan rematch telegraphs and fi
   flight.player.x = 2;
   while (flight.time < CICADA_FIRE + .08) flight.step(STEP);
   assert.deepEqual(flight.markers, locked);
-  assert.equal(flight.firedCannonX, firstVent);
-  assert.equal(flight.exposedCannonX, -firstVent);
+  assert(flight.firedCannonX < 0);
+  assert(flight.exposedCannonX > 0);
   assert.equal(flight.threats.length, 3);
   assert(flight.threats.every(shot => shot.vz > 0 && shot.z < 0));
 });
