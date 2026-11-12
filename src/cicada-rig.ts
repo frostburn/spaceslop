@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { addTitanSetae, titanChitin } from './titan-insect-surfaces';
+import { CICADA_VENT_X, CICADA_VENT_Z } from './cicada';
 
 export function createCicada(makeChitin = titanChitin) {
   const root=new T.Group();root.name='titan-cicada';
@@ -74,7 +75,7 @@ export function createCicada(makeChitin = titanChitin) {
     volume(root,dark,side*2.15,0,.25,.55,.8,.38);
     const vent=volume(root,new T.MeshStandardMaterial({color:0x18403b,emissive:0x69e7cc,emissiveIntensity:.3,roughness:.3}),side*2.4,0,.67,.27,.59,.13);vents.push(vent);
     for(let j=-1;j<=1;j++)volume(root,chitin,side*2.4,j*.3,.8,.26,.044,.055);
-    const anchor=new T.Object3D();anchor.name=side<0?'laser_contact_L':'laser_contact_R';anchor.position.set(side*2.4,0,.88);root.add(anchor);
+    const anchor=new T.Object3D();anchor.name=side<0?'laser_contact_L':'laser_contact_R';anchor.position.set(side*CICADA_VENT_X,0,CICADA_VENT_Z);root.add(anchor);
   }
   const wings:T.Group[]=[];
   const membrane=new T.MeshPhysicalMaterial({color:0xd3ab67,emissive:0xffb375,emissiveIntensity:0,transparent:true,opacity:.32,roughness:.25,metalness:.12,clearcoat:.8,side:T.DoubleSide,depthWrite:false,iridescence:.15});
@@ -120,7 +121,9 @@ export function createCicada(makeChitin = titanChitin) {
     head.position.z=.65-recoil*.13;
     for(let i=0;i<wings.length;i++){
       const side=i<2?-1:1;
-      wings[i].rotation.y=side*(.16+1.02*(1-wingSpread)+Math.sin(time*32+i%2*.65)*.22*wingSpread);
+      const beat = time * 32 + 1.65 * Math.sin(time * 1.46) + i % 2 * .65 + side * .13;
+      const stroke = .22 + .035 * Math.sin(time * 2.34 + side * .6);
+      wings[i].rotation.y=side*(.16+1.02*(1-wingSpread)+Math.sin(beat)*stroke*wingSpread);
       wings[i].rotation.z=Math.sin(time*2+i)*.025;
     }
     membrane.emissiveIntensity=backlight;

@@ -87,11 +87,11 @@ test('Titan ascent is quiet and its boss locks warnings before alternating vents
  for(let i=0;i<410;i++)f.step(STEP);
  assert.equal(f.phase,'approach');assert.equal(f.threats.length+f.shots.length,0);
  for(let i=0;i<12;i++)f.step(STEP);
- assert.equal(f.phase,'boss');const first=f.exposedCannonX;f.invulnerable=100;
+ assert.equal(f.phase,'boss');assert(f.exposedCannonX<0);f.invulnerable=100;
  for(let i=0;i<48;i++)f.step(STEP);
  assert.equal(f.markers.length,3);assert(f.cannonWindup>0);
  const locked=f.markers.map(p=>({...p}));f.player.x=2.5;
  for(let i=0;i<48;i++)f.step(STEP);
- assert.deepEqual(f.markers,locked);assert.equal(f.threats.length,3);assert.equal(f.exposedCannonX,-first);
+ assert.deepEqual(f.markers,locked);assert.equal(f.threats.length,3);assert(f.exposedCannonX>0);
  assert(f.threats.every(p=>p.vz>0&&Number.isFinite(p.vx)));
 });

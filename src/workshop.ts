@@ -36,6 +36,7 @@ import {setIoRockTexture,setIoCeramicTexture} from './io-materials';
 import {createCaldera,createSkipper} from './io-rigs';
 import {createIoBurnerStudy} from './io-burner';
 import { createCicada } from './cicada-rig';
+import { cicadaFlight } from './cicada';
 import { createCicadaScout, createCentipedeSection } from './titan-insect-rigs';
 import { bindCentipede, severCentipede, stepCentipedes, CENTIPEDE_SPACING, type CentipedePart } from './centipede';
 import { createMarineRig, createLeviathan, setMarineTexture } from './marine-rigs';
@@ -327,7 +328,13 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
         });
         return time < 1.4 ? 'metachronal crawl' : 'mid-section severed · opposite escapes';
       } },
-    cicada: {root:cicada.root,duration:7.2,pose(time:number){cicada.pose(1,Math.max(0,Math.sin(time*2)),time<3.6?-2.4:2.4,0,0,time);return 'wingbeat and thorax vents';}},
+    cicada: {root:cicada.root,duration:7.2,pose(time:number){
+      const motion=cicadaFlight(time);
+      cicada.root.position.set(motion.x,motion.y,motion.z);
+      cicada.root.rotation.set(0,motion.yaw,motion.bank,'ZYX');
+      cicada.pose(1,Math.max(0,Math.sin(time*2)),time<3.6?-2.4:2.4,0,0,time);
+      return 'banked flight and thorax vents';
+    }},
     ichthyosaur: {root:hunter.root,duration:5,pose(time:number){hunter.pose(time,marineMotion('ichthyosaur',time,0).bank);return time>1.25?'hunting bank':'cruise';}},
     plesiosaur: {root:sweeper.root,duration:5,pose(time:number){sweeper.pose(time,marineMotion('plesiosaur',time,0).bank,Math.max(0,1-Math.abs(time-1.8)/.55));return 'four-flipper stroke';}},
     leviathan: {root:leviathan.root,duration:LEVIATHAN_INTERVAL*2,pose(time:number){leviathan.pose(1,0,0,0,0,time);return leviathanMotion(time).windup>0?'jaw windup':'pursuit';}},

@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { createCicada } from '../../cicada-rig';
+import { cicadaFlight } from '../../cicada';
 import { BOSS_RECOIL_TIME } from '../../encounters';
 import { loadEncounterTexture } from '../../encounter-texture';
 import { BOSS_CAMERA_DISTANCE, BOSS_DEPTH, BOSS_PROJECTION, BOSS_Y, HEIGHT, WORMHOLE_PITCH } from '../../game';
@@ -112,22 +113,24 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
         fonsTime < -FONS_APPROACH + .72;
       boss.root.visible = retreat || (!flight.isFonsFight && frame.bossVisible && flight.bossHealth > 0);
       if (!boss.root.visible) return;
+      const bossTime = time - flight.stageDuration - WORMHOLE_APPROACH;
+      const motion = cicadaFlight(bossTime);
       if (retreat) {
         const recede = fonsEase(-FONS_APPROACH, -FONS_APPROACH + .72, fonsTime);
+        const drift = 1 - recede;
         const z = T.MathUtils.lerp(BOSS_DEPTH, -100, recede);
-        boss.root.position.set(0, BOSS_Y * (1 - z / distance) * BOSS_PROJECTION, z);
-        boss.root.rotation.set(recede * .8, recede * .6, recede * -.78);
-        boss.pose(1, 0, 0, 0, 0, time, 1 - recede);
+        boss.root.position.set(motion.x * drift, BOSS_Y * (1 - z / distance) * BOSS_PROJECTION + motion.y * drift, z + motion.z * drift);
+        boss.root.rotation.set(recede * .8, motion.yaw * drift + recede * .6, motion.bank * drift - recede * .78, 'ZYX');
+        boss.pose(1, 0, 0, 0, 0, bossTime, drift);
         return;
       }
 
       const z = T.MathUtils.lerp(-145, BOSS_DEPTH, frame.arrival);
       const size = 1 - z / BOSS_CAMERA_DISTANCE;
       // Project the distant boss inside the same aperture, then let it fly
-      // towards the player and settle exactly on the familiar vent targets.
-      boss.root.position.set(frame.lensX * halfHeight * size, (apertureY + frame.lensY) * halfHeight * size, z);
-      boss.root.rotation.set(-.19 * (1 - frame.arrival), -.42 * (1 - frame.arrival), -.16 * (1 - frame.arrival));
-      const bossTime = time - flight.stageDuration - WORMHOLE_APPROACH;
+      // towards the player and blend into its shared combat flight path.
+      boss.root.position.set(frame.lensX * halfHeight * size + motion.x, (apertureY + frame.lensY) * halfHeight * size + motion.y, z + motion.z);
+      boss.root.rotation.set(-.19 * (1 - frame.arrival), motion.yaw - .42 * (1 - frame.arrival), motion.bank - .16 * (1 - frame.arrival), 'ZYX');
       boss.pose(frame.arrival, flight.cannonWindup, flight.exposedCannonX, flight.firedCannonX,
         flight.bossRecoil / BOSS_RECOIL_TIME, bossTime, frame.wingSpread, frame.echo * frame.lensStrength * .46);
     },

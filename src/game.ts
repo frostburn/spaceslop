@@ -34,7 +34,7 @@ import { IO_DURATION, IO_HP, IO_LEG_HP, IO_APPROACH, IO_INTERVAL, IO_WINDUP, IO_
 import { bindCentipede, severCentipede, stepCentipedes, CENTIPEDE_SPACING, type CentipedeLink } from './centipede';
 import { cicadaMotion, titanInsectWaves, type CicadaCourse } from './titan-insects';
 import { TITAN_ROUTE_DURATION, TITAN_ROUTE_END } from './titan-layout';
-import { CICADA_HP, TITAN_ASCENT, CICADA_INTERVAL, CICADA_WINDUP, CICADA_FIRE, CICADA_TRAVEL } from './cicada';
+import { CICADA_HP, TITAN_ASCENT, CICADA_INTERVAL, CICADA_WINDUP, CICADA_FIRE, CICADA_TRAVEL, cicadaVent } from './cicada';
 import {
   BOSS_FIRE_AT, BOSS_MUZZLE_Z, BOSS_RECOIL_TIME, BOSS_VOLLEY_INTERVAL, BOSS_WINDUP_AT, raptorFlight,
 } from './encounters';
@@ -394,8 +394,20 @@ export class Flight {
 
   get ioLegBroken() { return this.ioCollapseAge >= 0; }
   get ioCollapse() { return this.ioLegBroken ? smooth01(this.ioCollapseAge / 1.2) : 0; }
+  cicadaMuzzle(time = this.bossTime) {
+    const vent = cicadaVent(time, this.volley % 2 === 0 ? -1 : 1);
+    return { x: vent.x, y: BOSS_Y + vent.y, z: BOSS_DEPTH + vent.z };
+  }
+
+  private cicadaAim(time = this.bossTime) {
+    // Register the actual vent with the nominal depth plane used by player shots.
+    const vent = projectShot(this.cicadaMuzzle(time));
+    return { x: vent.x / BOSS_PROJECTION, y: vent.y / BOSS_PROJECTION };
+  }
+
   get bossAimY() {
     if (this.isFonsFight) return fonsPose(this.fonsTime).y;
+    if (this.isCicadaFight) return this.cicadaAim().y;
     if (this.isFleet) return fleetBossTarget(this.fleetBossTime).y;
     if (this.isDen) return denPose(this.denBossTime).y;
     if(this.level==='biolume')return rayOrgan(this.rayTime,raySignal(this.rayTime).side).y/RAY_PROJECTION;
@@ -442,6 +454,7 @@ export class Flight {
 
   get exposedCannonX() {
     if (this.isFonsFight) return fonsPose(this.fonsTime).x;
+    if (this.isCicadaFight) return this.cicadaAim().x;
     if (this.isFleet) return fleetBossTarget(this.fleetBossTime).x;
     if (this.isDen) return denPose(this.denBossTime).x;
     if(this.level==='biolume')return rayOrgan(this.rayTime,raySignal(this.rayTime).side).x/RAY_PROJECTION;
@@ -578,6 +591,7 @@ export class Flight {
 
     const tunnelCruise = !boss && this.level === 'wormhole';
     const fonsDepth = boss && this.isFonsFight ? fonsPose(this.fonsTime).depth : undefined;
+    const cicadaTarget = boss && this.isCicadaFight ? this.cicadaAim() : undefined;
     this.shots = this.shots.filter((shot) => {
       if (boss && this.phase !== 'boss') return false;
       if (tunnelCruise) {
@@ -618,7 +632,7 @@ export class Flight {
         }
         const lockedTarget = shot.targetsBoss && (this.level !== 'io' || shot.bossSupport === !this.ioLegBroken) && (this.level!=='vents'||shot.crabTarget===this.crabTargetX);
         if (lockedTarget ||
-          ((shot.drone || shot.wing) && near(impact, { x: this.exposedCannonX, y: this.bossAimY }, this.bossTargetRadius))) {
+          ((shot.drone || shot.wing) && near(impact, cicadaTarget ?? { x: this.exposedCannonX, y: this.bossAimY }, this.bossTargetRadius))) {
           this.damageBoss(shot.damage ?? 1);
         }
         return false;
@@ -779,11 +793,12 @@ export class Flight {
     wing.cooldown = spec.interval;
     wing.flash = WING_FLASH_TIME;
     boss &&= !this.planarBoss;
+    const duration = spec.bossTravel;
+    const cicadaTarget = boss && this.isCicadaFight ? this.cicadaAim(this.bossTime + duration) : undefined;
     const hydraTarget = boss && this.level === 'summer' && wing.weapon === 'homing'
       ? nearestHydraHead(this.summerHydra, origin.x / BOSS_PROJECTION, true) : undefined;
-    const aimY = boss ? (hydraTarget === undefined ? this.bossAimY : hydraBossHead(this.time, hydraTarget).y) : 0;
+    const aimY = boss ? (hydraTarget === undefined ? cicadaTarget?.y ?? this.bossAimY : hydraBossHead(this.time, hydraTarget).y) : 0;
     if (boss && this.keepDepthShotsForward && origin.y + .1 >= aimY * BOSS_PROJECTION) boss = false;
-    const duration = spec.bossTravel;
     const tunnel = this.phase === 'stage' && this.level === 'wormhole';
     const forwardSpeed = spec.speed * 1.8;
     const fonsVelocity = this.isFonsFight ? this.fonsShotVelocity(origin, duration) : undefined;
@@ -817,11 +832,12 @@ export class Flight {
       const t = this.planarBossEntry(origin, { x: origin.x, y: 10 });
       if(Number.isFinite(t)){target=0;endY=origin.y+(10-origin.y)*t;}
     }else if (boss) {
-      const aimY = this.bossAimY * BOSS_PROJECTION;
+      const aim = this.isCicadaFight ? this.cicadaAim() : { x: this.exposedCannonX, y: this.bossAimY };
+      const aimY = aim.y * BOSS_PROJECTION;
       if (!this.keepDepthShotsForward || aimY > origin.y) {
         endY = aimY;
-        if (Math.abs(origin.x - this.exposedCannonX * BOSS_PROJECTION) < this.bossTargetRadius * BOSS_PROJECTION) {
-          target = this.exposedCannonX;
+        if (Math.abs(origin.x - aim.x * BOSS_PROJECTION) < this.bossTargetRadius * BOSS_PROJECTION) {
+          target = this.isCicadaFight ? Math.sign(aim.x) : aim.x;
         }
       }
     } else if (this.level === 'fleet') {
@@ -884,10 +900,12 @@ export class Flight {
       if (fons && shot.z <= depth) return;
       const remaining = Math.max(dt, (depth - shot.z) / shot.vz);
       const steer = Math.min(1, 10 * dt);
+      const cicadaTarget = this.isCicadaFight ? this.cicadaAim(this.bossTime + remaining) : undefined;
       if(this.level==='summer'&&(shot.hydraTarget===undefined||!hydraAlive(this.summerHydra,shot.hydraTarget)))shot.hydraTarget=nearestHydraHead(this.summerHydra,shot.x,true);
       const x = fons ? fons.x * (1 - depth / BOSS_CAMERA_DISTANCE)
-        : this.level === 'summer' ? hydraBossHead(this.time,shot.hydraTarget!).x : this.exposedCannonX;
+        : this.level === 'summer' ? hydraBossHead(this.time,shot.hydraTarget!).x : cicadaTarget?.x ?? this.exposedCannonX;
       shot.vx += ((x - shot.x) / remaining - shot.vx) * steer;
+      if (cicadaTarget) shot.vy += ((cicadaTarget.y - shot.y) / remaining - shot.vy) * steer;
       return;
     }
 
@@ -1451,9 +1469,12 @@ export class Flight {
       this.markers=[-1.4,0,1.4].map(offset=>({x:x+(volley%2===0?offset:0),y:y+(volley%2===0?0:offset)}));
     }
     if(elapsed>=CICADA_FIRE && this.markers.length && this.volley===volley){
-      const x=this.exposedCannonX,z=BOSS_DEPTH+BOSS_MUZZLE_Z;
-      this.firedCannonX=x;this.bossRecoil=BOSS_RECOIL_TIME;
-      this.threats.push(...this.markers.map(target=>({x,y:this.bossAimY,z,vx:(target.x-x)/CICADA_TRAVEL,vy:(target.y-this.bossAimY)/CICADA_TRAVEL,vz:-z/CICADA_TRAVEL})));
+      const origin = this.cicadaMuzzle();
+      this.firedCannonX = origin.x;
+      this.bossRecoil = BOSS_RECOIL_TIME;
+      this.threats.push(...this.markers.map(target => ({
+        ...origin, vx: (target.x - origin.x) / CICADA_TRAVEL, vy: (target.y - origin.y) / CICADA_TRAVEL, vz: -origin.z / CICADA_TRAVEL,
+      })));
       this.volley++;
     }
     if(elapsed>CICADA_FIRE+CICADA_TRAVEL+.05)this.markers=[];
@@ -1516,17 +1537,19 @@ export class Flight {
     const targetsBoss = !drone && Math.abs(x) < 1.65;
     const aimsAtBoss = drone || targetsBoss;
     const depthShot = this.phase !== 'stage' && !this.planarBoss;
-    const aimY = depthShot && aimsAtBoss ? this.bossAimY : y;
+    const duration = 0.38;
+    const cicadaTarget = depthShot && this.isCicadaFight ? this.cicadaAim(this.bossTime + duration) : undefined;
+    const aimY = depthShot && aimsAtBoss ? cicadaTarget?.y ?? this.bossAimY : y;
     const muzzleY = y + (drone ? 0.3 : 0.45);
     if (!depthShot || (this.keepDepthShotsForward && (!aimsAtBoss || muzzleY >= aimY * BOSS_PROJECTION))) {
       this.shots.push({ x, y: muzzleY, z: 0, vx: 0, vy: 15, vz: 0, ...shot });
       return;
     }
 
-    const duration = 0.38;
     // Preserve horizontal drone placement while advancing visibly toward boss depth.
     const expansion = 1 / BOSS_PROJECTION - 1;
-    const dx = drone ? x * expansion : (targetsBoss ? (this.level === 'io'||this.level==='vents'||this.level==='summer'||this.level==='wormhole' ? this.exposedCannonX : 0) - x : 0);
+    const aimX = cicadaTarget?.x ?? (this.level === 'io' || this.level === 'vents' || this.level === 'summer' ? this.exposedCannonX : 0);
+    const dx = drone ? x * expansion : targetsBoss ? aimX - x : 0;
     const dy = aimY - y;
     this.shots.push({ x, y, z: 0, vx: dx / duration, vy: dy / duration,
       vz: BOSS_DEPTH / duration, targetsBoss, bossSupport: this.level === 'io' ? !this.ioLegBroken : undefined, crabTarget:this.level==='vents'?this.crabTargetX:undefined,hydraTarget:this.level==='summer'&&targetsBoss?this.summerTargetHead:undefined, ...shot });

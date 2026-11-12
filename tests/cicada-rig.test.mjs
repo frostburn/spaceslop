@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { Group } from 'three';
+import { Group, Vector3 } from 'three';
 import { createServer } from 'vite';
 const server=await createServer({root:new URL('..',import.meta.url).pathname,configFile:false,
  server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true,entries:[]},appType:'custom'});
 after(()=>server.close());
 const {createCicada}=await server.ssrLoadModule('/src/cicada-rig.ts');
 const {createBossLaserContact}=await server.ssrLoadModule('/src/laser-contact.ts');
+const {cicadaFlight,CICADA_FIRE,CICADA_TRAVEL}=await server.ssrLoadModule('/src/cicada.ts');
+const {Flight,STEP,BOSS_DEPTH,BOSS_Y,BOSS_PROJECTION}=await server.ssrLoadModule('/src/game.ts');
 
 test('cicada has four articulated wings and six legs with finite, repeatable poses',()=>{
  const rig=createCicada(),wings=rig.root.children.filter(n=>/^(fore|hind)wing-/.test(n.name)),legs=rig.root.children.filter(n=>n.name.startsWith('leg-'));
@@ -19,13 +21,49 @@ test('cicada has four articulated wings and six legs with finite, repeatable pos
  const after=new Set();rig.root.traverse(n=>{if(n.geometry)after.add(n.geometry);});assert.deepEqual(after,before);
 });
 
-test('posed cicada laser contacts remain in the simulation thorax weakpoint windows',()=>{
- const plane=new Group(),rig=createCicada();plane.rotation.x=-Math.PI/2;plane.add(rig.root);rig.root.position.set(0,4.2,-12);
- const contact=createBossLaserContact(plane,rig.root),projection=22/34;
- for(let i=0;i<60;i++)for(const side of [-1,1]){
-  rig.pose(1,.7,side*2.4,0,0,i*.1);plane.updateMatrixWorld(true);const hit=contact(side*2.4,22);
-  assert(Math.abs(hit.x-side*2.4*projection)<.1);assert(Math.abs(hit.y-4.2*projection)<.1);
+test('banked cicada vents stay registered with combat and laser contact through the weave',()=>{
+ const plane=new Group(),rig=createCicada(),flight=new Flight('sentry',[],'vex','titan');
+ plane.rotation.x=-Math.PI/2;plane.add(rig.root);
+ flight.phase='boss';
+ const contact=createBossLaserContact(plane,rig.root);
+ const positions=[];
+ for(let i=0;i<160;i++){
+  flight.time=i*.1;
+  const p=cicadaFlight(flight.time);
+  positions.push(p.x);
+  rig.root.position.set(p.x,BOSS_Y+p.y,BOSS_DEPTH+p.z);
+  rig.root.rotation.set(0,p.yaw,p.bank,'ZYX');
+  for(const volley of [0,1]){
+   flight.volley=volley;
+   const side=volley?1:-1;
+   const hit=contact(side,22);
+   assert(Math.abs(hit.x-flight.exposedCannonX*BOSS_PROJECTION)<1e-9);
+   assert(Math.abs(hit.y-flight.bossAimY*BOSS_PROJECTION)<1e-9);
+   assert.equal(Math.sign(hit.x),side);
+  }
  }
+ assert(Math.max(...positions)-Math.min(...positions)>2.7);
+});
+
+test('volley origins follow the moving vent and a tracking laser keeps its lock',()=>{
+ const flight=new Flight('sentry',[],'vex','wormhole');
+ flight.phase='boss';
+ const wing=flight.wings[0];
+ wing.upgraded=true;
+ for(let i=0;i<70;i++){
+  flight.time=i*STEP;
+  flight.stepLaser(wing,{x:flight.exposedCannonX*BOSS_PROJECTION,y:-4},true,STEP);
+ }
+ assert(wing.laserHold>1);
+ flight.time=CICADA_FIRE+STEP/2;
+ const origin=flight.cicadaMuzzle();
+ flight.markers=[{x:2,y:-4}];
+ flight.stepCicada();
+ const [shot]=flight.threats;
+ assert(new Vector3(shot.x,shot.y,shot.z).distanceTo(new Vector3(origin.x,origin.y,origin.z))<1e-9);
+ assert(Math.hypot(shot.x+shot.vx*CICADA_TRAVEL-2,shot.y+shot.vy*CICADA_TRAVEL+4,shot.z+shot.vz*CICADA_TRAVEL)<1e-9);
+ flight.stepLaser(wing,{x:flight.exposedCannonX*BOSS_PROJECTION,y:-4},true,STEP);
+ assert.equal(wing.laserHold,0);
 });
 
 test('Titan world keeps ground/cloud separation and ends at the combat hit plane',async()=>{
