@@ -1,7 +1,7 @@
 import {FROG_HP,FROG_RADIUS,createFrogState,stepFrog,frogHeading,frogTongueHits,type FrogState} from './biolume/frog';
 import {groveWaves,groveMotion,groveEnemySize,groveCanAttack,GROVE_SPAWN_LEAD,type GroveCourse} from './biolume/combat';
 import {GROVE_APPROACH} from './biolume/route';
-import {RAY_HP,RAY_FAN_AT,RAY_SEEKER_AT,RAY_PROJECTION,RAY_ORGAN_RADIUS,RAY_SEEKER_RADIUS,RAY_SEEKER_HP,RAY_SEEKER_POOL,raySignal,rayOrgan,rayBodyEntry,stepRaySeeker,rayOrbEntry,raySeekerBurst,type RaySeeker} from './biolume/lantern-ray';
+import {RAY_HP,RAY_ENTRANCE,RAY_FAN_AT,RAY_SEEKER_AT,RAY_PROJECTION,RAY_ORGAN_RADIUS,RAY_SEEKER_RADIUS,RAY_SEEKER_HP,RAY_SEEKER_POOL,raySignal,rayOrgan,rayBodyEntry,stepRaySeeker,rayOrbEntry,raySeekerBurst,type RaySeeker} from './biolume/lantern-ray';
 import { DEN_BURSTS, DEN_CYCLE, DEN_GUNS, DEN_HP, denBodyEntry, denMount, denPose } from './den/combat';
 import { DEN_TURRET_HP, createDenTurret, denDefensePoint, denMineSites, denTurretEntry, denTurretSites,
   stepDenMine, stepDenTurret, type DenMine, type DenTurret } from './den/defense';
@@ -416,7 +416,7 @@ export class Flight {
     return this.level === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).y : BOSS_Y;
   }
 
-  get rayTime(){return this.phase==='stage'?this.time-this.stageDuration-this.transitionDuration:this.phase==='approach'?this.time-this.transitionDuration:this.bossTime;}
+  get rayTime() { return this.bossTime - RAY_ENTRANCE; }
 
   get stageDuration() { return levels[this.level].duration; }
 
@@ -1386,7 +1386,9 @@ export class Flight {
   }
 
   private stepLanternRay(dt:number){
-    const s=raySignal(this.time),origin=rayOrgan(this.time,s.side);
+    const time = this.rayTime;
+    if (time < 0) return;
+    const s=raySignal(time),origin=rayOrgan(time,s.side);
     if(s.phase>=.65&&s.phase<RAY_FAN_AT&&this.rayFanCycle!==s.cycle&&!this.markers.length)this.markers=[{x:this.player.x,y:this.player.y}];
     if(s.phase>=RAY_FAN_AT&&this.rayFanCycle!==s.cycle){
       const target=this.markers[0]??this.player,angle=Math.atan2(target.x-origin.x,origin.y-target.y);
@@ -1397,7 +1399,7 @@ export class Flight {
     if(s.phase>=RAY_SEEKER_AT&&this.raySeekerCycle!==s.cycle){
       const sides=this.bossHealth<RAY_HP/2?[-s.side,s.side]:[-s.side];
       for(const side of sides){if(this.enemies.filter(e=>e.rayOrb&&e.hp>0).length>=RAY_SEEKER_POOL)break;
-        const p=rayOrgan(this.time,side);this.enemies.push({...p,lane:p.x,age:0,fire:Infinity,hp:RAY_SEEKER_HP,rayOrb:{heading:Math.atan2(this.player.x-p.x,p.y-this.player.y),previousX:p.x,previousY:p.y}});
+        const p=rayOrgan(time,side);this.enemies.push({...p,lane:p.x,age:0,fire:Infinity,hp:RAY_SEEKER_HP,rayOrb:{heading:Math.atan2(this.player.x-p.x,p.y-this.player.y),previousX:p.x,previousY:p.y}});
       }
       this.raySeekerCycle=s.cycle;this.bossRecoil=BOSS_RECOIL_TIME;
     }
