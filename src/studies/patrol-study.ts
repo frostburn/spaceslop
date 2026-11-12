@@ -5,7 +5,6 @@ import { loadEncounterTexture } from '../encounter-texture';
 import './patrol-study.css';
 
 type Point = { x: number; y: number };
-const columns = 5;
 const halfView = 1.48;
 const degrees = Math.PI / 180;
 const element = <E extends HTMLElement>(id: string) => document.getElementById(id) as E;
@@ -19,7 +18,7 @@ function square(canvas: HTMLCanvasElement) {
   return size;
 }
 
-function drawMesh(context: CanvasRenderingContext2D, points: readonly Point[], selected = -1) {
+function drawMesh(context: CanvasRenderingContext2D, points: readonly Point[], columns: number, selected = -1) {
   const grid = context.canvas.width / context.canvas.clientWidth;
   context.beginPath();
   for (const [i, p] of points.entries()) {
@@ -38,7 +37,8 @@ function drawMesh(context: CanvasRenderingContext2D, points: readonly Point[], s
   for (const [i, p] of points.entries()) {
     context.beginPath();
     context.arc(p.x, p.y, grid * (i === selected ? 4 : 1.9), 0, 2 * Math.PI);
-    context.fillStyle = i === selected ? '#ffd280' : '#a5f6e4';
+    const detail = columns === 7 && (i % columns === 1 || i % columns === 5);
+    context.fillStyle = i === selected ? '#ffd280' : detail ? '#a7aaff' : '#a5f6e4';
     context.fill();
   }
 }
@@ -76,6 +76,16 @@ function start() {
   editBand.value = '12';
   card.setRegistration(atlas);
 
+  function setPointOptions() {
+    const { columns } = atlas.grid;
+    const names = columns === 7
+      ? ['Left margin', 'Left outer detail', 'Left interior', 'Center', 'Right interior', 'Right outer detail', 'Right margin']
+      : ['Left margin', 'Left interior', 'Center', 'Right interior', 'Right margin'];
+    editPoint.replaceChildren(...names.map((name, i) => new Option(name, String(i))));
+    editPoint.value = String(Math.floor(columns / 2));
+  }
+  setPointOptions();
+
   const turnAt = () => denPatrolWarp(heading.valueAsNumber * degrees, atlas.rows.length);
   const selected = () => {
     const turn = turnAt();
@@ -104,7 +114,7 @@ function start() {
       y: size / 2 + scale * (sin * u + cos * row[0]),
     })));
     sourcePoints[pane] = points;
-    drawMesh(context, points, selectedPoint);
+    drawMesh(context, points, atlas.grid.columns, selectedPoint);
   }
 
   function syncPointControls() {
@@ -113,7 +123,7 @@ function start() {
     const xs = patrolBandXs(row, atlas.gutter), originalX = patrolBandXs(base, atlas.gutter)[point];
     pointX.min = String(rounded(Math.min(xs[point], Math.max(originalX - 28, (xs[point - 1] ?? -Infinity) + .2))));
     pointX.max = String(rounded(Math.max(xs[point], Math.min(originalX + 28, (xs[point + 1] ?? Infinity) - .2))));
-    pointX.disabled = frame === 0 && point === 2;
+    pointX.disabled = frame === 0 && point === Math.floor(atlas.grid.columns / 2);
     pointX.value = String(xs[point]);
     bandY.min = String(rounded(Math.max(base[0] - 18, (bands[frame][band - 1]?.[0] ?? -Infinity) + .2)));
     bandY.max = String(rounded(Math.min(base[0] + 18, (bands[frame][band + 1]?.[0] ?? Infinity) - .2)));
@@ -133,6 +143,7 @@ function start() {
     }
     lastFrame = now;
     const turn = turnAt();
+    const { columns } = atlas.grid;
     if (!manual) blend.value = String(Math.round(turn.blend * 100));
     const weight = manual ? blend.valueAsNumber / 100 : turn.blend;
     output('heading').value = `${heading.valueAsNumber.toFixed(1)}°`;
@@ -159,7 +170,7 @@ function start() {
         y: size / 2 - scale * (sin * x + cos * y),
       });
       const position = card.root.geometry.attributes.position;
-      drawMesh(overlay, Array.from({ length: position.count }, (_, i) => project(position.getX(i), position.getY(i))),
+      drawMesh(overlay, Array.from({ length: position.count }, (_, i) => project(position.getX(i), position.getY(i))), columns,
         turn.mirror ? band * columns + columns - 1 - point : active);
       for (const mount of mounts ?? []) {
         const p = project(mount.x, mount.y);
@@ -222,10 +233,13 @@ function start() {
   function editCoordinates() {
     setPlaying(false);
     const { frame, band, point } = selected();
+    const { columns } = atlas.grid, center = Math.floor(columns / 2);
     const next = [...bands[frame]], xs = patrolBandXs(next[band], atlas.gutter);
     xs[point] = pointX.valueAsNumber;
     if (frame === 0) xs[columns - 1 - point] = -xs[point];
-    next[band] = [bandY.valueAsNumber, rounded(xs[0] + atlas.gutter), xs[2], rounded(xs[4] - atlas.gutter), xs[1], xs[3]];
+    const base = [bandY.valueAsNumber, rounded(xs[0] + atlas.gutter), xs[center],
+      rounded(xs[columns - 1] - atlas.gutter), xs[center - 1], xs[center + 1]] as const;
+    next[band] = columns === 7 ? [...base, xs[1], xs[5]] : base;
     applyBands(frame, next);
   }
 
@@ -257,6 +271,7 @@ function start() {
       if (d < distance) { distance = d; nearest = i; }
     }
     if (nearest < 0) return;
+    const { columns } = atlas.grid;
     editPose.value = String(pane);
     editBand.value = String(Math.floor(nearest / columns));
     editPoint.value = String(nearest % columns);
@@ -273,6 +288,7 @@ function start() {
     bands = [...atlas.rows];
     edited.clear();
     texture = map;
+    setPointOptions();
   }, undefined, controller.signal).then(() => {
     if (controller.signal.aborted) return;
     status.textContent = texture ? '' : 'Patrol atlas unavailable. Control points are still editable.';

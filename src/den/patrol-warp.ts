@@ -2,8 +2,6 @@ import * as T from 'three';
 import { denPatrolWarp } from './patrol';
 import { turn16Crops, turn16Hardpoints, turn16Rows } from './patrol-atlas-16';
 
-const COLUMNS = 5;
-
 // Atlas crops and chassis pivots in source pixels. UVs are normalized so the
 // registrations also work with whole-canvas resizes.
 const crops = [
@@ -71,29 +69,35 @@ const rows = [
   ],
 ] as const;
 
-const vertexCount = rows[0].length * COLUMNS;
-const indices: number[] = [];
-for (let row = 0; row < rows[0].length - 1; row++) for (let column = 0; column < COLUMNS - 1; column++) {
-  const i = row * COLUMNS + column;
-  indices.push(i, i + COLUMNS, i + 1, i + 1, i + COLUMNS, i + COLUMNS + 1);
+function grid(columns: number, bands: number) {
+  const indices: number[] = [];
+  for (let row = 0; row < bands - 1; row++) for (let column = 0; column < columns - 1; column++) {
+    const i = row * columns + column;
+    indices.push(i, i + columns, i + 1, i + 1, i + columns, i + columns + 1);
+  }
+  return { columns, vertexCount: columns * bands, indices };
 }
 
 type PixelPoint = readonly [number, number];
 type MeshAnchor = { vertices: [number, number, number]; weights: [number, number, number] };
-export type PatrolBand = readonly [height: number, left: number, center: number, right: number, innerLeft?: number, innerRight?: number];
+export type PatrolBand = readonly [height: number, left: number, center: number, right: number,
+  innerLeft?: number, innerRight?: number, detailLeft?: number, detailRight?: number];
 
 export type PatrolAtlas = {
   width: number;
   height: number;
   pixel: number;
   gutter: number;
+  grid: ReturnType<typeof grid>;
   crops: readonly (readonly [number, number, number, number, number, number])[];
   rows: readonly (readonly PatrolBand[])[];
   bandYaw?: number;
   hardpoints?: readonly (readonly [PixelPoint, PixelPoint, PixelPoint])[];
 };
 
-export function patrolBandXs([, left, center, right, innerLeft = left, innerRight = right]: PatrolBand, gutter: number) {
+export function patrolBandXs([, left, center, right, innerLeft = left, innerRight = right, detailLeft, detailRight]: PatrolBand, gutter: number) {
+  if (detailLeft !== undefined && detailRight !== undefined)
+    return [left - gutter, detailLeft, innerLeft, center, innerRight, detailRight, right + gutter];
   return [left - gutter, innerLeft, center, innerRight, right + gutter];
 }
 
@@ -102,12 +106,12 @@ export function patrolBandAngle(atlas: PatrolAtlas, frame: number) {
 }
 
 // An anchor inherits the same triangle deformation as its pixel in the artwork.
-function bindAnchor(xy: number[], x: number, y: number, mirror: boolean): MeshAnchor {
+function bindAnchor({ columns, indices }: PatrolAtlas['grid'], xy: number[], x: number, y: number, mirror: boolean): MeshAnchor {
   for (let i = 0; i < indices.length; i += 3) {
     const a = indices[i], b = indices[i + 1], c = indices[i + 2];
-    const va = 2 * (mirror ? mirrorColumn(a) : a);
-    const vb = 2 * (mirror ? mirrorColumn(b) : b);
-    const vc = 2 * (mirror ? mirrorColumn(c) : c);
+    const va = 2 * (mirror ? mirrorColumn(a, columns) : a);
+    const vb = 2 * (mirror ? mirrorColumn(b, columns) : b);
+    const vc = 2 * (mirror ? mirrorColumn(c, columns) : c);
     const ax = xy[va], ay = xy[va + 1];
     const bx = xy[vb] - ax, by = xy[vb + 1] - ay;
     const cx = xy[vc] - ax, cy = xy[vc + 1] - ay;
@@ -139,7 +143,7 @@ function registerPoses(atlas: PatrolAtlas) {
       const localX = yawCos * dx + yawSin * dy, localY = yawSin * dx - yawCos * dy;
       // The mirrored columns change the diagonal across a quad. Bind the
       // point to the triangle the shader actually draws for each direction.
-      return { forward: bindAnchor(xy, localX, localY, false), mirrored: bindAnchor(xy, localX, localY, true) };
+      return { forward: bindAnchor(atlas.grid, xy, localX, localY, false), mirrored: bindAnchor(atlas.grid, xy, localX, localY, true) };
     });
     return { xy, uv, mounts, crop: new T.Vector4(left / width, 1 - bottom / height, right / width, 1 - top / height) };
   });
@@ -155,9 +159,9 @@ function registerPoses(atlas: PatrolAtlas) {
   }));
 }
 
-const legacyAtlas: PatrolAtlas = { width: 1536, height: 1024, pixel: .00525, gutter: 42, crops, rows };
+const legacyAtlas: PatrolAtlas = { width: 1536, height: 1024, pixel: .00525, gutter: 42, crops, rows, grid: grid(5, rows[0].length) };
 const denseAtlas: PatrolAtlas = {
-  width: 1254, height: 1254, pixel: .009, gutter: 24, crops: turn16Crops, rows: turn16Rows,
+  width: 1254, height: 1254, pixel: .009, gutter: 5, crops: turn16Crops, rows: turn16Rows, grid: grid(7, turn16Rows[0].length),
   bandYaw: .35, hardpoints: turn16Hardpoints,
 };
 const legacyPoses = registerPoses(legacyAtlas), densePoses = registerPoses(denseAtlas);
@@ -168,21 +172,25 @@ export function patrolAtlasFor(width: number, height: number) {
   throw new Error('Unsupported patrol atlas layout');
 }
 
-function mirrorColumn(i: number) {
-  return i + COLUMNS - 1 - 2 * (i % COLUMNS);
+function mirrorColumn(i: number, columns: number) {
+  return i + columns - 1 - 2 * (i % columns);
 }
 
-export function createPatrolWarpCard() {
-  const geometry = new T.BufferGeometry();
+function createGeometry({ vertexCount, indices }: PatrolAtlas['grid']) {
   const position = new T.BufferAttribute(new Float32Array(vertexCount * 3), 3).setUsage(T.DynamicDrawUsage);
   const uv = new T.BufferAttribute(new Float32Array(vertexCount * 2), 2).setUsage(T.DynamicDrawUsage);
   const nextUV = new T.BufferAttribute(new Float32Array(vertexCount * 2), 2).setUsage(T.DynamicDrawUsage);
+  const geometry = new T.BufferGeometry();
   geometry.setAttribute('position', position);
   geometry.setAttribute('uv', uv);
   geometry.setAttribute('nextUV', nextUV);
   geometry.setIndex(indices);
-  let poses = legacyPoses;
-  let dense = false;
+  return { geometry, position, uv, nextUV };
+}
+
+export function createPatrolWarpCard() {
+  let layout = denseAtlas.grid, buffers = createGeometry(layout), poses = densePoses;
+  let dense = true;
   const uniforms = {
     atlas: { value: null as T.Texture | null },
     crop: { value: poses[0].crop }, nextCrop: { value: poses[0].crop }, poseBlend: { value: 0 },
@@ -221,7 +229,7 @@ export function createPatrolWarpCard() {
         #include <premultiplied_alpha_fragment>
       }`,
   });
-  const root = new T.Mesh(geometry, material);
+  const root = new T.Mesh(buffers.geometry, material);
   root.name = 'patrol-heading';
   root.position.z = .19;
   root.visible = false;
@@ -231,6 +239,7 @@ export function createPatrolWarpCard() {
   const nextMount = new T.Vector2();
 
   function placeAnchor(anchor: MeshAnchor, target: T.Vector2) {
+    const { position } = buffers;
     target.set(0, 0);
     for (let k = 0; k < 3; k++) {
       const i = anchor.vertices[k];
@@ -241,12 +250,19 @@ export function createPatrolWarpCard() {
 
   function setRegistration(atlas: PatrolAtlas, bands = atlas.rows) {
     const next = bands === atlas.rows ? (atlas === denseAtlas ? densePoses : legacyPoses) : registerPoses({ ...atlas, rows: bands });
+    if (layout !== atlas.grid) {
+      buffers.geometry.dispose();
+      layout = atlas.grid;
+      buffers = createGeometry(layout);
+      root.geometry = buffers.geometry;
+    }
     poses = next;
     dense = atlas === denseAtlas;
     firstKey = secondKey = Infinity;
   }
 
   function pose(heading: number, blendOverride?: number) {
+    const { columns, vertexCount } = layout, { position, uv, nextUV } = buffers;
     const turn = denPatrolWarp(heading, poses.length);
     const a = poses[turn.first], b = poses[turn.second];
     const sign = turn.mirror ? -1 : 1;
@@ -258,7 +274,7 @@ export function createPatrolWarpCard() {
     const tanB = dense ? t * t * (t - 1) : 0;
     for (let i = 0; i < vertexCount; i++) {
       // Reverse the columns when mirroring to retain front-face winding.
-      const j = turn.mirror ? mirrorColumn(i) : i, x = 2 * j, y = x + 1;
+      const j = turn.mirror ? mirrorColumn(i, columns) : i, x = 2 * j, y = x + 1;
       position.setXYZ(i, sign * (T.MathUtils.lerp(a.xy[x], b.xy[x], w) + tanA * a.tangent[x] + tanB * b.tangent[x]),
         T.MathUtils.lerp(a.xy[y], b.xy[y], w) + tanA * a.tangent[y] + tanB * b.tangent[y], 0);
       // Each texture follows the same vertices, with the head-on view shared

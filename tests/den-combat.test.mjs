@@ -61,22 +61,22 @@ test('patrols turn through both supported atlases and wait until they are fully 
 });
 
 test('patrol mesh stays continuous through atlas handoffs and straight ahead', () => {
-  const card = createPatrolWarpCard(), geometry = card.root.geometry;
-  const position = geometry.getAttribute('position');
-  const uv = geometry.getAttribute('uv'), nextUV = geometry.getAttribute('nextUV');
-  const sample = angle => {
-    card.pose(angle);
-    return {
-      shape: Array.from(position.array), uv: Array.from(uv.array), nextUV: Array.from(nextUV.array),
-      blend: card.root.material.uniforms.poseBlend.value,
-    };
-  };
+  const card = createPatrolWarpCard();
   const epsilon = 1e-5;
   assert.throws(() => card.setArt(new Texture({ width: 640, height: 480 })), /Unsupported patrol atlas layout/);
   assert.equal(card.root.visible, false);
   for (const [count, width, height] of [[7, 768, 512], [16, 627, 627]]) {
     const texture = new Texture({ width, height });
     card.setArt(texture);
+    const geometry = card.root.geometry, position = geometry.getAttribute('position');
+    const uv = geometry.getAttribute('uv'), nextUV = geometry.getAttribute('nextUV');
+    const sample = angle => {
+      card.pose(angle);
+      return {
+        shape: Array.from(position.array), uv: Array.from(uv.array), nextUV: Array.from(nextUV.array),
+        blend: card.root.material.uniforms.poseBlend.value,
+      };
+    };
     const step = Math.PI / (2 * (count - 1));
     const straight = sample(0);
     assert.deepEqual(sample(-epsilon).uv, sample(epsilon).uv);
@@ -118,7 +118,7 @@ test('patrol mesh stays continuous through atlas handoffs and straight ahead', (
     }
     texture.dispose();
   }
-  geometry.dispose();
+  card.root.geometry.dispose();
   card.root.material.dispose();
 });
 
@@ -136,8 +136,8 @@ test('the workshop can adjust one atlas band and isolate either texture on the s
   assert.equal(weights.value, 1);
   assert.deepEqual(mesh(), base);
   const atlas = patrolAtlasFor(627, 627), frames = [...atlas.rows], pose = [...frames[2]];
-  const [y, l, mid, r, il, ir] = pose[12];
-  pose[12] = [y + 1, l, mid - 1, r, il, ir];
+  const [y, l, mid, r, il, ir, detailL, detailR] = pose[12];
+  pose[12] = [y + 1, l, mid, r, il, ir, detailL, detailR - 1];
   frames[2] = pose;
   card.setRegistration(atlas, frames);
   card.pose(angle);
@@ -146,6 +146,20 @@ test('the workshop can adjust one atlas band and isolate either texture on the s
   card.setRegistration(atlas);
   card.pose(angle);
   assert.deepEqual(mesh(), base);
+  texture.dispose();
+  card.root.geometry.dispose();
+  card.root.material.dispose();
+});
+
+test('profile warp vertices follow the rear exhaust cap, lower housing and armor rail', () => {
+  const card = createPatrolWarpCard(), texture = new Texture({ width: 627, height: 627 });
+  card.setArt(texture);
+  card.pose(-Math.PI / 2);
+  const uv = card.root.geometry.getAttribute('uv');
+  for (const [band, x, y] of [[6, 1185, 1121], [9, 1165, 1148], [13, 1143, 1161]]) {
+    const index = band * 7 + 5;
+    assert(Math.hypot(uv.getX(index) * 1254 - x, (1 - uv.getY(index)) * 1254 - y) < 2);
+  }
   texture.dispose();
   card.root.geometry.dispose();
   card.root.material.dispose();
