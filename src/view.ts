@@ -18,7 +18,7 @@ import { loadCommonTextures } from './rendering/common-textures';
 import { tiltFlightCamera } from './rendering/flight-camera';
 import { boostFriendlyGlow } from './rendering/friendly-glow';
 import { disposeScene } from './rendering/dispose';
-import { createBossDefeat, createVictoryFlares, SALUTE_ANGLE, VICTORY_DURATION, victoryFormation, victoryMuzzleFlash } from './rendering/victory';
+import { addVictoryWingShots, createBossDefeat, createVictoryFlares, SALUTE_ANGLE, SALUTE_START, VICTORY_DURATION, victoryFormation } from './rendering/victory';
 export async function createFlightView(canvas: HTMLCanvasElement, level: LevelId, signal = new AbortController().signal) {
   const { createLevel } = await levelLoaders[level]();
   signal.throwIfAborted();
@@ -69,6 +69,8 @@ export class FlightView {
   private victoryFacing = new T.Quaternion();
   private saluteFacing = new T.Quaternion();
   private saluteRoll = new T.Quaternion();
+  private saluteMuzzle = new T.Vector3();
+  private saluteDirection = new T.Vector3();
   private rollAxis = new T.Vector3(0, 0, 1);
   private disposed = false;
   private levelTime = 0;
@@ -184,10 +186,11 @@ export class FlightView {
     this.towline.add(this.towlineGlow, this.towlineCore);
     this.playerMuzzle.root.position.set(0, .89, .045);
     this.droneMuzzle.root.position.set(0, .31, .06);
-    this.player.root.add(this.playerMuzzle.root);
+    this.victoryFlares.root.position.copy(this.playerMuzzle.root.position);
+    this.victoryFlares.root.position.z += .065;
+    this.player.root.add(this.playerMuzzle.root, this.victoryFlares.root);
     this.drone.add(this.droneMuzzle.root);
     this.plane.add(p.root, this.player.root, this.drone, this.droneGoal, this.towline, this.cannonMarker, this.pulse, ...this.markers, ...ammo, this.combat.root, ...pods, ...this.wingLasers.map(r => r.root), ...this.drops.map(r => r.root));
-    this.plane.add(...this.victoryFlares.map(flare => flare.root));
   }
   async warmup(signal: AbortSignal, repaint: () => void) {
     const nextFrame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
@@ -218,7 +221,7 @@ export class FlightView {
         });
     }
     const pods = this.wingPods.map(side => side.flatMap(r => [r.root, r.upgrade]));
-    const ordnance = [this.player.root, this.drone, this.towlineEmitters, ...Object.values(this.projectiles).map(r => r.root), this.combat.root, this.playerMuzzle.root, this.droneMuzzle.root, ...this.drops.slice(0, 4).map(r => r.root), ...this.victoryFlares.map(flare => flare.root)];
+    const ordnance = [this.player.root, this.drone, this.towlineEmitters, ...Object.values(this.projectiles).map(r => r.root), this.combat.root, this.playerMuzzle.root, this.droneMuzzle.root, ...this.drops.slice(0, 4).map(r => r.root), this.victoryFlares.root];
     const lasers = [...pods[1], ...this.wingLasers.map(r => r.root)];
     this.level.prepare?.();
     for (const objects of [...this.level.warmup, [this.cannonMarker, ...this.markers], pods[0], lasers, ordnance]) {
@@ -231,7 +234,7 @@ export class FlightView {
         this.combat.prime();
         this.playerMuzzle.prime();
         this.droneMuzzle.prime();
-        for (const flare of this.victoryFlares) flare.pose(VICTORY_DURATION);
+        this.victoryFlares.pose(VICTORY_DURATION);
         (Object.keys(wingWeapons) as WingWeapon[]).forEach((weapon, i) => this.drops[i].pose(weapon, 0));
       }
       if (objects === lasers)
@@ -356,6 +359,7 @@ export class FlightView {
     this.player.root.rotation.set(orientation ? -this.pitch : -(this.level.shipPitch ?? 1.18) * eased, this.bank, 0);
     if (formation > 0) this.player.root.quaternion.slerp(this.victoryFacing, formation);
     this.player.root.visible = flight.hull > 0 && (victoryTime !== undefined || Math.floor(flight.invulnerable * 12) % 2 === 0);
+    this.victoryFlares.pose(victoryTime);
     const fighterVelocity = this.fighterMotion(this.player.root.position, elapsed, newFlight);
     const fighterSpeed = fighterVelocity.length();
     poseBurners(this.playerBurners, this.animationTime, Math.min(1, 0.36 + fighterSpeed * 0.1 + 0.34 * Math.sin(eased * Math.PI)));
@@ -410,7 +414,8 @@ export class FlightView {
       this.cannonMarker.position.set(p.x, p.y, 0);
       this.cannonMarker.scale.setScalar(Math.min(1.25, flight.bossTargetRadius / BOSS_CANNON_RADIUS));
     }
-    this.drawWings(flight, eased, fighterVelocity, flight.level === 'titan' ? (eased > 0 ? distance / eased : undefined) : distance, victoryTime);
+    const saluteShots = this.drawWings(flight, eased, fighterVelocity,
+      flight.level === 'titan' ? (eased > 0 ? distance / eased : undefined) : distance, victoryTime);
     for (const [index, model] of this.drops.entries()) {
       const drop = flight.drops[index];
       model.root.visible = Boolean(drop);
@@ -421,7 +426,7 @@ export class FlightView {
         model.pose(drop.weapon, this.animationTime, (this.animationTime - this.seenDrops.get(drop)!) / 0.22);
       }
     }
-    this.drawProjectiles(flight);
+    this.drawProjectiles(flight, saluteShots);
     this.drawFeedback(flight, elapsed);
     if (victoryTime !== undefined && this.defeat.pose(victoryTime, (point, tint) => this.combat.emit('defeat', point, tint)))
       this.combat.update(0);
@@ -447,9 +452,10 @@ export class FlightView {
     const fighting = flight.weaponsActive;
     const throttle = Math.min(1, 0.38 + velocity.length() * 0.12 + 0.24 * Math.sin(reveal * Math.PI));
     const formation = victoryTime === undefined ? 0 : victoryFormation(victoryTime);
-    const saluteFlash = victoryTime === undefined ? 0 : victoryMuzzleFlash(victoryTime);
+    const saluteShots: Flight['shots'] | undefined = victoryTime === undefined ? undefined : [];
     for (const [index, wing] of flight.wings.entries()) {
       const laser = this.wingLasers[index];
+      laser.root.visible = false;
       const origin = flight.wingOrigin(wing.side);
       if (victoryTime !== undefined)
         this.saluteFacing.copy(this.victoryFacing).multiply(this.saluteRoll.setFromAxisAngle(this.rollAxis, -wing.side * SALUTE_ANGLE));
@@ -464,21 +470,29 @@ export class FlightView {
         if (formation > 0) pod.root.quaternion.slerp(this.saluteFacing, formation);
         const recoil = fighting ? wing.flash / WING_FLASH_TIME : 0;
         const charge = pod.weapon === 'omega' && fighting ? Math.max(0, 1 - wing.cooldown / 0.28) : 0;
-        const activity = wing.beamEnd && fighting ? 0.55 + 0.13 * Math.sin(time * 31) : Math.max(recoil, charge);
-        pod.pose(time, throttle, Math.max(activity, saluteFlash), recoil, wing.upgraded);
+        let activity = wing.beamEnd && fighting ? 0.55 + 0.13 * Math.sin(time * 31) : Math.max(recoil, charge);
+        if (saluteShots && victoryTime !== undefined && victoryTime >= SALUTE_START) {
+          const muzzle = this.saluteMuzzle.set(0, .08, .085).applyQuaternion(pod.root.quaternion).add(pod.root.position);
+          if (pod.weapon === 'laser') {
+            const hold = victoryTime - SALUTE_START;
+            const length = 5.25 * T.MathUtils.smoothstep(hold, 0, .18);
+            laser.root.visible = length > 0;
+            laser.root.position.copy(muzzle);
+            laser.root.quaternion.copy(pod.root.quaternion);
+            laser.draw({ x: 0, y: 0 }, { x: 0, y: length }, hold, this.animationTime, false, { upgraded: wing.upgraded });
+            activity = .55 + .13 * Math.sin(time * 31);
+          } else {
+            const direction = this.saluteDirection.set(0, 1, 0).applyQuaternion(pod.root.quaternion);
+            activity = addVictoryWingShots(saluteShots, pod.weapon, wing.upgraded, victoryTime, muzzle, direction);
+          }
+        }
+        pod.pose(time, throttle, activity, recoil, wing.upgraded);
       }
-      const salute = this.victoryFlares[index];
-      salute.pose(victoryTime);
-      if (salute.root.visible) {
-        const pod = this.wingPods[index].find(model => model.weapon === wing.weapon);
-        const launcher = pod?.root ?? this.player.root;
-        // Empty slots use the fighter's wingtip signal flares.
-        const muzzle = salute.root.position.set(pod ? 0 : wing.side * .72, pod ? .08 : -.04, .11);
-        this.plane.worldToLocal(launcher.localToWorld(muzzle));
-        salute.root.quaternion.copy(this.saluteFacing);
-      }
+      if (saluteShots) continue;
       laser.root.visible = fighting && flight.hull > 0 && Boolean(wing.beamEnd);
       if (laser.root.visible && wing.beamEnd) {
+        laser.root.position.set(0, 0, 0);
+        laser.root.quaternion.identity();
         const target = wing.laserTarget;
         let model: T.Object3D | undefined;
         if (target && typeof target !== 'number') {
@@ -508,9 +522,10 @@ export class FlightView {
         }
       }
     }
+    return saluteShots;
   }
-  private drawProjectiles(flight: Flight) {
-    const shots = flight.planarBoss && !flight.isFonsFight ? flight.shots.map(s => ({ ...s, ...planarProjectileLayer(s, .85) })) : flight.shots;
+  private drawProjectiles(flight: Flight, saluteShots?: Flight['shots']) {
+    const shots = saluteShots ?? (flight.planarBoss && !flight.isFonsFight ? flight.shots.map(s => ({ ...s, ...planarProjectileLayer(s, .85) })) : flight.shots);
     this.projectiles.ship.draw(shots.filter((shot) => !shot.drone && !shot.wing), this.animationTime);
     this.projectiles.drone.draw(shots.filter((shot) => shot.drone), this.animationTime);
     for (const weapon of ['homing', 'cannon', 'omega'] as const) {

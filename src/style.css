@@ -101,8 +101,32 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 }
 #panel.victory-results h1 {
   font-size: clamp(1.2rem, 7cqw, 2.5rem);
-  color: #fff4dc;
+  padding-inline: .05em .12em;
+  color: #f5e8d6;
   text-shadow: 0 2px 8px #080b14;
+}
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  #panel.victory-results h1 {
+    background-image: linear-gradient(180deg,
+      #fffdfa 10%, #778497 20%, #b8c8d5 34%, #f4f9ff 46%, #fffdf3 50%,
+      #422b24 51%, #8d522e 64%, #c78d55 74%, #f5cc9b 85%, #ffe0b6 90%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-stroke: .015em #e4cfb4;
+    text-shadow: none;
+    filter: drop-shadow(0 .027em 0 #ab7755) drop-shadow(.035em .043em 0 #34221c)
+      drop-shadow(0 .075em .13em #080b14);
+  }
+}
+@media (forced-colors: active) {
+  #panel.victory-results h1 {
+    background: none;
+    color: CanvasText;
+    -webkit-text-stroke: 0;
+    filter: none;
+    text-shadow: none;
+  }
 }
 #panel.victory-results > p { max-width: 100%; margin: .45rem 0 0; text-shadow: 0 1px 5px #080b14; }
 #panel.victory-results #promotion-subtitle { color: #b7f4f4; font-weight: 700; }

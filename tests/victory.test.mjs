@@ -12,7 +12,8 @@ const server = await createServer({
 });
 after(() => server.close());
 const { BOSS_DEPTH, Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
-const { createBossDefeat, createVictoryFlares, VICTORY_DURATION } = await server.ssrLoadModule('/src/rendering/victory.ts');
+const { addVictoryWingShots, createBossDefeat, createVictoryFlares, SALUTE_START, VICTORY_DURATION } =
+  await server.ssrLoadModule('/src/rendering/victory.ts');
 
 test('a lethal projectile clears in-flight ordnance and records the final boss time', () => {
   const flight = new Flight('sentry', [], 'vex', 'broodlock');
@@ -61,18 +62,34 @@ test('the defeat rig starts from the authored pose and resets for a replay', () 
   assert(defeat.pose(0, emit));
 });
 
-test('the final freeze frame holds two visible flare volleys until the next flight', () => {
-  for (const lane of createVictoryFlares()) {
-    lane.pose(.9);
-    assert.equal(lane.root.visible, false);
-    lane.pose(VICTORY_DURATION);
-    const live = lane.root.children.filter(flare => flare.visible && flare.scale.x > .5);
-    assert.equal(live.length, 2);
-    assert(live.every(flare => flare.position.y > 0));
-    const frozen = live.map(flare => flare.position.y);
-    lane.pose(VICTORY_DURATION);
-    assert.deepEqual(live.map(flare => flare.position.y), frozen);
-    lane.pose();
-    assert.equal(lane.root.visible, false);
+test('flares fan out from one launcher and hold their positions in the freeze frame', () => {
+  const { root, pose } = createVictoryFlares();
+  pose(.9);
+  assert.equal(root.visible, false);
+  pose(SALUTE_START);
+  const first = root.children.filter(flare => flare.visible);
+  assert.equal(first.length, 3);
+  assert(first.every(flare => flare.position.lengthSq() === 0));
+  pose(VICTORY_DURATION);
+  const bright = root.children.filter(flare => flare.visible && flare.scale.x > .5);
+  assert.equal(bright.length, 6);
+  assert.deepEqual(new Set(bright.map(flare => Math.sign(flare.position.x))), new Set([-1, 0, 1]));
+  const frozen = bright.map(flare => flare.position.toArray());
+  pose(VICTORY_DURATION);
+  assert.deepEqual(bright.map(flare => flare.position.toArray()), frozen);
+  pose();
+  assert.equal(root.visible, false);
+});
+
+test('salute rounds keep their equipped weapon and upgrade and travel along the muzzle direction', () => {
+  const muzzle = new T.Vector3(-1, -2, .1);
+  const direction = new T.Vector3(-.5, Math.sqrt(.75), 0);
+  for (const weapon of ['homing', 'cannon', 'omega']) {
+    const shots = [];
+    assert.equal(addVictoryWingShots(shots, weapon, true, SALUTE_START - .01, muzzle, direction), 0);
+    assert.equal(shots.length, 0);
+    assert(addVictoryWingShots(shots, weapon, true, VICTORY_DURATION, muzzle, direction) > 0);
+    assert(shots.every(shot => shot.wing === weapon && shot.upgraded && shot.x < muzzle.x && shot.y > muzzle.y));
+    assert(shots.every(shot => shot.vx < 0 && shot.vy > 0 && shot.vz === 0));
   }
 });

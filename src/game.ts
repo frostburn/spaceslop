@@ -49,7 +49,7 @@ import { BOSS_CAMERA_DISTANCE, HEIGHT, WIDTH } from './playfield';
 import { GROUNDSKEEPER_HP, GROUNDSKEEPER_RADIUS, groundskeeperContact, groundskeeperAttack, groundskeeperHits } from './groundskeeper';
 import { PRESERVE_APPROACH } from './preserve-layout';
 import { CLOSE_CALLS_REQUIRED, HOT_DOCK_COOLDOWN, HOT_DOCK_DISTANCE, type PilotId } from './pilot-data';
-import { WING_FLASH_TIME, WING_FORMATION, wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
+import { WING_FLASH_TIME, WING_FORMATION, wingShots, wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
 import { WORMHOLE_APPROACH } from './wormhole/route';
 import { FONS_APPROACH, FONS_HP, fonsBodyEntry, fonsPhase, fonsPose, fonsRockHits, fonsRocks, fonsSheltered } from './wormhole/fons/combat';
 import { fonsBeamHits, fonsVolleys } from './wormhole/fons/attacks';
@@ -124,12 +124,6 @@ function projectShot({ x, y, z }: Point & { z: number }): Point {
 function formationReward(weapon: WingWeapon | undefined, remaining = 1): FormationReward | undefined {
   return weapon ? { weapon, remaining } : undefined;
 }
-
-const wingShots = {
-  homing: { interval: 0.72, damage: 0.5, speed: 11, bossTravel: 0.68 },
-  cannon: { interval: 0.36, damage: 1, speed: 18, bossTravel: 0.32 },
-  omega: { interval: 1.7, damage: 4, speed: 20, bossTravel: 0.36 },
-};
 
 type Wave = { time: number; lanes: number[]; drop?: WingWeapon;
   grove?:Omit<GroveCourse,'slot'>;

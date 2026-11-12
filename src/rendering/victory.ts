@@ -1,19 +1,35 @@
 import * as T from 'three';
+import type { Flight } from '../game';
 import type { LevelId } from '../levels';
+import { WING_FLASH_TIME, wingShots, type WingProjectile } from '../wing';
 
 export const VICTORY_DURATION = 2.55;
+export const SALUTE_START = 1.58;
 export const SALUTE_ANGLE = Math.PI / 6;
 const DEFEAT_DURATION = 1.5;
-const flareTimes = [1.58, 1.96, 2.44];
+const flareTimes = [SALUTE_START, 1.96, 2.37];
+const flareAngles = [-Math.PI / 9, 0, Math.PI / 9];
+const lastWingShot = 2.44;
 
 export function victoryFormation(time: number) {
-  return T.MathUtils.smoothstep(time, .48, flareTimes[0]);
+  return T.MathUtils.smoothstep(time, .48, SALUTE_START);
 }
 
-export function victoryMuzzleFlash(time: number) {
+export function addVictoryWingShots(shots: Flight['shots'], weapon: WingProjectile, upgraded: boolean,
+  time: number, muzzle: T.Vector3, direction: T.Vector3) {
+  const spec = wingShots[weapon];
+  const speed = spec.speed * .7;
   let flash = 0;
-  for (const launch of flareTimes)
-    if (time >= launch) flash = Math.max(0, 1 - (time - launch) / .19);
+  for (let launch = lastWingShot; launch >= SALUTE_START; launch -= spec.interval) {
+    const age = time - launch;
+    const travel = age * speed;
+    if (age < 0 || travel > 6.1) continue;
+    shots.push({
+      x: muzzle.x + direction.x * travel, y: muzzle.y + direction.y * travel, z: muzzle.z + direction.z * travel,
+      vx: direction.x * speed, vy: direction.y * speed, vz: direction.z * speed, wing: weapon, upgraded,
+    });
+    flash = Math.max(flash, 1 - age / WING_FLASH_TIME);
+  }
   return flash;
 }
 
@@ -112,37 +128,36 @@ export function createVictoryFlares() {
         #include <colorspace_fragment>
       }`,
   });
-  return [0, 1].map(() => {
-    const root = new T.Group();
-    root.name = 'victory-flares';
-    root.visible = false;
-    const flares = flareTimes.map(launch => {
-      const flare = new T.Group();
-      const spark = new T.Mesh(sparkGeometry, sparkMaterial);
-      const streak = new T.Mesh(streakGeometry, streakMaterial);
-      spark.renderOrder = 24;
-      streak.renderOrder = 23;
-      spark.scale.set(.88, 1.38, .88);
-      flare.add(streak, spark);
-      root.add(flare);
-      return { flare, streak, launch };
-    });
-    return {
-      root,
-      pose(time?: number) {
-        root.visible = time !== undefined && time >= flareTimes[0];
-        if (!root.visible || time === undefined) return;
-        for (const { flare, streak, launch } of flares) {
-          const age = time - launch;
-          flare.visible = age >= 0 && age < 1.04;
-          if (!flare.visible) continue;
-          flare.position.y = age * 4.35;
-          flare.scale.setScalar(1 - .88 * T.MathUtils.smoothstep(age, .58, 1.04));
-          const length = .47 + age * .73;
-          streak.position.set(0, .08 - length / 2, -.018);
-          streak.scale.set(.42, length, 1);
-        }
-      },
-    };
-  });
+  const root = new T.Group();
+  root.name = 'victory-flares';
+  root.visible = false;
+  const flares = flareTimes.flatMap(launch => flareAngles.map(angle => {
+    const flare = new T.Group();
+    const spark = new T.Mesh(sparkGeometry, sparkMaterial);
+    const streak = new T.Mesh(streakGeometry, streakMaterial);
+    spark.renderOrder = 24;
+    streak.renderOrder = 23;
+    spark.scale.set(.88, 1.38, .88);
+    flare.rotation.z = angle;
+    flare.add(streak, spark);
+    root.add(flare);
+    return { flare, streak, launch, direction: new T.Vector3(-Math.sin(angle), Math.cos(angle), 0) };
+  }));
+  return {
+    root,
+    pose(time?: number) {
+      root.visible = time !== undefined && time >= SALUTE_START;
+      if (!root.visible || time === undefined) return;
+      for (const { flare, streak, launch, direction } of flares) {
+        const age = time - launch;
+        flare.visible = age >= 0 && age < 1.04;
+        if (!flare.visible) continue;
+        flare.position.copy(direction).multiplyScalar(age * 4.35);
+        flare.scale.setScalar(1 - .88 * T.MathUtils.smoothstep(age, .58, 1.04));
+        const length = .47 + age * .73;
+        streak.position.set(0, .08 - length / 2, -.018);
+        streak.scale.set(.42, length, 1);
+      }
+    },
+  };
 }

@@ -12,6 +12,12 @@ export type WingWeapon = keyof typeof wingWeapons;
 export type WingProjectile = Exclude<WingWeapon, 'laser'>;
 export type WingSide = -1 | 1;
 
+export const wingShots = {
+  homing: { interval: 0.72, damage: 0.5, speed: 11, bossTravel: 0.68 },
+  cannon: { interval: 0.36, damage: 1, speed: 18, bossTravel: 0.32 },
+  omega: { interval: 1.7, damage: 4, speed: 20, bossTravel: 0.36 },
+};
+
 export function readWingWeapon(value: string): WingWeapon | undefined {
   return Object.hasOwn(wingWeapons, value) ? value as WingWeapon : undefined;
 }
