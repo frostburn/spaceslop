@@ -1,6 +1,6 @@
 import { patternBearing, patternBullet, stepPatternBurst, type BossPattern } from '../challenge-patterns';
 import { wingRewardForWave } from '../wing';
-import { electricSites, HELIOSTAT_SPEED, heliostatCanAttack, heliostatScroll, type HeliostatCourse } from './combat';
+import { electricSites, HELIOSTAT_INTERVAL, HELIOSTAT_SPEED, heliostatCanAttack, heliostatScroll, type HeliostatCourse } from './combat';
 
 type Point = { x: number; y: number };
 type Course = Omit<HeliostatCourse, 'slot'>;
@@ -74,6 +74,22 @@ export function stepHeliostatChallengeActor(enemy: Attacker, course: HeliostatCo
 
 export const heliostatChallengeBoss = { health: 174, interval: 5.35, lockAt: .45,
   first: 1.28, spacing: .193, rows: 13, exposedRows: 15 } satisfies BossPattern & { health: number };
+
+export function heliostatChallengeAttack(time: number) {
+  const pairDuration = heliostatChallengeBoss.interval + HELIOSTAT_INTERVAL;
+  const round = Math.floor(time / pairDuration);
+  const age = time - round * pairDuration;
+  const plasma = age >= heliostatChallengeBoss.interval;
+  return { round, plasma, cycle: 2 * round + Number(plasma), elapsed: plasma ? age - heliostatChallengeBoss.interval : age };
+}
+
+export function heliostatChallengePlasmaTargets(player: Point, lead: number, staggered: boolean) {
+  const x = Math.max(-3.85, Math.min(3.85, player.x));
+  const y = Math.max(-7, Math.min(6.5, player.y));
+  const offset = Math.abs(x + lead * 1.45) <= 3.85 ? lead * 1.45 : -lead * 1.45;
+  return [-1, 1].map(side => side === lead ? { x, y }
+    : { x: x + offset, y: staggered ? Math.min(6.5, y + .6) : y });
+}
 
 export function heliostatChallengeBossRow(origins: readonly Point[], target: Point, cycle: number, row: number, unstable: boolean) {
   const lead = cycle % 2 === 0 ? -1 : 1;

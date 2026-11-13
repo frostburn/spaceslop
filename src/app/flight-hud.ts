@@ -109,7 +109,7 @@ function bossTip(flight: Flight) {
   if (flight.isIoChallenge) return flight.ioLegBroken ? 'Target the exposed machinery. Follow the gap through the longer sweep.'
     : 'Break the cyan support. Follow the opening in the rows.';
   if (flight.isTitanChallenge) return 'Target the glowing thorax vent. Move with the gap in the weather front.';
-  if (flight.isHeliostatChallenge) return 'Target the cyan core. Stay between the lens arcs.';
+  if (flight.isHeliostatChallenge) return 'Target the cyan core. Follow the gap in the arcs and dodge the plasma rings.';
   if (flight.isIceChallenge) return 'Target the mouth marker. Thread the gap between the ice streams.';
   if (flight.isFonsFight) {
     const storm = fonsPhase(flight.fonsTime);

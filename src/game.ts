@@ -14,7 +14,7 @@ import { broadsideShots, fleetWaves, FLEET_SAUCER_LIFE, FLEET_SAUCER_STAGGER, FL
   saucerCanFire, saucerFireInterval, saucerPose, saucerSize, saucerVolley, type FleetSaucer } from './fleet/combat';
 import { FLEET_APPROACH, tractorPose, tractorSites } from './fleet/route';
 import { createFleetBossAttack, FLEET_BOSS_HP, fleetBossEntry, fleetBossTarget, stepFleetBoss } from './fleet/boss';
-import { HELIOSTAT_HP,HELIOSTAT_APPROACH,HELIOSTAT_INTERVAL,HELIOSTAT_WINDUP,HELIOSTAT_FIRE,HELIOSTAT_CHANNEL,HELIOSTAT_FADE,HELIOSTAT_GUARD_FIRE,HELIOSTAT_SPAWN_LEAD,heliostatWaves,heliostatMotion,heliostatCanAttack,heliostatPlasmaHits,electricSites,electricHits,type HeliostatCourse } from './heliostat/combat';
+import { HELIOSTAT_HP,HELIOSTAT_APPROACH,HELIOSTAT_INTERVAL,HELIOSTAT_WINDUP,HELIOSTAT_FIRE,HELIOSTAT_CHANNEL,HELIOSTAT_FADE,HELIOSTAT_LENS_DELAY,HELIOSTAT_GUARD_FIRE,HELIOSTAT_SPAWN_LEAD,heliostatWaves,heliostatMotion,heliostatCanAttack,heliostatPlasmaHits,electricSites,electricHits,type HeliostatCourse } from './heliostat/combat';
 import {SUMMER_APPROACH} from './summer/layout';
 import {createHydraAttack,stepHydraAttack} from './summer/hydra-attack';
 import {VORTEX_HP,VORTEX_RADIUS,VORTEX_FIRE,vortexEmission} from './summer/vortex';
@@ -48,8 +48,8 @@ import {
 import { marineMotion, marineSpecs, marineBodyHit, schoolDelay, type MarineSchool, type MarineFormation, LEVIATHAN_HP, LEVIATHAN_INTERVAL, LEVIATHAN_WINDUP, LEVIATHAN_FIRE, LEVIATHAN_TRAVEL, type MarineKind } from './marine';
 import { TITAN_CHALLENGE_PACE, stepTitanChallengeInsect, titanChallengeBoss, titanChallengeBossRow,
   titanChallengeFirstShot, titanChallengeWaves } from './titan-challenge';
-import { HELIOSTAT_CHALLENGE_PACE, heliostatChallengeBoss, heliostatChallengeBossRow, heliostatChallengeFirstShot,
-  heliostatChallengeWaves, stepHeliostatChallengeActor } from './heliostat/challenge';
+import { HELIOSTAT_CHALLENGE_PACE, heliostatChallengeAttack, heliostatChallengeBoss, heliostatChallengeBossRow,
+  heliostatChallengeFirstShot, heliostatChallengePlasmaTargets, heliostatChallengeWaves, stepHeliostatChallengeActor } from './heliostat/challenge';
 import { ICE_CHALLENGE_PACE, iceChallengeBoss, iceChallengeBossRow, iceChallengeFirstShot,
   iceChallengeWaves, stepIceChallengeMarine } from './ice-challenge';
 import { leviathanMuzzle } from './marine';
@@ -440,11 +440,22 @@ export class Flight {
     return this.isDen ? denBodyEntry(this.denBossTime, a, b) : rayBodyEntry(this.rayTime, a, b);
   }
 
-  get heliostatAttackTime(){return this.bossTime;}
+  private get heliostatAttack() {
+    const time = this.bossTime;
+    if (this.isHeliostatChallenge) return heliostatChallengeAttack(time);
+    const cycle = Math.floor(time / HELIOSTAT_INTERVAL);
+    return { round: cycle, plasma: true, cycle, elapsed: time % HELIOSTAT_INTERVAL };
+  }
+
+  get heliostatAttackTime() { return this.isHeliostatChallenge ? this.heliostatAttack.elapsed : this.bossTime; }
   get heliostatPattern(){return this.heliostatLockedPattern;}
   get heliostatUnstable(){return Number.isFinite(this.heliostatEscalationAt);}
-  get heliostatUnstableAge(){return Math.max(0,this.heliostatAttackTime-this.heliostatEscalationAt);}
-  get heliostatTargets(){return this.heliostatAimCycle===Math.floor(this.heliostatAttackTime/HELIOSTAT_INTERVAL)&&this.heliostatCancelledCycle!==this.heliostatAimCycle?this.markers:[];}
+  get heliostatUnstableAge(){return Math.max(0,this.bossTime-this.heliostatEscalationAt);}
+  get heliostatTargets() {
+    const attack = this.heliostatAttack;
+    return attack.plasma && this.heliostatAimCycle === attack.cycle && this.heliostatCancelledCycle !== attack.cycle
+      ? this.markers : [];
+  }
 
   get transitionDuration() { if (this.level === 'wormhole') return WORMHOLE_SUPPLY_TIME; if (this.isFleet) return FLEET_APPROACH; if (this.isDen) return DEN_APPROACH; if(this.level==='biolume')return GROVE_APPROACH; if(this.level==='summer')return SUMMER_APPROACH;if(this.level==='heliostat')return HELIOSTAT_APPROACH;if(this.level==='boulevard')return BOULEVARD_APPROACH;return this.level === 'preserve' ? PRESERVE_APPROACH : this.level === 'vents' ? VENT_APPROACH : this.level === 'io' ? IO_APPROACH : this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
 
@@ -481,7 +492,6 @@ export class Flight {
     if (this.isIoChallenge) return ioChallengeBoss;
     if (this.isVentChallenge) return ventChallengeBoss;
     if (this.isTitanChallenge) return titanChallengeBoss;
-    if (this.isHeliostatChallenge) return heliostatChallengeBoss;
     if (this.isIceChallenge) return iceChallengeBoss;
   }
   cicadaMuzzle(time = this.bossTime) {
@@ -567,15 +577,20 @@ export class Flight {
   }
 
   get cannonWindup() {
+    if (this.encounterLevel === 'heliostat') {
+      const { cycle, elapsed, plasma } = this.heliostatAttack;
+      if (this.phase !== 'boss' || this.heliostatCancelledCycle === cycle) return 0;
+      if (plasma) return elapsed < HELIOSTAT_FIRE ? clamp((elapsed - HELIOSTAT_WINDUP) / (HELIOSTAT_FIRE - HELIOSTAT_WINDUP), 0, 1) : 0;
+      const burst = this.bossPattern;
+      return burst?.cycle === cycle ? bossPatternCharge(elapsed, heliostatChallengeBoss, burst.rows) : 0;
+    }
     const pattern = this.challengeBossPattern;
     if (pattern) {
       const burst = this.bossPattern;
       if (this.phase !== 'boss' || !burst || burst.cycle !== Math.floor(this.time / pattern.interval)) return 0;
-      if (this.isHeliostatChallenge && burst.cycle === this.heliostatCancelledCycle) return 0;
       return bossPatternCharge(this.time % pattern.interval, pattern, burst.rows);
     }
     if(this.encounterLevel==='biolume'){const s=raySignal(this.rayTime);return this.phase==='boss'?Math.max(s.fan,s.seeker):0;}
-    if(this.encounterLevel==='heliostat'){if(this.heliostatCancelledCycle===Math.floor(this.time/HELIOSTAT_INTERVAL))return 0;const t=this.time%HELIOSTAT_INTERVAL;return this.phase==='boss'&&t<HELIOSTAT_FIRE?clamp((t-HELIOSTAT_WINDUP)/(HELIOSTAT_FIRE-HELIOSTAT_WINDUP),0,1):0;}
     if(this.encounterLevel==='boulevard'){const t=this.time%BOULEVARD_INTERVAL;return this.phase==='boss'&&t<BOULEVARD_FIRE?clamp((t-BOULEVARD_WINDUP)/(BOULEVARD_FIRE-BOULEVARD_WINDUP),0,1):0;}
     const interval = this.encounterLevel === 'io' ? IO_INTERVAL : this.isCicadaFight ? CICADA_INTERVAL : this.encounterLevel === 'ice' ? LEVIATHAN_INTERVAL : BOSS_VOLLEY_INTERVAL;
     if (this.phase !== 'boss' || this.volley !== Math.floor(this.time / interval)) return 0;
@@ -636,8 +651,7 @@ export class Flight {
     } else {
       if (this.encounterLevel === 'preserve') this.groundskeeperCancelledAt = this.time;
       if (this.encounterLevel === 'heliostat') {
-        const interval = this.isHeliostatChallenge ? heliostatChallengeBoss.interval : HELIOSTAT_INTERVAL;
-        this.heliostatCancelledCycle = Math.floor(this.time / interval);
+        this.heliostatCancelledCycle = this.heliostatAttack.cycle;
         this.markers = [];
       }
       if(this.encounterLevel==='summer'){for(const side of HYDRA_SIDES)this.damageBoss(6,false,side);}
@@ -1589,13 +1603,8 @@ export class Flight {
     if (elapsed >= BOSS_FIRE_AT + BOSS_IMPACT_TRAVEL + 0.02) this.markers = [];
   }
 
-  private stepChallengeBoss(pattern: BossPattern) {
-    const cycle = Math.floor(this.time / pattern.interval);
-    const elapsed = this.time - cycle * pattern.interval;
-    if (this.isHeliostatChallenge) {
-      this.updateHeliostatInstability(cycle, 'Staggered arcs');
-      if (cycle === this.heliostatCancelledCycle) return;
-    }
+  private stepChallengeBoss(pattern: BossPattern, cycle = Math.floor(this.time / pattern.interval),
+    elapsed = this.time - cycle * pattern.interval) {
     if (elapsed < pattern.lockAt) {
       this.markers = [];
       return;
@@ -1630,7 +1639,7 @@ export class Flight {
       this.threats.push(...titanChallengeBossRow(projectShot(muzzle), target, cycle, row));
     } else if (this.isHeliostatChallenge) {
       const lenses = [-1, 1].map(side => projectShot(heliostatEmitter(side)));
-      this.threats.push(...heliostatChallengeBossRow(lenses, target, cycle, row, exposed));
+      this.threats.push(...heliostatChallengeBossRow(lenses, target, Math.floor(cycle / 2), row, exposed));
     } else if (this.isIceChallenge) {
       const muzzle = leviathanMuzzle(this.bossTime);
       const origin = projectShot({ x: muzzle.x, y: BOSS_Y + muzzle.y, z: BOSS_DEPTH + muzzle.z });
@@ -1682,17 +1691,25 @@ export class Flight {
     this.pickupTime = 3;
   }
 
-  private stepHeliostat(){
-    const cycle=Math.floor(this.time/HELIOSTAT_INTERVAL),t=this.time%HELIOSTAT_INTERVAL;
-    this.updateHeliostatInstability(cycle, 'Alternating channels');
-    if(this.heliostatCancelledCycle===cycle)return;
-    if(cycle!==this.heliostatAimCycle&&t>=HELIOSTAT_WINDUP&&t<HELIOSTAT_FIRE){
-      this.heliostatAimCycle=cycle;
-      this.heliostatLockedPattern=cycle>=this.heliostatEscalationCycle?(cycle%2?1:-1):0;
-      this.markers=heliostatLockTargets(this.player,this.heliostatPattern);
+  private stepHeliostat() {
+    const { cycle, elapsed, plasma, round } = this.heliostatAttack;
+    this.updateHeliostatInstability(cycle, this.isHeliostatChallenge ? 'Staggered fire' : 'Alternating channels');
+    if (this.heliostatCancelledCycle === cycle) return;
+    if (!plasma) {
+      this.stepChallengeBoss(heliostatChallengeBoss, cycle, elapsed);
+      return;
     }
-    if(heliostatPlasmaHits(this.time,this.heliostatTargets,this.player,this.heliostatPattern))this.hit();
-    if(t>HELIOSTAT_FIRE+HELIOSTAT_CHANNEL+HELIOSTAT_FADE+(this.heliostatPattern ? .55 : 0)+.02)this.markers=[];
+    if (cycle !== this.heliostatAimCycle && elapsed >= HELIOSTAT_WINDUP && elapsed < HELIOSTAT_FIRE) {
+      const lead = round % 2 === 0 ? -1 : 1;
+      const staggered = cycle >= this.heliostatEscalationCycle;
+      this.heliostatAimCycle = cycle;
+      this.heliostatLockedPattern = staggered ? lead : 0;
+      this.markers = this.isHeliostatChallenge ? heliostatChallengePlasmaTargets(this.player, lead, staggered)
+        : heliostatLockTargets(this.player, this.heliostatPattern);
+    }
+    if (heliostatPlasmaHits(elapsed, this.heliostatTargets, this.player, this.heliostatPattern)) this.hit();
+    const delay = this.heliostatPattern ? HELIOSTAT_LENS_DELAY : 0;
+    if (elapsed > HELIOSTAT_FIRE + HELIOSTAT_CHANNEL + HELIOSTAT_FADE + delay + .02) this.markers = [];
   }
 
   private stepBoulevard(){

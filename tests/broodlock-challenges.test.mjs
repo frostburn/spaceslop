@@ -10,6 +10,9 @@ const { PATTERN_HIT_RADIUS, PATTERN_BULLET_CAPACITY } = await server.ssrLoadModu
 const { challengeAvailable, decodeChallengeProgress, readChallengeCode, recordChallengeClear, resetHardcoreProgress, unlockChallenge } =
   await server.ssrLoadModule('/src/campaign/challenges.ts');
 
+const { heliostatChallengeBoss } = await server.ssrLoadModule('/src/heliostat/challenge.ts');
+const { HELIOSTAT_FIRE, HELIOSTAT_GROW, HELIOSTAT_INTERVAL } = await server.ssrLoadModule('/src/heliostat/combat.ts');
+
 const launch = (mode, pilot = 'vex', level = 'broodlock') => new Flight('sentry', [], pilot, level, () => .5, mode);
 
 test('challenge unlocks are case-insensitive and Hardcore loss resets only Hardcore clears', () => {
@@ -191,24 +194,74 @@ test('new Bullet Hell sectors escalate the volleys within the actor pools', () =
   }
 });
 
-test('Pulse interrupts both regulator lenses and the next volley is staggered after half health', () => {
+function launchRegulator() {
   const flight = launch('bullet-hell', 'vex', 'heliostat');
   flight.time = flight.stageDuration;
   flight.step(0);
   flight.step(flight.transitionDuration);
-  flight.cooldown = flight.droneCooldown = flight.invulnerable = 1e5;
-  while (flight.time < 1.4) flight.step(STEP);
+  flight.cooldown = flight.droneCooldown = 1e5;
+  return flight;
+}
+
+function stepTo(flight, time) {
+  while (flight.time < time && flight.phase === 'boss') flight.step(STEP);
+}
+
+test('the regulator follows its bullet torrent with locked and damaging plasma', () => {
+  const flight = launchRegulator();
+  const plasmaStart = heliostatChallengeBoss.interval;
+  flight.invulnerable = 1e5;
+  stepTo(flight, 1.4);
   assert.deepEqual(new Set(flight.threats.map(shot => shot.pattern)), new Set(['primary', 'accent']));
+  assert.deepEqual(flight.heliostatTargets, []);
+
+  flight.player = { x: 1.2, y: -5.4 };
+  stepTo(flight, plasmaStart + .8);
+  assert(flight.cannonWindup > 0);
+  const targets = flight.heliostatTargets.map(target => ({ ...target }));
+  assert.equal(targets.length, 2);
+  assert.deepEqual(targets[0], flight.player);
+  assert.notDeepEqual(targets[0], targets[1]);
+  const remainingBullets = new Set(flight.threats);
+  flight.player = { x: -3.8, y: -6 };
+  stepTo(flight, plasmaStart + HELIOSTAT_FIRE + HELIOSTAT_GROW - .05);
+  assert.deepEqual(flight.heliostatTargets, targets);
+  assert(flight.threats.every(shot => remainingBullets.has(shot)));
+
+  flight.invulnerable = 0;
+  const hull = flight.hull;
+  flight.player = { ...targets[0] };
+  stepTo(flight, plasmaStart + HELIOSTAT_FIRE + HELIOSTAT_GROW + .06);
+  assert.equal(flight.hull, hull - 1);
+  stepTo(flight, plasmaStart + HELIOSTAT_INTERVAL + .2);
+  assert.deepEqual(flight.heliostatTargets, []);
+});
+
+test('Pulse interrupts either regulator attack and half health staggers the following attacks', () => {
+  const flight = launchRegulator();
+  const plasmaStart = heliostatChallengeBoss.interval;
+  const nextTorrent = plasmaStart + HELIOSTAT_INTERVAL;
+  flight.invulnerable = 1e5;
+  stepTo(flight, 1.4);
   flight.damageBoss(flight.bossMaxHealth * .6);
   flight.pulse();
   assert.equal(flight.cannonWindup, 0);
-  while (flight.time < 5.35) {
-    flight.step(STEP);
-    assert.equal(flight.threats.length, 0);
-  }
+  stepTo(flight, plasmaStart + .3);
+  assert.equal(flight.threats.length, 0);
   assert(flight.heliostatUnstable);
-  while (flight.time < 6.75) flight.step(STEP);
+
+  stepTo(flight, plasmaStart + HELIOSTAT_FIRE + HELIOSTAT_GROW + .1);
+  assert.equal(flight.heliostatPattern, -1);
+  assert.equal(flight.heliostatTargets.length, 2);
+  flight.pulse();
+  stepTo(flight, plasmaStart + HELIOSTAT_FIRE + 1);
+  assert.deepEqual(flight.heliostatTargets, []);
+  assert.equal(flight.cannonWindup, 0);
+
+  stepTo(flight, nextTorrent + heliostatChallengeBoss.first + .12);
   assert(flight.threats.length > 0 && flight.threats.every(shot => shot.pattern === 'accent'));
-  while (flight.time < 7.1) flight.step(STEP);
+  stepTo(flight, nextTorrent + heliostatChallengeBoss.first + .52);
   assert(flight.threats.some(shot => shot.pattern === 'primary'));
+  stepTo(flight, nextTorrent + plasmaStart + .8);
+  assert.equal(flight.heliostatPattern, 1);
 });
