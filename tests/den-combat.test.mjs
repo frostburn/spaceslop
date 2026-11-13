@@ -365,8 +365,9 @@ test('Den patrols fire fans after visible entry from the docks onward', () => {
     flight.step(STEP);
     if (!before || !(oldFire <= before.age && before.fire > before.age && Number.isFinite(before.fire))) continue;
     assert(denPatrolCanFire(denPatrolPose(before.age, before.lane, before.den), before.den));
-    const shots = flight.threats.filter(shot => !previousShots.has(shot) && Math.hypot(shot.vx, shot.vy) > 6);
-    assert(shots.length >= 3);
+    const speed = (before.den.heavy ? 4.95 : 4.7) * stageEnemyTuning.den.shotSpeed;
+    const shots = flight.threats.filter(shot => !previousShots.has(shot) && Math.abs(Math.hypot(shot.vx, shot.vy) - speed) < 1e-9);
+    assert(shots.length >= (before.den.heavy ? 5 : 3));
     volleys.add(before);
   }
   assert(volleys.size > 1);
