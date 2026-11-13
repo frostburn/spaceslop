@@ -9,6 +9,13 @@ export const SALUTE_ANGLE = Math.PI / 6;
 const DEFEAT_DURATION = 1.5;
 const flareTimes = [SALUTE_START, 1.96, 2.37];
 const flareAngles = [-Math.PI / 9, 0, Math.PI / 9];
+const crestFlares = [
+  { angle: 31, speed: 3.2 },
+  { angle: 12, speed: 4.7 },
+  { angle: -2, speed: 5.6 },
+  { angle: -18, speed: 5.8 },
+  { angle: -39, speed: 5.7 },
+];
 const lastWingShot = 2.44;
 
 export function victoryFormation(time: number) {
@@ -155,8 +162,16 @@ export function createVictoryFlares(throughExit = false) {
   const root = new T.Group();
   root.name = 'victory-flares';
   root.visible = false;
-  const launches = throughExit ? [...flareTimes, VICTORY_DURATION + .36, VICTORY_DURATION + .94, VICTORY_DURATION + 1.66] : flareTimes;
-  const flares = launches.flatMap(launch => flareAngles.map(angle => {
+  // Vary the speeds so the middle of each rapid volley rises above both ends.
+  const shots = throughExit
+    ? [SALUTE_START, VICTORY_DURATION + .36, VICTORY_DURATION + 1.04, VICTORY_DURATION + 1.72]
+      .flatMap(start => crestFlares.map(({ angle, speed }, i) => ({
+        launch: start + i * .048, angle: T.MathUtils.degToRad(angle), speed,
+      })))
+    : flareTimes.flatMap(launch => flareAngles.map(angle => ({ launch, angle, speed: 4.35 })));
+  const lifetime = throughExit ? .72 : 1.04;
+  const fadeAt = throughExit ? .47 : .58;
+  const flares = shots.map(({ launch, angle, speed }) => {
     const flare = new T.Group();
     const spark = new T.Mesh(sparkGeometry, sparkMaterial);
     const streak = new T.Mesh(streakGeometry, streakMaterial);
@@ -166,19 +181,19 @@ export function createVictoryFlares(throughExit = false) {
     flare.rotation.z = angle;
     flare.add(streak, spark);
     root.add(flare);
-    return { flare, streak, launch, direction: new T.Vector3(-Math.sin(angle), Math.cos(angle), 0) };
-  }));
+    return { flare, streak, launch, speed, direction: new T.Vector3(-Math.sin(angle), Math.cos(angle), 0) };
+  });
   return {
     root,
     pose(time?: number) {
       root.visible = time !== undefined && time >= SALUTE_START;
       if (!root.visible || time === undefined) return;
-      for (const { flare, streak, launch, direction } of flares) {
+      for (const { flare, streak, launch, speed, direction } of flares) {
         const age = time - launch;
-        flare.visible = age >= 0 && age < 1.04;
+        flare.visible = age >= 0 && age < lifetime;
         if (!flare.visible) continue;
-        flare.position.copy(direction).multiplyScalar(age * 4.35);
-        flare.scale.setScalar(1 - .88 * T.MathUtils.smoothstep(age, .58, 1.04));
+        flare.position.copy(direction).multiplyScalar(age * speed);
+        flare.scale.setScalar(1 - .88 * T.MathUtils.smoothstep(age, fadeAt, lifetime));
         const length = .47 + age * .73;
         streak.position.set(0, .08 - length / 2, -.018);
         streak.scale.set(.42, length, 1);

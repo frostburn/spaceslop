@@ -123,13 +123,23 @@ test('salute rounds keep their equipped weapon and upgrade and travel along the 
   }
 });
 
-test('the tunnel escape fires another flare salvo after the normal victory beat', () => {
+test('cockpit flares launch one by one and form a crest with a high center', () => {
   const throughExit = createVictoryFlares(true);
   const ordinary = createVictoryFlares();
-  const time = VICTORY_DURATION + 1.35;
-  throughExit.pose(time);
-  ordinary.pose(time);
-  assert(throughExit.root.children.some(flare => flare.visible && flare.position.y > 0));
+  const visible = () => throughExit.root.children.filter(flare => flare.visible);
+  for (const start of [SALUTE_START, VICTORY_DURATION + .36]) {
+    for (let i = 0; i < 5; i++) {
+      throughExit.pose(start + i * .048);
+      assert.equal(visible().length, i + 1);
+      assert(visible().at(-1).position.lengthSq() < 1e-12);
+    }
+    throughExit.pose(start + .47);
+    const crest = visible().map(flare => flare.position);
+    assert(crest.every(({ x, y }, i) => y > 0 && (i === 0 || x > crest[i - 1].x)));
+    assert(crest[0].y < crest[1].y && crest[1].y < crest[2].y);
+    assert(crest[2].y > crest[3].y && crest[3].y > crest[4].y);
+  }
+  ordinary.pose(VICTORY_DURATION + 1.35);
   assert(ordinary.root.children.every(flare => !flare.visible));
 });
 
