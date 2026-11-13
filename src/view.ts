@@ -19,7 +19,7 @@ import { loadCommonTextures } from './rendering/common-textures';
 import { tiltFlightCamera } from './rendering/flight-camera';
 import { boostFriendlyGlow } from './rendering/friendly-glow';
 import { disposeScene } from './rendering/dispose';
-import { addVictoryWingShots, createBossDefeat, createVictoryFlares, SALUTE_ANGLE, SALUTE_START, VICTORY_DURATION, victoryFormation } from './rendering/victory';
+import { addVictoryWingShots, createBossDefeat, createVictoryFlares, SALUTE_ANGLE, SALUTE_START, VICTORY_DURATION, victoryFormation, victoryLaserLength } from './rendering/victory';
 export async function createFlightView(canvas: HTMLCanvasElement, level: LevelId, signal = new AbortController().signal, pilot?: PilotId) {
   const { createLevel } = await levelLoaders[level]();
   signal.throwIfAborted();
@@ -72,6 +72,8 @@ export class FlightView {
   private saluteRoll = new T.Quaternion();
   private saluteMuzzle = new T.Vector3();
   private saluteDirection = new T.Vector3();
+  private saluteFrustum = new T.Frustum();
+  private saluteProjection = new T.Matrix4();
   private rollAxis = new T.Vector3(0, 0, 1);
   private disposed = false;
   private levelTime = 0;
@@ -460,6 +462,13 @@ export class FlightView {
     const throttle = Math.min(1, 0.38 + velocity.length() * 0.12 + 0.24 * Math.sin(reveal * Math.PI));
     const formation = victoryTime === undefined ? 0 : victoryFormation(victoryTime);
     const saluteShots: Flight['shots'] | undefined = victoryTime === undefined ? undefined : [];
+    if (victoryTime !== undefined && victoryTime >= SALUTE_START) {
+      const camera = this.perspective;
+      camera.updateMatrixWorld();
+      this.plane.updateWorldMatrix(true, false);
+      this.saluteProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(this.plane.matrixWorld);
+      this.saluteFrustum.setFromProjectionMatrix(this.saluteProjection);
+    }
     for (const [index, wing] of flight.wings.entries()) {
       const laser = this.wingLasers[index];
       laser.root.visible = false;
@@ -480,16 +489,16 @@ export class FlightView {
         let activity = wing.beamEnd && fighting ? 0.55 + 0.13 * Math.sin(time * 31) : Math.max(recoil, charge);
         if (saluteShots && victoryTime !== undefined && victoryTime >= SALUTE_START) {
           const muzzle = this.saluteMuzzle.set(0, .08, .085).applyQuaternion(pod.root.quaternion).add(pod.root.position);
+          const direction = this.saluteDirection.set(0, 1, 0).applyQuaternion(pod.root.quaternion);
           if (pod.weapon === 'laser') {
             const hold = victoryTime - SALUTE_START;
-            const length = 5.25 * T.MathUtils.smoothstep(hold, 0, .18);
+            const length = victoryLaserLength(this.saluteFrustum, muzzle, direction) * T.MathUtils.smoothstep(hold, 0, .18);
             laser.root.visible = length > 0;
             laser.root.position.copy(muzzle);
             laser.root.quaternion.copy(pod.root.quaternion);
             laser.draw({ x: 0, y: 0 }, { x: 0, y: length }, hold, this.animationTime, false, { upgraded: wing.upgraded });
             activity = .55 + .13 * Math.sin(time * 31);
           } else {
-            const direction = this.saluteDirection.set(0, 1, 0).applyQuaternion(pod.root.quaternion);
             activity = addVictoryWingShots(saluteShots, pod.weapon, wing.upgraded, victoryTime, muzzle, direction);
           }
         }
