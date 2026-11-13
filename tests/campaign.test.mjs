@@ -34,16 +34,20 @@ test('the briefing route visits each sector once and takes Io, Europa and Titan 
 test('campaign clears advance in order and promote at the agreed milestones', () => {
   let cleared = decodeCampaignClears('not JSON');
   assert.deepEqual(campaignStatus(cleared), { next: 'broodlock', rank: 'specialist3' });
-  assert.equal(recordCampaignClear(cleared, 'wormhole').cleared.size, 0);
+  const outOfOrder = recordCampaignClear(cleared, 'wormhole');
+  assert.equal(outOfOrder.cleared.size, 0);
+  assert.equal(outOfOrder.unlockedBulletHell, false);
   const promotions = [];
   for (const mission of campaign) {
     assert.equal(campaignStatus(cleared).next, mission.level);
     const report = recordCampaignClear(cleared, mission.level);
     assert(report.cleared.has(mission.level));
     assert.equal(report.cleared.size, cleared.size + 1);
+    assert.equal(report.unlockedBulletHell, mission.level === 'wormhole');
     cleared = decodeCampaignClears(JSON.stringify([...report.cleared, 'unknown-sector', 4, mission.level]));
     if (report.promoted) promotions.push([mission.level, report.promoted]);
     assert.equal(recordCampaignClear(cleared, mission.level).promoted, undefined);
+    assert.equal(recordCampaignClear(cleared, mission.level).unlockedBulletHell, false);
   }
   assert.deepEqual(promotions, [
     ['broodlock', 'specialist4'], ['titan', 'sergeant'], ['heliostat', 'secondLt'], ['preserve', 'firstLt'],

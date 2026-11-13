@@ -1,6 +1,15 @@
 import * as T from 'three';
 import { BOSS_Y, BOSS_DEPTH, type Flight } from '../game';
 export type TextureResult = T.Texture | undefined;
+export interface LevelEnding {
+  duration: number;
+  departureAt: number;
+  cutToExterior: number;
+  cockpitFlares: { root: T.Group; prime(): void };
+  warmup(renderer: T.WebGLRenderer): void;
+  poseExit(time: number, fighter: T.Group, camera: T.PerspectiveCamera): void;
+  renderExterior(renderer: T.WebGLRenderer, time: number): void;
+}
 export interface LevelFrame {
   flight: Flight;
   time: number;
@@ -11,7 +20,13 @@ export interface LevelFrame {
   newFlight: boolean;
   fighterSpeed: number;
   droneSpeed: number;
-  victory?: { time: number; fighter: Readonly<T.Vector3>; drone: Readonly<T.Vector3> };
+  victory?: {
+    time: number;
+    fighter: Readonly<T.Vector3>;
+    drone: Readonly<T.Vector3>;
+    exitTime?: number;
+    camera: T.PerspectiveCamera;
+  };
 }
 export interface LevelScene {
   root: T.Group;
@@ -33,6 +48,7 @@ export interface LevelScene {
   exposure?: number;
   surfaces?: T.Group[];
   applyArmor?: (texture: T.Texture) => void;
+  ending?: LevelEnding;
   reveal?: (time: number, normal: number) => number;
   orientation?: (time: number, reveal: number) => {
     pitch: number;

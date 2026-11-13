@@ -14,12 +14,14 @@
     <main class="workshop">
       <section id="viewport" aria-label="3D asset preview">
         <canvas id="preview" aria-label="Orbitable 3D model"></canvas>
+        <div id="ending-preview" hidden></div>
         <p id="viewer-error" hidden>WebGL 2 is required for the 3D preview.</p>
       </section>
       <aside class="tools" aria-label="Asset inspection controls">
         <label for="sector">Sector</label>
         <select id="sector">
           <option value="fleet">Fleet Clash</option>
+          <option value="wormhole">The Return Channel · Wormhole</option>
           <option value="biolume">Lantern Grove · Bioluminescence</option>
           <option value="summer">Summer Ice Age · Thaw</option>
           <option value="heliostat">Uranus · Heliostat</option>
@@ -35,6 +37,9 @@
         </select>
         <label for="asset">Asset</label>
         <select id="asset">
+          <optgroup label="The Return Channel · Wormhole" data-sector="wormhole">
+            <option value="wormhole_ending">Ending sequence</option>
+          </optgroup>
           <optgroup label="Fleet Clash" data-sector="fleet">
             <option value="fleet_planets">Planet pair journey</option>
             <option value="fleet_shuttle">Pleiadian shuttle</option>

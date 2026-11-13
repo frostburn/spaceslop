@@ -208,6 +208,8 @@ Both full plates were delivered at **864×15,360**. Whole-canvas resizing is sup
 
 ## Asset workshop
 
+Choose **The Return Channel · Wormhole → Ending sequence** to play or scrub the finale from Fons's defeat through the tunnel exit, exterior flyby and credits. The preview uses the game's cameras and pauses on the unlock card.
+
 Choose a **Sector** to filter the asset list. Each sector remembers its last inspected asset. Shared craft, sidearms, ammunition and powerups have their own category. Preserve previews use the same fluorescent/UV lighting profile as the stage.
 
 Run `npm run dev` and open **Asset workshop** from the game menu or visit `/workshop.html`. Orbit and zoom the marine hunters, plesiosaur, Leviathan, boss and patrol cicadas, segmented centipede, raptor, ships, worker and soldier ants, guardian, mushroom cluster, wing weapon pods, ammunition, or powerups. Switch camera presets, scrub or play the animated rigs and effects, and toggle wireframe. Frostwake scenery can also be scrubbed across its full route and thirty seconds of boss pursuit, then inspected from the side. The workshop uses the game rigs and textures. Its side view exposes the mushroom roots, projecting stems, cap rim, and gills.

@@ -51,7 +51,7 @@ import { loadEncounterTextures } from './rendering/workshop-textures';
 import {
   BOSS_FIRE_AT, BOSS_RECOIL_TIME, BOSS_VOLLEY_INTERVAL, BOSS_WINDUP_AT, RAPTOR_FLARE_END, raptorFlight,
 } from './encounters';
-import { BOSS_CANNON_X, TRANSITION_TIME } from './game';
+import { BOSS_CANNON_X, Flight, TRANSITION_TIME } from './game';
 import { createMushroomCluster } from './hive-fungi';
 import { createIceScenery } from './ice-scenery';
 import { createPreserveScenery } from './preserve-scenery';
@@ -74,6 +74,9 @@ import { pursuitFighter, pursuitSaucer } from './fleet/pursuit';
 import { createSaucerFactory } from './fleet/saucers';
 import { fleetLighting } from './fleet/scenery';
 import { HEIGHT, WIDTH } from './playfield';
+import { FlightView } from './view';
+import { WORMHOLE_DEPARTURE_AT, WORMHOLE_ENDING_DURATION, WORMHOLE_EXTERIOR_AT, WORMHOLE_EXIT_HOLD } from './wormhole/ending';
+import { CREDITS_ROLL_DURATION, mountEndingCredits } from './app/ending-credits';
 import './workshop.css';
 
 function element<T extends HTMLElement>(id: string) {
@@ -401,6 +404,22 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const motion = element('motion-controls');
   const pose = element<HTMLOutputElement>('pose');
   const wireframe = element<HTMLInputElement>('wireframe');
+  const endingKey = 'wormhole_ending';
+  const freezeAt = WORMHOLE_ENDING_DURATION;
+  const endingDuration = freezeAt + CREDITS_ROLL_DURATION;
+  const endingPreview = element('ending-preview');
+  let endingCredits: HTMLElement | undefined;
+  let creditsRoll: HTMLElement | undefined;
+  let unlockNotice: HTMLElement | undefined;
+  const endingScope = new AbortController();
+  let endingView: FlightView | undefined;
+  let endingState: 'idle' | 'loading' | 'ready' | 'failed' = 'idle';
+  let endingFlight: Flight | undefined;
+  let endingFrame = -1;
+  window.addEventListener('pagehide', () => {
+    endingScope.abort();
+    endingView?.dispose();
+  }, { once: true });
   let selected: (typeof assets)[keyof typeof assets] = assets.raptor;
   let time = 0;
   let playing = false;
@@ -410,12 +429,50 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   let cameraView = gameView;
 
   function updatePose() {
-    const label = selected.pose(time);
+    const label = assetSelect.value === endingKey ? endingLabel() : selected.pose(time);
     if (pose.value !== label) pose.value = label;
   }
 
+  function endingLabel() {
+    if (endingState === 'idle' || endingState === 'loading') return 'Preparing ending…';
+    if (endingState === 'failed') return 'Ending preview unavailable';
+    const shot = time >= freezeAt ? 'Credits' : time >= WORMHOLE_EXTERIOR_AT + WORMHOLE_EXIT_HOLD
+      ? 'Fighter emerges' : time >= WORMHOLE_EXTERIOR_AT ? 'Exterior hold'
+        : time >= WORMHOLE_DEPARTURE_AT ? 'Tunnel exit and cockpit flares' : 'Fons defeat';
+    return `${time.toFixed(2)} s · ${shot}`;
+  }
+
+  async function prepareEnding() {
+    endingState = 'loading';
+    try {
+      const { createLevel } = await import('./rendering/levels/wormhole');
+      endingScope.signal.throwIfAborted();
+      const toneMapping = renderer.toneMapping;
+      const exposure = renderer.toneMappingExposure;
+      try { endingView = new FlightView(renderer, 'wormhole', createLevel, endingScope.signal); }
+      finally {
+        renderer.toneMapping = toneMapping;
+        renderer.toneMappingExposure = exposure;
+      }
+      endingFlight = Flight.previewEnding();
+      await endingView.readyForPreview();
+      endingScope.signal.throwIfAborted();
+      endingCredits = mountEndingCredits(endingPreview);
+      creditsRoll = endingCredits.querySelector<HTMLElement>('#ending-credits-roll')!;
+      unlockNotice = endingCredits.querySelector<HTMLElement>('#ending-unlock')!;
+      endingState = 'ready';
+    } catch {
+      if (endingScope.signal.aborted) return;
+      endingState = 'failed';
+    }
+    if (assetSelect.value === endingKey) {
+      play.disabled = timeline.disabled = endingState !== 'ready';
+      updatePose();
+    }
+  }
+
   function fitCamera(direction: T.Vector3) {
-    if (assetSelect.value === 'fleet_planets') return;
+    if (assetSelect.value === 'fleet_planets' || assetSelect.value === endingKey) return;
     cameraView = direction;
     const box = 'bounds' in selected ? selected.bounds : new T.Box3().setFromObject(selected.root);
     const bounds = box.getBoundingSphere(new T.Sphere());
@@ -457,17 +514,22 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     }
     uv.visible = habitat && !scenery;
     for (const asset of Object.values(assets)) asset.root.visible = asset === selected;
-    const fleetPreview = key === 'fleet_planets';
-    element('camera-controls').hidden = fleetPreview;
-    wireframe.closest('label')!.hidden = fleetPreview;
-    controls.enabled = !fleetPreview;
+    const fixedCamera = key === 'fleet_planets' || key === endingKey;
+    endingPreview.hidden = key !== endingKey;
+    element('camera-controls').hidden = fixedCamera;
+    wireframe.closest('label')!.hidden = fixedCamera;
+    controls.enabled = !fixedCamera;
     time = 0;
-    motion.hidden = selected.duration === 0;
-    timeline.max = String(selected.duration);
+    const duration = key === endingKey ? endingDuration : selected.duration;
+    motion.hidden = duration === 0;
+    play.disabled = timeline.disabled = key === endingKey && endingState !== 'ready';
+    timeline.max = String(duration);
     timeline.value = '0';
+    endingFrame = -1;
     setPlaying(false);
     updatePose();
     fitCamera(gameView);
+    if (key === endingKey && endingState === 'idle') void prepareEnding();
   }
 
   assetSelect.addEventListener('change', selectAsset);
@@ -480,7 +542,10 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   element('game-view').addEventListener('click', () => fitCamera(gameView));
   element('angle-view').addEventListener('click', () => fitCamera(angleView));
   element('side-view').addEventListener('click', () => fitCamera(sideView));
-  play.addEventListener('click', () => setPlaying(!playing));
+  play.addEventListener('click', () => {
+    if (assetSelect.value === endingKey && time >= endingDuration) time = 0;
+    setPlaying(!playing);
+  });
   timeline.addEventListener('input', () => {
     setPlaying(false);
     time = timeline.valueAsNumber;
@@ -501,6 +566,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     camera.updateProjectionMatrix();
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
     renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+    endingFrame = -1;
     fitCamera(cameraView);
   }
 
@@ -510,12 +576,50 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
 
   let previous = performance.now();
   renderer.setAnimationLoop((now) => {
+    const endingSelected = assetSelect.value === endingKey;
+    const elapsed = Math.min((now - previous) / 1000, .1);
     if (playing) {
-      time = (time + Math.min((now - previous) / 1000, 0.1)) % selected.duration;
+      if (endingSelected) {
+        time = Math.min(endingDuration, time + elapsed);
+        if (time === endingDuration) setPlaying(false);
+      } else time = (time + elapsed) % selected.duration;
       timeline.value = String(time);
       updatePose();
     }
     previous = now;
+    if (endingSelected) {
+      if (endingState !== 'ready' || !endingView || !endingFlight || !endingCredits || !creditsRoll || !unlockNotice) return;
+      const frameTime = Math.min(time, freezeAt);
+      const rolling = time >= freezeAt && time < endingDuration;
+      endingCredits.hidden = time < freezeAt;
+      endingCredits.classList.toggle('rolling', rolling);
+      unlockNotice.hidden = time < endingDuration;
+      if (rolling) {
+        const roll = creditsRoll.getAnimations()[0];
+        if (roll) {
+          roll.pause();
+          roll.currentTime = (time - freezeAt) * 1000;
+        }
+      }
+      if (endingFrame === frameTime) return;
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      if (!w || !h) return;
+      const width = Math.min(w, h * WIDTH / HEIGHT), height = width * HEIGHT / WIDTH;
+      const x = (w - width) / 2, y = (h - height) / 2;
+      renderer.toneMapping = T.ACESFilmicToneMapping;
+      renderer.setClearColor(0x0b1020);
+      renderer.clear();
+      renderer.setViewport(x, y, width, height);
+      renderer.setScissor(x, y, width, height);
+      renderer.setScissorTest(true);
+      try { endingView.previewVictory(endingFlight, frameTime); }
+      finally {
+        renderer.setScissorTest(false);
+        renderer.setViewport(0, 0, w, h);
+      }
+      endingFrame = frameTime;
+      return;
+    }
     controls.update();
     if(assetSelect.value==='summer_hydra'||assetSelect.value==='summer_lotus_hydra')updatePose();
     if(iceField.root.visible)iceField.capture(renderer,camera);

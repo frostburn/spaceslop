@@ -18,6 +18,7 @@
 | `src/rendering/loaders.ts` | Selective loading of level renderers. |
 | `src/rendering/dispose.ts` | Releases scene resources and restores procedural maps on shared materials. |
 | `src/rendering/victory.ts` | Boss defeat, ship formation and effects for the victory sequence. |
+| `src/wormhole/ending.ts` | Wormhole exit camera, exterior scene and final freeze frame. |
 | `src/rendering/levels/*.ts` | Level-owned scenery, actors, boss posing, texture loading, capture and effects. |
 | `src/assets/catalog.ts` | One media path catalog and an explicit list of textures used by each level. |
 | `src/encounter-texture.ts` | Optional texture loading, bounded deadlines and safe fallbacks. No enemy imports. |
@@ -77,6 +78,8 @@ Heliostat's `weathering.ts` layers fixed dirt, dust, streaks and sparse corrosio
 `heliostat/crawler.ts` owns rail sites, traversal/bracing/lift, one-time aim locks, the marked cutting sweep and segment collision. `crawler-rig.ts` shares carriage/head/line geometry across two rigs and poses their physical carriage on the existing rails; the raised cutter is the projected combat and laser-contact target. The crawler does not emit ordinary bullets. Pulse or a weapon kill removes its beam immediately. The last site leaves view before the camera turn. Below half health the regulator latches an unstable-lens state, preserving the current attack and switching patterns only on a new locked cycle. The leading lens alternates, the trailing stream waits 0.55 seconds and locks a different offset target; per-lens phases drive both visible tubes and damage. `stellar-debris.ts` owns forty deterministic, harmless instanced shards confined around the right lens behind flight altitude. Crawler warning/beam materials, fault ring and shards all prime before launch; pause/results freeze them. Workshop entries expose the crawler and unstable regulator separately.
 
 ## Wormhole boss rush
+
+After Fons falls, the victory clock continues into the tunnel exit shot and the exterior flyby. The Wormhole renderer warms both scenes at launch and draws the final frame behind the credits. The session saves the campaign clear at the moment of victory and shows the Bullet Hell notice on the first completed campaign. Free Flight and dev shortcuts can play the ending as practice. Reduced motion opens the static credits over the final frame.
 
 `wormhole/route.ts` keeps the tunnel scroll and aperture on one level clock. The encounter order comes from `campaign/missions.ts`, ending at Fons Inversus. One flight carries hull, score, weapons and remaining Pulse charges through all the fights. Each approach releases two independent weapon rolls. A third capsule restores one hull after every third clear, up to the current hull capacity. Fons is the final clear.
 

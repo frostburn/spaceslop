@@ -24,6 +24,7 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
     echo: { value: 0 },
     waveRadius: { value: .2 },
     waveStrength: { value: 0 },
+    exitGlow: { value: 0 },
     fighterReflection: { value: reflection as T.Texture | null },
     reflectionPlane: { value: new T.Vector4(0, 0, 1, 0) },
     reflectionStrength: { value: 0 },
@@ -51,6 +52,7 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
       varying vec2 screen;
       uniform vec2 lensCenter;
       uniform float travel, lensRadius, lensStrength, echo, waveRadius, waveStrength;
+      uniform float exitGlow;
       uniform sampler2D fighterReflection;
       uniform vec4 reflectionPlane;
       uniform float reflectionStrength;
@@ -272,6 +274,7 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
         for (int i=0; i<2; i++) color = drawRegulatorPortal(color, regulatorPortals[i], screen, travel);
         for (int i=0; i<2; i++) color = showRift(color, wallRifts[i]);
         color = corruptedRain(color);
+        color += exitGlow * exp(-dot(delta, delta) * 9.0) * vec3(.71,.43,1.2);
         gl_FragColor = vec4(color, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -298,7 +301,7 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
         portal.set(x, y, opening, roll);
       }
     },
-    pose(frame: ReturnType<typeof wormholeFrame>, mirror: WormholeReflectionPose) {
+    pose(frame: ReturnType<typeof wormholeFrame>, mirror: WormholeReflectionPose, exitGlow = 0) {
       uniforms.travel.value = frame.travel;
       uniforms.lensCenter.value.set(frame.lensX, apertureY + frame.lensY);
       uniforms.lensRadius.value = frame.lensRadius;
@@ -306,6 +309,7 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
       uniforms.echo.value = frame.echo;
       uniforms.waveRadius.value = frame.waveRadius;
       uniforms.waveStrength.value = frame.waveStrength;
+      uniforms.exitGlow.value = exitGlow;
       uniforms.reflectionStrength.value = mirror?.strength ?? 0;
       if (mirror) uniforms.reflectionPlane.value.set(mirror.x, mirror.y, mirror.nx, mirror.ny);
     },

@@ -12,8 +12,11 @@ const server = await createServer({
 });
 after(() => server.close());
 const { BOSS_DEPTH, Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
-const { addVictoryWingShots, createBossDefeat, createVictoryFlares, SALUTE_ANGLE, SALUTE_START, VICTORY_DURATION, VICTORY_LASER_OVERSCAN, victoryLaserLength } =
+const { addVictoryWingShots, createBossDefeat, createVictoryFlares, DEFEAT_DURATION, SALUTE_ANGLE, SALUTE_START, VICTORY_DURATION, VICTORY_LASER_OVERSCAN, victoryLaserLength } =
   await server.ssrLoadModule('/src/rendering/victory.ts');
+const { createFighterRig } = await server.ssrLoadModule('/src/ship-rigs.ts');
+const { shipBurners } = await server.ssrLoadModule('/src/burners.ts');
+const { createWormholeEnding, WORMHOLE_EXIT_HOLD } = await server.ssrLoadModule('/src/wormhole/ending.ts');
 
 test('a lethal projectile clears in-flight ordnance and records the final boss time', () => {
   const flight = new Flight('sentry', [], 'vex', 'broodlock');
@@ -117,6 +120,113 @@ test('salute rounds keep their equipped weapon and upgrade and travel along the 
     assert(addVictoryWingShots(shots, weapon, true, VICTORY_DURATION, muzzle, direction) > 0);
     assert(shots.every(shot => shot.wing === weapon && shot.upgraded && shot.x < muzzle.x && shot.y > muzzle.y));
     assert(shots.every(shot => shot.vx < 0 && shot.vy > 0 && shot.vz === 0));
+  }
+});
+
+test('the accelerating exit leaves a continuous flare wake that curls back and stops firing before the cut', () => {
+  const fighter = createFighterRig().root;
+  const ending = createWormholeEnding(fighter, 2.7);
+  const camera = new T.PerspectiveCamera(40, 9 / 16, .1, 240);
+  const origin = new T.Vector3(1.8, -4, 0);
+  const heading = new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 0), -1.45);
+  const flares = ending.cockpitFlares.root.children;
+  function pose(time) {
+    fighter.position.copy(origin);
+    fighter.quaternion.copy(heading);
+    camera.fov = 40;
+    ending.poseExit(time, fighter, camera);
+  }
+  try {
+    pose(0);
+    assert(fighter.position.equals(origin));
+    assert(fighter.quaternion.equals(heading));
+    assert.equal(camera.position.x, 0);
+    const launch = .14;
+    pose(launch);
+    const nozzle = new T.Vector3(0, .025, .28).applyQuaternion(fighter.quaternion).add(fighter.position);
+    assert.equal(flares.filter(flare => flare.visible).length, 1);
+    assert(flares[0].position.distanceTo(nozzle) < 1e-10);
+    const direction = new T.Vector3(0, 1, 0);
+    assert(direction.applyQuaternion(flares[0].quaternion).distanceTo(new T.Vector3(0, 1, 0)) < 1e-10);
+
+    pose(.8);
+    const first = flares[0].position.clone();
+    assert.equal(first.x, nozzle.x);
+    assert(first.z > nozzle.z + 1);
+    assert(first.y > nozzle.y + 1);
+    assert(direction.set(0, 1, 0).applyQuaternion(flares[0].quaternion).z > .9);
+    assert(fighter.position.z < first.z);
+    assert(flares[1].position.z < first.z);
+    assert(flares.filter(flare => flare.visible).length >= 7);
+    const early = fighter.position.z;
+    pose(1.6);
+    const middle = fighter.position.z;
+    pose(2.4);
+    assert(middle - fighter.position.z > early - middle);
+    assert(flares.filter(flare => flare.visible).length >= 10);
+    pose(ending.cutToExterior - .6);
+    const tail = flares.findLast(flare => flare.visible);
+    const tailPosition = tail.position.clone();
+    pose(ending.cutToExterior - .05);
+    assert.equal(flares.findLast(flare => flare.visible), tail);
+    assert(tail.position.z > tailPosition.z);
+    pose(.8);
+    assert(flares[0].position.equals(first));
+  } finally {
+    ending.dispose();
+  }
+});
+
+test('the exterior holds on the exit, then follows the fighter and its trails to a repeatable freeze', () => {
+  const fighter = createFighterRig().root;
+  let exterior, camera;
+  const renderer = { render(scene, lens) {
+    scene.updateMatrixWorld();
+    lens.updateMatrixWorld();
+    exterior = scene;
+    camera = lens;
+  } };
+  const ending = createWormholeEnding(fighter, 2.7);
+  const exteriorDuration = ending.duration - ending.departureAt - ending.cutToExterior;
+  assert(ending.departureAt > DEFEAT_DURATION);
+  try {
+    ending.warmup(renderer);
+    const ship = exterior.getObjectByName('wormhole-exit-fighter');
+    const lightning = exterior.getObjectByName('wormhole-exit-lightning');
+    const trails = exterior.getObjectByName('wormhole-exit-engine-trails');
+    const trumpet = exterior.getObjectByName('wormhole-exterior-exit');
+    const wall = trumpet.geometry.getAttribute('position');
+    const mouth = new T.Vector3().fromBufferAttribute(wall, wall.count - 1);
+    const throat = new T.Vector3().fromBufferAttribute(wall, 0);
+    assert(Math.hypot(mouth.x, mouth.y) > 4);
+    assert(Math.hypot(throat.x, throat.y) < 2 && throat.z < mouth.z - 8);
+    assert.equal(lightning.parent, trumpet);
+    assert(ship.visible && lightning.visible && trails.visible);
+    ending.renderExterior(renderer, WORMHOLE_EXIT_HOLD / 2);
+    assert(!ship.visible && !lightning.visible && !trails.visible);
+
+    ending.renderExterior(renderer, WORMHOLE_EXIT_HOLD + .3);
+    assert(ship.visible && lightning.visible && trails.visible);
+    const emergence = ship.position.clone();
+    ending.renderExterior(renderer, exteriorDuration);
+    assert(ship.position.z > emergence.z + 20);
+    const projected = ship.position.clone().project(camera);
+    assert(Math.abs(projected.x) < .92 && Math.abs(projected.y) < .92);
+
+    const ribbon = trails.geometry.getAttribute('position');
+    for (const [index, burner] of shipBurners(ship).entries()) {
+      const left = index * ribbon.count / 2;
+      const center = new T.Vector3().fromBufferAttribute(ribbon, left)
+        .add(new T.Vector3().fromBufferAttribute(ribbon, left + 1)).multiplyScalar(.5);
+      assert(center.distanceTo(burner.getWorldPosition(new T.Vector3())) < 1e-5);
+    }
+    const finalPose = ship.matrixWorld.clone();
+    const finalTrail = ribbon.array.slice();
+    ending.renderExterior(renderer, exteriorDuration + 5);
+    assert(ship.matrixWorld.equals(finalPose));
+    assert.deepEqual(ribbon.array, finalTrail);
+  } finally {
+    ending.dispose();
   }
 });
 

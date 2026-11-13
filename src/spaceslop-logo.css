@@ -1,0 +1,66 @@
+.spaceslop-logo {
+  width: fit-content;
+  margin: 0;
+  padding-inline-end: .12em;
+  color: #eef8ff;
+  font: italic 900 var(--logo-size, clamp(2rem, 13vw, 5.2rem))/1 system-ui, sans-serif;
+  letter-spacing: -.065em;
+  text-transform: uppercase;
+}
+.logo-edge-light, .logo-underline { display: none; }
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  .spaceslop-logo {
+    --logo-light-x: clamp(.07em, var(--logo-pointer-x, 50%), calc(100% - .07em));
+    position: relative;
+    background-image: linear-gradient(180deg,
+      #effaff 12%, #347ad4 20%, #54d8ff 35%,
+      #fbfdff 48%, #fbfdff 50%, #1c2a55 51%, #304c99 61%, #913bd1 72%,
+      #f47ae0 80%, #ffe3fc 88%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-stroke: .012em #cbdfff;
+    filter: drop-shadow(0 .018em 0 #9d56a2) drop-shadow(.02em .045em 0 #2d1c53)
+      drop-shadow(0 .045em .09em #252d76);
+  }
+  .logo-edge-light {
+    --edge-light-mask: radial-gradient(ellipse 1.35em 1em at var(--logo-light-x) calc(100% + .11em),
+      #000 12%, #000c 44%, transparent 100%);
+    display: block;
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    -webkit-text-stroke: .03em #fff1ff;
+    -webkit-mask-image: var(--edge-light-mask);
+    mask-image: var(--edge-light-mask);
+  }
+  .logo-edge-light::before { content: attr(data-wordmark); }
+  .logo-underline {
+    display: block;
+    position: absolute;
+    inset: auto 0 -.11em;
+    height: .14em;
+  }
+  .logo-underline::before, .logo-underline::after {
+    content: '';
+    position: absolute;
+  }
+  .logo-underline::before {
+    inset: 0;
+    background:
+      radial-gradient(ellipse .8em .1em at var(--logo-light-x) 50%, #fff, transparent),
+      linear-gradient(100deg, #2355a8, #75d9ff 33%, #9b8af2 55%, #dc71dc 73%, #5d2a8f);
+    clip-path: polygon(0 50%, 50% 32%, 100% 50%, 50% 68%);
+  }
+  .logo-underline::after {
+    inset: 0 auto 0 var(--logo-light-x);
+    width: .14em;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #d7f7ff, #fff 54%, #f3aae9);
+    clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  }
+}
+@media (forced-colors: active) {
+  .spaceslop-logo { background: none; color: CanvasText; -webkit-text-stroke: 0; filter: none; }
+  .logo-edge-light, .logo-underline { display: none; }
+}
