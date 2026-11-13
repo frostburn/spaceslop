@@ -370,6 +370,14 @@ export class Flight {
     this.startWormholeEncounter(wormholeBosses.length - 1);
   }
 
+  static previewEnding() {
+    const flight = new Flight('sentry', ['cannon', 'omega'], 'vex', 'wormhole');
+    flight.startFonsApproach();
+    flight.step(flight.transitionDuration);
+    flight.damageBoss(flight.bossHealth);
+    return flight;
+  }
+
   private startWormholeEncounter(index: number, repair = false) {
     this.wormholeEncounterAt = this.wormholeTime;
     this.wormholeIndex = index;

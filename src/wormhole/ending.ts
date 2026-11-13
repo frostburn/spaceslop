@@ -38,6 +38,7 @@ function createEscapePath() {
 function createStarfield() {
   const geometry = new T.PlaneGeometry(2, 2);
   const material = new T.ShaderMaterial({
+    uniforms: { aperture: { value: new T.Vector2() }, radius: { value: .38 } },
     depthTest: false, depthWrite: false,
     vertexShader: /* glsl */ `
       varying vec2 sky;
@@ -48,9 +49,11 @@ function createStarfield() {
     `,
     fragmentShader: /* glsl */ `
       varying vec2 sky;
+      uniform vec2 aperture;
+      uniform float radius;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-      vec3 stars(float scale) {
-        vec2 p = sky * scale;
+      vec3 stars(vec2 ray, float scale) {
+        vec2 p = ray * scale;
         vec2 cell = floor(p), offset = fract(p) - .5;
         float seed = hash(cell + scale);
         offset -= .68 * vec2(hash(cell + 13.0) - .5, hash(cell - 9.0) - .5);
@@ -64,7 +67,12 @@ function createStarfield() {
         float filaments = .65 + .35 * cos(18.0 * sky.x + 6.0 * sky.y + 2.0 * cos(sky.y * 11.0));
         vec3 color = vec3(.0018,.0025,.008) + vec3(.009,.011,.024) * haze
           + vec3(.044,.011,.061) * band * haze * filaments;
-        color += stars(23.0) * .76 + stars(45.0) * .24;
+        vec2 delta = sky - aperture;
+        float distanceToExit = length(delta) / radius;
+        float bend = exp(-distanceToExit * distanceToExit * 1.5);
+        float turn = .95 * bend;
+        vec2 ray = aperture + mat2(cos(turn), sin(turn), -sin(turn), cos(turn)) * delta * (1.0 + .38 * bend);
+        color += stars(ray, 23.0) * .76 + stars(ray, 45.0) * .24;
         gl_FragColor = vec4(color, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -77,45 +85,64 @@ function createStarfield() {
   return mesh;
 }
 
-function createExitRim() {
-  const mesh = new T.Mesh(new T.PlaneGeometry(2, 2), new T.ShaderMaterial({
+function createExitTrumpet() {
+  const geometry = new T.PlaneGeometry(1, 1, 128, 48);
+  const position = geometry.getAttribute('position');
+  const uv = geometry.getAttribute('uv');
+  for (let i = 0; i < position.count; i++) {
+    const angle = uv.getX(i) * 2 * Math.PI;
+    const depth = uv.getY(i);
+    const radius = .025 + 5.35 * (1 - depth) ** 2.36;
+    const curl = angle + depth * 4.2;
+    const ripple = 1 + .035 * Math.sin(5 * curl) + .024 * Math.cos(8 * curl + 1.7);
+    position.setXYZ(i, radius * ripple * Math.cos(angle) + 1.1 * depth ** 2,
+      .88 * radius * ripple * Math.sin(angle) - .65 * depth ** 2, -9.5 * depth ** 2.7);
+  }
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  const material = new T.ShaderMaterial({
     uniforms: { age: { value: 0 }, energy: { value: 0 } },
-    transparent: true, depthWrite: false,
+    transparent: true, depthWrite: false, side: T.DoubleSide,
     vertexShader: /* glsl */ `
-      varying vec2 disc;
+      varying vec2 funnel;
+      varying vec3 viewNormal, viewRay;
       void main() {
-        disc = position.xy;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        funnel = uv;
+        vec4 point = modelViewMatrix * vec4(position, 1.0);
+        viewNormal = normalMatrix * normal;
+        viewRay = -point.xyz;
+        gl_Position = projectionMatrix * point;
       }
     `,
     fragmentShader: /* glsl */ `
       uniform float age, energy;
-      varying vec2 disc;
+      varying vec2 funnel;
+      varying vec3 viewNormal, viewRay;
       void main() {
-        vec2 p = disc * vec2(1.0, 1.11);
-        float angle = atan(p.y, p.x + .00001);
-        float r = length(p);
-        float twist = angle + age * .77;
-        float rim = .57 + .018 * sin(twist * 7.0) + .017 * sin(twist * 13.0);
-        float edge = r - rim;
-        float strands = .50 + .50 * sin(twist * 8.0 + r * 39.0);
-        float core = exp(-abs(edge) * 113.0);
-        float halo = exp(-abs(edge) * 13.0);
-        float inner = (1.0 - smoothstep(-.14, .01, edge)) * smoothstep(.11, .53, r);
-        vec3 violet = mix(vec3(.12,.43,1.12), vec3(.72,.115,1.16), .5 + .5 * sin(twist * 2.0));
-        float inside = 1.0 - smoothstep(-.05, .012, edge);
-        float folds = .18 + .82 * pow(.50 + .50 * sin(twist * 4.0 + r * 19.0), 3.0);
-        vec3 light = violet * (halo * .36 + inner * (.20 + .49 * folds)) + vec3(1.14,.74,1.21) * core;
-        float alpha = (.32 + .68 * strands) * (core + .5 * halo) * (.72 + energy * .55);
-        gl_FragColor = vec4(light * (1.0 + energy * .54), min(alpha + .81 * inside, .97));
+        float depth = funnel.y;
+        float turn = funnel.x * 6.2831853 + 7.5 * depth - .85 * age;
+        float spiral = .5 + .5 * cos(4.0 * turn + 1.6 * sin(depth * 15.0));
+        float threads = pow(.5 + .5 * sin(13.0 * turn + depth * 29.0), 7.0);
+        float bands = pow(.5 + .5 * cos(56.0 * depth + 2.0 * turn - age * 3.1), 5.0);
+        float wall = smoothstep(.02, .18, depth) * (1.0 - smoothstep(.48, .94, depth));
+        float light = .36 + .64 * abs(dot(normalize(viewNormal), normalize(viewRay)));
+        vec3 cold = mix(vec3(.075,.25,.78), vec3(.51,.085,.76), .5 + .5 * cos(turn + depth * 2.0));
+        vec3 color = vec3(.003,.002,.014) + cold * light * wall *
+          (.24 + .54 * pow(spiral, 3.0) + .19 * bands + .19 * threads);
+        color += vec3(.56,.34,.89) * exp(-abs(depth - .14) * 23.0) * (.1 + .46 * spiral + .22 * threads);
+        color *= 1.0 + .62 * energy;
+        float alpha = smoothstep(0.0, .21, depth) * (1.0 - smoothstep(.68, 1.0, depth));
+        gl_FragColor = vec4(color, alpha);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }
     `,
-  }));
+  });
+  const mesh = new T.Mesh(geometry, material);
   mesh.name = 'wormhole-exterior-exit';
   mesh.position.copy(exit);
-  mesh.scale.set(3.8, 3.8, 1);
+  mesh.rotation.set(-.23, -.46, -.13);
+  mesh.renderOrder = -2;
   return mesh;
 }
 
@@ -198,12 +225,13 @@ export function createWormholeEnding(fighter: T.Group, apertureY: number): Level
 } {
   const exterior = new T.Scene();
   const camera = new T.PerspectiveCamera(39, aspect, .1, 220);
-  const rim = createExitRim();
+  const trumpet = createExitTrumpet();
+  const starfield = createStarfield();
   const lightning = createApertureLightning();
   lightning.root.name = 'wormhole-exit-lightning';
-  lightning.root.position.copy(exit);
-  lightning.root.position.z += .06;
-  lightning.root.scale.setScalar(1.21);
+  lightning.root.position.z = .08;
+  lightning.root.scale.setScalar(1.62);
+  trumpet.add(lightning.root);
   const ship = fighter.clone();
   ship.name = 'wormhole-exit-fighter';
   const burners = shipBurners(ship);
@@ -214,26 +242,30 @@ export function createWormholeEnding(fighter: T.Group, apertureY: number): Level
   key.position.set(-4, 7, 4);
   const back = new T.DirectionalLight(0xff8a71, 3.2);
   back.position.set(6, 2, -6);
-  exterior.add(createStarfield(), rim, lightning.root, trails.root, ship, key, back,
+  exterior.add(starfield, trumpet, trails.root, ship, key, back,
     new T.HemisphereLight(0xc1d8ff, 0x695292, 2.05));
 
   const aim = new T.Vector3();
   const shipForward = new T.Vector3(0, 1, 0);
   const bank = new T.Quaternion(), shipRotation = new T.Quaternion();
-  const angle = new T.Vector3();
+  const angle = new T.Vector3(), projected = new T.Vector3();
   const exitY = apertureY / (HEIGHT / 2) * (exitCameraZ - tunnelExitDepth) * Math.tan(T.MathUtils.degToRad(exitCameraFov / 2));
   function renderExterior(renderer: T.WebGLRenderer, time: number) {
     const age = T.MathUtils.clamp(time, 0, WORMHOLE_ENDING_DURATION - WORMHOLE_EXIT_DURATION);
     const burst = smooth(age, .62, WORMHOLE_EXIT_HOLD + .16) * (1 - smooth(age, 1.35, 2.1));
     const progress = T.MathUtils.clamp((age - WORMHOLE_EXIT_HOLD) / 2.2, 0, 1) ** 1.34;
-    rim.material.uniforms.age.value = age;
-    rim.material.uniforms.energy.value = burst;
+    trumpet.material.uniforms.age.value = age;
+    trumpet.material.uniforms.energy.value = burst;
     lightning.pose(age, burst * .81);
     ship.visible = progress > 0;
     escape(progress, ship.position, ship.quaternion);
     poseBurners(burners, age, .93);
     camera.position.set(1.8 - progress * .70, .85 + progress * .85, 6.7 + progress * 3.2);
     camera.lookAt(.35 + progress * .67, 1.35 - progress * .45, -10);
+    projected.copy(exit).project(camera);
+    const sky = starfield.material.uniforms;
+    sky.aperture.value.set(projected.x * aspect, projected.y);
+    sky.radius.value = 5.35 / ((camera.position.z - exit.z) * Math.tan(T.MathUtils.degToRad(camera.fov / 2)));
     trails.pose(progress, camera);
     renderer.render(exterior, camera);
   }

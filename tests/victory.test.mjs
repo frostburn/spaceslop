@@ -149,6 +149,13 @@ test('the exterior holds on the exit, then follows the fighter and its trails to
     const ship = exterior.getObjectByName('wormhole-exit-fighter');
     const lightning = exterior.getObjectByName('wormhole-exit-lightning');
     const trails = exterior.getObjectByName('wormhole-exit-engine-trails');
+    const trumpet = exterior.getObjectByName('wormhole-exterior-exit');
+    const wall = trumpet.geometry.getAttribute('position');
+    const mouth = new T.Vector3().fromBufferAttribute(wall, wall.count - 1);
+    const throat = new T.Vector3().fromBufferAttribute(wall, 0);
+    assert(Math.hypot(mouth.x, mouth.y) > 4);
+    assert(Math.hypot(throat.x, throat.y) < 2 && throat.z < mouth.z - 8);
+    assert.equal(lightning.parent, trumpet);
     assert(ship.visible && lightning.visible && trails.visible);
     ending.renderExterior(renderer, WORMHOLE_EXIT_HOLD / 2);
     assert(!ship.visible && !lightning.visible && !trails.visible);

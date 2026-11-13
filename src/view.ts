@@ -74,6 +74,8 @@ function trackMotion() {
 }
 export class FlightView {
   private renderer: T.WebGLRenderer;
+  private ownsRenderer: boolean;
+  private previewTime?: number;
   private scene = new T.Scene();
   private plane = new T.Group();
   private ortho = new T.OrthographicCamera(-WIDTH / 2, WIDTH / 2, HEIGHT / 2, -HEIGHT / 2, .1, 240);
@@ -160,8 +162,9 @@ export class FlightView {
   private bossHitAt = -1;
   private rotation = new T.Quaternion();
   private axis = new T.Vector3(1, 0, 0);
-  constructor(canvas: HTMLCanvasElement, readonly levelId: LevelId, createLevel: LevelFactory, signal: AbortSignal, livery?: PilotLivery) {
-    this.renderer = new T.WebGLRenderer({
+  constructor(canvas: HTMLCanvasElement | T.WebGLRenderer, readonly levelId: LevelId, createLevel: LevelFactory, signal: AbortSignal, livery?: PilotLivery) {
+    this.ownsRenderer = !(canvas instanceof T.WebGLRenderer);
+    this.renderer = canvas instanceof T.WebGLRenderer ? canvas : new T.WebGLRenderer({
       canvas,
       antialias: true,
       powerPreference: 'high-performance'
@@ -212,8 +215,8 @@ export class FlightView {
     this.towline.add(this.towlineGlow, this.towlineCore);
     this.playerMuzzle.root.position.set(0, .89, .045);
     this.droneMuzzle.root.position.set(0, .31, .06);
-    this.victoryFlares.root.position.copy(this.playerMuzzle.root.position);
-    this.victoryFlares.root.position.z += .065;
+    if (p.ending) this.victoryFlares.root.position.set(0, .025, .28);
+    else this.victoryFlares.root.position.set(0, .89, .11);
     this.player.root.add(this.playerMuzzle.root, this.victoryFlares.root);
     this.drone.add(this.droneMuzzle.root);
     this.plane.add(p.root, this.player.root, this.drone, this.droneGoal, this.towline, this.cannonMarker, this.pulse, ...this.markers, ...ammo, this.combat.root, ...pods, ...this.wingLasers.map(r => r.root), ...this.drops.map(r => r.root));
@@ -322,8 +325,10 @@ export class FlightView {
     void this.texturesReady.catch(() => undefined).then(() => {
       this.level.dispose?.();
       disposeScene(this.scene);
-      this.renderer.dispose();
-      this.renderer.forceContextLoss();
+      if (this.ownsRenderer) {
+        this.renderer.dispose();
+        this.renderer.forceContextLoss();
+      }
     });
   }
   resize(width: number, height: number) {
@@ -338,7 +343,27 @@ export class FlightView {
   get hasEnding() {
     return this.level.ending !== undefined;
   }
-  render(flight: Flight, elapsed = 0, victoryTime?: number) {
+  async readyForPreview() {
+    await this.texturesReady;
+  }
+  previewVictory(flight: Flight, time: number) {
+    // The tunnel shot still uses the flight's pooled defeat particles.
+    let previous = this.previewTime ?? 0;
+    if (this.previewTime === undefined || time < previous) {
+      this.lastFlight = undefined;
+      this.render(flight, 0, 0, false);
+      previous = 0;
+    }
+    const step = 1 / 60;
+    const defeatEnd = 2;
+    for (let age = previous + step; age < Math.min(time, defeatEnd); age += step) {
+      this.render(flight, step, age, false);
+      previous = age;
+    }
+    this.render(flight, time - previous, time);
+    this.previewTime = time;
+  }
+  render(flight: Flight, elapsed = 0, victoryTime?: number, present = true) {
     if (this.disposed || !this.surfacesReady)
       return;
     if (flight.level !== this.levelId)
@@ -348,7 +373,7 @@ export class FlightView {
     const exitTime = ending && victoryTime !== undefined && victoryTime >= VICTORY_DURATION
       ? victoryTime - VICTORY_DURATION : undefined;
     if (ending && exitTime !== undefined && exitTime >= ending.cutToExterior) {
-      ending.renderExterior(this.renderer, exitTime - ending.cutToExterior);
+      if (present) ending.renderExterior(this.renderer, exitTime - ending.cutToExterior);
       return;
     }
     const formation = victoryTime === undefined ? 0 : victoryFormation(victoryTime);
@@ -424,6 +449,11 @@ export class FlightView {
     if (ending && exitTime !== undefined) {
       ending.poseExit(exitTime, this.player.root, camera);
       this.victoryFacing.copy(this.player.root.quaternion);
+    }
+    if (ending && victoryTime !== undefined) {
+      // Keep the salvo above the cockpit as the fighter and camera bank.
+      this.victoryFlares.root.quaternion.copy(this.plane.quaternion)
+        .multiply(this.player.root.quaternion).invert().multiply(camera.quaternion);
     }
     this.victoryFlares.pose(victoryTime);
     const fighterVelocity = this.fighterMotion(this.player.root.position, elapsed, newFlight);
@@ -513,6 +543,7 @@ export class FlightView {
     this.pulse.position.copy(this.player.root.position);
     this.pulse.scale.setScalar(1 + (0.3 - pulse) * 25);
     this.pulse.material.opacity = pulse / 0.3;
+    if (!present) return;
     this.level.effects?.(this.plane, this.bubbleSources, levelFrame, this.renderer);
     this.level.capture?.(this.renderer, camera);
     if (this.level.present) this.level.present(this.renderer, this.scene, camera);

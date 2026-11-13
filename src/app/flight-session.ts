@@ -9,6 +9,7 @@ import { createFlightView, type FlightView } from '../view';
 import type { WingWeapon } from '../wing';
 import type { FonsVariant } from '../wormhole/fons/variants';
 import { createRankDisplays } from './briefing';
+import { mountEndingCredits } from './ending-credits';
 import { flightReadout } from './flight-hud';
 import { bindFlightInput } from './input';
 
@@ -56,7 +57,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
   const bossHud = element('boss-hud');
   const bossName = element('boss-name');
   const bossHealth = element<HTMLProgressElement>('boss-health');
-  const credits = element('ending-credits');
+  const credits = mountEndingCredits(canvas.parentElement!);
   const creditsWindow = element('ending-credits-window');
   const creditsRoll = element('ending-credits-roll');
   const creditsTitle = element('ending-title');
@@ -331,8 +332,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     preparing?.abort();
     input.reset();
     panel.classList.remove('victory-results');
-    credits.hidden = true;
-    credits.classList.remove('rolling');
+    credits.remove();
     promotionSubtitle.hidden = true;
     observer.disconnect();
     cancelAnimationFrame(animation);
