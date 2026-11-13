@@ -34,12 +34,6 @@ export const wallThemesShader = /* glsl */ `
       * (1.0 - smoothstep(.18, .64, pixel));
   }
 
-  float wireLine(float phase, float width) {
-    float pixel = max(fwidth(phase), .00001);
-    float distance = abs(fract(phase + .5) - .5) / pixel;
-    return (1.0 - smoothstep(width * .4, width, distance)) * (1.0 - smoothstep(.11, .48, pixel));
-  }
-
   vec3 themeWall(int style, vec3 wall, vec3 tone, vec3 accent, float theta, float z, float grain, float fine) {
     float angle = theta / 6.2831853;
     if (style == THEME_BROODLOCK) {
@@ -106,15 +100,7 @@ export const wallThemesShader = /* glsl */ `
       float wake = lobe(z * 4.7 + sin(theta * 4.0) * .93, 7.0);
       return wall * .54 + fine * (tone * (.11 + .27 * wake) + accent * (.48 * flower + .12 * exp(-radius * 18.0)));
     }
-    if (style == THEME_BOULEVARD) {
-      // The hoops, helical rails and diagonals share the same projected cells.
-      float u = angle * 12.0, v = z * 1.25;
-      float rails = wireLine(u, 1.0), hoops = wireLine(v, 1.2);
-      float diagonals = wireLine(u - v, .78);
-      float pulse = lobe(v * 1.15 - travel * .65, 1.6);
-      return wall * .026 + fine * (tone * hoops * (.61 + .39 * pulse)
-        + accent * rails * .65 + mix(tone, accent, .58) * diagonals * .36);
-    }
+    if (style == THEME_BOULEVARD) return wall * .026;
     if (style == THEME_BIOLUME) {
       vec2 p = vec2(angle * 11.0 + .11 * sin(z * .86), z * 1.28);
       float cell = cloudHash(vec2(mod(floor(p.x), 11.0), floor(p.y)));

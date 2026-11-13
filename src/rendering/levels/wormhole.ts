@@ -8,6 +8,7 @@ import { createFonsEnvironment } from '../../wormhole/fons/environment';
 import { createFonsLightning } from '../../wormhole/fons/lightning';
 import { createFonsRig } from '../../wormhole/fons/rig';
 import { createWormholeBosses, type WormholeBoss } from '../../wormhole/bosses';
+import { createCruiserWall } from '../../wormhole/cruiser-wall';
 import { wormholeBosses, wormholeFrame } from '../../wormhole/route';
 import { createWormholeTunnel } from '../../wormhole/tunnel';
 import type { TunnelTheme } from '../../wormhole/wall-themes';
@@ -23,6 +24,7 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
   root.name = 'wormhole';
   const reflection = createWormholeReflection(fighter);
   const tunnel = createWormholeTunnel(apertureY, reflection.texture);
+  const cruiserWall = createCruiserWall(apertureY);
   const attacks = createFonsEffects();
   const environment = createFonsEnvironment(tunnel.root, attacks.rocks);
   attacks.setCrystalEnvironment(environment.crystalTexture);
@@ -38,7 +40,7 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
   const amber = new T.Color(0xff974f), cyan = new T.Color(0x65e5da), violet = new T.Color(0xa563ff);
   const rim = new T.DirectionalLight(amber, .8);
   rim.position.set(-2, 6, -14);
-  root.add(tunnel.root, ...encounters.map(({ entrance }) => entrance), bosses.effects,
+  root.add(tunnel.root, cruiserWall.root, ...encounters.map(({ entrance }) => entrance), bosses.effects,
     fons.root, attacks.root, lightning.root, rim);
   const ready = Promise.all([bosses.ready, loadEncounterTexture('fonsMane', fons.setMane, undefined, signal)])
     .then(([textures, mane]) => [...textures, mane, ...tunnel.textures]);
@@ -62,7 +64,7 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
     skyIntensity: 1.35,
     friendlyGlow: 1.17,
     contacts: [...bosses.contacts, fons.root],
-    warmup: [[tunnel.root], ...bosses.warmup, [fons.root, attacks.root, lightning.root, ...fons.ornaments, ...attacks.royalFlashes]],
+    warmup: [[tunnel.root, cruiserWall.root], ...bosses.warmup, [fons.root, attacks.root, lightning.root, ...fons.ornaments, ...attacks.royalFlashes]],
     prepare() {
       bosses.prepare();
       fons.update(0, BOSS_CAMERA_DISTANCE, true);
@@ -104,6 +106,9 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
         : wormholeBosses[flight.wormholeBossNumber - 2] ?? 'cruise';
       const blend = flight.isFonsFight ? fonsEase(1.1, 4.1, age) : fonsEase(.36, 2.82, age);
       const light = tunnel.setTheme(previous, theme, blend);
+      const tessellation = previous === 'boulevard' ? 1 - blend : theme === 'boulevard' ? blend : 0;
+      cruiserWall.setAmount(tessellation);
+      cruiserWall.pose(frame.travel);
       frame.echo *= T.MathUtils.lerp(titanEcho(previous), titanEcho(theme), blend) * (1 - finale);
       frame.lensStrength += finale * .32 * (1 - fonsEase(-1.2, .8, fonsTime));
       const incomingPortal = theme === 'heliostat' ? fonsEase(.76, 2.88, age) : 0;
@@ -111,7 +116,7 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
       const portalOpening = incomingPortal + outgoingPortal;
       mirror = fighter.visible ? wormholeReflectionPose(fighter.position.x, fighter.position.y, apertureY * halfHeight) : undefined;
       tunnel.pose(frame, mirror);
-      tunnel.setRegulatorPortals(portalOpening);
+      tunnel.setRegulatorPortals(time, portalOpening);
       fons.root.visible = flight.isFonsFight && fonsTime >= -FONS_APPROACH + .61 && (flight.bossHealth > 0 || victory !== undefined);
       attacks.root.visible = flight.isFonsFight && fonsTime >= -1.7 && flight.bossHealth > 0;
       if (fons.root.visible) {

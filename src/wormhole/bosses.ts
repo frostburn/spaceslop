@@ -216,11 +216,11 @@ export function createWormholeBosses(plane: T.Group, signal: AbortSignal) {
       heliostatArt.heliostatMetal = metal;
       heliostatMaterials.setArt(heliostatArt, true);
     },
-    updateEffects({ flight, animationTime, distance }: LevelFrame, portalFeed: number) {
+    updateEffects({ flight, time, animationTime, distance }: LevelFrame, portalFeed: number) {
       const battle = flight.phase === 'boss' || flight.phase === 'lost';
       plasma.update(flight.heliostatAttackTime, animationTime, flight.heliostatTargets, battle && flight.encounterLevel === 'heliostat', flight.heliostatPattern);
       if (portalFeed > .002)
-        portalFeeds.update(animationTime, distance, portalFeed, flight.cannonWindup, regulatorState(flight));
+        portalFeeds.update(time, distance, portalFeed, flight.cannonWindup, regulatorState(flight));
       else portalFeeds.root.visible = false;
       groundskeeperEffects.root.visible = battle && flight.encounterLevel === 'preserve';
       if (groundskeeperEffects.root.visible)

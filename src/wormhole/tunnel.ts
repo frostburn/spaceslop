@@ -34,10 +34,7 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
     themeIds: { value: new T.Vector2() },
     themeMix: { value: 0 },
     wallPalette: { value: palettes.cruise.map(color => color.clone()) },
-    regulatorPortals: { value: ([-1, 1] as const).map(side => {
-      const { x, y, roll } = regulatorPortal(side);
-      return new T.Vector4(x, y, 0, roll);
-    }) },
+    regulatorPortals: { value: [new T.Vector4(), new T.Vector4()] },
   };
   const material = new T.ShaderMaterial({
     uniforms,
@@ -263,7 +260,8 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
         float bloom = exp(-rim * 78.0);
         float scatter = exp(-rim * 23.0);
         vec3 lensColor = mix(accent, vec3(1.0, .51, .21), echo);
-        color += lensColor * lensStrength * ringShape * (coreLight * 1.9 + (.63 * bloom + .17 * scatter) * (1.0 - wire * .70));
+        color += lensColor * lensStrength * ringShape * (coreLight * 1.9 + .63 * bloom + .17 * scatter)
+          * (1.0 - wire * .79);
         color += lensColor * .15 * echo * lensStrength * (1.0 - smoothstep(0.0, lensRadius, lensDistance));
         float shock = exp(-abs(lensDistance - waveRadius) * 36.0);
         color += lensColor * shock * distanceFade * waveStrength * (.13 + .63 * folded);
@@ -294,8 +292,11 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
         color.copy(palettes[from][index]).lerp(palettes[to][index], amount);
       return uniforms.wallPalette.value[2];
     },
-    setRegulatorPortals(opening: number) {
-      for (const portal of uniforms.regulatorPortals.value) portal.z = opening;
+    setRegulatorPortals(time: number, opening: number) {
+      for (const [index, portal] of uniforms.regulatorPortals.value.entries()) {
+        const { x, y, roll } = regulatorPortal(index === 0 ? -1 : 1, time);
+        portal.set(x, y, opening, roll);
+      }
     },
     pose(frame: ReturnType<typeof wormholeFrame>, mirror: WormholeReflectionPose) {
       uniforms.travel.value = frame.travel;

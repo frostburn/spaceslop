@@ -42,15 +42,15 @@ test('the far-wall feeds stay registered to the portal and its matching moving i
   try {
     feeds.update(0, BOSS_CAMERA_DISTANCE, 0, 0, state);
     assert(!feeds.root.visible);
-    for (const depth of [-124, -12]) {
+    for (const [time, depth] of [[0, -124], [2.4, -12], [7.1, -13]]) {
       regulator.position.z = depth;
-      feeds.update(2.4, BOSS_CAMERA_DISTANCE, 1, 0, state);
+      feeds.update(time, BOSS_CAMERA_DISTANCE, 1, 0, state);
       assert(feeds.root.visible);
       for (const [index, side] of sides.entries()) {
         const uniforms = feeds.root.children[index].children[0].material.uniforms;
         const source = uniforms.a.value, end = uniforms.d.value;
         const projection = BOSS_CAMERA_DISTANCE / (BOSS_CAMERA_DISTANCE - source.z);
-        const portal = regulatorPortal(side);
+        const portal = regulatorPortal(side, time);
         assert(source.z < end.z);
         assert(Math.abs(source.x * projection / (HEIGHT / 2) - portal.x) < 1e-9);
         assert(Math.abs(source.y * projection / (HEIGHT / 2) - portal.y) < 1e-9);
@@ -61,6 +61,19 @@ test('the far-wall feeds stay registered to the portal and its matching moving i
     resources.geometry.dispose();
     feeds.root.traverse(object => object.material?.dispose());
   }
+});
+
+test('the two portals drift independently within their sides of the far wall', () => {
+  for (const side of [-1, 1]) {
+    const path = Array.from({ length: 960 }, (_, i) => regulatorPortal(side, i * STEP));
+    const ys = path.map(portal => portal.y);
+    const xs = path.map(portal => portal.x);
+    assert(path.every(({ x, y }) => x * side > .12 && Math.abs(x) < .47 && y > .51 && y < .83));
+    assert(Math.max(...ys) - Math.min(...ys) > .15);
+    assert(Math.max(...xs) - Math.min(...xs) > .18);
+  }
+  const left = regulatorPortal(-1, 2.4), right = regulatorPortal(1, 2.4);
+  assert(Math.abs(left.y - right.y) > .025);
 });
 
 test('the royal backdrops follow their variant and Invictus cycles smoothly on the encounter clock', () => {
