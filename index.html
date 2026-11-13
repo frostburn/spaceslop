@@ -19,6 +19,8 @@
           <div class="menu-modes" role="group" aria-label="Flight mode">
             <button id="campaign-mode" type="button" aria-pressed="true">Campaign</button>
             <button id="free-flight-mode" type="button" aria-pressed="false">Free Flight</button>
+            <button id="bullet-hell-mode" type="button" aria-pressed="false" hidden>Bullet Hell</button>
+            <button id="hardcore-mode" type="button" aria-pressed="false" hidden>Bullet Hell Hardcore</button>
           </div>
           <div class="mission-action">
             <p id="menu-status" role="status"></p>
@@ -26,7 +28,21 @@
           </div>
         </div>
         <div id="level-cards" class="level-cards" role="group" aria-label="Select a mission"></div>
-        <div class="menu-actions"><details class="offline-settings"><summary>Offline storage</summary><p>Prepared levels are saved on this device. Clearing them keeps your campaign progress and pilot choice.</p><button id="clear-offline" type="button">Clear saved levels</button></details><button id="menu-update" type="button" hidden>Apply update</button></div>
+        <div class="menu-actions">
+          <details class="menu-settings">
+            <summary>Settings</summary>
+            <form class="challenge-form">
+              <label for="challenge-code">Mode unlock code</label>
+              <div>
+                <input id="challenge-code" type="text" autocomplete="off" spellcheck="false" required>
+                <button type="submit">Unlock</button>
+              </div>
+              <p id="challenge-status" role="status"></p>
+            </form>
+          </details>
+          <details class="menu-settings"><summary>Offline storage</summary><p>Prepared levels are saved on this device. Clearing them keeps your campaign progress and pilot choice.</p><button id="clear-offline" type="button">Clear saved levels</button></details>
+          <button id="menu-update" type="button" hidden>Apply update</button>
+        </div>
         <noscript>Enable JavaScript to launch Spaceslop.</noscript>
       </div>
       <section id="menu-briefing" aria-labelledby="brief-title" hidden>
@@ -45,6 +61,7 @@
             <div class="brief-objective">
               <h2>Objective</h2>
               <p></p>
+              <p id="brief-challenge" hidden></p>
             </div>
           </div>
           <div class="brief-loadout">
@@ -77,7 +94,7 @@
       <div class="console">
         <header class="hud" aria-label="Flight status">
           <div><span id="sector">SECTOR 01</span><strong id="score">000000</strong></div>
-          <div><span>HULL</span><strong id="hull">04</strong></div>
+          <div id="hull-readout"><span>HULL</span><strong id="hull">04</strong></div>
           <span id="pilot-rank-hud" class="rank-badge"></span>
           <button id="menu-button" type="button">Menu</button>
           <button id="pause" type="button" hidden>Pause</button>

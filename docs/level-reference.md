@@ -137,6 +137,8 @@ Stems and caps obstruct the fighter, drone, and wing pods. Contact slides craft 
 
 Ants look ahead along their path and steer into clear lanes before reaching a fruiting body. They bank gently during detours and ease back toward their original lane afterward. Collision clearance also keeps their bodies and legs out of stems and caps. Their avoidance is identical with art and placeholders.
 
+Bullet Hell and Hardcore use the same hive route with ten faster formations. Workers lock aim before firing three spores and soldiers fan out five. Staggered arrivals leave time to change lanes and reward formation clears with repeat Cannon drops for both wing upgrades, Towline, and surplus pickups. The Brood Guardian alternates aimed and split fans and follows each with a second, faster fan from the same cannon.
+
 ## The Greenhouse Ark
 
 **Orbital preserve** (`?level=preserve`) is a 100-second, approximately ten-screen route through a long orbital greenhouse, followed by a six-second observation-rotunda approach and **The Groundskeeper**. Four-winged Microraptor flocks and larger feathered raptor patrols cover the route, with repeated opportunities for all four wing weapons and quiet intervals at habitat changes. The last patrol arrives seven seconds before the approach. The existing raptor folds its wings before diving; the renderer has three prewarmed rigs so overlapping patrols retain their own pose and contact mapping.

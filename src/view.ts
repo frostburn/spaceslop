@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { poseBurners, shipBurners } from './burners';
 import { addTowlineEmitters, createDroneRig, createFighterRig } from './ship-rigs';
+import type { FlightMode } from './campaign/challenges';
 import { BOSS_MUZZLE_Z } from './encounters';
 import { BOSS_CAMERA_DISTANCE, BOSS_CANNON_RADIUS, BOSS_PROJECTION, BOSS_DEPTH, Flight, HEIGHT, WIDTH } from './game';
 import { WING_FLASH_TIME, WING_FORMATION, wingWeapons, type WingWeapon } from './wing';
@@ -20,10 +21,10 @@ import { tiltFlightCamera } from './rendering/flight-camera';
 import { boostFriendlyGlow } from './rendering/friendly-glow';
 import { disposeScene } from './rendering/dispose';
 import { addVictoryWingShots, createBossDefeat, createVictoryFlares, SALUTE_ANGLE, SALUTE_START, VICTORY_DURATION, victoryFormation, victoryLaserLength } from './rendering/victory';
-export async function createFlightView(canvas: HTMLCanvasElement, level: LevelId, signal = new AbortController().signal, pilot?: PilotId) {
+export async function createFlightView(canvas: HTMLCanvasElement, level: LevelId, signal = new AbortController().signal, pilot?: PilotId, mode: FlightMode = 'regular') {
   const { createLevel } = await levelLoaders[level]();
   signal.throwIfAborted();
-  return new FlightView(canvas, level, createLevel, signal, pilots.find(entry => entry.id === pilot)?.livery);
+  return new FlightView(canvas, level, createLevel, signal, pilots.find(entry => entry.id === pilot)?.livery, mode);
 }
 
 function nextWarmupFrame(signal: AbortSignal) {
@@ -46,6 +47,10 @@ const teal = 0x88f2ff;
 const orange = 0xff885d;
 const mint = 0xa1ffc5;
 const victoryShipY = -2.25;
+const challengeExhaust = {
+  'bullet-hell': { core: 0xffc17a, flame: 0xff7a21 },
+  hardcore: { core: 0xff9380, flame: 0xff2d1f },
+};
 function planarProjectileLayer({x, y}: { x: number; y: number }, z: number) {
   const scale = (BOSS_CAMERA_DISTANCE - z) / BOSS_CAMERA_DISTANCE;
   return { x: x * scale, y: y * scale, z };
@@ -162,7 +167,7 @@ export class FlightView {
   private bossHitAt = -1;
   private rotation = new T.Quaternion();
   private axis = new T.Vector3(1, 0, 0);
-  constructor(canvas: HTMLCanvasElement | T.WebGLRenderer, readonly levelId: LevelId, createLevel: LevelFactory, signal: AbortSignal, livery?: PilotLivery) {
+  constructor(canvas: HTMLCanvasElement | T.WebGLRenderer, readonly levelId: LevelId, createLevel: LevelFactory, signal: AbortSignal, livery?: PilotLivery, mode: FlightMode = 'regular') {
     this.ownsRenderer = !(canvas instanceof T.WebGLRenderer);
     this.renderer = canvas instanceof T.WebGLRenderer ? canvas : new T.WebGLRenderer({
       canvas,
@@ -171,7 +176,7 @@ export class FlightView {
     });
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = T.PCFShadowMap;
-    this.player = createFighterRig(livery);
+    this.player = createFighterRig(livery, mode === 'regular' ? undefined : challengeExhaust[mode]);
     this.playerBurners = shipBurners(this.player.root);
     this.drone = createDroneRig(livery);
     this.droneBurners = shipBurners(this.drone);

@@ -53,13 +53,15 @@ export function showSelectedPilot(id: PilotId, slot: HTMLElement, name: HTMLElem
   name.textContent = pilot.name;
 }
 
-export function setupPilotPicker(choices: HTMLElement, perkDescription: HTMLElement, signal: AbortSignal) {
+export function setupPilotPicker(choices: HTMLElement, perkDescription: HTMLElement, signal: AbortSignal, hardcore = false) {
   choices.replaceChildren();
 
   let selected = savedPilot();
   function showPilot(pilot: Pilot) {
     selected = pilot;
-    perkDescription.textContent = `${pilot.perk} · ${pilot.description}`;
+    const description = hardcore && pilot.id === 'brass'
+      ? 'Each surplus weapon pickup clears hostile bullets on screen.' : pilot.description;
+    perkDescription.textContent = `${pilot.perk} · ${description}`;
   }
   showPilot(selected);
 

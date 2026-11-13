@@ -21,10 +21,10 @@ type NavigatingAnt = { x: number; y: number; lane: number; age: number; ant?: An
 const probe = { x: 0, y: 0 };
 const clamp = (x: number, low: number, high: number) => Math.max(low, Math.min(high, x));
 
-export function steerHiveAnt(ant: NavigatingAnt, scenery: HiveCollision, duration: number, dt: number) {
-  const kind = ant.ant ?? 'worker', speed = antSpeeds[kind];
-  const lateralSpeed = kind === 'soldier' ? 2.3 : 2.7;
-  const preferred = ant.lane + Math.sin(ant.age * 1.55) * 0.46;
+export function steerHiveAnt(ant: NavigatingAnt, scenery: HiveCollision, duration: number, dt: number, pace = 1) {
+  const kind = ant.ant ?? 'worker', speed = antSpeeds[kind] * pace;
+  const lateralSpeed = (kind === 'soldier' ? 2.3 : 2.7) * pace;
+  const preferred = ant.lane + Math.sin(ant.age * pace * 1.55) * 0.46;
   if (ant.course === undefined || ant.age >= (ant.courseAt ?? 0)) {
     const lookahead = 1.25;
     const scrollSpeed = HEIGHT * (HIVE_SCREENS - 1) / duration;

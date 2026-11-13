@@ -6,6 +6,8 @@ Tap or click the playfield to send the drone to that point. It parks and fires a
 
 Boss tips in the HUD identify the current target and attack cues. Line up the ship or park the drone on a marked weak point, and move clear of amber aim warnings after they lock.
 
+Completing the regular campaign unlocks **Bullet Hell**, which opens with a denser Broodlock Quarantine and a faster fighter with orange exhaust. Clear Bullet Hell Broodlock to unlock **Bullet Hell Hardcore** while Broodlock is the sole challenge mission. Hardcore uses red exhaust. The first hit ends the run and resets Hardcore progress. Each surplus weapon pickup with Brass clears the hostile bullets on screen. Both modes also accept their names as case-insensitive unlock codes under **Settings**.
+
 In Vite dev mode, expand **Dev launch shortcuts** to skip to the selected mission’s boss approach, first Wormhole supply drop or another encounter offered in its briefing. Expand **Test loadout** to pre-equip a wing weapon or start with Towline. The test loadout is also available with `?testLoadout=1`.
 
 The drone starts with **Sentry** fire. **Towline** adds a pulsing arc between the ship and the parked drone. Drag the ship to sweep the arc through enemies or across a boss weak point. Each pulse deals 3 damage per target during a 0.3-second window.

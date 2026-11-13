@@ -104,6 +104,8 @@ const towlineTips: Partial<Record<LevelId, string>> = {
 function bossTip(flight: Flight) {
   const towline = flight.droneWeapon === 'towline';
   const encounter = flight.encounterLevel;
+  if (flight.isBroodlockChallenge) return towline ? 'Sweep the arc across the green cannon. Dodge the follow-up fan.'
+    : 'Tap the green cannon. Dodge both spore fans.';
   if (flight.isFonsFight) {
     const storm = fonsPhase(flight.fonsTime);
     if (storm.rain || storm.warning > 0) return 'Stay in the wake of a falling crystal';

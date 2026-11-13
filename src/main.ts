@@ -2,6 +2,8 @@ import { registerSW } from 'virtual:pwa-register';
 import { setupBriefing } from './app/briefing';
 import type { FlightLoadout, FlightShortcut } from './app/flight-session';
 import { saveLevelOffline, savedLevels, clearSavedLevels } from './app/offline';
+import { CHALLENGE_LEVEL, CHALLENGE_SAVE_KEY, challengeAvailable, challengeModes, challengeNames, decodeChallengeProgress,
+  readChallengeCode, recordChallengeClear, resetHardcoreProgress, unlockChallenge } from './campaign/challenges';
 import { campaign } from './campaign/missions';
 import { CAMPAIGN_SAVE_KEY, campaignStatus, decodeCampaignClears, recordCampaignClear } from './campaign/progress';
 import { ranks } from './campaign/ranks';
@@ -24,15 +26,25 @@ const cards = document.querySelector<HTMLElement>('#level-cards')!;
 const prepare = document.querySelector<HTMLButtonElement>('#prepare-flight')!;
 const status = document.querySelector<HTMLElement>('#menu-status')!;
 const update = document.querySelector<HTMLButtonElement>('#menu-update')!;
-const campaignMode = document.querySelector<HTMLButtonElement>('#campaign-mode')!;
-const freeFlightMode = document.querySelector<HTMLButtonElement>('#free-flight-mode')!;
+const modeButtons = {
+  campaign: document.querySelector<HTMLButtonElement>('#campaign-mode')!,
+  'free-flight': document.querySelector<HTMLButtonElement>('#free-flight-mode')!,
+  'bullet-hell': document.querySelector<HTMLButtonElement>('#bullet-hell-mode')!,
+  hardcore: document.querySelector<HTMLButtonElement>('#hardcore-mode')!,
+};
+type MenuMode = keyof typeof modeButtons;
 const droneWeapon = document.querySelector<HTMLSelectElement>('#drone-weapon')!;
 const wingSelectors = ['#left-wing', '#right-wing'].map(selector => document.querySelector<HTMLSelectElement>(selector)!);
 const query = new URLSearchParams(location.search);
 const testingLoadout = import.meta.env.DEV || query.get('testLoadout') === '1';
-let inCampaign = query.get('mode') === 'campaign' || (query.get('mode') !== 'free-flight' && !query.has('level'));
 let cleared = savedCampaign();
-let selected = inCampaign ? campaignSelection() : readLevel(query.get('level'));
+let challengeProgress = decodeChallengeProgress(null);
+let savedChallengeData: string | null = null;
+refreshChallenges();
+const requestedMode = query.get('mode');
+const requestedChallenge = challengeModes.find(mode => requestedMode === mode && challengeAvailable(challengeProgress, mode, cleared));
+let mode: MenuMode = requestedChallenge ?? (requestedMode === 'campaign' || (requestedMode !== 'free-flight' && !query.has('level')) ? 'campaign' : 'free-flight');
+let selected = requestedChallenge ? CHALLENGE_LEVEL : mode === 'campaign' ? campaignSelection() : readLevel(query.get('level'));
 let saved = new Set<LevelId>();
 let session: AbortController | undefined;
 let briefController: AbortController | undefined;
@@ -83,6 +95,25 @@ function savedCampaign() {
   catch { return new Set<LevelId>(); }
 }
 
+function refreshChallenges() {
+  try {
+    const value = localStorage.getItem(CHALLENGE_SAVE_KEY);
+    if (value !== savedChallengeData) {
+      challengeProgress = decodeChallengeProgress(value);
+      savedChallengeData = value;
+    }
+  } catch { /* Keep the progress available in this tab. */ }
+}
+
+function saveChallenges() {
+  const value = JSON.stringify(challengeProgress);
+  try {
+    localStorage.setItem(CHALLENGE_SAVE_KEY, value);
+    savedChallengeData = value;
+  }
+  catch { /* Progress remains available in this tab. */ }
+}
+
 function campaignSelection() {
   return campaignStatus(cleared).next ?? campaign.at(-1)!.level;
 }
@@ -102,14 +133,19 @@ const levelCards = campaign.map(({ level: id }, index) => {
 
 function updateCards() {
   const { next } = campaignStatus(cleared);
+  const inCampaign = mode === 'campaign';
+  const challenge = mode === 'bullet-hell' || mode === 'hardcore' ? mode : undefined;
+  for (const name of challengeModes) modeButtons[name].hidden = !challengeAvailable(challengeProgress, name, cleared);
   for (const card of levelCards) {
     const { id, button, title, detail } = card;
     const complete = cleared.has(id);
+    button.hidden = challenge !== undefined && id !== CHALLENGE_LEVEL;
     button.disabled = inCampaign && !complete && id !== next;
     button.setAttribute('aria-pressed', String(id === selected));
     button.classList.toggle('saved-offline', saved.has(id));
     title.textContent = inCampaign ? `${card.number} · ${levels[id].name}` : levels[id].name;
-    const note = inCampaign ? (complete ? 'Cleared' : id === next ? 'Ready' : 'Locked')
+    const note = challenge ? (challengeProgress.cleared[challenge].includes(id) ? 'Cleared' : 'Ready')
+      : inCampaign ? (complete ? 'Cleared' : id === next ? 'Ready' : 'Locked')
       : id === 'wormhole' ? 'Boss rush' : `${levels[id].duration} second route`;
     detail.textContent = saved.has(id) ? `${note} · Saved offline` : note;
   }
@@ -118,20 +154,21 @@ function updateCards() {
 function showMenuStatus() {
   const { rank, next } = campaignStatus(cleared);
   const progress = next ? `${cleared.size}/${campaign.length} cleared` : 'Campaign complete';
-  status.textContent = inCampaign ? `Return to Sender · ${ranks[rank].name} · ${progress}` : levels[selected].name;
+  status.textContent = mode === 'campaign' ? `Return to Sender · ${ranks[rank].name} · ${progress}`
+    : mode === 'free-flight' ? levels[selected].name
+    : mode === 'hardcore' ? `${challengeNames[mode]} · One hit ends the run` : challengeNames[mode];
 }
 
 function select(id: LevelId) {
   selected = id;
-  campaignMode.setAttribute('aria-pressed', String(inCampaign));
-  freeFlightMode.setAttribute('aria-pressed', String(!inCampaign));
+  for (const [name, button] of Object.entries(modeButtons)) button.setAttribute('aria-pressed', String(name === mode));
   const url = new URL(location.href);
-  if (inCampaign) {
-    url.searchParams.set('mode', 'campaign');
-    url.searchParams.delete('level');
-  } else {
+  if (mode === 'free-flight') {
     url.searchParams.delete('mode');
     url.searchParams.set('level', id);
+  } else {
+    url.searchParams.set('mode', mode);
+    url.searchParams.delete('level');
   }
   history.replaceState(null, '', url);
   updateCards();
@@ -143,15 +180,38 @@ async function refreshSavedLevels() {
   updateCards();
 }
 
-campaignMode.addEventListener('click', () => {
-  if (inCampaign) return;
-  inCampaign = true;
+modeButtons.campaign.addEventListener('click', () => {
+  if (mode === 'campaign') return;
+  mode = 'campaign';
   select(campaignSelection());
 });
-freeFlightMode.addEventListener('click', () => {
-  if (!inCampaign) return;
-  inCampaign = false;
+modeButtons['free-flight'].addEventListener('click', () => {
+  if (mode === 'free-flight') return;
+  mode = 'free-flight';
   select(selected);
+});
+for (const challenge of challengeModes) modeButtons[challenge].addEventListener('click', () => {
+  if (!challengeAvailable(challengeProgress, challenge, cleared) || mode === challenge) return;
+  mode = challenge;
+  select(CHALLENGE_LEVEL);
+});
+const challengeCode = document.querySelector<HTMLInputElement>('#challenge-code')!;
+const challengeStatus = document.querySelector<HTMLElement>('#challenge-status')!;
+challengeCode.form!.addEventListener('submit', event => {
+  event.preventDefault();
+  const challenge = readChallengeCode(challengeCode.value);
+  if (!challenge) {
+    challengeStatus.textContent = 'Code not recognized.';
+    return;
+  }
+  refreshChallenges();
+  if (!challengeAvailable(challengeProgress, challenge, cleared)) {
+    unlockChallenge(challengeProgress, challenge);
+    saveChallenges();
+  }
+  challengeCode.value = '';
+  challengeStatus.textContent = `${challengeNames[challenge]} unlocked.`;
+  updateCards();
 });
 select(selected);
 void refreshSavedLevels();
@@ -171,7 +231,11 @@ function openBriefing() {
   const { signal } = briefController;
   briefTitle.textContent = levels[selected].name;
   setupBriefing(selected, briefing, signal);
-  pilotPicker = setupPilotPicker(document.querySelector('#pilot-choices')!, document.querySelector('#pilot-perk-description')!, signal);
+  const challengeRules = document.querySelector<HTMLElement>('#brief-challenge')!;
+  challengeRules.hidden = mode === 'campaign' || mode === 'free-flight';
+  challengeRules.textContent = mode === 'hardcore' ? `${challengeNames.hardcore} · One hit ends the run and resets Hardcore progress.`
+    : `${challengeNames['bullet-hell']} · Faster ship, denser spore patterns.`;
+  pilotPicker = setupPilotPicker(document.querySelector('#pilot-choices')!, document.querySelector('#pilot-perk-description')!, signal, mode === 'hardcore');
   if (import.meta.env.DEV) updateShortcuts(selected);
   missionList.hidden = true;
   briefing.hidden = false;
@@ -215,11 +279,13 @@ function completeMission(id: LevelId) {
 async function launchFlight(shortcut?: FlightShortcut) {
   if (session || !pilotPicker) return;
   const id = selected;
-  const campaignFlight = inCampaign;
+  const campaignFlight = mode === 'campaign';
+  const flightMode = mode === 'bullet-hell' || mode === 'hardcore' ? mode : 'regular';
   const loadout: FlightLoadout = {
     pilot: pilotPicker.selectedId,
     drone: testingLoadout && droneWeapon.value === 'towline' ? 'towline' : 'sentry',
     wings: testingLoadout ? wingSelectors.map(select => readWingWeapon(select.value)) : [],
+    mode: flightMode,
   };
   const controller = new AbortController();
   session = controller;
@@ -233,6 +299,7 @@ async function launchFlight(shortcut?: FlightShortcut) {
   document.querySelector<HTMLButtonElement>('#pause')!.hidden = true;
   document.querySelector<HTMLButtonElement>('#pulse')!.disabled = true;
   document.querySelector<HTMLElement>('#boss-hud')!.hidden = true;
+  document.querySelector<HTMLElement>('#hull-readout')!.hidden = flightMode === 'hardcore';
   const flightStatus = document.querySelector<HTMLElement>('#status')!;
   flightStatus.classList.add('preparing-graphics');
   flightStatus.textContent = 'Preparing graphics…';
@@ -250,6 +317,21 @@ async function launchFlight(shortcut?: FlightShortcut) {
         returnToMenu();
         select(next);
         openBriefing();
+      },
+    } : undefined, flightMode !== 'regular' ? {
+      onClear() {
+        refreshChallenges();
+        const unlockedHardcore = recordChallengeClear(challengeProgress, flightMode);
+        saveChallenges();
+        updateCards();
+        return unlockedHardcore;
+      },
+      onLoss() {
+        if (flightMode !== 'hardcore') return;
+        refreshChallenges();
+        resetHardcoreProgress(challengeProgress);
+        saveChallenges();
+        updateCards();
       },
     } : undefined);
     if (handle && !controller.signal.aborted)

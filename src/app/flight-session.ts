@@ -1,4 +1,5 @@
 import { missionFor } from '../campaign/missions';
+import { challengeNames, type FlightMode } from '../campaign/challenges';
 import { ranks, type Rank } from '../campaign/ranks';
 import { FLEET_TRENCH_AT } from '../fleet/route';
 import { Flight, STEP, type DroneWeapon } from '../game';
@@ -13,7 +14,7 @@ import { mountEndingCredits } from './ending-credits';
 import { flightReadout } from './flight-hud';
 import { bindFlightInput } from './input';
 
-export type FlightLoadout = { pilot: PilotId; drone: DroneWeapon; wings: (WingWeapon | undefined)[] };
+export type FlightLoadout = { pilot: PilotId; drone: DroneWeapon; wings: (WingWeapon | undefined)[]; mode: FlightMode };
 export type FlightShortcut = 'boss' | 'trench' | FonsVariant;
 
 type CampaignRun = {
@@ -21,7 +22,9 @@ type CampaignRun = {
   onNext(level: LevelId): void;
 };
 
-export async function openFlightSession(selectedLevel: LevelId, loadout: FlightLoadout, signal: AbortSignal, shortcut?: FlightShortcut, campaignRun?: CampaignRun) {
+type ChallengeRun = { onClear(): boolean; onLoss(): void };
+
+export async function openFlightSession(selectedLevel: LevelId, loadout: FlightLoadout, signal: AbortSignal, shortcut?: FlightShortcut, campaignRun?: CampaignRun, challengeRun?: ChallengeRun) {
   function element<T extends HTMLElement>(id: string) {
     const node = document.getElementById(id);
     if (!node)
@@ -46,7 +49,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
   setPilotRank(mission.pilotRank);
   const start = element<HTMLButtonElement>('start');
   const nextMission = element<HTMLButtonElement>('next-mission');
-  element('return-menu').textContent = campaignRun ? 'Mission list' : 'Choose another sector';
+  element('return-menu').textContent = campaignRun || challengeRun ? 'Mission list' : 'Choose another sector';
   const pause = element<HTMLButtonElement>('pause');
   const pulse = element<HTMLButtonElement>('pulse');
   const status = element('status');
@@ -70,12 +73,15 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
   showSelectedPilot(loadout.pilot, selectedPortrait, element('selected-pilot'), signal);
   type Screen = 'loading' | 'active' | 'paused' | 'credits' | 'results';
   let screen: Screen = 'loading';
-  let flight = new Flight(loadout.drone, loadout.wings, loadout.pilot, selectedLevel);
+  const { mode } = loadout;
+  const createFlight = () => new Flight(loadout.drone, loadout.wings, loadout.pilot, selectedLevel, undefined, mode);
+  let flight = createFlight();
   let nextLevel: LevelId | undefined;
   let promotion: Rank | undefined;
   let unlockedBulletHell = false;
+  let unlockedHardcore = false;
   let victoryTime: number | undefined;
-  const progressOnClear = !shortcut;
+  const recordProgress = !shortcut;
   let offlineReady = false;
   let view: FlightView | undefined;
   let preparing: AbortController | undefined;
@@ -151,12 +157,13 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     if (flight.phase !== 'won' || victoryTime !== undefined) return;
     victoryTime = 0;
     input.reset();
-    if (progressOnClear && campaignRun) {
+    if (recordProgress && campaignRun) {
       const result = campaignRun.onClear();
       nextLevel = result.next;
       promotion = result.promoted;
       unlockedBulletHell = result.unlockedBulletHell;
     }
+    if (recordProgress && challengeRun) unlockedHardcore = challengeRun.onClear();
     if (view?.hasEnding && reduceMotion.matches) {
       victoryTime = view.victoryDuration;
     }
@@ -169,9 +176,15 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     input.reset();
     heading.textContent = flight.phase === 'won' ? 'Mission Complete' : 'Ship lost';
     const report = [levels[selectedLevel].name, `Score ${flight.score}`];
-    if (flight.phase === 'won' && progressOnClear && campaignRun) {
+    if (mode !== 'regular') report.splice(1, 0, challengeNames[mode]);
+    if (flight.phase === 'won' && recordProgress && campaignRun) {
       if (promotion) setPilotRank(promotion);
       if (!nextLevel) report.push('Campaign complete');
+    }
+    if (unlockedHardcore) report.push('Bullet Hell Hardcore unlocked');
+    if (flight.phase === 'lost' && recordProgress && challengeRun) {
+      challengeRun.onLoss();
+      if (mode === 'hardcore') report.push('Hardcore progress reset');
     }
     nextMission.textContent = nextLevel ? `Next briefing · ${levels[nextLevel].name}` : 'Next briefing';
     promotionSubtitle.textContent = promotion ? `Promoted to ${ranks[promotion].name}` : '';
@@ -221,10 +234,11 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     if (!view || signal.aborted || start.disabled || screen === 'active' || screen === 'credits')
       return;
     if (screen !== 'paused') {
-      if (screen === 'results') flight = new Flight(loadout.drone, loadout.wings, loadout.pilot, selectedLevel);
+      if (screen === 'results') flight = createFlight();
       nextLevel = undefined;
       promotion = undefined;
       unlockedBulletHell = false;
+      unlockedHardcore = false;
       victoryTime = undefined;
       setPilotRank(mission.pilotRank);
       if (import.meta.env.DEV && shortcut) {
@@ -343,7 +357,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     start.disabled = true;
     panel.scrollTop = 0;
     syncUI();
-    view = await createFlightView(canvas, selectedLevel, signal, loadout.pilot);
+    view = await createFlightView(canvas, selectedLevel, signal, loadout.pilot, mode);
     if (signal.aborted) {
       view.dispose();
       return;
