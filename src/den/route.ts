@@ -17,8 +17,7 @@ export function denScroll(time: number) {
   return DEN_SCREENS - 1 + u * (tangent + u * (3 - 2 * tangent + u * (tangent - 2)));
 }
 
-const sectionNames = ['Outer Docks', 'Workshops', 'Rookery', 'Bastion', 'Gantry Approach'];
-export function denSectionIndex(time: number) {
-  return Math.min(sectionNames.length - 1, Math.floor(Math.max(0, time) / (DEN_DURATION / sectionNames.length)));
+export function denSection(time: number) {
+  const names = ['Outer Docks', 'Workshops', 'Rookery', 'Bastion', 'Gantry Approach'];
+  return names[Math.min(names.length - 1, Math.floor(Math.max(0, time) / (DEN_DURATION / names.length)))];
 }
-export function denSection(time: number) { return sectionNames[denSectionIndex(time)]; }

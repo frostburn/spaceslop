@@ -7,7 +7,7 @@ type Side = -1 | 1;
 type Shot = Point & { z: number; vx: number; vy: number; vz: number; planar: true };
 type Beam = { from: Point; to: Point; width: number; active: boolean; warning: number; impact?: number };
 
-const standardVolleys = [1.02, 2.12, 3.22];
+const standardVolleys = [1.02, 1.78, 2.54, 3.30];
 const crownfire = [
   { at: 1.38, tusks: 'outer' },
   { at: 1.98, tusks: 'inner' },
@@ -119,7 +119,7 @@ export function fonsVolleys(time: number, dt: number, player: Point, variant: Fo
       const side: Side = (index + cycle) % 2 === 0 ? -1 : 1;
       const origin = fonsEmitter(fonsPose(cycle * FONS_CYCLE + at), side);
       const aim = Math.atan2(Math.max(-2.9, Math.min(2.9, player.x)) - origin.x, Math.max(2.9, origin.y - player.y));
-      for (let i = -3; i <= 3; i++) emit(origin, aim + i * .17, 5.35 + .24 * Math.abs(i));
+      for (let i = -3; i <= 3; i++) emit(origin, aim + i * .17, 6.1 + .24 * Math.abs(i));
     }
     return shots;
   }

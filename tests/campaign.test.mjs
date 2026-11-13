@@ -13,6 +13,7 @@ const { campaign, missionFor, officers } = await server.ssrLoadModule('/src/camp
 const { decodeCampaignClears, campaignStatus, recordCampaignClear } = await server.ssrLoadModule('/src/campaign/progress.ts');
 const { ranks, rankAtlasOrder, rankAtlasCell, RANK_ATLAS_ROWS, RANK_ATLAS_COLUMNS } = await server.ssrLoadModule('/src/campaign/ranks.ts');
 const { levelBriefingFiles, rankInsigniaFile } = await server.ssrLoadModule('/src/assets/catalog.ts');
+const { stageEnemyTuning } = await server.ssrLoadModule('/src/stage-enemy-tuning.ts');
 
 test('the briefing route visits each sector once and takes Io, Europa and Titan in order', () => {
   const route = campaign.map(mission => mission.level);
@@ -50,6 +51,18 @@ test('campaign clears advance in order and promote at the agreed milestones', ()
   ]);
   assert.deepEqual(campaignStatus(cleared), { next: undefined, rank: 'major' });
   assert.equal(cleared.size, campaign.length);
+});
+
+test('patrol pace, volley frequency and projectile speed rise in campaign order', () => {
+  const stages = campaign.filter(({ level }) => level !== 'wormhole');
+  assert.deepEqual(Object.keys(stageEnemyTuning), stages.map(({ level }) => level));
+  for (const [i, { level }] of stages.entries()) {
+    if (i === 0) continue;
+    const early = stageEnemyTuning[stages[i - 1].level];
+    const next = stageEnemyTuning[level];
+    assert(next.pace > early.pace && next.pace - early.pace <= .11, level);
+    assert(next.cadence < early.cadence && next.shotSpeed > early.shotSpeed, level);
+  }
 });
 
 test('Specialist 3 is drawn separately and existing ranks fit in distinct atlas cells', () => {

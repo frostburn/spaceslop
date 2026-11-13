@@ -78,7 +78,7 @@ test('the traveling aperture centers and opens before the cicada reaches combat 
   }
 });
 
-test('the preview has a quiet approach, then the Titan rematch telegraphs and fires', () => {
+test('the quiet approach leads to a five-shot Titan rematch with locked warnings', () => {
   const flight = new Flight('sentry', [], 'vex', 'wormhole');
   for (let tick = 0; tick <= Math.ceil(flight.stageDuration / STEP) && flight.phase === 'stage'; tick++) {
     flight.step(STEP);
@@ -96,7 +96,7 @@ test('the preview has a quiet approach, then the Titan rematch telegraphs and fi
   assert(flight.exposedCannonX < 0);
   while (flight.time < CICADA_WINDUP + .17) flight.step(STEP);
   const locked = flight.markers.map(marker => ({ ...marker }));
-  assert.equal(locked.length, 3);
+  assert.equal(locked.length, 5);
   assert(flight.cannonWindup > 0 && flight.cannonWindup < 1);
   assert(flight.bossHealth < CICADA_HP);
   flight.player.x = 2;
@@ -104,7 +104,7 @@ test('the preview has a quiet approach, then the Titan rematch telegraphs and fi
   assert.deepEqual(flight.markers, locked);
   assert(flight.firedCannonX < 0);
   assert(flight.exposedCannonX > 0);
-  assert.equal(flight.threats.length, 3);
+  assert.equal(flight.threats.length, locked.length);
   assert(flight.threats.every(shot => shot.vz > 0 && shot.z < 0));
 });
 
@@ -320,6 +320,17 @@ test('both royal variants fire Crownfire in two interleaved fans from their tusk
   tip.multiplyScalar(1 / (1 - tip.z / BOSS_CAMERA_DISTANCE));
   assert(Math.hypot(first[0].x - tip.x, first[0].y - tip.y) < 1e-10);
   assert.deepEqual(fonsTuskTip(pose, -1, 'outer'), { x: first[0].x, y: first[0].y });
+});
+
+test('Fons fires four seven-shot fans before the wall breaches open', () => {
+  const player = { x: 0, y: -5.35 };
+  const volleys = [];
+  for (let time = STEP; time < 4; time += STEP) {
+    const shots = fonsVolleys(time, STEP, player);
+    if (shots.length) volleys.push(shots);
+  }
+  assert.deepEqual(volleys.map(shots => shots.length), [7, 7, 7, 7]);
+  assert(volleys.flat().every(shot => shot.planar && Math.hypot(shot.vx, shot.vy) >= 6.1 - 1e-12));
 });
 
 test('only Invictus damages the reflected path after the False Horizon warning', () => {

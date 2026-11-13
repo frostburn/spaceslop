@@ -1,11 +1,12 @@
 import { HEIGHT, WIDTH } from '../playfield';
 import type { WingWeapon } from '../wing';
 import { ellipseEntry } from '../planar-contact';
+import { stageEnemyTuning } from '../stage-enemy-tuning';
 
 type Point = { x: number; y: number };
 type Course = 'launch' | 'cross' | 'weave';
-export type DenPatrol = { course: Course; side: -1 | 1; slot: number; heavy: boolean; section: number };
-type DenWave = Omit<DenPatrol, 'slot' | 'heavy' | 'section'> & {
+export type DenPatrol = { course: Course; side: -1 | 1; slot: number; heavy: boolean };
+type DenWave = Omit<DenPatrol, 'slot' | 'heavy'> & {
   time: number;
   lanes: readonly number[];
   guard?: number;
@@ -13,25 +14,10 @@ type DenWave = Omit<DenPatrol, 'slot' | 'heavy' | 'section'> & {
 };
 
 export const DEN_PATROL_POOL = 10;
-export const DEN_PATROL_STAGGER = .58;
+const tuning = stageEnemyTuning.den;
+export const DEN_PATROL_STAGGER = .58 / tuning.pace;
 export const DEN_PATROL_WINDUP = .46;
-
-// Keep the opening at its original tempo, then build through the cliff route.
-const single = [0];
-const pair = [-.12, .12];
-const fan = [-.22, 0, .22];
-const wideFan = [-.36, -.18, 0, .18, .36];
-const patrolTuning = [
-  { pace: 1, interval: 2.8, heavyInterval: 2.45, shotSpeed: 4.7, spread: single, heavySpread: fan },
-  { pace: 1.12, interval: 2.15, heavyInterval: 1.9, shotSpeed: 5.1, spread: pair, heavySpread: fan },
-  { pace: 1.24, interval: 1.65, heavyInterval: 1.5, shotSpeed: 5.5, spread: pair, heavySpread: wideFan },
-  { pace: 1.38, interval: 1.25, heavyInterval: 1.15, shotSpeed: 5.9, spread: fan, heavySpread: wideFan },
-  { pace: 1.5, interval: .95, heavyInterval: .9, shotSpeed: 6.3, spread: fan, heavySpread: wideFan },
-];
-
-export function denPatrolStagger(patrol: DenPatrol) {
-  return DEN_PATROL_STAGGER / patrolTuning[patrol.section].pace;
-}
+const guardSpread = [-.36, -.18, 0, .18, .36];
 
 export const denWaves: readonly DenWave[] = [
   { time: 3.0, course: 'launch', side: -1, lanes: [-1.15] },
@@ -58,7 +44,7 @@ export const denWaves: readonly DenWave[] = [
 export function denPatrolScale(patrol: DenPatrol) { return patrol.heavy ? 1.23 : 1; }
 
 export function denPatrolPose(age: number, lane: number, patrol: DenPatrol) {
-  const t = Math.max(0, age) * patrolTuning[patrol.section].pace;
+  const t = Math.max(0, age) * tuning.pace;
   const speed = patrol.heavy ? 2.35 : 2.75;
   const weave = patrol.course === 'weave';
   const entry = weave ? 0 : patrol.course === 'cross' ? 2.3 : 1.8;
@@ -89,15 +75,14 @@ export function denPatrolCanFire(pose: ReturnType<typeof denPatrolPose>, patrol:
   return Math.abs(pose.x) + radius < WIDTH / 2 && pose.y + radius < HEIGHT / 2 && pose.y > -4.1 && Math.abs(pose.heading) < .63;
 }
 
-export function denPatrolVolley(pose: ReturnType<typeof denPatrolPose>, player: Point, patrol: DenPatrol) {
-  const tuning = patrolTuning[patrol.section];
-  const reach = .82 * denPatrolScale(patrol);
-  const x = pose.x + Math.sin(pose.heading) * reach, y = pose.y - Math.cos(pose.heading) * reach;
+export function denPatrolVolley(origin: Point, player: Point, patrol: DenPatrol) {
+  const interval = (patrol.heavy ? 2.45 : 2.8) * tuning.cadence;
+  const { x, y } = origin;
   const aim = Math.atan2(player.x - x, Math.max(1.8, y - player.y));
-  const speed = tuning.shotSpeed + (patrol.heavy ? .25 : 0);
-  const spread = patrol.heavy ? tuning.heavySpread : tuning.spread;
+  const speed = (patrol.heavy ? 4.95 : 4.7) * tuning.shotSpeed;
+  const spread = patrol.heavy ? guardSpread : tuning.spread;
   return {
-    interval: patrol.heavy ? tuning.heavyInterval : tuning.interval,
+    interval,
     shots: spread.map(offset => {
       const angle = aim + offset;
       return { x, y, z: 0, vx: Math.sin(angle) * speed, vy: -Math.cos(angle) * speed, vz: 0, planar: true };

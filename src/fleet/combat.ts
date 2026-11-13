@@ -1,4 +1,5 @@
 import { HEIGHT, WIDTH } from '../playfield';
+import { stageEnemyTuning } from '../stage-enemy-tuning';
 import type { WingWeapon } from '../wing';
 import { easeFleet, flagshipPorts, flankShips, FLEET_SPEED, fleetViewY, hullPoint, trenchPorts, trenchShip } from './route';
 
@@ -50,6 +51,12 @@ export const FLEET_SAUCER_POOL = 12;
 export const FLEET_SAUCER_STAGGER = .31;
 export const FLEET_SAUCER_LIFE = 11;
 export const FLEET_SAUCER_WINDUP = 1;
+const tuning = stageEnemyTuning.fleet;
+const guardSpread = [-.40, -.20, 0, .20, .40];
+
+export function saucerFireInterval(saucer: FleetSaucer) {
+  return (saucer.heavy ? 2.8 : 3.35) * tuning.cadence;
+}
 
 export function saucerSize(saucer: FleetSaucer) {
   return saucer.heavy ? .88 : .62;
@@ -72,13 +79,14 @@ function saucerX(age: number, lane: number, saucer: FleetSaucer) {
 }
 
 export function saucerPose(age: number, lane: number, saucer: FleetSaucer) {
-  const t = Math.max(0, age);
+  const travelAge = age * tuning.pace;
+  const t = Math.max(0, travelAge);
   const phase = t * (saucer.heavy ? 2.3 : 3.1) + saucer.slot * 1.37 + saucer.side;
   const glide = saucer.course === 'hold' ? 2.8 * easeFleet((t - 2.2) / 2.7) : 0;
   const speed = saucerX(t + .025, lane, saucer) - saucerX(t - .025, lane, saucer);
   return {
     x: saucerX(t, lane, saucer),
-    y: 10.2 - (saucer.course === 'hold' ? 2.34 : 2.15) * age + glide + .11 * Math.sin(phase),
+    y: 10.2 - (saucer.course === 'hold' ? 2.34 : 2.15) * travelAge + glide + .11 * Math.sin(phase),
     pitch: .16 + .16 * Math.cos(phase * .81) + .16 * easeFleet((t - 4.0) / 2.2),
     bank: .13 * Math.sin(phase) + .44 * Math.tanh(speed * 9),
     yaw: .18 * Math.sin(phase * .48),
@@ -93,9 +101,10 @@ export function saucerCanFire(point: Point, saucer: FleetSaucer) {
 export function saucerVolley(origin: Point, target: Point, saucer: FleetSaucer): FleetShot[] {
   const aim = Math.atan2(target.x - origin.x, Math.max(1.1, origin.y - target.y));
   const radius = saucerSize(saucer);
-  return (saucer.heavy ? [-.25, 0, .25] : [0]).map(spread => {
+  const speed = (saucer.heavy ? 4.95 : 5.25) * tuning.shotSpeed;
+  return (saucer.heavy ? guardSpread : tuning.spread).map(spread => {
     const angle = aim + spread;
-    const x = Math.sin(angle), y = -Math.cos(angle), speed = saucer.heavy ? 4.95 : 5.25;
+    const x = Math.sin(angle), y = -Math.cos(angle);
     return { x: origin.x + x * .47 * radius, y: origin.y + y * .47 * radius, z: 0, vx: x * speed, vy: y * speed, vz: 0 };
   });
 }

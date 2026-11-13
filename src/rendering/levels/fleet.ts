@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { loadEncounterTexture } from '../../encounter-texture';
 import { createFleetBossRig } from '../../fleet/boss-rig';
-import { FLEET_SAUCER_POOL, FLEET_SAUCER_WINDUP, saucerPose, saucerSize } from '../../fleet/combat';
+import { FLEET_SAUCER_POOL, FLEET_SAUCER_WINDUP, saucerFireInterval, saucerPose, saucerSize } from '../../fleet/combat';
 import { createDistantSaucers } from '../../fleet/distant';
 import { createPleiadianCraft } from '../../fleet/pleiadian-craft';
 import { createBroadsideRigs, createTractorTraffic } from '../../fleet/props';
@@ -99,7 +99,7 @@ export const createLevel: LevelFactory = ({ signal }) => {
         if (!rig) break;
         const pose = saucerPose(enemy.age, enemy.lane, saucer);
         const charge = saucer.aim ? T.MathUtils.clamp(1 - (enemy.fire - enemy.age) / FLEET_SAUCER_WINDUP, 0, 1) : 0;
-        const sinceFire = enemy.age + (saucer.heavy ? 2.25 : 2.7) - enemy.fire;
+        const sinceFire = enemy.age + saucerFireInterval(saucer) - enemy.fire;
         const flash = sinceFire >= 0 && sinceFire < .15 ? 1 - sinceFire / .15 : 0;
         rig.root.visible = true;
         rig.root.position.set(enemy.x, enemy.y, -.08);

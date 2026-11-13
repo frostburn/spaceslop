@@ -44,7 +44,7 @@ test('five bank-anchored ambushers scroll in before view, fit the warmed pool an
   assert.equal(seen.size,5);assert.equal(warned.size,5);assert(maximum<=a.AMBUSHER_POOL);
   assert.equal(f.phase,'approach');assert.equal(f.enemies.length,0);assert.equal(f.threats.length,0);
   assert.equal(new Flight('sentry',[],'vex','preserve').nextAmbusher,0);
-  const other=new Flight('sentry',[],'vex','prototype');other.stepStage(0);assert(!other.enemies.some(e=>e.ambusher));
+  const other=new Flight('sentry',[],'vex','broodlock');other.stepStage(0);assert(!other.enemies.some(e=>e.ambusher));
 });
 
 test('aim locks through the warning, the bite reaches it in 3D and an opposite-bank sidestep is safe',()=>{
