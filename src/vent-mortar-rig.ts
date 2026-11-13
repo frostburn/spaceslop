@@ -40,8 +40,8 @@ export function createVentMortar(assets:ReturnType<typeof createMortarAssets>){
  const mouth=part(head,5,0,-MORTAR_REACH,.23,.46,.46);mouth.name='mortar-aperture';
  const muzzle=new T.Object3D();muzzle.name='mortar-muzzle';head.add(muzzle);
  const ring=new T.Mesh(new T.CircleGeometry(.12,20),new T.MeshBasicMaterial({color:0xffa846,transparent:true,opacity:.3,blending:T.AdditiveBlending,depthWrite:false}));ring.position.z=.24;head.add(ring);
- function pose(age:number,nextFire:number,angle:number){
-  const p=mortarPose(age,nextFire);head.rotation.z=angle;
+ function pose(age:number,nextFire:number,angle:number,interval?:number){
+  const p=mortarPose(age,nextFire,interval);head.rotation.z=angle;
   flesh.scale.y=1.25*(1-.06*p.charge+.05*p.recoil);
   for(const{side,pivot}of leaves)pivot.rotation.z=-side*(-.18+p.opening*.72);
   neck.position.y=-.30-p.extension*.5;neck.scale.y=.52+p.extension;

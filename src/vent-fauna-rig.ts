@@ -67,10 +67,10 @@ export function createVentShrimp(assets:Assets){
  });
  const muzzle=new T.Object3D();muzzle.name='shrimp-muzzle';muzzle.position.set(0,-.73,.2);root.add(muzzle);
  const antennae=[-1,1].map(side=>{const pivot=new T.Group();pivot.position.set(side*.12,-.62,.12);root.add(pivot);assets.part(pivot,3,0,.31,0,.045,.72);return{pivot,side};});
- function pose(age:number,nextFire:number){
-  const charge=Math.max(0,1-(nextFire-age)/.45),swim=age*7;
+ function pose(age:number,nextFire:number,windup?:number){
+  const charge=Math.max(0,1-(nextFire-age)/(windup??.45)),swim=age*7;
   joints.forEach((joint,i)=>{joint.rotation.z=Math.sin(swim-i*.65)*(.08+i*.025);});
-  for(const{pivot,elbow,side,pair}of limbs){pivot.rotation.z=-side*(pair===0?2.55+.2*charge:1.2+.35*Math.sin(swim-pair*.8));elbow.rotation.z=side*(.65+.18*Math.sin(swim-pair*.8+.5));}
+  for(const{pivot,elbow,side,pair}of limbs){pivot.rotation.z=-side*(pair===0?2.55+(windup===undefined?.2:.32)*charge:1.2+.35*Math.sin(swim-pair*.8));elbow.rotation.z=side*(.65+.18*Math.sin(swim-pair*.8+.5));}
   for(const{pivot,side}of antennae)pivot.rotation.z=-side*(2.75+.08*Math.sin(age*2.5));
   shell.scale.x=.9*(1-.025*charge);
  }

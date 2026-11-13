@@ -5,6 +5,7 @@ import {createServer} from 'vite';
 const server=await createServer({root:new URL('..',import.meta.url).pathname,configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true,entries:[]},appType:'custom'});after(()=>server.close());
 const c=await server.ssrLoadModule('/src/vent-crab.ts'),v=await server.ssrLoadModule('/src/vent-layout.ts'),{createVentBoss}=await server.ssrLoadModule('/src/vent-boss.ts'),{Flight,STEP,BOSS_PROJECTION}=await server.ssrLoadModule('/src/game.ts');
 const {createBossLaserContact}=await server.ssrLoadModule('/src/laser-contact.ts');
+const {ventChallengeBoss}=await server.ssrLoadModule('/src/vent-challenge.ts');
 
 test('the crab has two individually breakable claws and a protected core, with capped phase damage',()=>{
  const f=new Flight('sentry',[],'vex','vents');f.phase='boss';assert.equal(f.bossHealth,c.CRAB_HP);assert.equal(f.bossMaxHealth,c.CRAB_HP);
@@ -42,6 +43,48 @@ test('claw charges retain three locked warnings and the core attack expands to f
  for(const core of [false,true]){
   const f=new Flight('sentry',[],'vex','vents');f.phase='boss';if(core){f.damageBoss(12);f.damageBoss(12);}f.time=.6;f.stepBoss();assert.equal(f.markers.length,core?5:3);const points=f.markers.map(p=>({...p}));
   f.player.x=3;f.player.y=4;f.time=1.18;const origin=f.exposedCannonX;f.stepBoss();assert.deepEqual(f.markers,points);assert.equal(f.threats.length,core?5:3);for(const t of f.threats)assert.equal(t.x,origin);
+ }
+});
+
+test('challenge Sovereign keeps its aim and claw through the pair, then adds a third spray from its gills', () => {
+ for (const mode of ['bullet-hell', 'hardcore']) {
+  const f = new Flight('sentry', [], 'vex', 'vents', undefined, mode);
+  f.phase = 'boss';
+  f.fire = () => {};
+  f.stepDroneWeapon = () => {};
+  f.invulnerable = 200;
+  assert.equal(f.bossHealth, 2 * ventChallengeBoss.clawHealth + ventChallengeBoss.coreHealth);
+  function advance(time) {
+   const bullets = new Set();
+   f.threats = [];
+   while (f.time < time) {
+    f.step(STEP);
+    for (const shot of f.threats) bullets.add(shot);
+   }
+   return [...bullets];
+  }
+  advance(.42);
+  const lock = { ...f.player };
+  assert.deepEqual(f.markers, [lock]);
+  assert(f.cannonWindup > 0);
+  f.player.x = 3;
+  const first = advance(.72);
+  assert.equal(first.length, 11);
+  assert.equal(f.crabTargetX, -c.CRAB_TARGET_X);
+  const center = first[5];
+  assert(Math.abs(center.vx * (lock.y - center.y) - center.vy * (lock.x - center.x)) < 1e-8);
+  assert(first.every(shot => shot.planar && shot.z === 0));
+  assert.equal(advance(1.18).length, 12);
+  assert.equal(f.firedCrabTarget, -c.CRAB_TARGET_X);
+  assert.equal(f.crabTargetX, c.CRAB_TARGET_X);
+  f.damageBoss(1000);
+  f.damageBoss(1000);
+  assert.equal(f.bossHealth, ventChallengeBoss.coreHealth);
+  assert.equal(advance(1.75).length, 0);
+  assert.equal(advance(ventChallengeBoss.interval + 1.75).length, 33);
+  assert.equal(f.firedCrabTarget, 0);
+  f.damageBoss(ventChallengeBoss.coreHealth);
+  assert.equal(f.phase, 'won');
  }
 });
 

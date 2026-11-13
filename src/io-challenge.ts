@@ -3,7 +3,7 @@ import type { IoWave } from './io-layout';
 import { wingRewardForWave } from './wing';
 
 type Point = { x: number; y: number };
-type Attacker = Point & { age: number; fire: number; ioAim?: Point };
+type Attacker = Point & { age: number; fire: number; lockedAim?: Point };
 
 // Stagger patrols against the alternating Crucible crossings, leaving the rim clear.
 const patrols = [
@@ -36,12 +36,12 @@ export function ioChallengeSkipperFirstShot(slot: number) {
 function readyToFire(attacker: Attacker, origin: Point, player: Point, windup: number, visible: boolean) {
   if (!visible || origin.y < player.y + 1.65) {
     attacker.fire = Math.max(attacker.fire, attacker.age + windup);
-    attacker.ioAim = undefined;
+    attacker.lockedAim = undefined;
     return;
   }
   if (attacker.age < attacker.fire - windup) return;
-  attacker.ioAim ??= { ...player };
-  if (attacker.age >= attacker.fire) return attacker.ioAim;
+  attacker.lockedAim ??= { ...player };
+  if (attacker.age >= attacker.fire) return attacker.lockedAim;
 }
 
 function fan(angle: number, speed: number, spread: readonly number[]) {
@@ -63,7 +63,7 @@ export function stepIoChallengeSkipper(enemy: Attacker, slot: number, player: Po
   const target = readyToFire(enemy, origin, player, windup, enemy.y < 7.1);
   if (!target) return;
   enemy.fire = enemy.age + interval;
-  enemy.ioAim = undefined;
+  enemy.lockedAim = undefined;
   const spread = slot % 2 === 0 ? skipperFan : skipperSplit;
   return fan(bearing(origin, target), speed, spread)
     .map(velocity => ({ ...origin, ...velocity, z: 0, vz: 0, planar: true }));
@@ -75,7 +75,7 @@ export function stepIoChallengeCrucible(enemy: Attacker, player: Point) {
   const target = readyToFire(enemy, origin, player, CRUCIBLE_WINDUP, Math.abs(enemy.x) < 4);
   if (!target) return;
   enemy.fire = enemy.age + ioChallengeCrucible.interval;
-  enemy.ioAim = undefined;
+  enemy.lockedAim = undefined;
   return fan(bearing(origin, target), ioChallengeCrucible.speed, slagSpread)
     .map(slag => ({ ...origin, slag }));
 }

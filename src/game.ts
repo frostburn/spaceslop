@@ -31,6 +31,8 @@ import {wormPose,WORM_WINDUP,WORM_REACH} from './vent-worm';
 import {SHRIMP_HP,SHRIMP_FIRST_FIRE,SHRIMP_INTERVAL,WORM_HP,WORM_FIRST_ATTACK,WORM_INTERVAL,shrimpMotion,faunaMuzzle,faunaBodyHit,faunaBeamEntry,type ShrimpCourse} from './vent-fauna';
 import {MORTAR_HP,MORTAR_RADIUS,MORTAR_FIRST_FIRE,MORTAR_INTERVAL,MORTAR_SHOT_SPEED,mortarAim,mortarMuzzle} from './vent-mortar';
 import {ventOrbit,VENT_APPROACH,VENT_SPAWN_LEAD,ventWaves,ventAnchorPoint} from './vent-layout';
+import { stepVentChallengeMortar, stepVentChallengeShrimp, ventChallengeBoss, ventChallengeBossFan,
+  ventChallengeShrimp, ventChallengeShrimpFirstShot, ventChallengeVolleys, ventChallengeWaves, ventChallengeWindup } from './vent-challenge';
 import { CRUCIBLE_HP, CRUCIBLE_RADIUS, CRUCIBLE_FIRST_POUR, CRUCIBLE_POUR_INTERVAL, CRUCIBLE_MUZZLE_Y, SLAG_RADIUS, crucibleMotion, slagSpeed } from './io-crucible';
 import { IO_DURATION, IO_HP, IO_LEG_HP, IO_APPROACH, IO_INTERVAL, IO_WINDUP, IO_FIRE, IO_TRAVEL, calderaContact, calderaWheel, skipperMotion, ioWaves, smooth01 } from './io-layout';
 import { calderaChallengeFan, calderaChallengeVolleys, calderaChallengeWindup, ioChallengeBoss, ioChallengeCrucible,
@@ -97,7 +99,7 @@ type Enemy = Point & {
   mine?: BoulevardMine; interceptorAim?:number; interceptorHeading?:number;
   flyer?: FlyerCourse;
   ambusher?: AmbusherState;
-  lane: number; age: number; fire: number; hp: number; reward?: FormationReward; raptor?: boolean; ant?: AntKind; sporeTarget?: Point; ioAim?: Point; marine?: MarineKind; school?: MarineSchool;
+  lane: number; age: number; fire: number; hp: number; reward?: FormationReward; raptor?: boolean; ant?: AntKind; sporeTarget?: Point; lockedAim?: Point; marine?: MarineKind; school?: MarineSchool;
   centipede?: CentipedeLink; cicada?: CicadaCourse; skipper?: boolean; crucible?: boolean; slag?: {vx:number;vy:number}; ventAnchor?:number; ventScale?:number; slot?: number; mortarAngle?:number; ventWorm?:boolean; shrimp?:ShrimpCourse; wormReach?:number; wormBend?:number; wormLocked?:boolean;
   course?: number; courseAt?: number; heading?: number; laserDamage?: number;
 };
@@ -257,6 +259,7 @@ export class Flight {
   private groundskeeperAimCycle = -1;
   crabClawHealth=[CRAB_CLAW_HP,CRAB_CLAW_HP];
   private crabBreakTimes=[-1,-1];
+  private ventAttack?: { cycle: number; core: boolean };
   bossLaserDamage = 0;
   firedCannonX = 0;
   firedCrabTarget=0;
@@ -329,6 +332,7 @@ export class Flight {
     this.pilot = pilot;
     this.hull = mode === 'hardcore' ? 1 : STARTING_HULL;
     this.denMines = level === 'den' ? denMineSites.map(() => ({})) : [];
+    if (this.isVentChallenge) this.crabClawHealth = [ventChallengeBoss.clawHealth, ventChallengeBoss.clawHealth];
     this.bossHealth = this.bossMaxHealth;
     if (level === 'broodlock') this.obstacles = new HiveCollision();
     if (level === 'ice') this.obstacles = new IceCollision();
@@ -341,7 +345,8 @@ export class Flight {
 
   get encounterLevel() { return this.level === 'wormhole' ? wormholeBosses[this.wormholeIndex] : this.level; }
   get isBroodlockChallenge() { return this.level === 'broodlock' && this.mode !== 'regular'; }
-  get isIoChallenge() { return this.level === 'io' && this.mode === 'bullet-hell'; }
+  get isIoChallenge() { return this.level === 'io' && this.mode !== 'regular'; }
+  get isVentChallenge() { return this.level === 'vents' && this.mode !== 'regular'; }
   get wormholeBossNumber() { return this.wormholeIndex + 1; }
   get isDen() { return this.encounterLevel === 'den'; }
   get isFleet() { return this.encounterLevel === 'fleet'; }
@@ -413,7 +418,7 @@ export class Flight {
       x, y: 3.8 + 1.8 * lane,
       weapon: supplyWeapons[Math.floor(this.random() * supplyWeapons.length)],
     }));
-    if (repair) this.drops.push({ x: 0, y: 1.4, kind: 'repair' });
+    if (repair && this.mode !== 'hardcore') this.drops.push({ x: 0, y: 1.4, kind: 'repair' });
   }
 
   private planarBossEntry(a: Point, b: Point) {
@@ -432,7 +437,9 @@ export class Flight {
 
   get bossMaxHealth() {
     if (this.isBroodlockChallenge) return challengeGuardian.health;
-    return this.isIoChallenge ? ioChallengeBoss.health : bossHealthByLevel[this.encounterLevel];
+    if (this.isIoChallenge) return ioChallengeBoss.health;
+    if (this.isVentChallenge) return ventChallengeBoss.clawHealth * 2 + ventChallengeBoss.coreHealth;
+    return bossHealthByLevel[this.encounterLevel];
   }
   get bossTargetRadius() { if(this.encounterLevel==='biolume')return RAY_ORGAN_RADIUS/RAY_PROJECTION;if(this.encounterLevel==='summer')return .48*HYDRA_BOSS_SIZE;if(this.encounterLevel==='boulevard'||this.encounterLevel==='heliostat')return 1.25;return this.encounterLevel === 'preserve' ? GROUNDSKEEPER_RADIUS : BOSS_CANNON_RADIUS; }
   get summerTargetHead(){return nearestHydraHead(this.summerHydra,this.player.x/BOSS_PROJECTION,true);}
@@ -541,6 +548,7 @@ export class Flight {
 
   get cannonWindup() {
     if (this.isIoChallenge) return this.phase === 'boss' ? calderaChallengeWindup(this.time, this.ioThirdSweep) : 0;
+    if (this.isVentChallenge) return this.phase === 'boss' ? ventChallengeWindup(this.time, this.ventAttack?.core ?? false) : 0;
     if (this.isBroodlockChallenge) {
       const { interval, windup, fire, echo } = challengeGuardian;
       if (this.phase !== 'boss' || this.volley !== Math.floor(this.time / interval)) return 0;
@@ -1134,7 +1142,8 @@ export class Flight {
     }
     const hiveChallenge = this.isBroodlockChallenge;
     const ioChallenge = this.isIoChallenge;
-    const wave: Wave | undefined = (this.level==='biolume'?groveWaves:this.level==='summer'?summerWaves:this.level==='heliostat'?heliostatWaves:this.level==='boulevard'?boulevardWaves:this.level === 'broodlock' ? (hiveChallenge ? challengeWaves : hiveWaves) : this.level === 'ice' ? iceWaves : this.level === 'vents' ? ventWaves : this.level === 'io' ? (ioChallenge ? ioChallengeWaves : ioWaves) : this.level === 'titan' ? titanWaves : stageWaves)[this.nextWave];
+    const ventChallenge = this.isVentChallenge;
+    const wave: Wave | undefined = (this.level==='biolume'?groveWaves:this.level==='summer'?summerWaves:this.level==='heliostat'?heliostatWaves:this.level==='boulevard'?boulevardWaves:this.level === 'broodlock' ? (hiveChallenge ? challengeWaves : hiveWaves) : this.level === 'ice' ? iceWaves : this.level === 'vents' ? (ventChallenge ? ventChallengeWaves : ventWaves) : this.level === 'io' ? (ioChallenge ? ioChallengeWaves : ioWaves) : this.level === 'titan' ? titanWaves : stageWaves)[this.nextWave];
     if (wave && this.time >= wave.time-(wave.grove?GROVE_SPAWN_LEAD:wave.summer?3:wave.heliostat?HELIOSTAT_SPAWN_LEAD:wave.boulevard?BOULEVARD_SPAWN_LEAD:0)) {
       this.nextWave++;
       const reward = formationReward(wave.drop, wave.centipede ?? wave.lanes.length);
@@ -1164,7 +1173,7 @@ export class Flight {
             : heliostat ? (heliostat.kind === 'guard' ? HELIOSTAT_GUARD_FIRE + index * .35 : 2.2 + index * .25)
             : boulevard ? 1.7 + index * .22
             : flyer ? Infinity
-            : shrimp ? SHRIMP_FIRST_FIRE + index * .25
+            : shrimp ? (ventChallenge ? ventChallengeShrimpFirstShot(index) : SHRIMP_FIRST_FIRE + index * .25)
             : wave.ventWorm ? WORM_FIRST_ATTACK
             : wave.ventAnchor !== undefined ? MORTAR_FIRST_FIRE
             : wave.crucible ? (ioChallenge ? ioChallengeCrucible.first : CRUCIBLE_FIRST_POUR)
@@ -1178,7 +1187,7 @@ export class Flight {
             : flyer ? FLYER_HP
             : shrimp ? SHRIMP_HP
             : wave.ventWorm ? WORM_HP
-            : wave.ventAnchor !== undefined ? MORTAR_HP
+            : wave.ventAnchor !== undefined ? MORTAR_HP + (ventChallenge ? 2 : 0)
             : wave.crucible ? (ioChallenge ? CRUCIBLE_HP + 3 : CRUCIBLE_HP)
             : wave.marine ? marineSpecs[wave.marine].hp
             : wave.ant === 'soldier' ? 4 : 2,
@@ -1200,7 +1209,8 @@ export class Flight {
         || (enemy.grove && !enemy.frog) || enemy.summer?.kind === 'scout' || enemy.summer?.kind === 'drone');
       const previousAge = enemy.age;
       enemy.age += dt;
-      const pace = ioChallenge && enemy.skipper ? ioChallengeSkipper.pace : tuning.pace;
+      const pace = ventChallenge && enemy.shrimp ? ventChallengeShrimp.pace
+        : ioChallenge && enemy.skipper ? ioChallengeSkipper.pace : tuning.pace;
       if (mobile && enemy.age > 0) enemy.age += Math.min(dt, enemy.age) * (pace - 1);
       const motionStep = enemy.age - previousAge;
       const motion = enemy.raptor ? raptorFlight(enemy.age) : undefined;
@@ -1240,17 +1250,26 @@ export class Flight {
           }
           if(enemy.age>=enemy.fire)enemy.fire+=WORM_INTERVAL;
         }else{
-          enemy.mortarAngle=mortarAim(enemy,this.player);
-          if(enemy.age>=enemy.fire&&enemy.y<8){
-            const origin=mortarMuzzle(enemy,enemy.mortarAngle);
-            const speed = MORTAR_SHOT_SPEED * tuning.shotSpeed;
-            for(const spread of [-.18,0,.18])this.threats.push({...origin,z:0,vx:Math.sin(enemy.mortarAngle+spread)*speed,vy:-Math.cos(enemy.mortarAngle+spread)*speed,vz:0});
-            enemy.fire+=MORTAR_INTERVAL;
+          if (ventChallenge) {
+            const volley = stepVentChallengeMortar(enemy, this.player);
+            if (volley) this.threats.push(...volley);
+          } else {
+            enemy.mortarAngle = mortarAim(enemy, this.player);
+            if (enemy.age >= enemy.fire && enemy.y < 8) {
+              const origin = mortarMuzzle(enemy, enemy.mortarAngle);
+              const speed = MORTAR_SHOT_SPEED * tuning.shotSpeed;
+              for (const spread of [-.18, 0, .18]) this.threats.push({ ...origin, z: 0,
+                vx: Math.sin(enemy.mortarAngle + spread) * speed, vy: -Math.cos(enemy.mortarAngle + spread) * speed, vz: 0 });
+              enemy.fire += MORTAR_INTERVAL;
+            }
           }
         }
       } else if (enemy.shrimp) {
         const p=shrimpMotion(enemy.age,enemy.lane,enemy.shrimp);enemy.x=p.x;enemy.y=p.y;enemy.heading=p.heading;
-        if(enemy.age>=enemy.fire&&enemy.y<8){
+        if (ventChallenge) {
+          const volley = stepVentChallengeShrimp(enemy, this.player);
+          if (volley) this.threats.push(...volley);
+        } else if(enemy.age>=enemy.fire&&enemy.y<8){
           const origin=faunaMuzzle(enemy),angle=Math.atan2(this.player.x-origin.x,origin.y-this.player.y);
           const speed = 4 * tuning.shotSpeed;
           for(const spread of [-.065,.065])this.threats.push({...origin,z:0,vx:Math.sin(angle+spread)*speed,vy:-Math.cos(angle+spread)*speed,vz:0});
@@ -1461,6 +1480,10 @@ export class Flight {
   }
 
   private stepBoss(dt: number) {
+    if (this.isVentChallenge) {
+      this.stepChallengeCrab(dt);
+      return;
+    }
     if (this.isBroodlockChallenge) {
       this.stepChallengeGuardian(dt);
       return;
@@ -1523,6 +1546,28 @@ export class Flight {
       this.volley++;
     }
     if (elapsed >= BOSS_FIRE_AT + BOSS_IMPACT_TRAVEL + 0.02) this.markers = [];
+  }
+
+  private stepChallengeCrab(dt: number) {
+    const { interval, lockAt } = ventChallengeBoss;
+    const cycle = Math.floor(this.time / interval);
+    const elapsed = this.time - cycle * interval;
+    if (elapsed < lockAt) {
+      this.markers = [];
+      return;
+    }
+    if (this.ventAttack?.cycle !== cycle) {
+      this.ventAttack = { cycle, core: this.crabCoreOpen };
+      this.markers = [{ ...this.player }];
+    }
+    for (const index of ventChallengeVolleys(elapsed, dt, this.ventAttack.core)) {
+      const target = this.crabTargetX;
+      this.threats.push(...ventChallengeBossFan(this.time, target, this.markers[0], index, cycle));
+      this.firedCrabTarget = target;
+      this.bossRecoil = BOSS_RECOIL_TIME;
+      // Keep the exposed claw available through the pair, then switch sides.
+      if (index === 1) this.volley++;
+    }
   }
 
   private stepChallengeGuardian(dt: number) {
@@ -1780,7 +1825,8 @@ export class Flight {
       }
     }else if(this.encounterLevel==='vents'&&!this.crabCoreOpen){
       const index=this.crabTargetX<0?0:1;this.crabClawHealth[index]=Math.max(0,this.crabClawHealth[index]-damage);
-      this.bossHealth=CRAB_CORE_HP+this.crabClawHealth[0]+this.crabClawHealth[1];
+      const coreHealth = this.isVentChallenge ? ventChallengeBoss.coreHealth : CRAB_CORE_HP;
+      this.bossHealth = coreHealth + this.crabClawHealth[0] + this.crabClawHealth[1];
       if(this.crabClawHealth[index]===0){this.crabBreakTimes[index]=this.time;this.pickupMessage=this.crabCoreOpen?'Claws disabled · Gill chamber exposed':index===0?'Crusher joint broken':'Cutter joint broken';this.pickupTime=2.4;for(const wing of this.wings){wing.laserHold=0;wing.laserTarget=undefined;}}
     }else this.bossHealth = Math.max(0, this.bossHealth - damage);
     if (this.encounterLevel === 'io' && !this.ioLegBroken) {

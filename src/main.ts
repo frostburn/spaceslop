@@ -3,7 +3,7 @@ import { setupBriefing } from './app/briefing';
 import type { FlightLoadout, FlightShortcut } from './app/flight-session';
 import { saveLevelOffline, savedLevels, clearSavedLevels } from './app/offline';
 import { CHALLENGE_SAVE_KEY, challengeAvailable, challengeModes, challengeNames, challengeRoutes, decodeChallengeProgress,
-  nextChallengeLevel, readChallengeCode, recordChallengeClear, resetHardcoreProgress, unlockChallenge, type ChallengeMode } from './campaign/challenges';
+  nextChallengeLevel, readChallengeCode, recordChallengeClear, resetHardcoreProgress, unlockChallenge, type ChallengeMode, type FlightMode } from './campaign/challenges';
 import { campaign } from './campaign/missions';
 import { CAMPAIGN_SAVE_KEY, campaignStatus, decodeCampaignClears, recordCampaignClear } from './campaign/progress';
 import { ranks } from './campaign/ranks';
@@ -49,6 +49,7 @@ let saved = new Set<LevelId>();
 let session: AbortController | undefined;
 let briefController: AbortController | undefined;
 let pilotPicker: ReturnType<typeof setupPilotPicker> | undefined;
+let practiceDifficulty: HTMLSelectElement | undefined;
 let reloadBeforePreparation = false;
 let logoPosition = .5;
 let logoPointerX = 0;
@@ -228,6 +229,15 @@ function closeBriefing() {
   menu.setAttribute('aria-labelledby', 'menu-title');
 }
 
+function selectedFlightMode(): FlightMode {
+  if (mode === 'bullet-hell' || mode === 'hardcore') return mode;
+  if (import.meta.env.DEV && mode === 'free-flight') {
+    const chosen = practiceDifficulty?.value;
+    if (chosen === 'bullet-hell' || chosen === 'hardcore') return chosen;
+  }
+  return 'regular';
+}
+
 function openBriefing() {
   if (reloadBeforePreparation) { location.reload(); return; }
   briefController = new AbortController();
@@ -235,10 +245,21 @@ function openBriefing() {
   briefTitle.textContent = levels[selected].name;
   setupBriefing(selected, briefing, signal);
   const challengeRules = document.querySelector<HTMLElement>('#brief-challenge')!;
-  challengeRules.hidden = mode === 'campaign' || mode === 'free-flight';
-  challengeRules.textContent = mode === 'hardcore' ? `${challengeNames.hardcore} · One hit ends the run and resets Hardcore progress.`
-    : `${challengeNames['bullet-hell']} · Faster ship, denser enemy fire.`;
-  pilotPicker = setupPilotPicker(document.querySelector('#pilot-choices')!, document.querySelector('#pilot-perk-description')!, signal, mode === 'hardcore');
+  pilotPicker = setupPilotPicker(document.querySelector('#pilot-choices')!, document.querySelector('#pilot-perk-description')!, signal);
+  function updateDifficulty() {
+    const flightMode = selectedFlightMode();
+    challengeRules.hidden = flightMode === 'regular';
+    challengeRules.textContent = flightMode === 'hardcore'
+      ? `${challengeNames.hardcore} · ${mode === 'free-flight' ? 'One hit ends the run.' : 'One hit ends the run and resets Hardcore progress.'}`
+      : mode === 'free-flight' ? `${challengeNames['bullet-hell']} · Faster fighter.`
+        : `${challengeNames['bullet-hell']} · Faster fighter, denser enemy fire.`;
+    pilotPicker?.setHardcore(flightMode === 'hardcore');
+  }
+  if (practiceDifficulty) {
+    practiceDifficulty.closest('label')!.hidden = mode !== 'free-flight';
+    practiceDifficulty.addEventListener('change', updateDifficulty, { signal });
+  }
+  updateDifficulty();
   if (import.meta.env.DEV) updateShortcuts(selected);
   missionList.hidden = true;
   briefing.hidden = false;
@@ -283,7 +304,8 @@ async function launchFlight(shortcut?: FlightShortcut) {
   if (session || !pilotPicker) return;
   const id = selected;
   const campaignFlight = mode === 'campaign';
-  const flightMode = mode === 'bullet-hell' || mode === 'hardcore' ? mode : 'regular';
+  const challengeFlight = mode === 'bullet-hell' || mode === 'hardcore' ? mode : undefined;
+  const flightMode = selectedFlightMode();
   const loadout: FlightLoadout = {
     pilot: pilotPicker.selectedId,
     drone: testingLoadout && droneWeapon.value === 'towline' ? 'towline' : 'sentry',
@@ -322,17 +344,17 @@ async function launchFlight(shortcut?: FlightShortcut) {
     const handle = await openFlightSession(id, loadout, controller.signal, shortcut, campaignFlight ? {
       onClear: () => completeMission(id),
       onNext: nextBriefing,
-    } : undefined, flightMode !== 'regular' ? {
+    } : undefined, challengeFlight ? {
       onClear() {
         refreshChallenges();
-        const outcome = recordChallengeClear(challengeProgress, flightMode, id);
+        const outcome = recordChallengeClear(challengeProgress, challengeFlight, id);
         saveChallenges();
         updateCards();
         return outcome;
       },
       onNext: nextBriefing,
       onLoss() {
-        if (flightMode !== 'hardcore') return;
+        if (challengeFlight !== 'hardcore') return;
         refreshChallenges();
         resetHardcoreProgress(challengeProgress);
         saveChallenges();
@@ -370,6 +392,17 @@ document.querySelector('#clear-offline')!.addEventListener('click', async () => 
   status.textContent = removed ? 'Saved level files cleared. Campaign progress is retained.' : 'Offline storage could not be cleared on this device.';
 });
 if (import.meta.env.DEV) {
+  const difficultyField = document.createElement('label');
+  difficultyField.className = 'loadout-field';
+  difficultyField.hidden = true;
+  practiceDifficulty = document.createElement('select');
+  practiceDifficulty.id = 'dev-flight-difficulty';
+  practiceDifficulty.setAttribute('aria-label', 'Difficulty');
+  practiceDifficulty.add(new Option('Regular', 'regular'));
+  for (const challenge of challengeModes) practiceDifficulty.add(new Option(challengeNames[challenge], challenge));
+  difficultyField.append('Difficulty', practiceDifficulty);
+  briefing.querySelector('#test-wing-loadout')!.before(difficultyField);
+
   const links=document.createElement('nav');
   links.id='menu-dev-tools';links.className='dev-links';links.setAttribute('aria-label','Development tools');
   for(const [path,label]of [['workshop.html','Asset workshop'],['patrol-study.html','Draconian patrol blend'],['vent-study.html','Abyss camera study'],['io-study.html','Io camera study'],['heliostat-study.html','Uranus corridor study'],['biolume-study.html','Bioluminescence lighting study'],['black-hole-study.html','Black hole study']]){

@@ -70,7 +70,7 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
         rig.root.visible = true;
         rig.root.position.set(enemy.x, enemy.y, 0);
         rig.root.rotation.z = -motion.heading;
-        const charge = challenge && enemy.ioAim ? T.MathUtils.clamp(1 + (enemy.age - enemy.fire) / ioChallengeSkipper.windup, 0, 1) : 0;
+        const charge = challenge && enemy.lockedAim ? T.MathUtils.clamp(1 + (enemy.age - enemy.fire) / ioChallengeSkipper.windup, 0, 1) : 0;
         rig.pose(enemy.age, motion.bank, motion.jet, charge);
         skipperModels[index] = rig.root;
         rig.root.rotation.x -= ioPitch;

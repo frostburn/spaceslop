@@ -118,6 +118,8 @@ function bossTip(flight: Flight) {
       (towline ? 'Sweep the arc across the mirror' : 'Fire into the mirror · Dodge the sweeps');
   }
   if (encounter === 'vents') {
+    if (flight.isVentChallenge) return flight.crabCoreOpen ? 'Target the exposed gills. Dodge the third spray.'
+      : 'Break both glowing claw joints. Move after the aim lock.';
     if (towline) return flight.crabCoreOpen ? 'Sweep the arc across the exposed gills.' : 'Sweep the arc across a glowing claw joint.';
     return flight.crabCoreOpen ? 'Tap the gill chamber. Dodge amber rings.' : 'Tap the glowing joint. Break both claws.';
   }

@@ -53,10 +53,11 @@ export function showSelectedPilot(id: PilotId, slot: HTMLElement, name: HTMLElem
   name.textContent = pilot.name;
 }
 
-export function setupPilotPicker(choices: HTMLElement, perkDescription: HTMLElement, signal: AbortSignal, hardcore = false) {
+export function setupPilotPicker(choices: HTMLElement, perkDescription: HTMLElement, signal: AbortSignal) {
   choices.replaceChildren();
 
   let selected = savedPilot();
+  let hardcore = false;
   function showPilot(pilot: Pilot) {
     selected = pilot;
     const description = hardcore && pilot.id === 'brass'
@@ -92,5 +93,9 @@ export function setupPilotPicker(choices: HTMLElement, perkDescription: HTMLElem
 
   return {
     get selectedId() { return selected.id; },
+    setHardcore(value: boolean) {
+      hardcore = value;
+      showPilot(selected);
+    },
   };
 }
