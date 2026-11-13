@@ -18,7 +18,9 @@ const arrows = mergeGeometries([-1, 1].map((side) => polygon([
   [-0.12, 0.56 * side], [0, 0.475 * side], [0.12, 0.56 * side], [0.12, 0.6 * side],
   [0, 0.525 * side], [-0.12, 0.6 * side],
 ])));
-const icons: Record<WingWeapon, T.BufferGeometry> = {
+type PowerupKind = WingWeapon | 'repair';
+export const repairColor = 0x70f49a;
+const icons: Record<PowerupKind, T.BufferGeometry> = {
   homing: mergeGeometries([new T.RingGeometry(0.035, 0.055, 24), ...[-1, 1].flatMap((side) => [
     box(side * 0.17, 0, 0.14, 0.026), box(0, side * 0.17, 0.026, 0.14),
   ])]),
@@ -30,12 +32,20 @@ const icons: Record<WingWeapon, T.BufferGeometry> = {
     polygon([[0.16, 0.16], [0.07, 0.19], [0.11, 0.09]])]),
   omega: mergeGeometries([new T.RingGeometry(0.115, 0.175, 24, 1, -Math.PI / 2 + 0.5, Math.PI * 2 - 1),
     box(-0.115, -0.16, 0.14, 0.055), box(0.115, -0.16, 0.14, 0.055)]),
+  repair: polygon([
+    [-.061, .21], [.061, .21], [.061, .061], [.21, .061], [.21, -.061], [.061, -.061],
+    [.061, -.21], [-.061, -.21], [-.061, -.061], [-.21, -.061], [-.21, .061], [-.061, .061],
+  ]),
 };
-const palette = Object.fromEntries((Object.keys(wingWeapons) as WingWeapon[]).map((weapon) => [weapon, {
-  signal: new T.MeshBasicMaterial({ color: wingWeapons[weapon].color, side: T.DoubleSide }),
-  halo: new T.MeshBasicMaterial({ color: wingWeapons[weapon].color, transparent: true,
-    opacity: 0.55, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide }),
-}])) as Record<WingWeapon, { signal: T.MeshBasicMaterial; halo: T.MeshBasicMaterial }>;
+export const powerupKinds = Object.keys(icons) as PowerupKind[];
+const palette = Object.fromEntries(powerupKinds.map(kind => {
+  const color = kind === 'repair' ? repairColor : wingWeapons[kind].color;
+  return [kind, {
+    signal: new T.MeshBasicMaterial({ color, side: T.DoubleSide }),
+    halo: new T.MeshBasicMaterial({ color, transparent: true,
+      opacity: 0.55, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide }),
+  }];
+})) as Record<PowerupKind, { signal: T.MeshBasicMaterial; halo: T.MeshBasicMaterial }>;
 const lockCircle = new T.RingGeometry(0.94, 1, 40);
 const lockMaterials = [0, 1].map(() => new T.MeshBasicMaterial({ color: wingWeapons.homing.color,
   transparent: true, opacity: 0.6, depthWrite: false, side: T.DoubleSide }));
@@ -43,7 +53,7 @@ const lockMaterials = [0, 1].map(() => new T.MeshBasicMaterial({ color: wingWeap
 export function createPowerupGraphic() {
   const root = new T.Group();
   root.name = 'powerup-capsule';
-  const variants = (Object.keys(wingWeapons) as WingWeapon[]).map((weapon, index) => {
+  const variants = powerupKinds.map((weapon, index) => {
     const model = new T.Group(); model.name = `powerup-${weapon}`;
     const armor = new T.Mesh(casing, steel);
     const inset = new T.Mesh(face, charcoal); inset.position.z = 0.067;
@@ -63,7 +73,7 @@ export function createPowerupGraphic() {
   root.visible = false;
   return {
     root,
-    pose(weapon: WingWeapon, time: number, intro = 1) {
+    pose(weapon: PowerupKind, time: number, intro = 1) {
       root.visible = true;
       const t = T.MathUtils.clamp(intro, 0, 1);
       root.scale.setScalar(Math.max(0.05, 1 - (1 - t) ** 3 + Math.sin(t * Math.PI) * 0.1));

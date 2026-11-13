@@ -87,7 +87,7 @@ export const campaign: readonly Mission[] = [
   {
     level: 'wormhole', pilotRank: 'captain', officer: 'arruv',
     brief: 'The return channel is replaying the forged order in Malik’s voice. Follow the echo to its source and break the override before it answers again.',
-    objective: 'Follow the signal through the wormhole and clear the anomaly.',
+    objective: 'Defeat the returning bosses, then break the override at its source.',
   },
 ];
 

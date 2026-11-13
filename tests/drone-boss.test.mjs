@@ -70,6 +70,7 @@ for (const finale of [false, true]) {
   test(`wormhole projectiles recede into the screen during ${finale ? 'Fons' : 'the cicada rematch'}`, () => {
     const flight = new Flight('sentry', ['cannon', 'omega'], 'vex', 'wormhole');
     if (finale) flight.startFonsApproach();
+    else flight.startWormholeEncounter(3);
     flight.phase = 'boss';
     flight.player = { x: 0, y: 6 };
     flight.fire(flight.player);

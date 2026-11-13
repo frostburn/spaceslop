@@ -11,7 +11,7 @@ const server = await createServer({
 after(() => server.close());
 const { Flight, STEP, BOSS_CAMERA_DISTANCE, BOSS_Y, BOSS_PROJECTION } = await server.ssrLoadModule('/src/game.ts');
 const { levels } = await server.ssrLoadModule('/src/levels.ts');
-const { wormholeFrame, WORMHOLE_APPROACH } = await server.ssrLoadModule('/src/wormhole/route.ts');
+const { wormholeFrame, WORMHOLE_SUPPLY_TIME, wormholeBosses } = await server.ssrLoadModule('/src/wormhole/route.ts');
 const { CICADA_FIRE, CICADA_HP, CICADA_WINDUP } = await server.ssrLoadModule('/src/cicada.ts');
 const { wormholeReflectionPose, createWormholeReflection } = await server.ssrLoadModule('/src/wormhole/reflection.ts');
 const { createFighterRig } = await server.ssrLoadModule('/src/ship-rigs.ts');
@@ -51,23 +51,28 @@ test('the royal backdrops follow their variant and Invictus cycles smoothly on t
   }
 });
 
-test('the traveling aperture centers and opens before the cicada reaches combat depth', () => {
+test('the traveling aperture centers for the rush and opens again for each arrival', () => {
   const end = levels.wormhole.duration;
   const start = wormholeFrame(0, end);
   const approach = wormholeFrame(end, end);
   const open = wormholeFrame(end + 2.5, end);
-  const combat = wormholeFrame(end + WORMHOLE_APPROACH, end);
-  const settled = wormholeFrame(end + WORMHOLE_APPROACH + 3, end);
+  const combat = wormholeFrame(end + WORMHOLE_SUPPLY_TIME, end);
+  const settled = wormholeFrame(end + WORMHOLE_SUPPLY_TIME + 3, end);
   assert.equal(start.lensStrength, 0);
-  assert(!approach.bossVisible && open.bossVisible);
+  assert.equal(approach.arrival, 0);
   assert(approach.lensX < 0 && approach.lensY > 0);
   assert(open.lensRadius > approach.lensRadius && open.echo > approach.echo);
   assert(open.arrival > 0 && open.arrival < 1);
   assert.equal(combat.arrival, 1);
-  assert.equal(combat.wingSpread, 1);
   assert.equal(Math.hypot(combat.lensX, combat.lensY), 0);
   assert(settled.lensStrength < combat.lensStrength);
   assert(settled.echo < combat.echo);
+  const next = wormholeFrame(end + 33, end, 2.25);
+  const nextCombat = wormholeFrame(end + 33, end, WORMHOLE_SUPPLY_TIME);
+  assert(next.lensStrength > settled.lensStrength && next.waveStrength > 0);
+  assert(next.arrival > 0 && next.arrival < 1);
+  assert.equal(nextCombat.arrival, 1);
+  assert.equal(next.travel, nextCombat.travel);
 
   let previous = start.travel;
   for (let tick = 1; tick < 60 * 30; tick++) {
@@ -78,19 +83,38 @@ test('the traveling aperture centers and opens before the cicada reaches combat 
   }
 });
 
-test('the quiet approach leads to a five-shot Titan rematch with locked warnings', () => {
-  const flight = new Flight('sentry', [], 'vex', 'wormhole');
-  for (let tick = 0; tick <= Math.ceil(flight.stageDuration / STEP) && flight.phase === 'stage'; tick++) {
-    flight.step(STEP);
-    assert.equal(flight.enemies.length + flight.drops.length + flight.threats.length, 0);
-  }
+function finishApproach(flight) {
   assert.equal(flight.phase, 'approach');
-  assert.equal(flight.transitionDuration, WORMHOLE_APPROACH);
-  for (let tick = 0; tick <= Math.ceil(WORMHOLE_APPROACH / STEP) && flight.phase === 'approach'; tick++) {
-    flight.step(STEP);
-    assert.equal(flight.shots.length + flight.threats.length, 0);
-  }
+  while (flight.phase === 'approach') flight.step(STEP);
   assert.equal(flight.phase, 'boss');
+}
+
+function defeatEncounter(flight) {
+  assert.equal(flight.phase, 'boss');
+  if (flight.encounterLevel === 'vents') {
+    for (let i = 0; i < 2; i++) {
+      flight.damageBoss(1000);
+      flight.volley++;
+    }
+  }
+  if (flight.encounterLevel === 'summer') {
+    for (const side of [-1, 0, 1]) flight.damageBoss(1000, false, side);
+  } else {
+    flight.damageBoss(1000);
+    if (flight.encounterLevel === 'io' && flight.phase === 'boss') flight.damageBoss(1000);
+  }
+}
+
+test('the fourth encounter is a five-shot Titan rematch with locked warnings', () => {
+  const flight = new Flight('sentry', [], 'vex', 'wormhole');
+  flight.time = flight.stageDuration;
+  flight.step(0);
+  for (let i = 0; i < 3; i++) {
+    finishApproach(flight);
+    defeatEncounter(flight);
+  }
+  finishApproach(flight);
+  assert.equal(flight.encounterLevel, 'titan');
   assert.equal(flight.bossMaxHealth, CICADA_HP);
   assert.equal(flight.bossHealth, CICADA_HP);
   assert(flight.exposedCannonX < 0);
@@ -174,37 +198,113 @@ test('reflection capture primes once, restores renderer state, and disposes the 
   assert(disposed);
 });
 
-test('defeating the cicada flows into Fons with the same flight and continuous travel', () => {
-  const flight = new Flight('sentry', ['cannon'], 'vex', 'wormhole');
-  flight.time = flight.stageDuration;
-  flight.step(0);
-  while (flight.phase === 'approach') flight.step(STEP);
-  for (let tick = 0; tick < 90; tick++) flight.step(STEP);
-  assert(flight.markers.length > 0);
+test('the entire campaign roster shares a flight clock, loadout, score and charges through Fons', () => {
+  const weapons = ['homing', 'cannon', 'laser', 'omega'];
+  let draws = 0;
+  const flight = new Flight('sentry', ['cannon'], 'vex', 'wormhole', () => (draws++ % 4 + .5) / 4);
+  const expected = ['broodlock', 'io', 'vents', 'titan', 'heliostat', 'ice', 'preserve',
+    'summer', 'boulevard', 'biolume', 'fleet', 'den', 'wormhole'];
+  assert.deepEqual(wormholeBosses, expected);
+  for (let tick = 0; flight.phase === 'stage'; tick++) {
+    assert(tick <= Math.ceil(flight.stageDuration / STEP));
+    assert.equal(flight.enemies.length + flight.drops.length + flight.threats.length, 0);
+    flight.step(STEP);
+  }
+  flight.player.x = 3.5;
   flight.hull = 2;
-  flight.bossHealth = 6;
-  const before = flight.wormholeTime;
-  flight.pulse();
-  assert.equal(flight.phase, 'approach');
-  assert.equal(flight.wormholeTime, before);
-  assert.equal(flight.fonsTime, -FONS_APPROACH);
-  assert.equal(flight.hull, 2);
-  assert.equal(flight.charges, 1);
-  assert.equal(flight.score, 1000);
-  assert.equal(flight.bossHealth, FONS_HP);
-  assert.equal(flight.shots.length + flight.markers.length + flight.threats.length, 0);
-  while (flight.phase === 'approach') flight.step(STEP);
-  assert.equal(flight.phase, 'boss');
-  assert(flight.isFonsFight && flight.planarBoss);
-  assert.equal(flight.fonsVariant, 'normal');
-  assert(Math.abs(flight.fonsTime) < 1e-8);
-  flight.bossHealth = 6;
-  flight.pulse();
-  assert.equal(flight.phase, 'won');
-  assert.equal(flight.score, 3500);
+  flight.charges = 1;
+  flight.wings[0].upgraded = true;
+  for (const [index, id] of expected.entries()) {
+    assert.equal(flight.level, 'wormhole');
+    assert.equal(flight.encounterLevel, id);
+    assert.equal(flight.wormholeBossNumber, index + 1);
+    assert.equal(flight.transitionDuration, WORMHOLE_SUPPLY_TIME);
+    assert.equal(flight.shots.length + flight.markers.length + flight.threats.length + flight.enemies.length, 0);
+    assert.deepEqual(flight.drops.flatMap(drop => drop.weapon ? [drop.weapon] : []),
+      [weapons[2 * index % 4], weapons[(2 * index + 1) % 4]]);
+    assert.equal(flight.drops.filter(drop => drop.kind === 'repair').length, index > 0 && index % 3 === 0 ? 1 : 0);
+    assert.equal(draws, 2 * (index + 1));
+    assert.equal(flight.wings[0].weapon, 'cannon');
+    assert(flight.wings[0].upgraded);
+    assert.equal(flight.hull, 2);
+    assert.equal(flight.charges, 1);
+    assert.equal(flight.bossHealth, id === 'wormhole' ? FONS_HP : new Flight('sentry', [], 'vex', id).bossMaxHealth);
+    finishApproach(flight);
+    assert.equal(flight.drops.length, 0);
+    if (id === 'wormhole') {
+      assert(flight.isFonsFight && flight.planarBoss);
+      assert.equal(flight.fonsTime, 0);
+      assert.equal(flight.fonsVariant, 'normal');
+    }
+    const before = flight.wormholeTime;
+    defeatEncounter(flight);
+    assert.equal(flight.wormholeTime, before);
+    assert.equal(flight.phase, id === 'wormhole' ? 'won' : 'approach');
+  }
+  assert.equal(flight.score, 14500);
   const finish = flight.wormholeTime;
   flight.step(3);
   assert.equal(flight.wormholeTime, finish);
+  assert.equal(flight.drops.length, 0);
+});
+
+test('supply capsules use existing weapon upgrades and restore one hull up to the current capacity', () => {
+  const flight = new Flight('sentry', [], 'brass', 'wormhole', () => .3);
+  flight.time = flight.stageDuration;
+  flight.step(0);
+  const collect = drop => {
+    Object.assign(flight.player, { x: drop.x, y: drop.y });
+    flight.step(STEP);
+    assert(!flight.drops.includes(drop));
+  };
+  const pair = [...flight.drops];
+  pair.forEach(collect);
+  assert.equal(flight.wings[0].weapon, 'cannon');
+  assert(flight.wings[0].upgraded);
+  flight.player.x = 3.5;
+  for (let i = 0; i < 12; i++) {
+    finishApproach(flight);
+    defeatEncounter(flight);
+    const repair = flight.drops.find(drop => drop.kind === 'repair');
+    if (!repair) continue;
+    if (i === 2) {
+      flight.hull = 2;
+      collect(repair);
+      assert.equal(flight.hull, 3);
+      assert.equal(flight.pickupMessage, 'Hull repaired · +1');
+    } else if (i === 5) {
+      flight.hull = 4;
+      collect(repair);
+      assert.equal(flight.hull, 4);
+      assert.equal(flight.pickupMessage, 'Hull already full');
+    } else if (i === 8) {
+      flight.droneWeapon = 'towline';
+      collect(flight.drops[0]);
+      assert.equal(flight.hull, 5);
+      flight.hull = 4;
+      collect(repair);
+      assert.equal(flight.hull, 5);
+    } else {
+      collect(repair);
+      assert.equal(flight.hull, 5);
+    }
+    Object.assign(flight.player, { x: 3.5, y: -5.3 });
+  }
+});
+
+test('losing during the sequence freezes the current encounter without spawning supplies', () => {
+  const flight = new Flight('sentry', [], 'vex', 'wormhole');
+  flight.time = flight.stageDuration;
+  flight.step(0);
+  finishApproach(flight);
+  flight.hull = 1;
+  flight.hit();
+  const finish = flight.wormholeTime;
+  flight.step(3);
+  assert.equal(flight.wormholeTime, finish);
+  assert.equal(flight.phase, 'lost');
+  assert.equal(flight.encounterLevel, 'broodlock');
+  assert.equal(flight.drops.length, 0);
 });
 
 test('the wall rifts open before the asteroids cross and both rocks recede after giving cover', () => {

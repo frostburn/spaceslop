@@ -46,7 +46,7 @@ test('banked cicada vents stay registered with combat and laser contact through 
 });
 
 test('volley origins follow the moving vent and a tracking laser keeps its lock',()=>{
- const flight=new Flight('sentry',[],'vex','wormhole');
+ const flight=new Flight('sentry',[],'vex','titan');
  flight.phase='boss';
  const wing=flight.wings[0];
  wing.upgraded=true;

@@ -1,5 +1,5 @@
 export const levels = {
-  wormhole: { name: 'The Return Channel · Wormhole', sector: 'WORMHOLE', boss: 'TITAN CICADA', duration: 7 },
+  wormhole: { name: 'The Return Channel · Wormhole', sector: 'WORMHOLE', boss: 'FONS INVERSUS', duration: 7 },
   fleet: { name: 'The Broken Exchange', sector: 'FLEET CLASH', boss: 'GRAY COMMAND SAUCER', duration: 98 },
   den: { name: 'The Last Gantry · Sagittarius A*', sector: 'DRACONIAN DEN', boss: 'THE GANTRY CHIEF', duration: 100 },
   biolume: { name: 'Lantern Grove', sector: 'LANTERN GROVE', boss: 'LANTERN RAY', duration: 100 },

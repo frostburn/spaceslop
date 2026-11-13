@@ -76,7 +76,8 @@ export const studyTextureFiles = {
 export type StudyTexture = keyof typeof studyTextureFiles;
 
 export const levelTextures: Record<LevelId, readonly EncounterTexture[]> = {
-  wormhole: ['armor', 'titanChitin', 'fonsMane'],
+  wormhole: ['armor', 'chitin', 'fungus', 'mold', 'ioCeramic', 'ventCrab', 'titanChitin', 'marine',
+    'feathers', 'scales', 'summerHydra', 'biolumeBoss', 'fleetSaucer', 'denBiker', 'fonsMane'],
   fleet: ['armor', 'fleetSky', 'fleetPlanets', 'fleetFlagship', 'fleetTrench', 'fleetSaucer'],
   den: ['armor', 'denCliff', 'denDisk', 'denBiker', 'denGantry', 'denSky', 'denPatrol', 'denProps', 'denDefenses'],
   biolume:['armor','biolumeBackdrop','biolumeForeground','biolumeEnemy','biolumePods','biolumeBoss','biolumeFrog'],

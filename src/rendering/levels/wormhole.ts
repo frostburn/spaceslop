@@ -1,18 +1,14 @@
 import * as T from 'three';
-import { createCicada } from '../../cicada-rig';
-import { cicadaFlight } from '../../cicada';
-import { BOSS_RECOIL_TIME } from '../../encounters';
 import { loadEncounterTexture } from '../../encounter-texture';
-import { BOSS_CAMERA_DISTANCE, BOSS_DEPTH, BOSS_PROJECTION, BOSS_Y, HEIGHT, WORMHOLE_PITCH } from '../../game';
-import { createBossLaserContact } from '../../laser-contact';
-import { createTitanChitinSurface } from '../../titan-insect-surfaces';
+import { BOSS_CAMERA_DISTANCE, BOSS_PROJECTION, BOSS_Y, HEIGHT, WORMHOLE_PITCH } from '../../game';
 import { createWormholeReflection, wormholeReflectionPose, type WormholeReflectionPose } from '../../wormhole/reflection';
 import { fonsEase, fonsPhase, FONS_APPROACH } from '../../wormhole/fons/combat';
 import { createFonsEffects } from '../../wormhole/fons/effects';
 import { createFonsEnvironment } from '../../wormhole/fons/environment';
 import { createFonsLightning } from '../../wormhole/fons/lightning';
 import { createFonsRig } from '../../wormhole/fons/rig';
-import { wormholeFrame, WORMHOLE_APPROACH } from '../../wormhole/route';
+import { createWormholeBosses, type WormholeBoss } from '../../wormhole/bosses';
+import { wormholeFrame } from '../../wormhole/route';
 import { createWormholeTunnel } from '../../wormhole/tunnel';
 import type { LevelFactory } from '../level';
 
@@ -31,24 +27,26 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
   const fons = createFonsRig(environment.texture);
   const lightning = createFonsLightning(apertureY * halfHeight);
   let mirror: WormholeReflectionPose;
-  const chitin = createTitanChitinSurface();
-  const boss = createCicada(chitin.material);
-  boss.root.visible = false;
+  const bosses = createWormholeBosses(plane, signal);
+  const encounters = Object.values(bosses.roster);
+  let active: WormholeBoss | undefined;
+  let retreating: WormholeBoss | undefined;
   fons.root.visible = attacks.root.visible = false;
   const amber = new T.Color(0xff974f), cyan = new T.Color(0x65e5da), violet = new T.Color(0xa563ff);
   const rim = new T.DirectionalLight(amber, .8);
   rim.position.set(-2, 6, -14);
-  root.add(tunnel.root, boss.root, fons.root, attacks.root, lightning.root, rim);
-  const ready = Promise.all([
-    loadEncounterTexture('titanChitin', chitin.setTexture, 1, signal),
-    loadEncounterTexture('fonsMane', fons.setMane, undefined, signal),
-  ]).then(textures => [...textures, ...tunnel.textures]);
+  root.add(tunnel.root, ...encounters.map(({ entrance }) => entrance), bosses.effects,
+    fons.root, attacks.root, lightning.root, rim);
+  const ready = Promise.all([bosses.ready, loadEncounterTexture('fonsMane', fons.setMane, undefined, signal)])
+    .then(([textures, mane]) => [...textures, mane, ...tunnel.textures]);
 
   return {
     root,
-    boss: boss.root,
+    get boss() { return active?.model ?? fons.root; },
     victoryBoss: fons.root,
-    models: [],
+    models: bosses.models,
+    surfaces: bosses.surfaces,
+    applyArmor: bosses.applyArmor,
     ready,
     stageDistance: BOSS_CAMERA_DISTANCE,
     fixedCamera: true,
@@ -60,32 +58,42 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
     ground: 0x49365b,
     skyIntensity: 1.35,
     friendlyGlow: 1.17,
-    contacts: [boss.root, fons.root],
-    warmup: [[tunnel.root, boss.root], [fons.root, attacks.root, lightning.root, ...fons.ornaments, ...attacks.royalFlashes]],
+    contacts: [...bosses.contacts, fons.root],
+    warmup: [[tunnel.root], ...bosses.warmup, [fons.root, attacks.root, lightning.root, ...fons.ornaments, ...attacks.royalFlashes]],
     prepare() {
-      // Prime the rematch at its settled depth before the entrance animates it.
-      boss.root.position.set(0, BOSS_Y, BOSS_DEPTH);
+      bosses.prepare();
       fons.update(0, BOSS_CAMERA_DISTANCE, true);
       attacks.prime();
       lightning.update(-1.8, BOSS_CAMERA_DISTANCE);
       environment.prime();
       reflection.prime();
     },
+    afterWarmup: bosses.afterWarmup,
     capture(renderer, camera) {
       reflection.capture(renderer, mirror);
       environment.capture(renderer, camera, fons.root.visible);
     },
     dispose() {
+      bosses.dispose();
       tunnel.clearReflection();
       reflection.dispose();
       fons.clearEnvironment();
       attacks.setCrystalEnvironment(null);
       environment.dispose();
     },
-    contact: createBossLaserContact(plane, boss.root),
-    update({ flight, time, distance, newFlight, victory }) {
-      const frame = wormholeFrame(time, flight.stageDuration);
+    contact(x, distance, flight) {
+      if (active?.contact) {
+        if (flight.encounterLevel === 'io') x = flight.ioLegBroken ? 1 : -1;
+        if (flight.encounterLevel === 'vents') x = flight.crabCoreOpen ? 0 : flight.crabTargetX;
+        return active.contact(x, distance);
+      }
+      return { x: flight.exposedCannonX, y: flight.bossAimY };
+    },
+    update(levelFrame) {
+      const { flight, time, distance, newFlight, victory } = levelFrame;
       const fonsTime = flight.fonsTime;
+      const age = flight.phase === 'stage' ? time - flight.stageDuration : flight.wormholeEncounterTime;
+      const frame = wormholeFrame(time, flight.stageDuration, age, flight.isFonsFight);
       const finale = flight.isFonsFight ? fonsEase(-FONS_APPROACH, -1.2, fonsTime) : 0;
       frame.echo *= 1 - finale;
       frame.lensStrength += finale * .32 * (1 - fonsEase(-1.2, .8, fonsTime));
@@ -109,30 +117,35 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
       rim.color.copy(amber).lerp(cyan, finale).lerp(violet, crackle * .68);
       rim.intensity = .54 + frame.echo * 1.65 + waveLight * 1.8 + finale * 1.4 + crackle * .82;
       rim.position.set(frame.lensX * 19 - 2, 6, -14);
-      const retreat = flight.isFonsFight && time > flight.stageDuration + WORMHOLE_APPROACH + .60 &&
-        fonsTime < -FONS_APPROACH + .72;
-      boss.root.visible = retreat || (!flight.isFonsFight && frame.bossVisible && flight.bossHealth > 0);
-      if (!boss.root.visible) return;
-      const bossTime = time - flight.stageDuration - WORMHOLE_APPROACH;
-      const motion = cicadaFlight(bossTime);
-      if (retreat) {
-        const recede = fonsEase(-FONS_APPROACH, -FONS_APPROACH + .72, fonsTime);
-        const drift = 1 - recede;
-        const z = T.MathUtils.lerp(BOSS_DEPTH, -100, recede);
-        boss.root.position.set(motion.x * drift, BOSS_Y * (1 - z / distance) * BOSS_PROJECTION + motion.y * drift, z + motion.z * drift);
-        boss.root.rotation.set(recede * .8, motion.yaw * drift + recede * .6, motion.bank * drift - recede * .78, 'ZYX');
-        boss.pose(1, 0, 0, 0, 0, bossTime, drift);
-        return;
+      const next = flight.phase === 'stage' || flight.encounterLevel === 'wormhole'
+        ? undefined : bosses.roster[flight.encounterLevel];
+      if (newFlight || next !== active) {
+        if (retreating) retreating.entrance.visible = false;
+        if (active) active.entrance.visible = false;
+        retreating = !newFlight && flight.phase === 'approach' ? active : undefined;
+        active = next;
       }
-
-      const z = T.MathUtils.lerp(-145, BOSS_DEPTH, frame.arrival);
-      const size = 1 - z / BOSS_CAMERA_DISTANCE;
-      // Project the distant boss inside the same aperture, then let it fly
-      // towards the player and blend into its shared combat flight path.
-      boss.root.position.set(frame.lensX * halfHeight * size + motion.x, (apertureY + frame.lensY) * halfHeight * size + motion.y, z + motion.z);
-      boss.root.rotation.set(-.19 * (1 - frame.arrival), motion.yaw - .42 * (1 - frame.arrival), motion.bank - .16 * (1 - frame.arrival), 'ZYX');
-      boss.pose(frame.arrival, flight.cannonWindup, flight.exposedCannonX, flight.firedCannonX,
-        flight.bossRecoil / BOSS_RECOIL_TIME, bossTime, frame.wingSpread, frame.echo * frame.lensStrength * .46);
+      if (retreating) {
+        const recede = fonsEase(0, .76, age);
+        retreating.entrance.visible = recede < 1;
+        retreating.entrance.position.set(0, BOSS_Y * 2.7 * recede, -92 * recede);
+        if (recede === 1) retreating = undefined;
+      }
+      if (active) {
+        active.entrance.visible = frame.arrival > 0 && flight.bossHealth > 0;
+        if (active.entrance.visible) {
+          active.pose(levelFrame, flight.bossTime);
+          const far = 1 - frame.arrival, depth = -112 * far;
+          const point = active.model.position;
+          const factor = 1 - (point.z + depth) / distance;
+          active.entrance.position.set(
+            (frame.lensX * halfHeight * factor - point.x) * far,
+            ((apertureY + frame.lensY) * halfHeight * factor - point.y) * far,
+            depth,
+          );
+        }
+      }
+      bosses.updateEffects(levelFrame);
     },
   };
 };
