@@ -33,13 +33,17 @@ test('challenge unlocks are case-insensitive and Hardcore loss resets only Hardc
   assert(!challengeAvailable(progress, 'hardcore', campaignClears));
   assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'vents'), { next: 'io', unlockedHardcore: false });
   assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'io'), { next: 'vents', unlockedHardcore: false });
-  assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'vents'), { next: undefined, unlockedHardcore: true });
+  assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'vents'), { next: 'titan', unlockedHardcore: false });
+  assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'ice'), { next: 'titan', unlockedHardcore: false });
+  assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'titan'), { next: 'heliostat', unlockedHardcore: false });
+  assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'heliostat'), { next: 'ice', unlockedHardcore: false });
+  assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'ice'), { next: undefined, unlockedHardcore: true });
   assert(challengeAvailable(progress, 'hardcore', campaignClears));
   recordChallengeClear(progress, 'hardcore', 'broodlock');
   const saved = decodeChallengeProgress(JSON.stringify(progress));
   assert.deepEqual(saved.cleared.hardcore, ['broodlock']);
   resetHardcoreProgress(saved);
-  assert.deepEqual(saved.cleared, { 'bullet-hell': ['broodlock', 'io', 'vents'], hardcore: [] });
+  assert.deepEqual(saved.cleared, { 'bullet-hell': ['broodlock', 'io', 'vents', 'titan', 'heliostat', 'ice'], hardcore: [] });
   assert(challengeAvailable(saved, 'hardcore', campaignClears));
 
   const firstStageSave = decodeChallengeProgress('{"unlocked":["hardcore"],"cleared":{"bullet-hell":["broodlock"]}}');
@@ -47,7 +51,8 @@ test('challenge unlocks are case-insensitive and Hardcore loss resets only Hardc
   assert.deepEqual(recordChallengeClear(firstStageSave, 'bullet-hell', 'broodlock'), { next: 'io', unlockedHardcore: false });
   assert.deepEqual(recordChallengeClear(firstStageSave, 'bullet-hell', 'io'), { next: 'vents', unlockedHardcore: false });
   const twoStageSave = decodeChallengeProgress(JSON.stringify(firstStageSave));
-  assert.deepEqual(recordChallengeClear(twoStageSave, 'bullet-hell', 'vents'), { next: undefined, unlockedHardcore: false });
+  assert.deepEqual(recordChallengeClear(twoStageSave, 'bullet-hell', 'vents'), { next: 'titan', unlockedHardcore: false });
+  assert(challengeAvailable(twoStageSave, 'hardcore', campaignClears));
 });
 
 test('both challenges build dense fields of slow, readable projectiles', () => {
@@ -148,4 +153,62 @@ test('Hardcore ends on its first hit and Brass can clear on-screen fire repeated
   assert.equal(bulletHell.hull, 3);
   assert.equal(hardcore.hull, 0);
   assert.equal(hardcore.phase, 'lost');
+});
+
+test('new Bullet Hell sectors escalate the volleys within the actor pools', () => {
+  const sectors = [
+    ['titan', [[e => e.cicada, 12], [e => e.centipede, 32]]],
+    ['heliostat', [[e => e.heliostat?.kind === 'drone', 14], [e => e.heliostat?.kind === 'guard', 4]]],
+    ['ice', [[e => e.marine === 'ichthyosaur', 12], [e => e.marine === 'plesiosaur', 4]]],
+  ];
+  let previousRate = 16;
+  for (const [level, pools] of sectors) {
+    const flight = launch('bullet-hell', 'vex', level);
+    const regular = launch('regular', 'vex', level);
+    assert.equal(flight.stageDuration, regular.stageDuration);
+    assert.equal(flight.transitionDuration, regular.transitionDuration);
+    assert(flight.bossMaxHealth > regular.bossMaxHealth);
+    flight.cooldown = flight.droneCooldown = flight.invulnerable = 1e5;
+    const shots = new Set();
+    while (flight.phase === 'stage') {
+      flight.step(STEP);
+      for (const [matches, capacity] of pools) assert(flight.enemies.filter(matches).length <= capacity, level);
+      assert(flight.threats.length <= PATTERN_BULLET_CAPACITY, level);
+      for (const shot of flight.threats) shots.add(shot);
+    }
+    const rate = shots.size / flight.stageDuration;
+    assert(rate > previousRate && rate - previousRate < 5, level);
+    previousRate = rate;
+    assert.deepEqual(new Set([...shots].map(shot => shot.pattern)), new Set(['primary', 'accent']));
+    for (const shot of shots) assert(Math.hypot(shot.vx, shot.vy) < 5.5 && shot.vy < 0, level);
+    while (flight.phase === 'approach') flight.step(STEP);
+    flight.cooldown = flight.droneCooldown = 1e5;
+    while (flight.time < .8) flight.step(STEP);
+    assert(flight.cannonWindup > 0 && flight.threats.length === 0, level);
+    while (flight.time < 3.55) flight.step(STEP);
+    assert(flight.threats.length >= 100 && flight.threats.length <= PATTERN_BULLET_CAPACITY, level);
+    assert.deepEqual(new Set(flight.threats.map(shot => shot.pattern)), new Set(['primary', 'accent']));
+  }
+});
+
+test('Pulse interrupts both regulator lenses and the next volley is staggered after half health', () => {
+  const flight = launch('bullet-hell', 'vex', 'heliostat');
+  flight.time = flight.stageDuration;
+  flight.step(0);
+  flight.step(flight.transitionDuration);
+  flight.cooldown = flight.droneCooldown = flight.invulnerable = 1e5;
+  while (flight.time < 1.4) flight.step(STEP);
+  assert.deepEqual(new Set(flight.threats.map(shot => shot.pattern)), new Set(['primary', 'accent']));
+  flight.damageBoss(flight.bossMaxHealth * .6);
+  flight.pulse();
+  assert.equal(flight.cannonWindup, 0);
+  while (flight.time < 5.35) {
+    flight.step(STEP);
+    assert.equal(flight.threats.length, 0);
+  }
+  assert(flight.heliostatUnstable);
+  while (flight.time < 6.75) flight.step(STEP);
+  assert(flight.threats.length > 0 && flight.threats.every(shot => shot.pattern === 'accent'));
+  while (flight.time < 7.1) flight.step(STEP);
+  assert(flight.threats.some(shot => shot.pattern === 'primary'));
 });

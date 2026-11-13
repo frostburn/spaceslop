@@ -57,6 +57,9 @@ const patternPalettes: Partial<Record<LevelId, PatternPalette>> = {
   broodlock: { primary: 0xffa842, accent: 0xef91ff, shape: 'seed' },
   io: { primary: 0xffab36, accent: 0xff6d8a, shape: 'ember' },
   vents: { primary: 0x8deaff, accent: 0xdf99ff, shape: 'pearl' },
+  titan: { primary: 0xbd83ff, accent: 0x8dffd7, shape: 'seed' },
+  heliostat: { primary: 0xffd05b, accent: 0xff75bd, shape: 'pearl' },
+  ice: { primary: 0x839cff, accent: 0xff98d1, shape: 'shard' },
 };
 function planarProjectileLayer({x, y}: { x: number; y: number }, z: number) {
   const scale = (BOSS_CAMERA_DISTANCE - z) / BOSS_CAMERA_DISTANCE;
@@ -685,7 +688,7 @@ export class FlightView {
     const hostile = flight.isDen ? threats.map(s => ({ ...s, ...planarProjectileLayer(s, .85) }))
       : flight.level === 'fleet' ? threats.filter(s => !s.broadside) : threats;
     this.projectiles.hostile.draw(flight.encounterLevel !== 'ice' && flight.encounterLevel !== 'broodlock' && !flight.isFonsFight ? hostile : [], this.animationTime);
-    this.projectiles.brine.draw(flight.encounterLevel === 'ice' ? flight.threats : [], this.animationTime);
+    this.projectiles.brine.draw(flight.encounterLevel === 'ice' ? threats : [], this.animationTime);
     this.projectiles.spore.draw(flight.encounterLevel === 'broodlock' ? threats : [], this.animationTime);
   }
   private drawFeedback(flight: Flight, elapsed: number) {

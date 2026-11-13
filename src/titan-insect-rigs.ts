@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { TITAN_CENTIPEDE_MUZZLE, TITAN_SCOUT_MUZZLE } from './titan-challenge';
 import { addTitanSetae, titanChitin } from './titan-insect-surfaces';
 
 // Small patrol models share all GPU resources; each pool entry owns only its pivots.
@@ -16,6 +17,7 @@ const membrane = new T.MeshPhysicalMaterial({ color: 0xb5c4b6, transparent: true
   roughness: .28, metalness: .08, clearcoat: .7, side: T.DoubleSide, depthWrite: false });
 const vein = new T.LineBasicMaterial({ color: 0xc0c9b4, transparent: true, opacity: .8, depthWrite: false });
 const orb = new T.SphereGeometry(1, 16, 10);
+const chargeLight = new T.MeshBasicMaterial({ color: 0xe8acff });
 const up = new T.Vector3(0, 1, 0);
 
 function oval(x: number, y: number, z: number, sx: number, sy: number, sz: number) {
@@ -79,6 +81,8 @@ export function createCicadaScout() {
   const g = scoutParts ??= scoutGeometry(), root = new T.Group(); root.name = 'cicada-scout';
   mesh(root, g.body, scoutShell, 'scout-carapace'); mesh(root, g.ribs, scoutRim, 'abdomen-ribs');
   mesh(root, g.eyes, scoutEye, 'compound-eyes'); const feet = mesh(root, g.legs, scoutJoint, 'folded-legs');
+  const muzzle = mesh(root, orb, chargeLight, 'scout-charge');
+  muzzle.position.set(0, TITAN_SCOUT_MUZZLE, .31); muzzle.visible = false;
   addTitanSetae(root, 0, -.08, .32, .57, .76, 0);
   for (const side of [-1, 1]) addTitanSetae(root, side * .24, .31, .32, .30, .32, 0);
   const wings: { pivot: T.Group; side: number; rear: boolean }[] = [];
@@ -92,7 +96,9 @@ export function createCicadaScout() {
     mesh(blade, g.wing, membrane, 'wing-membrane'); blade.add(new T.LineSegments(g.veins, vein));
     pivot.add(blade); root.add(pivot); wings.push({ pivot, side, rear });
   }
-  return { root, pose(time: number, bank = 0) {
+  return { root, prime() { muzzle.visible = true; muzzle.scale.setScalar(.12); }, pose(time: number, bank = 0, charge = 0) {
+    muzzle.visible = charge > 0;
+    muzzle.scale.setScalar(.045 + charge * .105);
     root.rotation.y = bank; feet.rotation.x = Math.sin(time * 9) * .12;
     for (const { pivot, side, rear } of wings) {
       // The full beat stays at or above the dorsal hinge, never beneath the shell.
@@ -138,10 +144,14 @@ export function createCentipedeSection() {
   });
   const head = new T.Group(); head.name = 'original-head'; root.add(head);
   mesh(head, g.head, shell, 'head-and-antennae'); mesh(head, g.eyes, eye, 'head-eyes'); mesh(head, g.jaws, joint, 'mandibles');
+  const muzzle = mesh(head, orb, chargeLight, 'centipede-charge');
+  muzzle.position.set(0, TITAN_CENTIPEDE_MUZZLE, .28); muzzle.visible = false;
   const stump = mesh(root, g.stump, wound, 'severed-joint');
-  return { root, prime() { head.visible = stump.visible = true; },
-    pose(time: number, slot: number, originalHead: boolean, escaping: boolean) {
+  return { root, prime() { head.visible = stump.visible = muzzle.visible = true; muzzle.scale.setScalar(.12); },
+    pose(time: number, slot: number, originalHead: boolean, escaping: boolean, charge = 0) {
       head.visible = originalHead; stump.visible = slot === 0 && !originalHead;
+      muzzle.visible = !escaping && charge > 0;
+      muzzle.scale.setScalar(.045 + charge * .135);
       const gait = time * (escaping ? 22 : 14) - slot * .85;
       legs.forEach((leg, i) => {
         const phase = gait + i * Math.PI;

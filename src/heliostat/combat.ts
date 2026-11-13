@@ -80,8 +80,11 @@ export function heliostatLockTargets(player:{x:number;y:number},pattern=0){
   return [-1,1].map(side=>({x:x+side*(pattern===0 ? .75 : side===pattern ? .35 : 1.45),y:y+(pattern!==0&&side!==pattern ? .6 : 0)}));
 }
 export type PlasmaPoint={x:number;y:number;z:number};
+export function heliostatEmitter(side: number): PlasmaPoint {
+  return { x: side * HELIOSTAT_EMITTER_X, y: 4.2, z: -11.2 };
+}
 export function heliostatPlasmaControls(side:number,target:{x:number;y:number}):PlasmaPoint[] {
-  return [{x:side*HELIOSTAT_EMITTER_X,y:4.2,z:-11.2},{x:side*4.5,y:1.8,z:-8.6},
+  return [heliostatEmitter(side),{x:side*4.5,y:1.8,z:-8.6},
     {x:target.x+side*.6,y:target.y+1.9,z:-3.5},{...target,z:0}];
 }
 /** Curve and collision meet exactly at z=0; the tail continues toward camera. */

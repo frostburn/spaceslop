@@ -47,13 +47,13 @@ const facingGLSL = `float viewFacing(vec3 n, vec3 eye) {
   return clamp(dot(n, eye) * inversesqrt(max(dot(n,n) * dot(eye,eye), 1e-12)), 0.0, 1.0);
 }`;
 
-export type PatternPalette = { primary: number; accent: number; shape: 'seed' | 'ember' | 'pearl' };
+export type PatternPalette = { primary: number; accent: number; shape: 'seed' | 'ember' | 'pearl' | 'shard' };
 
 export function createPatternProjectileBatch(palette: PatternPalette) {
   const root = new T.Group();
   root.name = 'challenge-projectiles';
   const material = new T.ShaderMaterial({
-    uniforms: { shape: { value: { seed: 0, ember: 1, pearl: 2 }[palette.shape] } },
+    uniforms: { shape: { value: { seed: 0, ember: 1, pearl: 2, shard: 3 }[palette.shape] } },
     transparent: true,
     depthTest: false,
     depthWrite: false,
@@ -70,6 +70,7 @@ export function createPatternProjectileBatch(palette: PatternPalette) {
         if (shape == 0) radius = length(vec2(p.x * (1.0 + 0.22 * p.y), p.y));
         if (shape == 1) radius = max(abs(p.x), abs(p.y)) * 0.55 + (abs(p.x) + abs(p.y)) * 0.45;
         if (shape == 2) radius = length(cell / vec2(0.63, 0.63));
+        if (shape == 3) radius = max(abs(p.x) * 0.86 + abs(p.y) * 0.67, abs(p.y));
         float edge = max(0.06, fwidth(radius));
         float body = 1.0 - smoothstep(1.0 - edge, 1.0 + edge, radius);
         float glow = exp(-2.8 * radius * radius) * 0.45;
@@ -95,7 +96,7 @@ export function createPatternProjectileBatch(palette: PatternPalette) {
   root.visible = false;
   const matrix = new T.Matrix4(), position = new T.Vector3(), rotation = new T.Quaternion();
   const axis = new T.Vector3(0, 0, 1);
-  const size = new T.Vector3(.52, palette.shape === 'seed' ? .57 : palette.shape === 'ember' ? .63 : .52, 1);
+  const size = new T.Vector3(.52, { seed: .57, ember: .63, pearl: .52, shard: .71 }[palette.shape], 1);
 
   function draw(shots: Flight['threats']) {
     let count = 0;

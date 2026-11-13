@@ -7,6 +7,8 @@ import { createTitanScenery } from '../../titan-scenery';
 import { createCicada } from '../../cicada-rig';
 import { cicadaFlight } from '../../cicada';
 import { createCicadaScout, createCentipedeSection } from '../../titan-insect-rigs';
+import { patternBurstCharge } from '../../challenge-patterns';
+import { titanChallengeCentipede, titanChallengeScout } from '../../titan-challenge';
 import { CICADA_SCOUT_POOL, cicadaMotion } from '../../titan-insects';
 import { CENTIPEDE_POOL } from '../../centipede';
 import { titanBossPoint, titanFrame, TITAN_PITCH } from '../../titan-frame';
@@ -35,6 +37,7 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
     warmup: [[titan.root, boss.root], [...actors]],
     prepare() {
       titan.update(0);
+      cicadaScouts[0].prime();
       centipedeParts[0].prime();
     },
     contact: createBossLaserContact(plane, boss.root),
@@ -63,10 +66,10 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
         rig.root.rotation.z = -(enemy.heading ?? Math.PI);
         if (enemy.centipede) {
           const link = enemy.centipede;
-          (rig as typeof centipedeParts[number]).pose(enemy.age, link.slot, link.originalHead, Boolean(link.chain.escape));
+          (rig as typeof centipedeParts[number]).pose(enemy.age, link.slot, link.originalHead, Boolean(link.chain.escape), patternBurstCharge(enemy, titanChallengeCentipede.windup));
         }
         else if (enemy.cicada) {
-          (rig as typeof cicadaScouts[number]).pose(enemy.age, cicadaMotion(enemy.age, enemy.lane, enemy.cicada).bank);
+          (rig as typeof cicadaScouts[number]).pose(enemy.age, cicadaMotion(enemy.age, enemy.lane, enemy.cicada).bank, patternBurstCharge(enemy, titanChallengeScout.windup));
         }
         insectModels[index] = rig.root;
       }

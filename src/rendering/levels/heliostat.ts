@@ -4,6 +4,8 @@ import { createHeliostatScenery } from '../../heliostat/scenery';
 import { createHeliostatBackdrop } from '../../heliostat/backdrop';
 import { createHeliostatEnvironment } from '../../heliostat/materials';
 import { createHeliostatDrone,actorPose } from '../../heliostat/actors';
+import { patternBurstCharge } from '../../challenge-patterns';
+import { heliostatChallengeDrone, heliostatChallengeGuard } from '../../heliostat/challenge';
 import {createGuardAssets,createHeliostatGuard} from '../../heliostat/guard';
 import {createAttackPlasma} from '../../heliostat/plasma';
 import {crawlerPose,CRAWLER_POOL} from '../../heliostat/crawler';
@@ -39,6 +41,7 @@ export const createLevel:LevelFactory=({plane,scene,signal})=>{
     orientation:(_time,reveal)=>heliostatFrame(reveal),contacts:[scenery.boss.root,...actors.map(r=>r.root),...crawlers.map(r=>r.head)],
     warmup:[[scenery.root,plasma.root,...actors.map(r=>r.root),...crawlers.map(r=>r.root)]],
     prepare(){
+      drones[0].getObjectByName('drone-charge')!.visible = true;
       restoreRoute=scenery.route.prepare(-scenery.world.position.y);scenery.gates.prime();plasma.prime();
       restoreUnderworks=scenery.underworks.prepare(-scenery.world.position.y);
       restoreBoss=scenery.boss.prime();restoreCrawlers=crawlers.map(r=>r.prime());
@@ -67,7 +70,11 @@ export const createLevel:LevelFactory=({plane,scene,signal})=>{
         const index=enemy.heliostat.kind==='guard'?HELIOSTAT_DRONE_POOL+gi++:di++,rig=actors[index];if(!rig)continue;
         const p=heliostatMotion(enemy.age,enemy.lane,enemy.heliostat);
         rig.root.visible=enemy.hp>0;rig.root.position.set(enemy.x,enemy.y,0);rig.root.rotation.set(0,0,enemy.heading??0);
-        const charge=enemy.heliostat.kind==='guard'&&heliostatCanAttack(enemy.age,enemy.lane,enemy.heliostat)?T.MathUtils.clamp(1-(enemy.fire-enemy.age)/HELIOSTAT_GUARD_CHARGE,0,1):0;
+        const guard = enemy.heliostat.kind === 'guard';
+        const charge = flight.isHeliostatChallenge
+          ? patternBurstCharge(enemy, (guard ? heliostatChallengeGuard : heliostatChallengeDrone).windup)
+          : guard && heliostatCanAttack(enemy.age,enemy.lane,enemy.heliostat)
+            ? T.MathUtils.clamp(1-(enemy.fire-enemy.age)/HELIOSTAT_GUARD_CHARGE,0,1) : 0;
         rig.pose(animationTime+enemy.heliostat.slot,p.bank,charge);models[i]=rig.root.getObjectByName('guard-contact')??rig.root;
       }
     },
