@@ -41,15 +41,13 @@ export function createJellyDonuts(count: number) {
     return {
       root,
       pose(time: number, direction = 1, offset = 0) {
-        const cycle = 2 * Math.PI * time / JELLY_DONUT_PERIOD + offset;
-        // Keep the motion continuous when scrubbing or wrapping the eight-second preview.
-        const spin = 2 * cycle + .82 * Math.sin(4 * cycle) + .22 * Math.sin(11 * cycle);
-        disc.rotation.set(
-          .29 * Math.sin(3 * cycle) + .10 * Math.sin(9 * cycle),
-          .28 * Math.sin(5 * cycle + .7),
-          direction * spin,
-        );
-        disc.position.set(.035 * Math.sin(5 * cycle), .035 * Math.cos(3 * cycle), 0);
+        const turn = 2 * Math.PI;
+        const phase = T.MathUtils.euclideanModulo(time / JELLY_DONUT_PERIOD + offset / turn, 1);
+        const angle = turn * phase;
+        const spin = angle + .3 * Math.sin(angle);
+        // Ease one full somersault between stretches of slow face-on spin.
+        const flip = turn * T.MathUtils.smootherstep(phase, .33, .72);
+        disc.rotation.set(direction * flip, .09 * Math.sin(angle), direction * spin);
       },
     };
   });
