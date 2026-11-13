@@ -1,9 +1,11 @@
 import { CRUCIBLE_MUZZLE_Y, CRUCIBLE_WINDUP } from './io-crucible';
+import { patternBearing, patternBullet, stepPatternBurst, type BossPattern } from './challenge-patterns';
 import type { IoWave } from './io-layout';
 import { wingRewardForWave } from './wing';
 
 type Point = { x: number; y: number };
-type Attacker = Point & { age: number; fire: number; lockedAim?: Point };
+type Skipper = Point & Parameters<typeof stepPatternBurst>[0];
+type Crucible = Point & { age: number; fire: number; lockedAim?: Point };
 
 // Stagger patrols against the alternating Crucible crossings, leaving the rim clear.
 const patrols = [
@@ -26,91 +28,57 @@ export const ioChallengeWaves: readonly IoWave[] = [
   ...carrierTimes.map((time, index) => ({ time, lanes: [index % 2 === 0 ? 1 : -1], drop: drops[index % drops.length], crucible: true })),
 ].sort((a, b) => a.time - b.time);
 
-export const ioChallengeSkipper = { pace: 1.62, windup: .60, interval: 1.94, speed: 7.1 };
-export const ioChallengeCrucible = { first: 1.72, interval: 2.42, speed: 5.8 };
+export const ioChallengeSkipper = { pace: 1.32, windup: .78, rows: 3, spacing: .29, rest: 2.9, speed: 4.8 };
+export const ioChallengeCrucible = { first: 1.95, interval: 2.85, speed: 4.7 };
 
 export function ioChallengeSkipperFirstShot(slot: number) {
-  return 1.28 + slot * .34;
+  return 1.48 + slot * .45;
 }
 
-function readyToFire(attacker: Attacker, origin: Point, player: Point, windup: number, visible: boolean) {
-  if (!visible || origin.y < player.y + 1.65) {
-    attacker.fire = Math.max(attacker.fire, attacker.age + windup);
-    attacker.lockedAim = undefined;
+export function stepIoChallengeSkipper(enemy: Skipper, slot: number) {
+  const origin = { x: enemy.x, y: enemy.y - .58 };
+  const timing = ioChallengeSkipper;
+  const burst = stepPatternBurst(enemy, enemy, enemy.y < 7.1 && origin.y > -1, timing);
+  if (!burst) return;
+  const mirror = slot % 2 === 0 ? 1 : -1;
+  const aim = patternBearing(origin, { x: burst.target.x * .68, y: -5.1 }, .34) + (burst.row - 1) * mirror * .24;
+  return [-.37, -.13, .13, .37].map(offset => patternBullet(origin, aim + offset, timing.speed,
+    burst.row === 1 ? 'accent' : 'primary'));
+}
+
+const slagSpread = [-.66, -.42, -.21, .21, .42, .66];
+export function stepIoChallengeCrucible(enemy: Crucible, player: Point) {
+  const origin = { x: enemy.x, y: enemy.y + CRUCIBLE_MUZZLE_Y };
+  if (Math.abs(enemy.x) >= 4 || origin.y < player.y + 2.5) {
+    enemy.fire = Math.max(enemy.fire, enemy.age + CRUCIBLE_WINDUP);
+    enemy.lockedAim = undefined;
     return;
   }
-  if (attacker.age < attacker.fire - windup) return;
-  attacker.lockedAim ??= { ...player };
-  if (attacker.age >= attacker.fire) return attacker.lockedAim;
-}
-
-function fan(angle: number, speed: number, spread: readonly number[]) {
-  return spread.map(offset => {
-    const direction = angle + offset;
-    return { vx: Math.sin(direction) * speed, vy: -Math.cos(direction) * speed };
-  });
-}
-
-function bearing(origin: Point, target: Point) {
-  return Math.atan2(target.x - origin.x, origin.y - target.y);
-}
-
-const skipperFan = [-.38, -.19, 0, .19, .38];
-const skipperSplit = [-.36, -.12, .12, .36];
-export function stepIoChallengeSkipper(enemy: Attacker, slot: number, player: Point) {
-  const origin = { x: enemy.x, y: enemy.y - .58 };
-  const { windup, interval, speed } = ioChallengeSkipper;
-  const target = readyToFire(enemy, origin, player, windup, enemy.y < 7.1);
-  if (!target) return;
-  enemy.fire = enemy.age + interval;
-  enemy.lockedAim = undefined;
-  const spread = slot % 2 === 0 ? skipperFan : skipperSplit;
-  return fan(bearing(origin, target), speed, spread)
-    .map(velocity => ({ ...origin, ...velocity, z: 0, vz: 0, planar: true }));
-}
-
-const slagSpread = [-.58, -.31, 0, .31, .58];
-export function stepIoChallengeCrucible(enemy: Attacker, player: Point) {
-  const origin = { x: enemy.x, y: enemy.y + CRUCIBLE_MUZZLE_Y };
-  const target = readyToFire(enemy, origin, player, CRUCIBLE_WINDUP, Math.abs(enemy.x) < 4);
-  if (!target) return;
+  if (enemy.age < enemy.fire - CRUCIBLE_WINDUP) return;
+  enemy.lockedAim ??= { ...player };
+  if (enemy.age < enemy.fire) return;
+  const aim = patternBearing(origin, enemy.lockedAim, .32);
   enemy.fire = enemy.age + ioChallengeCrucible.interval;
   enemy.lockedAim = undefined;
-  return fan(bearing(origin, target), ioChallengeCrucible.speed, slagSpread)
-    .map(slag => ({ ...origin, slag }));
+  const speed = ioChallengeCrucible.speed;
+  return slagSpread.map(offset => ({ ...origin, slag: { vx: Math.sin(aim + offset) * speed, vy: -Math.cos(aim + offset) * speed } }));
 }
 
-export const ioChallengeBoss = { health: 132, supportHealth: 32, interval: 2.35, lockAt: .32 };
-const wheelVolleys = [
-  { at: .78, speed: 7.25, spread: [-.72, -.54, -.36, -.18, 0, .18, .36, .54, .72] },
-  { at: 1.20, speed: 7.75, spread: [-.83, -.67, -.51, -.35, -.19, .19, .35, .51, .67, .83] },
-  { at: 1.66, speed: 8.15, spread: [-.56, -.40, -.24, -.08, .08, .24, .40, .56] },
-] as const;
+export const ioChallengeBoss = { health: 132, supportHealth: 32, interval: 4.3, lockAt: .4,
+  first: 1.05, spacing: .20, rows: 9, exposedRows: 13 } satisfies BossPattern & { health: number; supportHealth: number };
 
-export function calderaChallengeWindup(time: number, broken: boolean) {
-  const elapsed = time % ioChallengeBoss.interval;
-  const count = broken ? wheelVolleys.length : 2;
-  for (let index = 0; index < count; index++) {
-    const { at } = wheelVolleys[index];
-    const start = index === 0 ? ioChallengeBoss.lockAt : at - .24;
-    if (elapsed >= start && elapsed < at) return (elapsed - start) / (at - start);
-    if (elapsed >= at && elapsed < at + .15) return 1 - (elapsed - at) / .15;
+const curtainY = -4.8;
+export function calderaChallengeRow(origin: Point, target: Point, cycle: number, row: number) {
+  const mirror = cycle % 2 === 0 ? 1 : -1;
+  const gap = Math.max(-2.05, Math.min(2.05, target.x * .3 + mirror * (1.32 * Math.sin(row * .28 - 1.1))));
+  const shift = row % 2 === 0 ? 0 : .32;
+  const shots = [];
+  for (let column = -8; column <= 8; column++) {
+    const x = .64 * column + shift;
+    if (Math.abs(x - gap) < .92) continue;
+    // Lay out the curtain at a fixed height so the moving wheel cannot close its gap.
+    const angle = Math.atan2(x - origin.x, origin.y - curtainY);
+    shots.push(patternBullet(origin, angle, 5.15, row % 2 === 0 ? 'primary' : 'accent'));
   }
-  return 0;
-}
-
-export function calderaChallengeVolleys(time: number, dt: number, broken: boolean) {
-  const cycle = Math.floor(time / ioChallengeBoss.interval);
-  const elapsed = time - cycle * ioChallengeBoss.interval;
-  return wheelVolleys.slice(0, broken ? 3 : 2).flatMap((volley, index) => {
-    if (elapsed < volley.at || elapsed - dt >= volley.at) return [];
-    const turn = (cycle % 2 === 0 ? 1 : -1) * (index === 1 ? -.14 : index === 2 ? .19 : 0);
-    return [{ ...volley, turn }];
-  });
-}
-
-export function calderaChallengeFan(origin: Point, target: Point, volley: ReturnType<typeof calderaChallengeVolleys>[number]) {
-  const angle = bearing(origin, target) + volley.turn;
-  return fan(angle, volley.speed, volley.spread)
-    .map(velocity => ({ ...origin, ...velocity, z: 0, vz: 0, planar: true }));
+  return shots;
 }

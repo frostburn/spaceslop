@@ -9,6 +9,7 @@ import { createMortarAssets, createVentMortar } from '../../vent-mortar-rig';
 import { createFaunaAssets, createWormAssets, createVentShrimp, createVentWorm } from '../../vent-fauna-rig';
 import { MORTAR_POOL } from '../../vent-mortar';
 import { ventChallengeMortar, ventChallengeShrimp } from '../../vent-challenge';
+import { patternBurstCharge } from '../../challenge-patterns';
 import { SHRIMP_POOL, WORM_POOL } from '../../vent-fauna';
 import { createBurnerBubbles } from '../../vent-effects';
 import { ventCameraRise, ventBossReveal, ventBossPose, ventWorld, ventFrame, VENT_CAMERA_DISTANCE, VENT_PITCH, VENT_DURATION, VENT_APPROACH, ventAnchors, ventAnchorPoint, VENT_SPAWN_LEAD } from '../../vent-layout';
@@ -83,7 +84,8 @@ export const createLevel: LevelFactory = ({ plane, scene, signal }) => {
         rig.root.visible = true;
         rig.root.position.set(enemy.x, enemy.y, 0);
         rig.root.scale.setScalar(enemy.ventScale ?? 1);
-        rig.pose(enemy.age, enemy.fire, enemy.mortarAngle ?? 0, challenge ? ventChallengeMortar.interval : undefined);
+        const charge = challenge ? patternBurstCharge(enemy, ventChallengeMortar.windup) : undefined;
+        rig.pose(enemy.age, enemy.fire, enemy.mortarAngle ?? 0, charge);
         mortarModels[index] = rig.combat;
       }
       faunaModels.length = flight.enemies.length;
@@ -101,7 +103,8 @@ export const createLevel: LevelFactory = ({ plane, scene, signal }) => {
         rig.root.position.set(enemy.x, enemy.y, 0);
         rig.root.scale.setScalar(enemy.ventScale ?? 1);
         rig.root.rotation.z = enemy.heading ?? 0;
-        rig.pose(enemy.age, challenge && !enemy.lockedAim ? Infinity : enemy.fire, challenge ? ventChallengeShrimp.windup : undefined);
+        const charge = challenge ? patternBurstCharge(enemy, ventChallengeShrimp.windup) : undefined;
+        rig.pose(enemy.age, enemy.fire, charge);
         faunaModels[index] = rig.combat;
       }
       let wormSlot = 0;

@@ -6,6 +6,7 @@ const server = await createServer({ configFile: false, server: { middlewareMode:
 after(() => server.close());
 const { Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
 const { campaign } = await server.ssrLoadModule('/src/campaign/missions.ts');
+const { PATTERN_HIT_RADIUS, PATTERN_BULLET_CAPACITY } = await server.ssrLoadModule('/src/challenge-patterns.ts');
 const { challengeAvailable, decodeChallengeProgress, readChallengeCode, recordChallengeClear, resetHardcoreProgress, unlockChallenge } =
   await server.ssrLoadModule('/src/campaign/challenges.ts');
 
@@ -49,17 +50,21 @@ test('challenge unlocks are case-insensitive and Hardcore loss resets only Hardc
   assert.deepEqual(recordChallengeClear(twoStageSave, 'bullet-hell', 'vents'), { next: undefined, unlockedHardcore: false });
 });
 
-test('both challenges share a denser route and boss than the regular campaign', () => {
+test('both challenges build dense fields of slow, readable projectiles', () => {
   function sample(flight, seconds) {
     const shots = new Set(), enemies = new Set();
+    let fieldTotal = 0;
     flight.cooldown = flight.droneCooldown = flight.invulnerable = 1e5;
     for (let frame = 0; frame < seconds / STEP; frame++) {
       flight.step(STEP);
+      assert(flight.threats.length <= PATTERN_BULLET_CAPACITY);
+      fieldTotal += flight.threats.length;
       for (const threat of flight.threats) shots.add(threat);
       for (const enemy of flight.enemies) enemies.add(enemy);
     }
     const speeds = [...shots].map(shot => Math.hypot(shot.vx, shot.vy));
-    return { shots: shots.size, enemies: enemies.size, meanSpeed: speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length };
+    return { shots: shots.size, enemies: enemies.size, fieldDensity: fieldTotal * STEP / seconds,
+      meanSpeed: speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length };
   }
 
   const regular = launch('regular');
@@ -71,17 +76,19 @@ test('both challenges share a denser route and boss than the regular campaign', 
   assert.deepEqual(challenge, sample(hardcore, hardcore.stageDuration));
   const io = launch('bullet-hell', 'vex', 'io');
   const ioStage = sample(io, io.stageDuration);
-  assert(ioStage.shots / io.stageDuration > challenge.shots / bulletHell.stageDuration);
+  assert(ioStage.fieldDensity > challenge.fieldDensity);
   assert(ioStage.meanSpeed > challenge.meanSpeed);
   const hadal = launch('bullet-hell', 'vex', 'vents');
   const hadalStage = sample(hadal, hadal.stageDuration);
   assert(hadalStage.shots / hadal.stageDuration > ioStage.shots / io.stageDuration);
+  assert(hadalStage.fieldDensity > ioStage.fieldDensity);
   assert(hadalStage.meanSpeed > ioStage.meanSpeed);
   assert.equal(bulletHell.stageDuration, regular.stageDuration);
   assert.equal(normal.enemies, 15);
   assert(challenge.enemies > normal.enemies);
   assert(challenge.shots / bulletHell.stageDuration > gantry.shots / 100);
-  assert(challenge.meanSpeed > gantry.meanSpeed);
+  assert(challenge.fieldDensity > gantry.fieldDensity * 2);
+  assert(challenge.meanSpeed < gantry.meanSpeed && hadalStage.meanSpeed < 5);
 
   for (const flight of [regular, bulletHell, hardcore]) {
     if (flight.phase === 'stage') flight.step(STEP);
@@ -92,6 +99,18 @@ test('both challenges share a denser route and boss than the regular campaign', 
   assert.deepEqual(guardian, sample(hardcore, 4));
   assert(guardian.shots > sample(regular, 4).shots * 2);
   assert(bulletHell.bossMaxHealth > regular.bossMaxHealth);
+});
+
+test('pattern shots can graze just outside the fighter marker and hit inside it', () => {
+  const flight = launch('hardcore');
+  const shot = { ...flight.player, z: 0, vx: 0, vy: 0, vz: 0, planar: true, pattern: 'primary' };
+  flight.threats = [{ ...shot, x: shot.x + PATTERN_HIT_RADIUS + .03 }];
+  flight.step(STEP);
+  assert.equal(flight.threats[0].graze, 'near');
+  assert.equal(flight.hull, 1);
+  flight.threats = [{ ...shot, x: shot.x + PATTERN_HIT_RADIUS - .03 }];
+  flight.step(STEP);
+  assert.equal(flight.phase, 'lost');
 });
 
 test('Hardcore ends on its first hit and Brass can clear on-screen fire repeatedly', () => {

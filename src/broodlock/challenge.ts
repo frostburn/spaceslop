@@ -1,8 +1,9 @@
 import { antScales, type AntKind } from '../ant-navigation';
+import { patternBearing, patternBullet, stepPatternBurst, type BossPattern } from '../challenge-patterns';
 import type { WingWeapon } from '../wing';
 
 type Point = { x: number; y: number };
-type Ant = Point & { age: number; fire: number; sporeTarget?: Point };
+type Ant = Point & Parameters<typeof stepPatternBurst>[0];
 type HiveWave = { time: number; lanes: number[]; ant: AntKind; drop?: WingWeapon };
 
 export const challengeWaves: readonly HiveWave[] = [
@@ -18,49 +19,38 @@ export const challengeWaves: readonly HiveWave[] = [
   { time: 24, lanes: [-2.65, 0, 2.65], ant: 'soldier', drop: 'laser' },
 ];
 
-export const CHALLENGE_ANT_PACE = 1.75;
-export const CHALLENGE_ANT_WINDUP = .46;
+export const CHALLENGE_ANT_PACE = 1.38;
+export const CHALLENGE_ANT_WINDUP = .68;
 const antPatterns = {
-  worker: { first: .92, interval: 1.36, speed: 6.3, spread: [-.19, 0, .19] },
-  soldier: { first: 1.12, interval: 1.27, speed: 6.65, spread: [-.42, -.21, 0, .21, .42] },
+  worker: { first: 1.24, windup: CHALLENGE_ANT_WINDUP, rows: 3, spacing: .24, rest: 2.95, speed: 4.45, spread: [-.27, 0, .27] },
+  soldier: { first: 1.48, windup: CHALLENGE_ANT_WINDUP, rows: 4, spacing: .22, rest: 3.25, speed: 4.6, spread: [-.47, -.29, .29, .47] },
 };
 
 export function challengeAntFirstShot(kind: AntKind, slot: number) {
-  return antPatterns[kind].first + slot * .24;
+  return antPatterns[kind].first + slot * .34;
 }
 
-function sporeFan(origin: Point, aim: number, speed: number, spread: readonly number[]) {
-  return spread.map(offset => {
-    const angle = aim + offset;
-    return { ...origin, z: 0, vx: Math.sin(angle) * speed, vy: -Math.cos(angle) * speed, vz: 0, planar: true };
-  });
-}
-
-export function stepChallengeAnt(ant: Ant, kind: AntKind, player: Point) {
+export function stepChallengeAnt(ant: Ant, kind: AntKind, slot: number) {
   const origin = { x: ant.x, y: ant.y - .55 * antScales[kind] };
-  if (ant.y > 6.9 || origin.y < player.y + 1.65) {
-    ant.fire = Math.max(ant.fire, ant.age + CHALLENGE_ANT_WINDUP);
-    ant.sporeTarget = undefined;
-    return;
-  }
-  if (ant.age < ant.fire - CHALLENGE_ANT_WINDUP) return;
-  ant.sporeTarget ??= { ...player };
-  if (ant.age < ant.fire) return;
-  const { interval, speed, spread } = antPatterns[kind];
-  const aim = Math.atan2(ant.sporeTarget.x - origin.x, origin.y - ant.sporeTarget.y);
-  const shots = sporeFan(origin, aim, speed, spread);
-  ant.sporeTarget = undefined;
-  ant.fire = ant.age + interval;
-  return shots;
+  const timing = antPatterns[kind];
+  const burst = stepPatternBurst(ant, ant, ant.y <= 6.9 && origin.y > -1, timing);
+  if (!burst) return;
+  const spread = timing.spread;
+  const mirror = slot % 2 === 0 ? 1 : -1;
+  const sweep = (burst.row - (timing.rows - 1) / 2) * mirror * .13;
+  const aim = patternBearing(origin, { x: burst.target.x * .52, y: -5.2 }, .36) + sweep;
+  return spread.map(offset => patternBullet(origin, aim + offset, timing.speed, kind === 'worker' ? 'primary' : 'accent'));
 }
 
-export const challengeGuardian = { health: 96, interval: 1.64, windup: .33, fire: .88, echo: 1.22 };
-const sweep = [-.54, -.36, -.18, 0, .18, .36, .54];
-const split = [-.68, -.50, -.32, -.18, .18, .32, .50, .68];
-const echo = [-.44, -.22, 0, .22, .44];
+export const challengeGuardian = { health: 96, interval: 3.8, lockAt: .38, first: 1.04, spacing: .19, rows: 8 } satisfies BossPattern & { health: number };
+const petalAngles = [-.91, -.76, -.58, -.42, -.26, .26, .42, .58, .76, .91];
 
-export function challengeGuardianVolley(origin: Point, target: Point, cycle: number, followup: boolean) {
-  const aim = Math.atan2(target.x - origin.x, origin.y - target.y);
-  if (followup) return sporeFan(origin, aim + (cycle % 2 === 0 ? .11 : -.11), 7.3, echo);
-  return sporeFan(origin, aim, 6.8, cycle % 2 === 0 ? sweep : split);
+export function challengeGuardianVolley(origin: Point, target: Point, cycle: number, row: number) {
+  const mirror = cycle % 2 === 0 ? 1 : -1;
+  const sweep = Math.sin((row / (challengeGuardian.rows - 1) - .5) * Math.PI) * .31 * mirror;
+  const aim = patternBearing(origin, target, .23) * .7 + sweep;
+  return petalAngles.map(offset => {
+    const inner = Math.abs(offset) <= .42;
+    return patternBullet(origin, aim + offset, inner ? 4.8 : 4.1, inner ? 'accent' : 'primary');
+  });
 }

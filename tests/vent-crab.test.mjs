@@ -46,7 +46,7 @@ test('claw charges retain three locked warnings and the core attack expands to f
  }
 });
 
-test('challenge Sovereign keeps its aim and claw through the pair, then adds a third spray from its gills', () => {
+test('challenge Sovereign locks its aim, rotates the gap and adds more rows from its gills on the next lock', () => {
  for (const mode of ['bullet-hell', 'hardcore']) {
   const f = new Flight('sentry', [], 'vex', 'vents', undefined, mode);
   f.phase = 'boss';
@@ -55,33 +55,37 @@ test('challenge Sovereign keeps its aim and claw through the pair, then adds a t
   f.invulnerable = 200;
   assert.equal(f.bossHealth, 2 * ventChallengeBoss.clawHealth + ventChallengeBoss.coreHealth);
   function advance(time) {
-   const bullets = new Set();
-   f.threats = [];
+   const rows = [];
    while (f.time < time) {
+    f.threats = [];
     f.step(STEP);
-    for (const shot of f.threats) bullets.add(shot);
+    if (f.threats.length) rows.push(f.threats);
    }
-   return [...bullets];
+   return rows;
   }
   advance(.42);
   const lock = { ...f.player };
   assert.deepEqual(f.markers, [lock]);
   assert(f.cannonWindup > 0);
   f.player.x = 3;
-  const first = advance(.72);
+  const [first] = advance(ventChallengeBoss.first + .02);
   assert.equal(first.length, 11);
   assert.equal(f.crabTargetX, -c.CRAB_TARGET_X);
-  const center = first[5];
-  assert(Math.abs(center.vx * (lock.y - center.y) - center.vy * (lock.x - center.x)) < 1e-8);
-  assert(first.every(shot => shot.planar && shot.z === 0));
-  assert.equal(advance(1.18).length, 12);
+  assert(first.every(shot => shot.planar && shot.z === 0 && shot.pattern));
+  const bearing = shot => Math.atan2(shot.vx, -shot.vy);
+  const gap = row => (bearing(row[0]) + bearing(row.find(shot => shot.pattern === 'accent'))) / 2;
+  const rest = advance(ventChallengeBoss.interval);
+  assert.equal(rest.length, ventChallengeBoss.rows - 1);
+  assert(gap(rest[4]) > gap(first) + .2);
+  assert(bearing(first[5]) - bearing(first[0]) > .47);
   assert.equal(f.firedCrabTarget, -c.CRAB_TARGET_X);
   assert.equal(f.crabTargetX, c.CRAB_TARGET_X);
+  advance(ventChallengeBoss.interval + .5);
   f.damageBoss(1000);
   f.damageBoss(1000);
   assert.equal(f.bossHealth, ventChallengeBoss.coreHealth);
-  assert.equal(advance(1.75).length, 0);
-  assert.equal(advance(ventChallengeBoss.interval + 1.75).length, 33);
+  assert.equal(advance(2 * ventChallengeBoss.interval).length, ventChallengeBoss.rows);
+  assert.equal(advance(3 * ventChallengeBoss.interval).length, ventChallengeBoss.exposedRows);
   assert.equal(f.firedCrabTarget, 0);
   f.damageBoss(ventChallengeBoss.coreHealth);
   assert.equal(f.phase, 'won');

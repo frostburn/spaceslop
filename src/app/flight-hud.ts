@@ -104,10 +104,10 @@ const towlineTips: Partial<Record<LevelId, string>> = {
 function bossTip(flight: Flight) {
   const towline = flight.droneWeapon === 'towline';
   const encounter = flight.encounterLevel;
-  if (flight.isBroodlockChallenge) return towline ? 'Sweep the arc across the green cannon. Dodge the follow-up fan.'
-    : 'Tap the green cannon. Dodge both spore fans.';
-  if (flight.isIoChallenge) return flight.ioLegBroken ? 'Target the exposed machinery. Dodge the third sweep.'
-    : 'Break the cyan support. Move after the wheel locks on.';
+  if (flight.isBroodlockChallenge) return towline ? 'Sweep the arc across the green cannon. Slip between the spore streams.'
+    : 'Tap the green cannon. Follow the gap in the spore bloom.';
+  if (flight.isIoChallenge) return flight.ioLegBroken ? 'Target the exposed machinery. Follow the gap through the longer sweep.'
+    : 'Break the cyan support. Follow the opening in the rows.';
   if (flight.isFonsFight) {
     const storm = fonsPhase(flight.fonsTime);
     if (storm.rain || storm.warning > 0) return 'Stay in the wake of a falling crystal';
@@ -118,8 +118,8 @@ function bossTip(flight: Flight) {
       (towline ? 'Sweep the arc across the mirror' : 'Fire into the mirror · Dodge the sweeps');
   }
   if (encounter === 'vents') {
-    if (flight.isVentChallenge) return flight.crabCoreOpen ? 'Target the exposed gills. Dodge the third spray.'
-      : 'Break both glowing claw joints. Move after the aim lock.';
+    if (flight.isVentChallenge) return flight.crabCoreOpen ? 'Target the exposed gills. Drift with the opening between the streams.'
+      : 'Break both glowing claw joints. Follow the gap in the pearl sweep.';
     if (towline) return flight.crabCoreOpen ? 'Sweep the arc across the exposed gills.' : 'Sweep the arc across a glowing claw joint.';
     return flight.crabCoreOpen ? 'Tap the gill chamber. Dodge amber rings.' : 'Tap the glowing joint. Break both claws.';
   }

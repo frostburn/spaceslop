@@ -8,7 +8,7 @@ const {Flight,STEP}=await server.ssrLoadModule('/src/game.ts');
 const c=await server.ssrLoadModule('/src/io-crucible.ts');
 const {ioWaves,IO_DURATION,IO_APPROACH,IO_SKIPPER_POOL,calderaWheel}=await server.ssrLoadModule('/src/io-layout.ts');
 const {BOSS_CAMERA_DISTANCE}=await server.ssrLoadModule('/src/playfield.ts');
-const {ioChallengeBoss}=await server.ssrLoadModule('/src/io-challenge.ts');
+const {ioChallengeBoss,ioChallengeCrucible}=await server.ssrLoadModule('/src/io-challenge.ts');
 const {createCrucible,createSlag}=await server.ssrLoadModule('/src/io-crucible-rig.ts');
 const carrier=(x=0,y=3)=>({x,y,lane:1,age:0,fire:c.CRUCIBLE_FIRST_POUR,hp:c.CRUCIBLE_HP,crucible:true});
 const slag=(x=0,y=1)=>({x,y,lane:0,age:0,fire:Infinity,hp:1,slag:{vx:0,vy:-3.4}});
@@ -126,43 +126,45 @@ test('Bullet Hell Io keeps the same route length and its overlapping patrols fit
   assert.equal(flight.transitionDuration, IO_APPROACH);
   assert.equal(carriers.size, 9);
   assert(skippers.size > 100 && slag.size > 100);
-  assert([...slag].every(drop => Math.abs(Math.hypot(drop.slag.vx, drop.slag.vy) - 5.8) < 1e-10));
+  assert([...slag].every(drop => Math.abs(Math.hypot(drop.slag.vx, drop.slag.vy) - ioChallengeCrucible.speed) < 1e-10));
 });
 
-test('the challenge Caldera fires from its wheel and adds its third sweep at the next lock', () => {
+test('the challenge Caldera leaves a gap in every row and lengthens the curtain at the next lock', () => {
   const flight = quietChallenge();
   flight.phase = 'boss';
-  const advanceTo = time => {
-    const seen = new Set();
+  const advanceTo = (time, inspect = () => {}) => {
+    let rows = 0;
     while (flight.time < time) {
+      flight.threats = [];
       flight.step(STEP);
-      for (const shot of flight.threats) seen.add(shot);
+      if (flight.threats.length) {
+        inspect(flight.threats);
+        rows++;
+      }
     }
-    return seen;
+    return rows;
   };
   const locked = { ...flight.player };
   advanceTo(.5);
   assert.deepEqual(flight.markers, [locked]);
   assert(flight.cannonWindup > 0);
   flight.player.x = 3;
-  const first = [...advanceTo(.78)];
-  assert.equal(first.length, 9);
-  const muzzle = calderaWheel(IO_DURATION + IO_APPROACH + flight.time, flight.ioCollapse);
-  const scale = BOSS_CAMERA_DISTANCE / (BOSS_CAMERA_DISTANCE - muzzle.z);
-  for (const shot of first) {
-    assert(shot.planar);
-    assert(Math.abs(shot.x - shot.vx * STEP - muzzle.x * scale) < 1e-8);
-    assert(Math.abs(shot.y - shot.vy * STEP - muzzle.y * scale) < 1e-8);
-  }
-  const center = first[4];
-  assert(Math.abs(center.vx * (locked.y - muzzle.y * scale) - center.vy * (locked.x - muzzle.x * scale)) < 1e-8);
+  assert.equal(advanceTo(ioChallengeBoss.first + .02, row => {
+    const muzzle = calderaWheel(IO_DURATION + IO_APPROACH + flight.time, flight.ioCollapse);
+    const scale = BOSS_CAMERA_DISTANCE / (BOSS_CAMERA_DISTANCE - muzzle.z);
+    const crossing = row.map(shot => {
+      assert(shot.planar && shot.pattern === 'primary');
+      assert(Math.abs(shot.x - shot.vx * STEP - muzzle.x * scale) < 1e-8);
+      assert(Math.abs(shot.y - shot.vy * STEP - muzzle.y * scale) < 1e-8);
+      return shot.x + shot.vx * ((-4.8 - shot.y) / shot.vy);
+    });
+    assert(crossing.some((x, index) => index > 0 && x - crossing[index - 1] > 1.8));
+    assert(crossing.every(x => Math.abs(x + 1.32 * Math.sin(1.1)) >= .92 - 1e-9));
+  }), 1);
   assert.equal(flight.bossHealth, ioChallengeBoss.health);
   flight.damageBoss(ioChallengeBoss.supportHealth);
   assert(flight.ioLegBroken);
   assert.equal(flight.bossHealth, ioChallengeBoss.health - ioChallengeBoss.supportHealth);
-  flight.threats = [];
-  assert.equal(advanceTo(1.9).size, 10);
-  advanceTo(ioChallengeBoss.interval);
-  flight.threats = [];
-  assert.equal(advanceTo(ioChallengeBoss.interval + 1.9).size, 27);
+  assert.equal(advanceTo(ioChallengeBoss.interval), ioChallengeBoss.rows - 1);
+  assert.equal(advanceTo(ioChallengeBoss.interval * 2), ioChallengeBoss.exposedRows);
 });

@@ -2,6 +2,7 @@ import * as T from 'three';
 import { poseBurners, shipBurners } from './burners';
 import { addTowlineEmitters, createDroneRig, createFighterRig } from './ship-rigs';
 import type { FlightMode } from './campaign/challenges';
+import { PATTERN_HIT_RADIUS } from './challenge-patterns';
 import { BOSS_MUZZLE_Z } from './encounters';
 import { BOSS_CAMERA_DISTANCE, BOSS_CANNON_RADIUS, BOSS_PROJECTION, BOSS_DEPTH, Flight, HEIGHT, WIDTH } from './game';
 import { WING_FLASH_TIME, WING_FORMATION, wingWeapons, type WingWeapon } from './wing';
@@ -9,7 +10,8 @@ import { createWingPod } from './wing-pod';
 import { createCombatEffects } from './combat-effects';
 import { createLaserContactTrace } from './laser-contact';
 import { createPowerupGraphic, powerupKinds, repairColor } from './powerup-graphics';
-import { createContinuousLaser, createMuzzleFlash, createProjectileBatch, projectileKinds, type ProjectileKind } from './projectile-graphics';
+import { createContinuousLaser, createMuzzleFlash, createPatternProjectileBatch, createProjectileBatch, projectileKinds,
+  type PatternPalette, type ProjectileKind } from './projectile-graphics';
 import { ambusherFeedback } from './preserve-ambusher';
 import { faunaMuzzle } from './vent-fauna';
 import type { LevelId } from './levels';
@@ -50,6 +52,11 @@ const victoryShipY = -2.25;
 const challengeExhaust = {
   'bullet-hell': { core: 0xffc17a, flame: 0xff7a21 },
   hardcore: { core: 0xff9380, flame: 0xff2d1f },
+};
+const patternPalettes: Partial<Record<LevelId, PatternPalette>> = {
+  broodlock: { primary: 0xffa842, accent: 0xef91ff, shape: 'seed' },
+  io: { primary: 0xffab36, accent: 0xff6d8a, shape: 'ember' },
+  vents: { primary: 0x8deaff, accent: 0xdf99ff, shape: 'pearl' },
 };
 function planarProjectileLayer({x, y}: { x: number; y: number }, z: number) {
   const scale = (BOSS_CAMERA_DISTANCE - z) / BOSS_CAMERA_DISTANCE;
@@ -129,6 +136,8 @@ export class FlightView {
   }));
   private cannonMarker = new T.Mesh(new T.RingGeometry(BOSS_CANNON_RADIUS * BOSS_PROJECTION - 0.06, BOSS_CANNON_RADIUS * BOSS_PROJECTION, 24), new T.MeshBasicMaterial({ color: mint, depthTest: false, depthWrite: false }));
   private projectiles = Object.fromEntries(projectileKinds.map((kind) => [kind, createProjectileBatch(kind)])) as Record<ProjectileKind, ReturnType<typeof createProjectileBatch>>;
+  private patternProjectiles?: ReturnType<typeof createPatternProjectileBatch>;
+  private dodgeMarker?: T.Group;
   private playerMuzzle = createMuzzleFlash(teal);
   private droneMuzzle = createMuzzleFlash(mint);
   private combat = createCombatEffects();
@@ -177,6 +186,20 @@ export class FlightView {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = T.PCFShadowMap;
     this.player = createFighterRig(livery, mode === 'regular' ? undefined : challengeExhaust[mode]);
+    const palette = mode === 'regular' ? undefined : patternPalettes[levelId];
+    if (palette) {
+      this.patternProjectiles = createPatternProjectileBatch(palette);
+      this.dodgeMarker = new T.Group();
+      this.dodgeMarker.name = 'fighter-dodge-point';
+      const rim = new T.Mesh(new T.RingGeometry(PATTERN_HIT_RADIUS - .022, PATTERN_HIT_RADIUS, 32),
+        new T.MeshBasicMaterial({ color: 0xdcf9ff, transparent: true, opacity: .64, depthTest: false, depthWrite: false }));
+      const center = new T.Mesh(new T.CircleGeometry(.053, 16),
+        new T.MeshBasicMaterial({ color: 0xfff4e6, depthTest: false, depthWrite: false }));
+      rim.renderOrder = center.renderOrder = 14;
+      this.dodgeMarker.add(rim, center);
+      this.dodgeMarker.visible = false;
+      this.plane.add(this.patternProjectiles.root, this.dodgeMarker);
+    }
     this.playerBurners = shipBurners(this.player.root);
     this.drone = createDroneRig(livery);
     this.droneBurners = shipBurners(this.drone);
@@ -260,6 +283,7 @@ export class FlightView {
     const pods = this.wingPods.map(side => side.flatMap(r => [r.root, r.upgrade]));
     const flares = this.level.ending?.cockpitFlares.root ?? this.victoryFlares!.root;
     const ordnance = [this.player.root, this.drone, this.towlineEmitters, ...Object.values(this.projectiles).map(r => r.root), this.combat.root, this.playerMuzzle.root, this.droneMuzzle.root, ...this.drops.slice(0, powerupKinds.length).map(r => r.root), flares];
+    if (this.patternProjectiles && this.dodgeMarker) ordnance.push(this.patternProjectiles.root, this.dodgeMarker);
     const lasers = [...pods[1], ...this.wingLasers.map(r => r.root)];
     try {
       this.level.prepare?.();
@@ -270,6 +294,7 @@ export class FlightView {
         if (objects === ordnance) {
           for (const batch of Object.values(this.projectiles))
             batch.prime();
+          this.patternProjectiles?.prime();
           this.combat.prime();
           this.playerMuzzle.prime();
           this.droneMuzzle.prime();
@@ -457,6 +482,10 @@ export class FlightView {
     this.player.root.rotation.set(orientation ? -this.pitch : -(this.level.shipPitch ?? 1.18) * eased, this.bank, 0);
     if (formation > 0) this.player.root.quaternion.slerp(this.victoryFacing, formation);
     this.player.root.visible = flight.hull > 0 && (victoryTime !== undefined || Math.floor(flight.invulnerable * 12) % 2 === 0);
+    if (this.dodgeMarker) {
+      this.dodgeMarker.visible = this.player.root.visible && (flight.phase === 'stage' || flight.phase === 'boss');
+      this.dodgeMarker.position.set(flight.player.x, flight.player.y, 0);
+    }
     if (ending && exitTime !== undefined) {
       ending.poseExit(exitTime, this.player.root, camera);
       this.victoryFacing.copy(this.player.root.quaternion);
@@ -651,11 +680,13 @@ export class FlightView {
     for (const weapon of ['homing', 'cannon', 'omega'] as const) {
       this.projectiles[weapon].draw(shots.filter((shot) => shot.wing === weapon), this.animationTime);
     }
-    const hostile = flight.isDen ? flight.threats.map(s => ({ ...s, ...planarProjectileLayer(s, .85) }))
-      : flight.level === 'fleet' ? flight.threats.filter(s => !s.broadside) : flight.threats;
+    this.patternProjectiles?.draw(flight.threats);
+    const threats = this.patternProjectiles ? flight.threats.filter(s => !s.pattern) : flight.threats;
+    const hostile = flight.isDen ? threats.map(s => ({ ...s, ...planarProjectileLayer(s, .85) }))
+      : flight.level === 'fleet' ? threats.filter(s => !s.broadside) : threats;
     this.projectiles.hostile.draw(flight.encounterLevel !== 'ice' && flight.encounterLevel !== 'broodlock' && !flight.isFonsFight ? hostile : [], this.animationTime);
     this.projectiles.brine.draw(flight.encounterLevel === 'ice' ? flight.threats : [], this.animationTime);
-    this.projectiles.spore.draw(flight.encounterLevel === 'broodlock' ? flight.threats : [], this.animationTime);
+    this.projectiles.spore.draw(flight.encounterLevel === 'broodlock' ? threats : [], this.animationTime);
   }
   private drawFeedback(flight: Flight, elapsed: number) {
     this.combat.update(elapsed);

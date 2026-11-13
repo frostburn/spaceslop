@@ -4,6 +4,7 @@ import {GROVE_APPROACH} from './biolume/route';
 import {RAY_HP,RAY_ENTRANCE,RAY_FAN_AT,RAY_SEEKER_AT,RAY_PROJECTION,RAY_ORGAN_RADIUS,RAY_SEEKER_RADIUS,RAY_SEEKER_HP,RAY_SEEKER_POOL,raySignal,rayOrgan,rayBodyEntry,stepRaySeeker,rayOrbEntry,raySeekerBurst,type RaySeeker} from './biolume/lantern-ray';
 import { CHALLENGE_ANT_PACE, challengeAntFirstShot, challengeGuardian, challengeGuardianVolley, challengeWaves, stepChallengeAnt } from './broodlock/challenge';
 import type { FlightMode } from './campaign/challenges';
+import { bossPatternCharge, PATTERN_GRAZE_RADIUS, PATTERN_HIT_RADIUS, type BossPattern, type PatternColor } from './challenge-patterns';
 import { DEN_BURSTS, DEN_CYCLE, DEN_GUNS, DEN_HP, denBodyEntry, denMount, denPose } from './den/combat';
 import { DEN_TURRET_HP, createDenTurret, denDefensePoint, denMineSites, denTurretEntry, denTurretSites,
   stepDenMine, stepDenTurret, type DenMine, type DenTurret } from './den/defense';
@@ -31,11 +32,11 @@ import {wormPose,WORM_WINDUP,WORM_REACH} from './vent-worm';
 import {SHRIMP_HP,SHRIMP_FIRST_FIRE,SHRIMP_INTERVAL,WORM_HP,WORM_FIRST_ATTACK,WORM_INTERVAL,shrimpMotion,faunaMuzzle,faunaBodyHit,faunaBeamEntry,type ShrimpCourse} from './vent-fauna';
 import {MORTAR_HP,MORTAR_RADIUS,MORTAR_FIRST_FIRE,MORTAR_INTERVAL,MORTAR_SHOT_SPEED,mortarAim,mortarMuzzle} from './vent-mortar';
 import {ventOrbit,VENT_APPROACH,VENT_SPAWN_LEAD,ventWaves,ventAnchorPoint} from './vent-layout';
-import { stepVentChallengeMortar, stepVentChallengeShrimp, ventChallengeBoss, ventChallengeBossFan,
-  ventChallengeShrimp, ventChallengeShrimpFirstShot, ventChallengeVolleys, ventChallengeWaves, ventChallengeWindup } from './vent-challenge';
+import { stepVentChallengeMortar, stepVentChallengeShrimp, ventChallengeBoss, ventChallengeBossRow,
+  ventChallengeShrimp, ventChallengeShrimpFirstShot, ventChallengeWaves } from './vent-challenge';
 import { CRUCIBLE_HP, CRUCIBLE_RADIUS, CRUCIBLE_FIRST_POUR, CRUCIBLE_POUR_INTERVAL, CRUCIBLE_MUZZLE_Y, SLAG_RADIUS, crucibleMotion, slagSpeed } from './io-crucible';
 import { IO_DURATION, IO_HP, IO_LEG_HP, IO_APPROACH, IO_INTERVAL, IO_WINDUP, IO_FIRE, IO_TRAVEL, calderaContact, calderaWheel, skipperMotion, ioWaves, smooth01 } from './io-layout';
-import { calderaChallengeFan, calderaChallengeVolleys, calderaChallengeWindup, ioChallengeBoss, ioChallengeCrucible,
+import { calderaChallengeRow, ioChallengeBoss, ioChallengeCrucible,
   ioChallengeSkipper, ioChallengeSkipperFirstShot, ioChallengeWaves, stepIoChallengeCrucible, stepIoChallengeSkipper } from './io-challenge';
 import { bindCentipede, severCentipede, stepCentipedes, CENTIPEDE_SPACING, type CentipedeLink } from './centipede';
 import { cicadaMotion, titanInsectWaves, type CicadaCourse } from './titan-insects';
@@ -84,7 +85,7 @@ type Shot = Point & {
   hydraTarget?:HydraSide;hydraPierced?:Map<Enemy,Set<HydraSide>>;
   planarBossHit?: boolean;
 };
-type Threat = Shot & { graze?: 'near' | 'counted';planar?:boolean; broadside?: true };
+type Threat = Shot & { graze?: 'near' | 'counted';planar?:boolean; broadside?: true; pattern?: PatternColor };
 type Enemy = Point & {
   fleet?: FleetSaucer;
   den?: DenPatrol;
@@ -99,7 +100,8 @@ type Enemy = Point & {
   mine?: BoulevardMine; interceptorAim?:number; interceptorHeading?:number;
   flyer?: FlyerCourse;
   ambusher?: AmbusherState;
-  lane: number; age: number; fire: number; hp: number; reward?: FormationReward; raptor?: boolean; ant?: AntKind; sporeTarget?: Point; lockedAim?: Point; marine?: MarineKind; school?: MarineSchool;
+  lane: number; age: number; fire: number; hp: number; reward?: FormationReward; raptor?: boolean; ant?: AntKind; lockedAim?: Point; marine?: MarineKind; school?: MarineSchool;
+  burst?: { target: Point; row: number };
   centipede?: CentipedeLink; cicada?: CicadaCourse; skipper?: boolean; crucible?: boolean; slag?: {vx:number;vy:number}; ventAnchor?:number; ventScale?:number; slot?: number; mortarAngle?:number; ventWorm?:boolean; shrimp?:ShrimpCourse; wormReach?:number; wormBend?:number; wormLocked?:boolean;
   course?: number; courseAt?: number; heading?: number; laserDamage?: number;
 };
@@ -117,7 +119,7 @@ const STARTING_HULL = 4;
 const SURPLUS_PICKUP_SCORE = 250;
 const UPGRADED_WING_DAMAGE = 1.5;
 const SHIP_SPEED = 6.5;
-const CHALLENGE_SHIP_SPEED = 8.5;
+const CHALLENGE_SHIP_SPEED = 7.6;
 const DRONE_SPEED = 4 * SHIP_SPEED;
 const DRONE_FIRE_INTERVAL = 0.44;
 const TOWLINE_INTERVAL = 1.05;
@@ -259,7 +261,7 @@ export class Flight {
   private groundskeeperAimCycle = -1;
   crabClawHealth=[CRAB_CLAW_HP,CRAB_CLAW_HP];
   private crabBreakTimes=[-1,-1];
-  private ventAttack?: { cycle: number; core: boolean };
+  private bossPattern?: { cycle: number; target: Point; row: number; rows: number };
   bossLaserDamage = 0;
   firedCannonX = 0;
   firedCrabTarget=0;
@@ -460,9 +462,10 @@ export class Flight {
 
   get ioLegBroken() { return this.ioCollapseAge >= 0; }
   get ioCollapse() { return this.ioLegBroken ? smooth01(this.ioCollapseAge / 1.2) : 0; }
-  private get ioThirdSweep() {
-    // The exposed core adds its attack on the next aim lock.
-    return this.ioCollapseAge >= this.time % ioChallengeBoss.interval - ioChallengeBoss.lockAt;
+  private get challengeBossPattern(): BossPattern | undefined {
+    if (this.isBroodlockChallenge) return challengeGuardian;
+    if (this.isIoChallenge) return ioChallengeBoss;
+    if (this.isVentChallenge) return ventChallengeBoss;
   }
   cicadaMuzzle(time = this.bossTime) {
     const vent = cicadaVent(time, this.volley % 2 === 0 ? -1 : 1);
@@ -547,14 +550,11 @@ export class Flight {
   }
 
   get cannonWindup() {
-    if (this.isIoChallenge) return this.phase === 'boss' ? calderaChallengeWindup(this.time, this.ioThirdSweep) : 0;
-    if (this.isVentChallenge) return this.phase === 'boss' ? ventChallengeWindup(this.time, this.ventAttack?.core ?? false) : 0;
-    if (this.isBroodlockChallenge) {
-      const { interval, windup, fire, echo } = challengeGuardian;
-      if (this.phase !== 'boss' || this.volley !== Math.floor(this.time / interval)) return 0;
-      const elapsed = this.time % interval;
-      return elapsed < fire ? clamp((elapsed - windup) / (fire - windup), 0, 1)
-        : clamp((elapsed - echo + .16) / .16, 0, 1);
+    const pattern = this.challengeBossPattern;
+    if (pattern) {
+      const burst = this.bossPattern;
+      if (this.phase !== 'boss' || !burst || burst.cycle !== Math.floor(this.time / pattern.interval)) return 0;
+      return bossPatternCharge(this.time % pattern.interval, pattern, burst.rows);
     }
     if(this.encounterLevel==='biolume'){const s=raySignal(this.rayTime);return this.phase==='boss'?Math.max(s.fan,s.seeker):0;}
     if(this.encounterLevel==='heliostat'){if(this.heliostatCancelledCycle===Math.floor(this.time/HELIOSTAT_INTERVAL))return 0;const t=this.time%HELIOSTAT_INTERVAL;return this.phase==='boss'&&t<HELIOSTAT_FIRE?clamp((t-HELIOSTAT_WINDUP)/(HELIOSTAT_FIRE-HELIOSTAT_WINDUP),0,1):0;}
@@ -767,7 +767,7 @@ export class Flight {
         else if (near(shot, this.player, 1.05)) this.recordGraze();
         return false;
       }
-      if (near(shot, this.player, 0.44)) {
+      if (near(shot, this.player, shot.pattern ? PATTERN_HIT_RADIUS : .44)) {
         this.hit();
         return false;
       }
@@ -789,7 +789,7 @@ export class Flight {
     if (this.pilot !== 'vex' || this.closeCalls >= CLOSE_CALLS_REQUIRED || shot.graze === 'counted') return;
     if (this.invulnerable > 0) {
       shot.graze = undefined;
-    } else if (inField && near(shot, this.player, 0.9)) {
+    } else if (inField && near(shot, this.player, shot.pattern ? PATTERN_GRAZE_RADIUS : .9)) {
       shot.graze = 'near';
     } else if (shot.graze === 'near') {
       shot.graze = 'counted';
@@ -1267,7 +1267,7 @@ export class Flight {
       } else if (enemy.shrimp) {
         const p=shrimpMotion(enemy.age,enemy.lane,enemy.shrimp);enemy.x=p.x;enemy.y=p.y;enemy.heading=p.heading;
         if (ventChallenge) {
-          const volley = stepVentChallengeShrimp(enemy, this.player);
+          const volley = stepVentChallengeShrimp(enemy);
           if (volley) this.threats.push(...volley);
         } else if(enemy.age>=enemy.fire&&enemy.y<8){
           const origin=faunaMuzzle(enemy),angle=Math.atan2(this.player.x-origin.x,origin.y-this.player.y);
@@ -1311,10 +1311,10 @@ export class Flight {
         this.obstacles.move(enemy, 0, 0, hull, { minX: -2.4, maxX: 2.4, minY: -10, maxY: 10 });
       }
       if (hiveChallenge && enemy.ant) {
-        const volley = stepChallengeAnt(enemy, enemy.ant, this.player);
+        const volley = stepChallengeAnt(enemy, enemy.ant, enemy.slot ?? 0);
         if (volley) this.threats.push(...volley);
       } else if (ioChallenge && enemy.skipper) {
-        const volley = stepIoChallengeSkipper(enemy, enemy.slot ?? 0, this.player);
+        const volley = stepIoChallengeSkipper(enemy, enemy.slot ?? 0);
         if (volley) this.threats.push(...volley);
       } else if (!enemy.frog && enemy.summer?.kind!=='vortex' && !enemy.mine && !enemy.flyer && !enemy.ambusher && !enemy.shrimp && enemy.ventAnchor===undefined && !enemy.crucible && !enemy.slag && !motion && (!enemy.centipede || (enemy.centipede.slot === 0 && !enemy.centipede.chain.escape)) && enemy.age >= enemy.fire && enemy.y < 8 && (!enemy.grove||groveCanAttack(enemy.age,enemy.lane,enemy.grove)) && (!enemy.heliostat||heliostatCanAttack(enemy.age,enemy.lane,enemy.heliostat))) {
         const interval = enemy.grove ? (enemy.grove.kind === 'sentry' ? 2.7 : 2.8)
@@ -1480,12 +1480,9 @@ export class Flight {
   }
 
   private stepBoss(dt: number) {
-    if (this.isVentChallenge) {
-      this.stepChallengeCrab(dt);
-      return;
-    }
-    if (this.isBroodlockChallenge) {
-      this.stepChallengeGuardian(dt);
+    const pattern = this.challengeBossPattern;
+    if (pattern) {
+      this.stepChallengeBoss(pattern);
       return;
     }
     if (this.isFonsFight) {
@@ -1517,11 +1514,7 @@ export class Flight {
       return;
     }
     if(this.encounterLevel==='boulevard'){this.stepBoulevard();return;}
-    if (this.encounterLevel === 'io') {
-      if (this.isIoChallenge) this.stepChallengeCaldera(dt);
-      else this.stepCaldera();
-      return;
-    }
+    if (this.encounterLevel === 'io') { this.stepCaldera(); return; }
     if(this.isCicadaFight) { this.stepCicada(); return; }
     if(this.encounterLevel === 'ice') { this.stepLeviathan(); return; }
     const elapsed = this.time % BOSS_VOLLEY_INTERVAL;
@@ -1548,46 +1541,41 @@ export class Flight {
     if (elapsed >= BOSS_FIRE_AT + BOSS_IMPACT_TRAVEL + 0.02) this.markers = [];
   }
 
-  private stepChallengeCrab(dt: number) {
-    const { interval, lockAt } = ventChallengeBoss;
-    const cycle = Math.floor(this.time / interval);
-    const elapsed = this.time - cycle * interval;
-    if (elapsed < lockAt) {
+  private stepChallengeBoss(pattern: BossPattern) {
+    const cycle = Math.floor(this.time / pattern.interval);
+    const elapsed = this.time - cycle * pattern.interval;
+    if (elapsed < pattern.lockAt) {
       this.markers = [];
       return;
     }
-    if (this.ventAttack?.cycle !== cycle) {
-      this.ventAttack = { cycle, core: this.crabCoreOpen };
-      this.markers = [{ ...this.player }];
+    if (this.bossPattern?.cycle !== cycle) {
+      const exposed = this.isIoChallenge ? this.ioLegBroken : this.isVentChallenge && this.crabCoreOpen;
+      const rows = exposed ? pattern.exposedRows ?? pattern.rows : pattern.rows;
+      this.bossPattern = { cycle, target: { ...this.player }, row: 0, rows };
+      this.markers = [this.bossPattern.target];
     }
-    for (const index of ventChallengeVolleys(elapsed, dt, this.ventAttack.core)) {
-      const target = this.crabTargetX;
-      this.threats.push(...ventChallengeBossFan(this.time, target, this.markers[0], index, cycle));
-      this.firedCrabTarget = target;
-      this.bossRecoil = BOSS_RECOIL_TIME;
-      // Keep the exposed claw available through the pair, then switch sides.
-      if (index === 1) this.volley++;
+    const burst = this.bossPattern;
+    while (burst.row < burst.rows && elapsed + 1e-8 >= pattern.first + burst.row * pattern.spacing) {
+      this.fireChallengeBossRow(burst.target, cycle, burst.row++, burst.rows > pattern.rows);
+      if (burst.row === burst.rows) this.volley++;
     }
+    if (elapsed >= pattern.first + .3) this.markers = [];
   }
 
-  private stepChallengeGuardian(dt: number) {
-    const { interval, windup, fire, echo } = challengeGuardian;
-    const cycle = Math.floor(this.time / interval);
-    const elapsed = this.time - cycle * interval;
-    if (elapsed < windup || this.volley !== cycle) return;
-    if (!this.markers.length) this.markers = [{ ...this.player }];
-    const followup = elapsed >= echo;
-    const fireAt = followup ? echo : fire;
-    if (elapsed < fireAt || elapsed - dt >= fireAt) return;
-
-    const x = this.exposedCannonX;
-    const origin = projectShot({ x, y: BOSS_Y, z: BOSS_DEPTH + BOSS_MUZZLE_Z });
-    this.threats.push(...challengeGuardianVolley(origin, this.markers[0], cycle, followup));
-    this.firedCannonX = x;
+  private fireChallengeBossRow(target: Point, cycle: number, row: number, exposed: boolean) {
     this.bossRecoil = BOSS_RECOIL_TIME;
-    if (followup) {
-      this.volley++;
-      this.markers = [];
+    if (this.isVentChallenge) {
+      this.firedCrabTarget = this.crabTargetX;
+      this.threats.push(...ventChallengeBossRow(this.time, this.firedCrabTarget, target, cycle, row, exposed));
+    } else if (this.isIoChallenge) {
+      const muzzle = calderaWheel(IO_DURATION + IO_APPROACH + this.time, this.ioCollapse);
+      this.firedCannonX = muzzle.x;
+      this.threats.push(...calderaChallengeRow(projectShot(muzzle), target, cycle, row));
+    } else {
+      const x = this.exposedCannonX;
+      this.firedCannonX = x;
+      const origin = projectShot({ x, y: BOSS_Y, z: BOSS_DEPTH + BOSS_MUZZLE_Z });
+      this.threats.push(...challengeGuardianVolley(origin, target, cycle, row));
     }
   }
 
@@ -1668,23 +1656,6 @@ export class Flight {
       this.volley++;
     }
     if(elapsed>IO_FIRE+IO_TRAVEL+.05)this.markers=[];
-  }
-
-  private stepChallengeCaldera(dt: number) {
-    const { interval, lockAt } = ioChallengeBoss;
-    const elapsed = this.time % interval;
-    if (elapsed < lockAt) {
-      this.markers = [];
-      return;
-    }
-    if (!this.markers.length) this.markers = [{ ...this.player }];
-    const volleys = calderaChallengeVolleys(this.time, dt, this.ioThirdSweep);
-    if (!volleys.length) return;
-    const muzzle = calderaWheel(IO_DURATION + IO_APPROACH + this.time, this.ioCollapse);
-    const origin = projectShot(muzzle);
-    for (const volley of volleys) this.threats.push(...calderaChallengeFan(origin, this.markers[0], volley));
-    this.firedCannonX = muzzle.x;
-    this.bossRecoil = BOSS_RECOIL_TIME;
   }
 
   private stepCicada() {

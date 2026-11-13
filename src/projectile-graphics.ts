@@ -4,6 +4,7 @@ import { shipAlloy } from './encounter-surfaces';
 import type { Flight } from './game';
 import { wingWeapons } from './wing';
 import { createLaserAblation, createLaserShield } from './laser-ablation';
+import { PATTERN_BULLET_CAPACITY } from './challenge-patterns';
 
 type Shot = Flight['shots'][number];
 export const projectileKinds = ['ship', 'drone', 'homing', 'cannon', 'omega', 'hostile', 'spore', 'brine'] as const;
@@ -45,6 +46,75 @@ const white = new T.Color(0xfff8e6);
 const facingGLSL = `float viewFacing(vec3 n, vec3 eye) {
   return clamp(dot(n, eye) * inversesqrt(max(dot(n,n) * dot(eye,eye), 1e-12)), 0.0, 1.0);
 }`;
+
+export type PatternPalette = { primary: number; accent: number; shape: 'seed' | 'ember' | 'pearl' };
+
+export function createPatternProjectileBatch(palette: PatternPalette) {
+  const root = new T.Group();
+  root.name = 'challenge-projectiles';
+  const material = new T.ShaderMaterial({
+    uniforms: { shape: { value: { seed: 0, ember: 1, pearl: 2 }[palette.shape] } },
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    vertexShader: `varying vec2 cell; varying vec3 ink;
+      void main() {
+        cell = uv * 2.0 - 1.0;
+        ink = instanceColor;
+        gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `uniform int shape; varying vec2 cell; varying vec3 ink;
+      void main() {
+        vec2 p = cell / vec2(0.56, 0.67);
+        float radius = length(p);
+        if (shape == 0) radius = length(vec2(p.x * (1.0 + 0.22 * p.y), p.y));
+        if (shape == 1) radius = max(abs(p.x), abs(p.y)) * 0.55 + (abs(p.x) + abs(p.y)) * 0.45;
+        if (shape == 2) radius = length(cell / vec2(0.63, 0.63));
+        float edge = max(0.06, fwidth(radius));
+        float body = 1.0 - smoothstep(1.0 - edge, 1.0 + edge, radius);
+        float glow = exp(-2.8 * radius * radius) * 0.45;
+        float lip = smoothstep(0.32, 0.59, radius) * (1.0 - smoothstep(0.78, 0.99, radius));
+        vec3 color = mix(ink * 0.18, ink, lip);
+        float light = 1.0 - smoothstep(0.12, 0.70, length(p - vec2(-0.10, 0.16)));
+        color = mix(color, vec3(1.0, 0.97, 0.89), light * 0.88);
+        color = mix(ink * 0.73, color, body);
+        gl_FragColor = vec4(color, max(body, glow));
+        #include <colorspace_fragment>
+      }`,
+  });
+  const primary = new T.Color(palette.primary), accent = new T.Color(palette.accent);
+  const geometry = new T.PlaneGeometry(1, 1);
+  const mesh = new T.InstancedMesh(geometry, material, PATTERN_BULLET_CAPACITY);
+  mesh.frustumCulled = false;
+  mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);
+  mesh.renderOrder = 9;
+  mesh.count = 0;
+  mesh.setColorAt(0, primary);
+  mesh.instanceColor!.setUsage(T.DynamicDrawUsage);
+  root.add(mesh);
+  root.visible = false;
+  const matrix = new T.Matrix4(), position = new T.Vector3(), rotation = new T.Quaternion();
+  const axis = new T.Vector3(0, 0, 1);
+  const size = new T.Vector3(.52, palette.shape === 'seed' ? .57 : palette.shape === 'ember' ? .63 : .52, 1);
+
+  function draw(shots: Flight['threats']) {
+    let count = 0;
+    for (const shot of shots) {
+      if (!shot.pattern) continue;
+      position.set(shot.x, shot.y, 0);
+      rotation.setFromAxisAngle(axis, Math.atan2(-shot.vx, shot.vy));
+      matrix.compose(position, rotation, size);
+      mesh.setMatrixAt(count, matrix);
+      mesh.setColorAt(count++, shot.pattern === 'accent' ? accent : primary);
+    }
+    root.visible = count > 0;
+    mesh.count = count;
+    if (count === 0) return;
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.instanceColor!.needsUpdate = true;
+  }
+  return { root, draw, prime: () => draw([{ x: 0, y: 0, z: 0, vx: 0, vy: -5, vz: 0, pattern: 'primary' }]) };
+}
 
 function energyMaterial(color: number, danger: boolean) {
   return new T.ShaderMaterial({

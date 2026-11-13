@@ -1,4 +1,5 @@
 import { BOSS_MUZZLE_Z } from './encounters';
+import { patternBearing, patternBullet, stepPatternBurst, type BossPattern } from './challenge-patterns';
 import { BOSS_CAMERA_DISTANCE } from './playfield';
 import { faunaMuzzle } from './vent-fauna';
 import { ventAnchors, ventBossPose, ventWorld, VENT_APPROACH, VENT_CRAB_SCALE, VENT_DURATION, VENT_SPAWN_LEAD, type VentWave } from './vent-layout';
@@ -6,7 +7,9 @@ import { MORTAR_WINDUP, mortarAim, mortarMuzzle } from './vent-mortar';
 import { wingRewardForWave } from './wing';
 
 type Point = { x: number; y: number };
-type Attacker = Parameters<typeof faunaMuzzle>[0] & { lockedAim?: Point; mortarAngle?: number };
+type Attacker = Parameters<typeof faunaMuzzle>[0] & Parameters<typeof stepPatternBurst>[0];
+const shrimpStreams = [-.38, -.18, .18, .38];
+const mortarStreams = [-.28, 0, .28];
 
 const patrols = [
   [.7, [-2.3, -.7, .8, 2.4]], [3.75, [-2.25, 0, 2.25]], [6.9, [0, 0, 0, 0]],
@@ -30,91 +33,57 @@ export const ventChallengeWaves: readonly VentWave[] = [
   ...ventAnchors.map((anchor, index) => ({ time: anchor.time - VENT_SPAWN_LEAD, lanes: [0], ventAnchor: index, ventWorm: anchor.worm })),
 ].sort((a, b) => a.time - b.time);
 
-export const ventChallengeShrimp = { pace: 2.1, windup: .72, interval: 3.24, speed: 7.35 };
-export const ventChallengeMortar = { interval: 2.16, speed: 6.85 };
+export const ventChallengeShrimp = { pace: 1.58, windup: .78, rows: 3, spacing: .28, rest: 4.3, speed: 4.95 };
+export const ventChallengeMortar = { windup: MORTAR_WINDUP, rows: 5, spacing: .22, rest: 3.9, speed: 4.55 };
 
 export function ventChallengeShrimpFirstShot(slot: number) {
-  return 1.58 + slot * .43;
+  return 1.67 + slot * .45;
 }
 
-function fan(origin: Point, bearing: number, speed: number, spread: readonly number[]) {
-  return spread.map(offset => ({ ...origin, z: 0, vx: Math.sin(bearing + offset) * speed,
-    vy: -Math.cos(bearing + offset) * speed, vz: 0, planar: true }));
-}
-
-const tightFan = [-.38, -.19, 0, .19, .38];
-const splitFan = [-.56, -.39, -.22, .22, .39, .56];
-
-export function stepVentChallengeShrimp(enemy: Attacker, player: Point) {
+export function stepVentChallengeShrimp(enemy: Attacker) {
   const origin = faunaMuzzle(enemy);
-  const { windup, interval, speed } = ventChallengeShrimp;
-  const canFire = enemy.y < 7.1 && origin.y > player.y + 1.65 && Math.abs(enemy.heading ?? 0) < 1;
-  if (!canFire) {
-    enemy.fire = Math.max(enemy.fire, enemy.age + windup);
-    enemy.lockedAim = undefined;
-    return;
-  }
-  if (enemy.age < enemy.fire - windup) return;
-  enemy.lockedAim ??= { ...player };
-  if (enemy.age < enemy.fire) return;
-  const aim = mortarAim(origin, enemy.lockedAim);
-  enemy.lockedAim = undefined;
-  enemy.fire = enemy.age + interval;
-  return fan(origin, aim, speed, (enemy.shrimp?.slot ?? 0) % 2 === 0 ? tightFan : splitFan);
+  const timing = ventChallengeShrimp;
+  const canFire = enemy.y < 7.1 && origin.y > -1 && Math.abs(enemy.heading ?? 0) < 1;
+  const burst = stepPatternBurst(enemy, enemy, canFire, timing);
+  if (!burst) return;
+  const side = (enemy.shrimp?.slot ?? 0) % 2 === 0 ? 1 : -1;
+  const aim = patternBearing(origin, { x: burst.target.x * .36, y: -5.25 }, .32) + side * (.24 * (burst.row - 1));
+  return shrimpStreams.map(offset => patternBullet(origin, aim + offset, timing.speed,
+    side === 1 ? 'primary' : 'accent'));
 }
 
-const mortarFan = [-.64, -.44, -.25, 0, .25, .44, .64];
 export function stepVentChallengeMortar(enemy: Attacker, player: Point) {
-  const { interval, speed } = ventChallengeMortar;
-  if (enemy.y >= 7.1 || enemy.y <= player.y + 2.2) {
-    enemy.fire = Math.max(enemy.fire, enemy.age + MORTAR_WINDUP);
-    enemy.lockedAim = undefined;
-  } else if (enemy.age >= enemy.fire - MORTAR_WINDUP) {
-    enemy.lockedAim ??= { ...player };
-  }
-  const angle = mortarAim(enemy, enemy.lockedAim ?? player);
+  const burst = stepPatternBurst(enemy, player, enemy.y < 7.1 && enemy.y > player.y + 2.9, ventChallengeMortar);
+  const aim = burst?.target ?? enemy.burst?.target ?? player;
+  const angle = mortarAim(enemy, aim);
   enemy.mortarAngle = angle;
-  if (enemy.age < enemy.fire) return;
-  const origin = mortarMuzzle(enemy, angle, interval);
-  enemy.fire = enemy.age + interval;
-  enemy.lockedAim = undefined;
-  return fan(origin, angle, speed, mortarFan);
+  if (!burst) return;
+  const origin = mortarMuzzle(enemy, angle, burst.row === 0 ? 1 : .7);
+  const swing = Math.sign(enemy.x) * (burst.row - 2) * .13;
+  const bearing = patternBearing(origin, aim, .72) * .9 + swing;
+  return mortarStreams.map(offset => patternBullet(origin, bearing + offset, ventChallengeMortar.speed, 'accent'));
 }
 
-export const ventChallengeBoss = { clawHealth: 30, coreHealth: 92, interval: 2.15, lockAt: .28 };
-const sprays = [
-  { at: .72, speed: 7.55, spread: [-.84, -.66, -.48, -.30, -.15, 0, .15, .30, .48, .66, .84] },
-  { at: 1.15, speed: 8, spread: [-.90, -.74, -.58, -.42, -.27, -.13, .13, .27, .42, .58, .74, .90] },
-  { at: 1.57, speed: 8.35, spread: [-.72, -.56, -.40, -.24, -.08, .08, .24, .40, .56, .72] },
-] as const;
+export const ventChallengeBoss = { clawHealth: 30, coreHealth: 92, interval: 4.65, lockAt: .34,
+  first: 1.02, spacing: .21, rows: 10, exposedRows: 14 } satisfies BossPattern & { clawHealth: number; coreHealth: number };
 
-export function ventChallengeWindup(time: number, core: boolean) {
-  const elapsed = time % ventChallengeBoss.interval;
-  let charge = 0;
-  for (let index = 0; index < (core ? 3 : 2); index++) {
-    const { at } = sprays[index];
-    const start = index === 0 ? ventChallengeBoss.lockAt : at - .25;
-    charge = Math.max(charge, elapsed < at ? (elapsed - start) / (at - start) : 1 - (elapsed - at) / .15);
-  }
-  return charge;
-}
-
-export function ventChallengeVolleys(elapsed: number, dt: number, core: boolean) {
-  const fired: number[] = [];
-  for (let index = 0; index < (core ? 3 : 2); index++) {
-    const { at } = sprays[index];
-    if (elapsed >= at && elapsed - dt < at) fired.push(index);
-  }
-  return fired;
-}
-
-export function ventChallengeBossFan(time: number, localX: number, target: Point, index: number, cycle: number) {
+export function ventChallengeBossRow(time: number, localX: number, target: Point, cycle: number, row: number, extended: boolean) {
   const boss = ventBossPose(1, time);
   const point = ventWorld(boss.x, boss.y, boss.z, VENT_DURATION + VENT_APPROACH + time, 1);
   // Match the posed claw or gill anchor before the rig recoils.
   const scale = BOSS_CAMERA_DISTANCE / (BOSS_CAMERA_DISTANCE - point.z - (BOSS_MUZZLE_Z + .015) * VENT_CRAB_SCALE);
   const origin = { x: (point.x + localX) * scale, y: point.y * scale };
-  const spray = sprays[index];
-  const turn = (cycle % 2 === 0 ? 1 : -1) * (index === 1 ? .17 : index === 2 ? -.23 : 0);
-  return fan(origin, mortarAim(origin, target) + turn, spray.speed, spray.spread);
+  const mirror = cycle % 2 === 0 ? 1 : -1;
+  const sweep = mirror * Math.sin(row * .37 - 1.15) * (extended ? .43 : .35);
+  const center = patternBearing(origin, target, .25) * .55 + sweep;
+  const shots = [];
+  // Each arm keeps an open side and bends around the same empty center.
+  for (const side of [-1, 1]) {
+    const length = side === mirror ? 6 : 5;
+    for (let index = 0; index < length; index++) {
+      const angle = center + side * (.24 + .127 * index);
+      shots.push(patternBullet(origin, angle, 5.48 - .12 * index, side === mirror ? 'accent' : 'primary'));
+    }
+  }
+  return shots;
 }
