@@ -12,7 +12,7 @@ const server = await createServer({
 });
 after(() => server.close());
 const { BOSS_DEPTH, Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
-const { addVictoryWingShots, createBossDefeat, createVictoryFlares, SALUTE_ANGLE, SALUTE_START, VICTORY_DURATION, VICTORY_LASER_OVERSCAN, victoryLaserLength } =
+const { addVictoryWingShots, createBossDefeat, createVictoryFlares, DEFEAT_DURATION, SALUTE_ANGLE, SALUTE_START, VICTORY_DURATION, VICTORY_LASER_OVERSCAN, victoryLaserLength } =
   await server.ssrLoadModule('/src/rendering/victory.ts');
 const { createFighterRig } = await server.ssrLoadModule('/src/ship-rigs.ts');
 const { shipBurners } = await server.ssrLoadModule('/src/burners.ts');
@@ -187,7 +187,8 @@ test('the exterior holds on the exit, then follows the fighter and its trails to
     camera = lens;
   } };
   const ending = createWormholeEnding(fighter, 2.7);
-  const exteriorDuration = ending.duration - ending.cutToExterior;
+  const exteriorDuration = ending.duration - ending.departureAt - ending.cutToExterior;
+  assert(ending.departureAt > DEFEAT_DURATION);
   try {
     ending.warmup(renderer);
     const ship = exterior.getObjectByName('wormhole-exit-fighter');

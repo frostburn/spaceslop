@@ -3,6 +3,7 @@ import { BOSS_Y, BOSS_DEPTH, type Flight } from '../game';
 export type TextureResult = T.Texture | undefined;
 export interface LevelEnding {
   duration: number;
+  departureAt: number;
   cutToExterior: number;
   cockpitFlares: { root: T.Group; prime(): void };
   warmup(renderer: T.WebGLRenderer): void;

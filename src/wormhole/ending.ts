@@ -3,12 +3,15 @@ import { poseBurners, shipBurners } from '../burners';
 import { disposeScene } from '../rendering/dispose';
 import { BOSS_CAMERA_DISTANCE, HEIGHT, WIDTH } from '../playfield';
 import type { LevelEnding } from '../rendering/level';
-import { createCockpitFlares } from '../rendering/victory';
+import { createCockpitFlares, DEFEAT_DURATION } from '../rendering/victory';
 import { createApertureLightning } from './fons/lightning';
 
 export const WORMHOLE_EXIT_DURATION = 3.35;
 export const WORMHOLE_EXIT_HOLD = .95;
-export const WORMHOLE_ENDING_DURATION = WORMHOLE_EXIT_DURATION + 3.15;
+export const WORMHOLE_DEPARTURE_AT = DEFEAT_DURATION + .2;
+export const WORMHOLE_EXTERIOR_AT = WORMHOLE_DEPARTURE_AT + WORMHOLE_EXIT_DURATION;
+const exteriorDuration = 3.15;
+export const WORMHOLE_ENDING_DURATION = WORMHOLE_EXTERIOR_AT + exteriorDuration;
 
 const exit = new T.Vector3(-.68, 5.2, -26);
 const tunnelExitDepth = -26;
@@ -275,7 +278,7 @@ export function createWormholeEnding(fighter: T.Group, apertureY: number): Level
     point.add(cockpitOffset.copy(cockpit).applyQuaternion(sampledRotation));
   }
   function renderExterior(renderer: T.WebGLRenderer, time: number) {
-    const age = T.MathUtils.clamp(time, 0, WORMHOLE_ENDING_DURATION - WORMHOLE_EXIT_DURATION);
+    const age = time >= exteriorDuration - 1e-9 ? exteriorDuration : Math.max(0, time);
     const burst = smooth(age, .62, WORMHOLE_EXIT_HOLD + .16) * (1 - smooth(age, 1.35, 2.1));
     const progress = T.MathUtils.clamp((age - WORMHOLE_EXIT_HOLD) / 2.2, 0, 1) ** 1.34;
     trumpet.material.uniforms.age.value = age;
@@ -296,6 +299,7 @@ export function createWormholeEnding(fighter: T.Group, apertureY: number): Level
 
   return {
     duration: WORMHOLE_ENDING_DURATION,
+    departureAt: WORMHOLE_DEPARTURE_AT,
     cutToExterior: WORMHOLE_EXIT_DURATION,
     exitPoint: new T.Vector3(0, exitY, tunnelExitDepth),
     cockpitFlares,

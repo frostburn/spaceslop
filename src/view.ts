@@ -375,7 +375,8 @@ export class FlightView {
       throw new Error('A flight view belongs to one level.');
     victoryTime = flight.phase === 'won' ? victoryTime ?? 0 : undefined;
     const ending = this.level.ending;
-    const exitTime = ending ? victoryTime : undefined;
+    const exitTime = ending && victoryTime !== undefined && victoryTime >= ending.departureAt
+      ? victoryTime - ending.departureAt : undefined;
     if (ending && exitTime !== undefined && exitTime >= ending.cutToExterior) {
       if (present) ending.renderExterior(this.renderer, exitTime - ending.cutToExterior);
       return;

@@ -75,7 +75,7 @@ import { createSaucerFactory } from './fleet/saucers';
 import { fleetLighting } from './fleet/scenery';
 import { HEIGHT, WIDTH } from './playfield';
 import { FlightView } from './view';
-import { WORMHOLE_ENDING_DURATION, WORMHOLE_EXIT_DURATION, WORMHOLE_EXIT_HOLD } from './wormhole/ending';
+import { WORMHOLE_DEPARTURE_AT, WORMHOLE_ENDING_DURATION, WORMHOLE_EXTERIOR_AT, WORMHOLE_EXIT_HOLD } from './wormhole/ending';
 import { CREDITS_ROLL_DURATION, mountEndingCredits } from './app/ending-credits';
 import './workshop.css';
 
@@ -436,9 +436,9 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   function endingLabel() {
     if (endingState === 'idle' || endingState === 'loading') return 'Preparing ending…';
     if (endingState === 'failed') return 'Ending preview unavailable';
-    const exterior = WORMHOLE_EXIT_DURATION;
-    const shot = time >= freezeAt ? 'Credits' : time >= exterior + WORMHOLE_EXIT_HOLD
-      ? 'Fighter emerges' : time >= exterior ? 'Exterior hold' : 'Tunnel exit and cockpit flares';
+    const shot = time >= freezeAt ? 'Credits' : time >= WORMHOLE_EXTERIOR_AT + WORMHOLE_EXIT_HOLD
+      ? 'Fighter emerges' : time >= WORMHOLE_EXTERIOR_AT ? 'Exterior hold'
+        : time >= WORMHOLE_DEPARTURE_AT ? 'Tunnel exit and cockpit flares' : 'Fons defeat';
     return `${time.toFixed(2)} s · ${shot}`;
   }
 

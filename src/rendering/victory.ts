@@ -6,7 +6,7 @@ import { WING_FLASH_TIME, wingShots, type WingProjectile } from '../wing';
 export const VICTORY_DURATION = 2.55;
 export const SALUTE_START = 1.58;
 export const SALUTE_ANGLE = Math.PI / 6;
-const DEFEAT_DURATION = 1.5;
+export const DEFEAT_DURATION = 1.5;
 const flareTimes = [SALUTE_START, 1.96, 2.37];
 const flareAngles = [-Math.PI / 9, 0, Math.PI / 9];
 const lastWingShot = 2.44;
