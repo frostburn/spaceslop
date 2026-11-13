@@ -27,7 +27,7 @@ export const createLevel: LevelFactory = ({ signal }) => {
     loadScrollPlate('denCliff', DEN_SCREENS, signal),
     loadEncounterTexture('denDisk', scenery.setDisk, undefined, signal),
     loadEncounterTexture('denSky', scenery.setSky, undefined, signal),
-    loadEncounterTexture('denGantry', map => { scenery.setPlate(map); props.useGantryArt(); }, undefined, signal),
+    loadEncounterTexture('denGantry', scenery.setPlate, undefined, signal),
     loadEncounterTexture('denBiker', boss.setArt, undefined, signal),
     loadEncounterTexture('denPatrol', patrols.setArt, undefined, signal),
     loadEncounterTexture('denProps', props.setArt, undefined, signal),
@@ -35,6 +35,7 @@ export const createLevel: LevelFactory = ({ signal }) => {
   ]).then(([tiles, , , , chiefArt, patrolArt, propArt, defenseArt]) => {
     if (signal.aborted) { disposePlateTiles(tiles); return []; }
     scenery.setCliff(tiles);
+    if (!tiles.length) props.useFallbackCliff();
     scenery.update(0, 0, 0);
     return [...scenery.textures, props.fallback, chiefArt, patrolArt, propArt, defenseArt];
   });
