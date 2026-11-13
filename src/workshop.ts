@@ -410,7 +410,6 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const endingPreview = element('ending-preview');
   let endingCredits: HTMLElement | undefined;
   let creditsRoll: HTMLElement | undefined;
-  let creditsTitle: HTMLElement | undefined;
   let unlockNotice: HTMLElement | undefined;
   const endingScope = new AbortController();
   let endingView: FlightView | undefined;
@@ -460,7 +459,6 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
       endingScope.signal.throwIfAborted();
       endingCredits = mountEndingCredits(endingPreview);
       creditsRoll = endingCredits.querySelector<HTMLElement>('#ending-credits-roll')!;
-      creditsTitle = endingCredits.querySelector<HTMLElement>('#ending-title')!;
       unlockNotice = endingCredits.querySelector<HTMLElement>('#ending-unlock')!;
       endingState = 'ready';
     } catch {
@@ -601,12 +599,6 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
         if (roll) {
           roll.pause();
           roll.currentTime = (time - freezeAt) * 1000;
-        }
-      }
-      if (!endingCredits.hidden && creditsTitle) {
-        for (const glint of creditsTitle.getAnimations({ subtree: true })) {
-          glint.pause();
-          glint.currentTime = (time - freezeAt) * 1000;
         }
       }
       if (endingFrame === frameTime) return;

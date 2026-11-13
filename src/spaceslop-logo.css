@@ -12,10 +12,10 @@
   .spaceslop-logo {
     --logo-light-x: clamp(.07em, var(--logo-pointer-x, 50%), calc(100% - .07em));
     position: relative;
-    background-image: linear-gradient(var(--logo-gradient-angle, 180deg),
-      #effaff 12%, var(--logo-steel, #347ad4) 20%, var(--logo-sky, #54d8ff) 35%,
-      #fbfdff 48%, #fbfdff 50%, #1c2a55 51%, #304c99 61%, var(--logo-violet, #913bd1) 72%,
-      var(--logo-rose, #f47ae0) 80%, #ffe3fc 88%);
+    background-image: linear-gradient(180deg,
+      #effaff 12%, #347ad4 20%, #54d8ff 35%,
+      #fbfdff 48%, #fbfdff 50%, #1c2a55 51%, #304c99 61%, #913bd1 72%,
+      #f47ae0 80%, #ffe3fc 88%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
