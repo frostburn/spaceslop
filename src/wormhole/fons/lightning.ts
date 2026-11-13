@@ -8,7 +8,7 @@ const noise = (key: number) => {
   return value - Math.floor(value);
 };
 
-export function createFonsLightning(apertureY: number) {
+export function createApertureLightning(apertureY = 0) {
   const points = new Float32Array(branchCapacity * 4 * 3);
   const energy = new Float32Array(branchCapacity * 4);
   const across = new Float32Array(branchCapacity * 4);
@@ -53,9 +53,7 @@ export function createFonsLightning(apertureY: number) {
     `,
   });
   const root = new T.Mesh(geometry, material);
-  root.name = 'fons-entry-lightning';
   root.frustumCulled = false;
-  root.position.z = depth;
   root.visible = false;
   let segment = 0;
 
@@ -94,11 +92,9 @@ export function createFonsLightning(apertureY: number) {
 
   return {
     root,
-    update(time: number, distance: number) {
-      const age = time + FONS_APPROACH;
-      const glow = fonsEase(.18, .65, age) * (1 - fonsEase(2.30, FONS_APPROACH, age));
+    pose(age: number, glow: number) {
       root.visible = glow > .003;
-      if (!root.visible) return 0;
+      if (!root.visible) return;
       segment = 0;
       for (let i = 0; i < 8; i++) {
         const tick = Math.floor((age + i * .042) * 12.5);
@@ -111,11 +107,25 @@ export function createFonsLightning(apertureY: number) {
           Math.cos(exitAngle) * reach, apertureY + Math.sin(exitAngle) * reach * .88,
           seed, .088 + noise(seed + 13) * .054, power, 10);
       }
-      const projection = 1 - depth / distance;
-      root.scale.set(projection, projection, 1);
       geometry.setDrawRange(0, segment * 6);
       position.needsUpdate = brightness.needsUpdate = true;
-      return glow;
+    },
+  };
+}
+
+export function createFonsLightning(apertureY: number) {
+  const lightning = createApertureLightning(apertureY);
+  lightning.root.name = 'fons-entry-lightning';
+  lightning.root.position.z = depth;
+  return {
+    root: lightning.root,
+    update(time: number, distance: number) {
+      const age = time + FONS_APPROACH;
+      const glow = fonsEase(.18, .65, age) * (1 - fonsEase(2.30, FONS_APPROACH, age));
+      lightning.pose(age, glow);
+      const projection = 1 - depth / distance;
+      lightning.root.scale.set(projection, projection, 1);
+      return lightning.root.visible ? glow : 0;
     },
   };
 }

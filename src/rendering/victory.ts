@@ -128,7 +128,7 @@ export function createBossDefeat(boss: T.Group, plane: T.Group, level: LevelId) 
   };
 }
 
-export function createVictoryFlares() {
+export function createVictoryFlares(throughExit = false) {
   const streakGeometry = new T.PlaneGeometry(1, 1);
   const sparkGeometry = new T.OctahedronGeometry(.125);
   // The salute stays readable in front of overhead scenery after combat stops.
@@ -155,7 +155,8 @@ export function createVictoryFlares() {
   const root = new T.Group();
   root.name = 'victory-flares';
   root.visible = false;
-  const flares = flareTimes.flatMap(launch => flareAngles.map(angle => {
+  const launches = throughExit ? [...flareTimes, VICTORY_DURATION + .36, VICTORY_DURATION + .94, VICTORY_DURATION + 1.66] : flareTimes;
+  const flares = launches.flatMap(launch => flareAngles.map(angle => {
     const flare = new T.Group();
     const spark = new T.Mesh(sparkGeometry, sparkMaterial);
     const streak = new T.Mesh(streakGeometry, streakMaterial);

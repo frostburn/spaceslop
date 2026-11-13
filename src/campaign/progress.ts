@@ -24,5 +24,10 @@ export function recordCampaignClear(cleared: ReadonlySet<LevelId>, level: LevelI
   const updated = new Set(cleared);
   if (level === before.next) updated.add(level);
   const after = campaignStatus(updated);
-  return { cleared: updated, next: after.next, promoted: after.rank === before.rank ? undefined : after.rank };
+  return {
+    cleared: updated,
+    next: after.next,
+    promoted: after.rank === before.rank ? undefined : after.rank,
+    unlockedBulletHell: before.next !== undefined && after.next === undefined,
+  };
 }

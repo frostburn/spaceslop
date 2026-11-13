@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { loadEncounterTexture } from '../../encounter-texture';
-import { BOSS_CAMERA_DISTANCE, BOSS_PROJECTION, BOSS_Y, HEIGHT, WORMHOLE_PITCH } from '../../game';
+import { BOSS_CAMERA_DISTANCE, BOSS_PROJECTION, BOSS_Y, HEIGHT, WIDTH, WORMHOLE_PITCH } from '../../game';
 import { createWormholeReflection, wormholeReflectionPose, type WormholeReflectionPose } from '../../wormhole/reflection';
 import { fonsEase, fonsPhase, FONS_APPROACH } from '../../wormhole/fons/combat';
 import { createFonsEffects } from '../../wormhole/fons/effects';
@@ -9,6 +9,7 @@ import { createFonsLightning } from '../../wormhole/fons/lightning';
 import { createFonsRig } from '../../wormhole/fons/rig';
 import { createWormholeBosses, type WormholeBoss } from '../../wormhole/bosses';
 import { createCruiserWall } from '../../wormhole/cruiser-wall';
+import { createWormholeEnding } from '../../wormhole/ending';
 import { wormholeBosses, wormholeFrame } from '../../wormhole/route';
 import { createWormholeTunnel } from '../../wormhole/tunnel';
 import type { TunnelTheme } from '../../wormhole/wall-themes';
@@ -24,6 +25,8 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
   root.name = 'wormhole';
   const reflection = createWormholeReflection(fighter);
   const tunnel = createWormholeTunnel(apertureY, reflection.texture);
+  const ending = createWormholeEnding(fighter, apertureY * halfHeight);
+  const exitPoint = new T.Vector3();
   const cruiserWall = createCruiserWall(apertureY);
   const attacks = createFonsEffects();
   const environment = createFonsEnvironment(tunnel.root, attacks.rocks);
@@ -53,6 +56,7 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
     surfaces: bosses.surfaces,
     applyArmor: bosses.applyArmor,
     ready,
+    ending,
     stageDistance: BOSS_CAMERA_DISTANCE,
     fixedCamera: true,
     orientation: () => headOn,
@@ -79,6 +83,7 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
       environment.capture(renderer, camera, fons.root.visible);
     },
     dispose() {
+      ending.dispose();
       bosses.dispose();
       tunnel.clearReflection();
       reflection.dispose();
@@ -111,11 +116,27 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
       cruiserWall.pose(frame.travel);
       frame.echo *= T.MathUtils.lerp(titanEcho(previous), titanEcho(theme), blend) * (1 - finale);
       frame.lensStrength += finale * .32 * (1 - fonsEase(-1.2, .8, fonsTime));
+      let exitGlow = 0;
+      if (victory?.exitTime !== undefined) {
+        const progress = victory.exitTime / ending.cutToExterior;
+        const fly = progress ** 2.65;
+        exitPoint.copy(ending.exitPoint).project(victory.camera);
+        const lineUp = T.MathUtils.smoothstep(progress, 0, .8);
+        frame.lensX = T.MathUtils.lerp(frame.lensX, exitPoint.x * WIDTH / HEIGHT, lineUp);
+        frame.lensY = T.MathUtils.lerp(frame.lensY, exitPoint.y - apertureY, lineUp);
+        frame.travel += victory.exitTime * (.9 + 2.5 * fly);
+        frame.lensRadius += .39 * fly;
+        frame.lensStrength += .69 * fly;
+        frame.waveRadius = .27 + .64 * progress;
+        frame.waveStrength = Math.sin(progress * Math.PI) * .32;
+        exitGlow = T.MathUtils.smoothstep(progress, .86, 1);
+      }
       const incomingPortal = theme === 'heliostat' ? fonsEase(.76, 2.88, age) : 0;
       const outgoingPortal = previous === 'heliostat' ? 1 - fonsEase(.06, 1.32, age) : 0;
       const portalOpening = incomingPortal + outgoingPortal;
-      mirror = fighter.visible ? wormholeReflectionPose(fighter.position.x, fighter.position.y, apertureY * halfHeight) : undefined;
-      tunnel.pose(frame, mirror);
+      mirror = fighter.visible && victory?.exitTime === undefined
+        ? wormholeReflectionPose(fighter.position.x, fighter.position.y, apertureY * halfHeight) : undefined;
+      tunnel.pose(frame, mirror, exitGlow);
       tunnel.setRegulatorPortals(time, portalOpening);
       fons.root.visible = flight.isFonsFight && fonsTime >= -FONS_APPROACH + .61 && (flight.bossHealth > 0 || victory !== undefined);
       attacks.root.visible = flight.isFonsFight && fonsTime >= -1.7 && flight.bossHealth > 0;

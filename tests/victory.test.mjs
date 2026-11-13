@@ -14,6 +14,9 @@ after(() => server.close());
 const { BOSS_DEPTH, Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
 const { addVictoryWingShots, createBossDefeat, createVictoryFlares, SALUTE_ANGLE, SALUTE_START, VICTORY_DURATION, VICTORY_LASER_OVERSCAN, victoryLaserLength } =
   await server.ssrLoadModule('/src/rendering/victory.ts');
+const { createFighterRig } = await server.ssrLoadModule('/src/ship-rigs.ts');
+const { shipBurners } = await server.ssrLoadModule('/src/burners.ts');
+const { createWormholeEnding, WORMHOLE_EXIT_HOLD } = await server.ssrLoadModule('/src/wormhole/ending.ts');
 
 test('a lethal projectile clears in-flight ordnance and records the final boss time', () => {
   const flight = new Flight('sentry', [], 'vex', 'broodlock');
@@ -117,6 +120,61 @@ test('salute rounds keep their equipped weapon and upgrade and travel along the 
     assert(addVictoryWingShots(shots, weapon, true, VICTORY_DURATION, muzzle, direction) > 0);
     assert(shots.every(shot => shot.wing === weapon && shot.upgraded && shot.x < muzzle.x && shot.y > muzzle.y));
     assert(shots.every(shot => shot.vx < 0 && shot.vy > 0 && shot.vz === 0));
+  }
+});
+
+test('the tunnel escape fires another flare salvo after the normal victory beat', () => {
+  const throughExit = createVictoryFlares(true);
+  const ordinary = createVictoryFlares();
+  const time = VICTORY_DURATION + 1.35;
+  throughExit.pose(time);
+  ordinary.pose(time);
+  assert(throughExit.root.children.some(flare => flare.visible && flare.position.y > 0));
+  assert(ordinary.root.children.every(flare => !flare.visible));
+});
+
+test('the exterior holds on the exit, then follows the fighter and its trails to a repeatable freeze', () => {
+  const fighter = createFighterRig().root;
+  let exterior, camera;
+  const renderer = { render(scene, lens) {
+    scene.updateMatrixWorld();
+    lens.updateMatrixWorld();
+    exterior = scene;
+    camera = lens;
+  } };
+  const ending = createWormholeEnding(fighter, 2.7);
+  const exteriorDuration = ending.duration - ending.cutToExterior;
+  try {
+    ending.warmup(renderer);
+    const ship = exterior.getObjectByName('wormhole-exit-fighter');
+    const lightning = exterior.getObjectByName('wormhole-exit-lightning');
+    const trails = exterior.getObjectByName('wormhole-exit-engine-trails');
+    assert(ship.visible && lightning.visible && trails.visible);
+    ending.renderExterior(renderer, WORMHOLE_EXIT_HOLD / 2);
+    assert(!ship.visible && !lightning.visible && !trails.visible);
+
+    ending.renderExterior(renderer, WORMHOLE_EXIT_HOLD + .3);
+    assert(ship.visible && lightning.visible && trails.visible);
+    const emergence = ship.position.clone();
+    ending.renderExterior(renderer, exteriorDuration);
+    assert(ship.position.z > emergence.z + 20);
+    const projected = ship.position.clone().project(camera);
+    assert(Math.abs(projected.x) < .92 && Math.abs(projected.y) < .92);
+
+    const ribbon = trails.geometry.getAttribute('position');
+    for (const [index, burner] of shipBurners(ship).entries()) {
+      const left = index * ribbon.count / 2;
+      const center = new T.Vector3().fromBufferAttribute(ribbon, left)
+        .add(new T.Vector3().fromBufferAttribute(ribbon, left + 1)).multiplyScalar(.5);
+      assert(center.distanceTo(burner.getWorldPosition(new T.Vector3())) < 1e-5);
+    }
+    const finalPose = ship.matrixWorld.clone();
+    const finalTrail = ribbon.array.slice();
+    ending.renderExterior(renderer, exteriorDuration + 5);
+    assert(ship.matrixWorld.equals(finalPose));
+    assert.deepEqual(ribbon.array, finalTrail);
+  } finally {
+    ending.dispose();
   }
 });
 

@@ -5,7 +5,6 @@ import { Flight, STEP, type DroneWeapon } from '../game';
 import { levels, type LevelId } from '../levels';
 import type { PilotId } from '../pilot-data';
 import { showSelectedPilot } from '../pilots';
-import { VICTORY_DURATION } from '../rendering/victory';
 import { createFlightView, type FlightView } from '../view';
 import type { WingWeapon } from '../wing';
 import type { FonsVariant } from '../wormhole/fons/variants';
@@ -17,7 +16,7 @@ export type FlightLoadout = { pilot: PilotId; drone: DroneWeapon; wings: (WingWe
 export type FlightShortcut = 'boss' | 'trench' | FonsVariant;
 
 type CampaignRun = {
-  onClear(): { next?: LevelId; promoted?: Rank };
+  onClear(): { next?: LevelId; promoted?: Rank; unlockedBulletHell: boolean };
   onNext(level: LevelId): void;
 };
 
@@ -57,14 +56,23 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
   const bossHud = element('boss-hud');
   const bossName = element('boss-name');
   const bossHealth = element<HTMLProgressElement>('boss-health');
+  const credits = element('ending-credits');
+  const creditsWindow = element('ending-credits-window');
+  const creditsRoll = element('ending-credits-roll');
+  const creditsTitle = element('ending-title');
+  const unlockNotice = element('ending-unlock');
+  const skipCredits = element<HTMLButtonElement>('ending-skip');
+  const continueCredits = element<HTMLButtonElement>('ending-continue');
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const selectedPortrait = element('selected-portrait');
   const perkReadout = element('pilot-perk-readout');
   showSelectedPilot(loadout.pilot, selectedPortrait, element('selected-pilot'), signal);
-  type Screen = 'loading' | 'active' | 'paused' | 'results';
+  type Screen = 'loading' | 'active' | 'paused' | 'credits' | 'results';
   let screen: Screen = 'loading';
   let flight = new Flight(loadout.drone, loadout.wings, loadout.pilot, selectedLevel);
   let nextLevel: LevelId | undefined;
   let promotion: Rank | undefined;
+  let unlockedBulletHell = false;
   let victoryTime: number | undefined;
   const progressOnClear = !shortcut;
   let offlineReady = false;
@@ -87,14 +95,14 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     bossName.textContent = readout.boss;
     pulse.disabled = !active || !fighting || flight.charges === 0;
     pause.hidden = !active;
-    panel.hidden = active;
+    panel.hidden = active || screen === 'credits';
     heading.classList.toggle('preparing-flight', screen === 'loading');
     const victoryResults = screen === 'results' && flight.phase === 'won';
     panel.classList.toggle('victory-results', victoryResults);
     promotionSubtitle.hidden = !victoryResults || promotion === undefined;
     start.hidden = screen === 'loading';
     nextMission.hidden = screen !== 'results' || !nextLevel;
-    perkReadout.hidden = screen === 'loading' || screen === 'results';
+    perkReadout.hidden = screen === 'loading' || screen === 'credits' || screen === 'results';
     if (!perkReadout.hidden && perkReadout.textContent !== flight.perkReadout) {
       perkReadout.textContent = flight.perkReadout;
     }
@@ -146,11 +154,17 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
       const result = campaignRun.onClear();
       nextLevel = result.next;
       promotion = result.promoted;
+      unlockedBulletHell = result.unlockedBulletHell;
+    }
+    if (view?.hasEnding && reduceMotion.matches) {
+      victoryTime = view.victoryDuration;
     }
   }
   function showResults() {
-    if (screen !== 'active') return;
+    if (screen !== 'active' && screen !== 'credits') return;
+    const fromCredits = screen === 'credits';
     screen = 'results';
+    credits.hidden = true;
     input.reset();
     heading.textContent = flight.phase === 'won' ? 'Mission Complete' : 'Ship lost';
     const report = [levels[selectedLevel].name, `Score ${flight.score}`];
@@ -164,17 +178,52 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     start.textContent = 'Fly again';
     panel.scrollTop = 0;
     syncUI();
+    if (fromCredits && !contextLost) start.focus({ preventScroll: true });
   }
+  function finishCredits() {
+    if (screen !== 'credits') return;
+    credits.classList.remove('rolling');
+    unlockNotice.hidden = !unlockedBulletHell;
+    continueCredits.hidden = false;
+    const wasFocused = document.activeElement === skipCredits;
+    skipCredits.hidden = true;
+    if (wasFocused) continueCredits.focus({ preventScroll: true });
+  }
+  function showCredits() {
+    screen = 'credits';
+    input.reset();
+    credits.hidden = false;
+    unlockNotice.hidden = true;
+    continueCredits.hidden = true;
+    skipCredits.hidden = false;
+    creditsWindow.scrollTop = 0;
+    if (reduceMotion.matches) finishCredits();
+    else credits.classList.add('rolling');
+    syncUI();
+    creditsTitle.focus({ preventScroll: true });
+  }
+  skipCredits.addEventListener('click', finishCredits, { signal });
+  continueCredits.addEventListener('click', showResults, { signal });
+  creditsRoll.addEventListener('animationend', (event) => {
+    if (screen === 'credits' && event.target === creditsRoll) finishCredits();
+  }, { signal });
+  reduceMotion.addEventListener('change', () => {
+    if (!reduceMotion.matches) return;
+    if (view?.hasEnding && victoryTime !== undefined && (screen === 'active' || screen === 'paused')) {
+      victoryTime = view.victoryDuration;
+    } else finishCredits();
+  }, { signal });
   nextMission.addEventListener('click', () => {
     if (screen === 'results' && nextLevel) campaignRun?.onNext(nextLevel);
   }, { signal });
   function startFlight() {
-    if (!view || signal.aborted || start.disabled || screen === 'active')
+    if (!view || signal.aborted || start.disabled || screen === 'active' || screen === 'credits')
       return;
     if (screen !== 'paused') {
       if (screen === 'results') flight = new Flight(loadout.drone, loadout.wings, loadout.pilot, selectedLevel);
       nextLevel = undefined;
       promotion = undefined;
+      unlockedBulletHell = false;
       victoryTime = undefined;
       setPilotRank(mission.pilotRank);
       if (import.meta.env.DEV && shortcut) {
@@ -235,6 +284,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     });
   }, { signal });
   const observer = new ResizeObserver(() => {
+    if (contextLost) return;
     view?.resize(canvas.clientWidth, canvas.clientHeight);
     view?.render(flight, 0, victoryTime);
   });
@@ -255,12 +305,16 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
         }
         recordVictory();
       } else {
-        const next = Math.min(VICTORY_DURATION, victoryTime + elapsed);
+        const next = Math.min(view.victoryDuration, victoryTime + elapsed);
         presentationStep = next - victoryTime;
         victoryTime = next;
       }
       view.render(flight, presentationStep, victoryTime);
-      if (flight.phase === 'lost' || victoryTime === VICTORY_DURATION) showResults();
+      if (flight.phase === 'lost') showResults();
+      else if (victoryTime === view.victoryDuration) {
+        if (view.hasEnding) showCredits();
+        else showResults();
+      }
       else syncUI();
     }
     else {
@@ -277,6 +331,8 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     preparing?.abort();
     input.reset();
     panel.classList.remove('victory-results');
+    credits.hidden = true;
+    credits.classList.remove('rolling');
     promotionSubtitle.hidden = true;
     observer.disconnect();
     cancelAnimationFrame(animation);
