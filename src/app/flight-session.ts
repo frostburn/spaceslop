@@ -1,27 +1,17 @@
-import {groveSection} from '../biolume/route';
-import { DEN_SCREENS, denSection } from '../den/route';
-import {boulevardSection} from '../boulevard';
-import {summerSection} from '../summer/layout';
-import { fleetSection, FLEET_TRENCH_AT } from '../fleet/route';
 import { missionFor } from '../campaign/missions';
 import { ranks, type Rank } from '../campaign/ranks';
-import { createRankDisplays } from './briefing';
-import { bindFlightInput } from './input';
-import { ventSection } from '../vent-layout';
-import { ioSection, IO_SCREENS } from '../io-layout';
-import { titanSection } from '../titan-layout';
-import { BOSS_HP, Flight, STEP, type DroneWeapon } from '../game';
+import { FLEET_TRENCH_AT } from '../fleet/route';
+import { Flight, STEP, type DroneWeapon } from '../game';
+import { levels, type LevelId } from '../levels';
 import type { PilotId } from '../pilot-data';
 import { showSelectedPilot } from '../pilots';
-import { createFlightView, type FlightView } from '../view';
 import { VICTORY_DURATION } from '../rendering/victory';
-import { levels, type LevelId } from '../levels';
-import { iceSection } from '../ice-layout';
-import { wingWeapons, type WingWeapon } from '../wing';
-import { FONS_RAIN_END, fonsPhase } from '../wormhole/fons/combat';
-import { fonsAttackCue } from '../wormhole/fons/attacks';
-import { fonsNames, type FonsVariant } from '../wormhole/fons/variants';
-import { wormholeBosses } from '../wormhole/route';
+import { createFlightView, type FlightView } from '../view';
+import type { WingWeapon } from '../wing';
+import type { FonsVariant } from '../wormhole/fons/variants';
+import { createRankDisplays } from './briefing';
+import { flightReadout } from './flight-hud';
+import { bindFlightInput } from './input';
 
 export type FlightLoadout = { pilot: PilotId; drone: DroneWeapon; wings: (WingWeapon | undefined)[] };
 export type FlightShortcut = 'boss' | 'trench' | FonsVariant;
@@ -67,7 +57,6 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
   const bossHud = element('boss-hud');
   const bossName = element('boss-name');
   const bossHealth = element<HTMLProgressElement>('boss-health');
-  bossHealth.max = BOSS_HP;
   const selectedPortrait = element('selected-portrait');
   const perkReadout = element('pilot-perk-readout');
   showSelectedPilot(loadout.pilot, selectedPortrait, element('selected-pilot'), signal);
@@ -85,38 +74,17 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
   function syncUI() {
     const active = screen === 'active';
     const fighting = flight.phase === 'stage' || flight.phase === 'boss';
-    const encounter = flight.encounterLevel;
-    const bossTitle = flight.isFonsFight ? fonsNames[flight.fonsVariant].toUpperCase() : levels[encounter].boss;
-    const label = {
-      stage: levels[flight.level].sector,
-      approach: flight.level === 'wormhole' ? 'SUPPLIES' : flight.isFleet ? 'BREACH APPROACH' : flight.isDen ? 'GANTRY APPROACH' : flight.level==='biolume'?'DARK CROWN':flight.level==='summer'?'LOTUS PALACE':flight.level==='heliostat'?'COLLECTOR APPROACH':flight.level==='boulevard'?'SUNSET PLAZA':flight.level === 'vents' ? 'ABYSSAL DROP' : flight.level === 'io' ? 'CALDERA APPROACH' : flight.level === 'titan' ? 'ASCENT' : 'CONTACT',
-      boss: 'BOSS',
-      won: 'CLEAR',
-      lost: 'SIGNAL LOST',
-    }[flight.phase];
-    sector.textContent = (flight.level === 'summer' || flight.level === 'heliostat' || flight.level === 'vents' || flight.level === 'ice' || flight.level === 'titan') && flight.phase === 'stage'
-      ? `${label} · ${Math.min(10, Math.floor(flight.hiveProgress * 10) + 1)}/10` : label;
-    if (flight.level === 'io' && flight.phase === 'stage')
-      sector.textContent = `IO · ${Math.min(IO_SCREENS, Math.floor(flight.hiveProgress * IO_SCREENS) + 1)}/${IO_SCREENS}`;
-    if(flight.level==='boulevard'&&flight.phase==='stage')sector.textContent=`BOULEVARD · ${Math.min(10,1+Math.floor(flight.time/10))}/10`;
-    if(flight.level==='biolume'&&flight.phase==='stage')sector.textContent=`LANTERN GROVE · ${Math.min(10,1+Math.floor(flight.time/10))}/10`;
-    if (flight.isDen && flight.phase === 'stage') sector.textContent = `${label} · ${Math.min(DEN_SCREENS, 1 + Math.floor(flight.hiveProgress * DEN_SCREENS))}/${DEN_SCREENS}`;
-    sector.title = flight.isDen ? denSection(flight.phase === 'stage' ? flight.time : flight.stageDuration) : flight.level==='biolume'?groveSection(flight.phase==='stage'?flight.time:100):flight.level==='summer'?summerSection(flight.time):flight.level==='boulevard'?boulevardSection(flight.time):flight.level === 'vents' && flight.phase === 'stage' ? ventSection(flight.time) : flight.level === 'io' && flight.phase === 'stage' ? ioSection(flight.time) : flight.level === 'titan' ? titanSection(flight.hiveProgress) : flight.level === 'ice' ? iceSection(flight.hiveProgress) : levels[flight.level].name;
-    if (flight.level === 'fleet' && flight.phase === 'stage') {
-      sector.title = fleetSection(flight.time);
-      sector.textContent = sector.title.toUpperCase();
-    }
-    if (flight.level === 'wormhole' && (flight.phase === 'approach' || flight.phase === 'boss')) {
-      sector.textContent = `${label} · ${flight.wormholeBossNumber}/${wormholeBosses.length}`;
-      sector.title = bossTitle;
-    }
+    const preparingGraphics = preparing !== undefined || screen === 'loading';
+    const readout = flightReadout(flight, active, preparingGraphics, offlineReady);
+    sector.textContent = readout.sector.label;
+    sector.title = readout.sector.title;
     score.textContent = String(flight.score).padStart(6, '0');
     hull.textContent = String(flight.hull).padStart(2, '0');
     charges.textContent = String(flight.charges).padStart(2, '0');
-    bossHud.hidden = flight.phase !== 'boss' && !(flight.level === 'wormhole' && flight.phase === 'approach');
+    bossHud.hidden = !readout.showBoss;
     bossHealth.max = flight.bossMaxHealth;
     bossHealth.value = flight.bossHealth;
-    bossName.textContent = bossTitle + (encounter === 'summer' ? ` · ${flight.summerHeadsAlive} ${flight.summerHeadsAlive === 1 ? 'HEAD' : 'HEADS'}` : '');
+    bossName.textContent = readout.boss;
     pulse.disabled = !active || !fighting || flight.charges === 0;
     pause.hidden = !active;
     panel.hidden = active;
@@ -131,59 +99,9 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
       perkReadout.textContent = flight.perkReadout;
     }
     selectedPortrait.classList.toggle('perk-flash', active && flight.perkTime > 1.15);
-    const preparingGraphics = preparing !== undefined || screen === 'loading';
     status.classList.toggle('preparing-graphics', preparingGraphics);
-    let tip = 'Tap for drone · Drag to steer';
-    if (preparingGraphics)
-      tip = 'Preparing graphics…';
-    else if (flight.level === 'wormhole' && flight.phase === 'approach') {
-      const repair = flight.drops.some(drop => drop.kind === 'repair');
-      const weapons = flight.drops.some(drop => drop.weapon);
-      tip = repair ? (weapons ? 'Collect the weapons and hull repair' : 'Collect the hull repair')
-        : weapons ? 'Collect weapon drops before the next fight' : 'Boss approaching';
-    }
-    else if (flight.isFonsFight && flight.phase === 'boss') {
-      const storm = fonsPhase(flight.fonsTime);
-      if (storm.rain || storm.warning > 0) tip = 'Stay in the wake of a falling crystal';
-      else if (storm.shielded) tip = storm.age < FONS_RAIN_END ? 'Fons shielded · Find cover' : 'Cloak opening';
-      else if (storm.wrap > 0 && storm.age < FONS_RAIN_END) tip = 'Cloak closing · Find cover';
-      else if (storm.openingRifts) tip = 'Wall rifts opening · Watch for falling cover';
-      else tip = fonsAttackCue(storm.age, flight.fonsVariant) ??
-        (flight.droneWeapon === 'towline' ? 'Sweep the arc across the mirror' : 'Fire into the mirror · Dodge the sweeps');
-    }
-    else if (flight.isDen && flight.phase === 'boss')
-      tip = flight.droneWeapon === 'towline' ? 'Sweep the arc across the bike.' : 'Watch the engines · Dodge the sweeping bursts';
-    else if (flight.isFleet && flight.phase === 'boss')
-      tip = flight.droneWeapon === 'towline' ? 'Sweep the arc across the saucer.' : 'Move after the side guns light up · Thread the rings';
-    else if (flight.droneWeapon === 'towline') {
-      tip = flight.phase === 'boss' ? (encounter==='biolume'?'Sweep the arc through seekers or the ray.':encounter==='heliostat'||encounter==='boulevard'?'Sweep the arc across the cyan core.':encounter === 'ice' ? 'Sweep the arc across the mouth marker.' : encounter === 'io' ? 'Sweep the arc across the cyan support, then exposed machinery.' : flight.isCicadaFight ? 'Sweep the arc across the glowing thorax vent.' : encounter === 'vents' ? (flight.crabCoreOpen ? 'Sweep the arc across the exposed gills.' : 'Sweep the arc across a glowing claw joint.') : 'Sweep the arc across the green cannon.') : 'Park the drone · Sweep the arc';
-    }
-    else if(flight.phase==='boss'&&encounter==='biolume')tip='Shoot seeking lanterns · Dodge their burst · Fire straight into the ray.';
-    else if(flight.phase==='boss'&&(encounter==='boulevard'||encounter==='heliostat'))tip='Target the cyan core · Move after the amber aim lock.';
-    else if (flight.phase === 'boss' && encounter === 'preserve')
-      tip = 'Dodge the claw windups. Pulse interrupts an attack. Fire into the belly.';
-    else if (flight.phase === 'boss')
-      tip = encounter === 'ice' ? 'Tap the mouth marker. Dodge amber rings.' : encounter === 'io' ? (flight.ioLegBroken ? 'Machinery exposed · Dodge the wheel shots.' : 'Break the cyan front support.') : flight.isCicadaFight ? 'Tap the glowing thorax vent. Dodge amber rings.' : encounter === 'vents' ? (flight.crabCoreOpen ? 'Tap the gill chamber. Dodge amber rings.' : 'Tap the glowing joint. Break both claws.') : encounter==='summer'?'Destroy all three hydra heads. Dodge amber rings.':'Tap the green cannon. Dodge amber rings.';
-    if (active && flight.perkTime > 0) {
-      tip = flight.perkMessage;
-    }
-    else if (active && flight.pickupTime > 0) {
-      tip = flight.pickupMessage;
-    }
-    else if (active && flight.phase === 'stage') {
-      const equipment = flight.wings.flatMap((wing) => wing.weapon
-        ? [`${wing.side < 0 ? 'L' : 'R'} ${wingWeapons[wing.weapon].short}${wing.upgraded ? ' II' : ''}`]
-        : []);
-      if (flight.droneWeapon === 'towline') equipment.push('Towline');
-      if (equipment.length)
-        tip = equipment.join(' · ');
-      else if (flight.drops.length)
-        tip = 'Fly through the drop to equip it';
-    }
-    if (!active && offlineReady && !preparing && screen !== 'loading') tip = 'Level ready offline';
-    if (flight.phase === 'won') tip = '';
-    if (status.textContent !== tip)
-      status.textContent = tip;
+    if (status.textContent !== readout.tip)
+      status.textContent = readout.tip;
   }
   async function prepareGraphics() {
     if (!view)
@@ -194,7 +112,6 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     syncUI();
     try {
       const currentView = view;
-      signal.addEventListener('abort', () => controller.abort(), { once: true });
       await currentView.warmup(controller.signal, () => currentView.render(flight, 0, victoryTime));
     }
     catch (error) {
@@ -204,8 +121,10 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     finally {
       if (preparing === controller) {
         preparing = undefined;
-        start.disabled = signal.aborted || contextLost;
-        syncUI();
+        if (!signal.aborted) {
+          start.disabled = contextLost;
+          syncUI();
+        }
       }
     }
   }

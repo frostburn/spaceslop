@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { applySurfaceMap } from './encounter-surfaces';
 
 function fallbackMold() {
   const size = 128, canvas = document.createElement('canvas');
@@ -33,10 +34,7 @@ const materials = [0, 0.85, -0.65].map((rotation) => new T.SpriteMaterial({
 
 export function setAntMoldTexture(texture: T.Texture) {
   texture.wrapS = texture.wrapT = T.ClampToEdgeWrapping;
-  for (const material of materials) {
-    material.map = texture;
-    material.needsUpdate = true;
-  }
+  applySurfaceMap(texture, materials);
 }
 
 export function addMoldPatch(parent: T.Group, x: number, y: number, z: number, width: number, height: number, variant = 0) {

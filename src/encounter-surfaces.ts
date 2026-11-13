@@ -18,12 +18,44 @@ export function hide(color: number, vertexColors = false) {
   }), 0.49, 4.1);
 }
 
-export function applyRelief(texture: T.Texture, materials: readonly T.MeshStandardMaterial[]) {
+type SurfaceMaterial = T.Material & { map: T.Texture | null; bumpMap?: T.Texture | null };
+const surfaceFallbacks = new WeakMap<T.Material, Partial<Record<'map' | 'bumpMap', T.Texture | null>>>();
+
+// Some level and boss rigs share a palette. Restore every binding when its
+// upload is released, including materials outside the current scene.
+export function applySurfaceMap(texture: T.Texture, materials: readonly SurfaceMaterial[], relief = false) {
   for (const material of materials) {
+    const fallbacks = surfaceFallbacks.get(material) ?? {};
+    if (fallbacks.map === undefined) fallbacks.map = material.map;
     material.map = texture;
-    material.bumpMap = texture;
+    if (relief) {
+      if (fallbacks.bumpMap === undefined) fallbacks.bumpMap = material.bumpMap ?? null;
+      material.bumpMap = texture;
+    }
+    surfaceFallbacks.set(material, fallbacks);
     material.needsUpdate = true;
   }
+  function release() {
+    texture.removeEventListener('dispose', release);
+    for (const material of materials) {
+      if (material.map !== texture && material.bumpMap !== texture) continue;
+      const fallbacks = surfaceFallbacks.get(material);
+      if (material.map === texture) material.map = fallbacks?.map ?? null;
+      if (material.bumpMap === texture) material.bumpMap = fallbacks?.bumpMap ?? null;
+      material.needsUpdate = true;
+    }
+  }
+  texture.addEventListener('dispose', release);
+}
+
+export function surfaceFallback(material: T.Material, slot: string) {
+  const fallbacks = surfaceFallbacks.get(material);
+  if (slot === 'map') return fallbacks?.map;
+  if (slot === 'bumpMap') return fallbacks?.bumpMap;
+}
+
+export function applyRelief(texture: T.Texture, materials: readonly T.MeshStandardMaterial[]) {
+  applySurfaceMap(texture, materials, true);
 }
 
 export function shipAlloy(color: number) {

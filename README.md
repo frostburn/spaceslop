@@ -2,6 +2,8 @@
 
 A portrait browser shoot ’em up and installable PWA. Fly the Return to Sender campaign from the Broodlock outpost through Europa’s Hadal Cable and on to the Galactic Centre, with selectable pilots, an autofiring drone and collectible wing weapons.
 
+The Return Channel closes the campaign with a 13-boss Wormhole run. Collect weapons between fights and repair hull after every third boss.
+
 ## Develop
 
 Use Node.js 22.12 or newer.
@@ -13,7 +15,7 @@ npm run dev
 
 The app opens in **Campaign**. **Open briefing** shows the selected mission’s officer, objective, rank and loadout controls in the menu. **Launch** prepares and starts the mission. Clearing a mission unlocks the next one and records progress on this device. **Free Flight** offers every sector for practice. Tap to place the drone, drag to steer, or use WASD/arrows. Space fires Pulse and Escape pauses. **Menu** leaves the current run.
 
-Vite dev links the asset workshop and camera studies directly from the main menu. The briefing includes boss and transition launch shortcuts. Direct URLs are `/workshop.html`, `/vent-study.html` and `/io-study.html`. Production excludes those pages and shortcuts. `?level=vents` selects Hadal Cable in Free Flight and `?testLoadout=1` enables the wing test picker.
+The development menu links the asset workshop, Draconian patrol blend editor and camera studies. Open the workshop at `/workshop.html` or the patrol editor at `/patrol-study.html`. Dev briefings also offer shortcuts into boss approaches. `?level=vents` selects Hadal Cable in Free Flight and `?testLoadout=1` enables the weapon picker.
 
 ## Validate
 
@@ -34,10 +36,8 @@ A versioned content URL keeps replaced artwork fresh. Updates are offered in the
 
 ## Project map
 
-- [Architecture and maintenance](docs/architecture.md): startup, renderer contracts, adding a level and checking regressions.
+- [Architecture and maintenance](docs/architecture.md) covers startup, renderer contracts, adding a level and checking regressions.
 - [Controls, pilots and weapons](docs/controls.md).
 - [Level and atlas reference](docs/level-reference.md).
 - [Asset handoff and import settings](docs/assets.md).
-- [Agent instructions](AGENTS.md): generated art stays in chat; the owner uploads it after review.
-
-**Last Exit Boulevard** is a 100-second neon resort route with solid and wireframe architecture, live wet-road reflections, hovercar waves and a head-on Pursuit Cruiser fight. Its optional asphalt texture is reviewed and uploaded separately through chat. See `docs/level-reference.md` for the asset path and development workshop controls.
+- [Agent instructions](AGENTS.md) cover generated asset handoff and verification.

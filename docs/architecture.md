@@ -8,13 +8,16 @@
 | `src/campaign/` | Mission order, briefing text, cast, ranks, save rules and procedural rank insignias. |
 | `src/app/briefing.ts` | The active mission's portrait and officer/pilot rank displays. |
 | `src/levels.ts` | Small menu catalog, shared route durations and level IDs; layout modules derive their duration from it. Keep it independent of scene constructors. |
-| `src/app/flight-session.ts` | One flight session: HUD, preparation, simulation clock, pause/results and context recovery. |
+| `src/app/flight-session.ts` | Session lifecycle, simulation clock, HUD updates, pause, results and graphics recovery. |
+| `src/app/flight-hud.ts` | Derives sector labels, boss readouts and tips from the flight state. |
 | `src/app/input.ts` | Scoped keyboard and pointer controls. All listeners end with the session's abort signal. |
 | `src/app/offline.ts` | Save/check selected level packages without downloading other sectors. |
 | `src/game.ts` | Shared deterministic flight/combat simulation; level math remains in the named layout/combat modules. |
 | `src/view.ts` | Shared camera, ship, weapons, feedback and warm-up. A view belongs to one level. |
 | `src/rendering/level.ts` | Typed level renderer contract: roots, frames, actor models, boss contact, warm-up and disposal. |
 | `src/rendering/loaders.ts` | Selective loading of level renderers. |
+| `src/rendering/dispose.ts` | Releases scene resources and restores procedural maps on shared materials. |
+| `src/rendering/victory.ts` | Boss defeat, ship formation and effects for the victory sequence. |
 | `src/rendering/levels/*.ts` | Level-owned scenery, actors, boss posing, texture loading, capture and effects. |
 | `src/assets/catalog.ts` | One media path catalog and an explicit list of textures used by each level. |
 | `src/encounter-texture.ts` | Optional texture loading, bounded deadlines and safe fallbacks. No enemy imports. |
@@ -26,6 +29,42 @@ Existing level geometry, rig and layout modules retain their descriptive prefixe
 `campaign/missions.ts` orders Return to Sender from Broodlock, Io and Europa through The Return Channel. The campaign save stores cleared level IDs, with the first uncleared entry as the next mission. A normal Campaign victory records progress. Free Flight and dev shortcuts are practice runs. `stage-enemy-tuning.ts` sets the stage patrol pace, volley interval and projectile speed by level for both Campaign and Free Flight. Formations keep their routes and scheduled entrances. Fixed hazards and the motion of scenery keep their level clocks. The Preserve increases pressure with faster flying predators and leaps, and the Return Channel uses its own boss patterns. The briefing shows the rank assigned to that mission and the results name the mission just flown and announce earned promotions. The next briefing button names its destination. The lightweight menu derives the career rank from the frontier, including Major after the finale.
 
 Opening a briefing requests its officer portrait, the shared pilot portraits and the optional rank sheet. Launching caches those files alongside the stage media. Missing portraits use initials and the rank displays can draw their badges directly. The initial mission list loads no media. Europa’s survey cable and junction lamps sit on Hadal’s seabed. A shared, mip-filtered residue map weathers the insulation and housings in seabed coordinates.
+
+## Startup and session lifecycle
+
+The initial mission list has no WebGL context, game loop, portrait or level media. Selecting a card changes metadata only. **Open briefing** opens the menu’s portrait, objective and loadout view. **Launch** snapshots the loadout, imports the session and shared engine, then invokes only the selected level factory. That factory constructs its scenery and actor pools and loads its media. The flight starts after that level’s resources and shared weapons have warmed up.
+
+A session's abort signal owns controls, focus/media listeners, resize observation, preparation and the animation loop. Returning to the menu cancels them. Each session gets a fresh canvas; disposing an older context cannot accidentally destroy a new renderer on the same canvas. Cancellation stops pending texture application and Titan slicing. Graphics warm-up cancels its pending frame and restores temporary level state. Disposal waits for texture preparation to settle, releases the scene and level-owned GPU resources, and restores procedural maps on shared materials before releasing the context. JavaScript modules remain in the browser's module cache between visits.
+
+If a module download fails, the menu offers **Reload menu** before retrying; native module-map failures can survive a reconnect in the same page.
+
+Simulation is fixed-step. Presentation time freezes on pause/results. Preserve that distinction when adding animation. `FlightView` rejects a flight from a different level: switching sectors requires a new session rather than mutating a live renderer.
+
+## Level renderer contract
+
+A factory returns a `LevelScene`. Its root contains only that stage's objects. `update(frame)` poses scenery, boss and enemies; `models[index]` identifies the currently visible living model for the corresponding simulation enemy, so laser contact remains correct. `contact` maps boss targets to posed weakpoints. Optional `orientation`, `reveal`, `capture` and `effects` hooks cover stages with special cameras or refraction. Optional `farDistance` extends only the selected level’s camera range for distant scenery. `present` replaces the final scene draw for a level-owned lens pass; preflight uses the same hook so its linear-color shader variants and targets warm before launch.
+
+List all actor contact models and warm-up batches, including broken/severed phases and later-wave variants. `prepare` primes stage effects. `afterWarmup` restores temporary priming state after a completed, canceled or failed warm-up. Own any offscreen render target through `dispose`. Do not allocate unbounded geometry, programs or particle pools as waves spawn.
+
+## Assets, cache and deployment
+
+Vite hashes the contents of existing optional media into query versions. Missing files do not generate image requests. A level factory loads its own catalog entries; shared ship armor and the pilot portraits are the common media.
+
+The service worker precaches only the static menu dependency closure, its registration helper and `level-packages.json`. Dynamic imports are deliberately excluded from that traversal. The generated package manifest contains the shared session code plus the selected renderer's static dependency closure and that level's media. Launching a level caches that package. The menu can check complete code packages without downloading their contents, and its offline-storage control can release all saved level files without clearing the shell or pilot preference. The runtime cache also serves image/script/style requests. Shell readiness and level readiness have different UI wording; the initial menu alone does not imply every stage works offline.
+
+Rebuild after owner art uploads. Test changed media at the same filename to catch stale-cache regressions. Use Vite's base URL throughout; never hard-code `/assets/` or `/encounters/` at runtime. Validate both root and subpath deployments. HTTPS is required for service workers outside localhost. Keep deployment entry files revalidatable and hashed chunks available long enough for existing tabs.
+
+## Adding or changing a stage
+
+1. Add its menu metadata/ID and simulation rules. Keep the menu catalog free of rendering dependencies.
+2. Add a renderer factory under `rendering/levels`, register its dynamic loader, and declare its media in the asset catalog.
+3. Supply procedural fallbacks, pooled actor/contact mappings and complete warm-up/disposal hooks.
+4. Extend the package/build isolation check for a new ID. Check network requests: menu selection must not fetch stage code or pictures; preparation must not fetch another stage's media.
+5. Verify stage, approach, boss phases, lasers, restart, pause/resume, cancellation and switching away/back. For loading changes, complete a production offline run with art and a media-free run. Include a portrait viewport and clean console check.
+
+`npm test` covers simulation, geometry, contacts and effects. `npm run build` also checks unused locals/parameters. `npm run test:build` checks delivery boundaries. Browser checks cover actual WebGL, lifecycle and service-worker behavior; a successful TypeScript build alone cannot establish those.
+
+## Heliostat Gate
 
 `rendering/levels/heliostat.ts` owns the playable Uranus factory. Shared station construction, camera math, combat schedules, actors, gates and backdrop live in `src/heliostat/`; only the standalone study UI and loader remain in `src/studies/`. `heliostat/combat.ts` contains no Three.js or media imports. The 100-second straight route decelerates into an eight-second turn, with a single physical world for machinery, capacitor posts, regulator and star. Twenty waves use bounded, prewarmed drone/man o’war pools; six fixed capacitor sites share their gap, warning and discharge clocks with collision. Boss target locks precede continuous curved plasma channels; their first intersection with the flight plane supplies damage, and Pulse interrupts the current channel. The same control points drive the preallocated GPU tubes, with bright cores and broad halos; source feeds meet two registered sunspots. Laser contacts follow the physical aperture. The narrow playable view looks down onto lowered side machinery; overhead headers stop before containment so the collector stays visible. The full route shares four templates and culls by bay. A second, deeper network repeats three shared service-platform templates along fifteen islands: annular decks, complete truss bridges, generator piers, radiator banks and transfer pipes. It stays below flight altitude and is prewarmed before launch. Capacitor gates remain energized after charging and leave view only through physical scrolling. Raster man o’war parts share one optional 2×2 atlas, preserve the modeled fallback and delay fire until the complete body and charge are visible.
 
@@ -85,41 +124,7 @@ Heliostat's `weathering.ts` layers fixed dirt, dust, streaks and sparse corrosio
 
 `biolume/basin.ts` restricts water to the root-bridge / blackwater reach. A softened linear-albedo mask separates the olive pools from raised brown roots and bright plants; the media-free route uses a procedural bank mask. `biolume/water.ts` shares one 384×684 half-float planar capture across the ground tiles. It reflects actors, ordnance, canopy and five additional pods above the flight camera, plus a source-built star field and shaded crescent moon behind the camera. Overhead pods reuse the existing reduced-resolution atlas and move with world travel; distant sky stays fixed. They cannot appear directly in the main view. World-registered crossing ripples distort the capture without moving the shoreline. Ground tiles hide during capture, linear lighting is tone-mapped only by the main draw, and GPU target/viewport/scissor/XR/shadow state restores even after a failed capture. The reflection pass runs only while the basin is visible, except when priming all variants in preflight. Its target and private helper geometry/material belong to the session; disposal clears shared sampler references before releasing them. No new raster asset is required.
 
-## Startup and session lifecycle
-
-`biolume-study.html` is a separate Vite-only one-screen lighting proof, linked on its own line from the DEV menu. `src/biolume/` owns source-drawn fallbacks, two optional full-screen raster plates, a bending glider sprite, UV-cropped seed pods from the original study atlas, broad relief, eight shared local light sources, leaf backlighting and approximate root occlusion. The study has no ambient/environment fill and explicitly separates emission from illumination. Its standalone UI owns paused inspection and cleanup and remains DEV-only. Its two small proof plates are separate from the production level’s full-length images; the glider and pod atlas are shared optional art. The Uranus study filters to its own maps. See [Lighting proof](biolume-study.md) for controls, asset handoff and limits.
-
-The initial mission list has no WebGL context, game loop, portrait or level media. Selecting a card changes metadata only. **Open briefing** opens the menu’s portrait, objective and loadout view. **Launch** snapshots the loadout, imports the session and shared engine, then invokes only the selected level factory. That factory constructs its scenery and actor pools and loads its media. The flight starts after that level’s resources and shared weapons have warmed up.
-
-A session's abort signal owns controls, focus/media listeners, resize observation, preparation and the animation loop. Returning to the menu cancels them. Each session gets a fresh canvas; disposing an older context cannot accidentally destroy a new renderer on the same canvas. The session abort signal stops pending texture application and Titan slicing. Disposal waits for those preparation promises, releases render targets, geometry, material/texture GPU resources and the context, and clears uploaded image maps on shared materials. JavaScript modules remain in the browser's module cache between visits.
-
-If a module download fails, the menu offers **Reload menu** before retrying; native module-map failures can survive a reconnect in the same page.
-
-Simulation is fixed-step. Presentation time freezes on pause/results. Preserve that distinction when adding animation. `FlightView` rejects a flight from a different level: switching sectors requires a new session rather than mutating a live renderer.
-
-## Level renderer contract
-
-A factory returns a `LevelScene`. Its root contains only that stage's objects. `update(frame)` poses scenery, boss and enemies; `models[index]` identifies the currently visible living model for the corresponding simulation enemy, so laser contact remains correct. `contact` maps boss targets to posed weakpoints. Optional `orientation`, `reveal`, `capture` and `effects` hooks cover stages with special cameras or refraction. Optional `farDistance` extends only the selected level’s camera range for distant scenery. `present` replaces the final scene draw for a level-owned lens pass; preflight uses the same hook so its linear-color shader variants and targets warm before launch.
-
-List all actor contact models and warm-up batches, including broken/severed phases and later-wave variants. `prepare` primes stage effects; `afterWarmup` restores temporary priming state. Own any offscreen render target through `dispose`. Do not allocate unbounded geometry, programs or particle pools as waves spawn.
-
-## Assets, cache and deployment
-
-Vite hashes the contents of existing optional media into query versions. Missing files do not generate image requests. A level factory loads its own catalog entries; shared ship armor and the pilot portraits are the common media.
-
-The service worker precaches only the static menu dependency closure, its registration helper and `level-packages.json`. Dynamic imports are deliberately excluded from that traversal. The generated package manifest contains the shared session code plus the selected renderer's static dependency closure and that level's media. Launching a level caches that package. The menu can check complete code packages without downloading their contents, and its offline-storage control can release all saved level files without clearing the shell or pilot preference. The runtime cache also serves image/script/style requests. Shell readiness and level readiness have different UI wording; the initial menu alone does not imply every stage works offline.
-
-Rebuild after owner art uploads. Test changed media at the same filename to catch stale-cache regressions. Use Vite's base URL throughout; never hard-code `/assets/` or `/encounters/` at runtime. Validate both root and subpath deployments. HTTPS is required for service workers outside localhost. Keep deployment entry files revalidatable and hashed chunks available long enough for existing tabs.
-
-## Adding or changing a stage
-
-1. Add its menu metadata/ID and simulation rules. Keep the menu catalog free of rendering dependencies.
-2. Add a renderer factory under `rendering/levels`, register its dynamic loader, and declare its media in the asset catalog.
-3. Supply procedural fallbacks, pooled actor/contact mappings and complete warm-up/disposal hooks.
-4. Extend the package/build isolation check for a new ID. Check network requests: menu selection must not fetch stage code or pictures; preparation must not fetch another stage's media.
-5. Verify stage, approach, boss phases, lasers, restart, pause/resume, cancellation and switching away/back. For loading changes, complete a production offline run with art and a media-free run. Include a portrait viewport and clean console check.
-
-`npm test` covers simulation, geometry, contacts and effects. `npm run build` also checks unused locals/parameters. `npm run test:build` checks delivery boundaries. Browser checks cover actual WebGL, lifecycle and service-worker behavior; a successful TypeScript build alone cannot establish those.
+`biolume-study.html` is a separate Vite-only one-screen lighting proof, linked on its own line from the DEV menu. `src/biolume/` owns source-drawn fallbacks, two optional full-screen raster plates, a bending glider sprite, UV-cropped seed pods from the original study atlas, broad relief, eight shared local light sources, leaf backlighting and approximate root occlusion. The study has no ambient/environment fill and explicitly separates emission from illumination. Its standalone UI owns paused inspection and cleanup and remains DEV-only. Its two small proof plates are separate from the production level’s full-length images; the glider and pod atlas are shared optional art. See [Lighting proof](biolume-study.md) for controls, asset handoff and limits.
 
 ## Orbital preserve scenery
 

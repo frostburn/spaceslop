@@ -1,5 +1,5 @@
 import * as T from 'three';
-import { texturedSurface } from './encounter-surfaces';
+import { applyRelief, texturedSurface } from './encounter-surfaces';
 import { IO_PITCH } from './io-layout';
 import {ioDustCoating} from './io-dust-surface';
 import {applyTriplanar} from './rendering/triplanar';
@@ -35,8 +35,16 @@ export const ioDark=new T.MeshStandardMaterial({color:0x211c1c,roughness:.73,met
 export const ioRust=new T.MeshStandardMaterial({color:0x753e2a,map:detail,roughness:.92});
 export const ioHot=new T.MeshStandardMaterial({color:0xff851c,emissive:0xff3900,emissiveIntensity:1.5,roughness:.43});
 export const ioTarget=new T.MeshStandardMaterial({color:0x5ddbd5,emissive:0x29bfb5,emissiveIntensity:1.3,roughness:.3,metalness:.25});
-export function setIoRockTexture(t:T.Texture) {t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=4;for(const m of [ioRock,ioGround,ioCrust]){m.map=m.bumpMap=t;m.needsUpdate=true;}}
-export function setIoCeramicTexture(t:T.Texture) {t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=4;for(const m of [ioCeramic,ioBand,ioSilo,ioSiloBand]){m.map=m.bumpMap=t;m.needsUpdate=true;}}
+export function setIoRockTexture(texture: T.Texture) {
+  texture.wrapS = texture.wrapT = T.RepeatWrapping;
+  texture.anisotropy = 4;
+  applyRelief(texture, [ioRock, ioGround, ioCrust]);
+}
+export function setIoCeramicTexture(texture: T.Texture) {
+  texture.wrapS = texture.wrapT = T.RepeatWrapping;
+  texture.anisotropy = 4;
+  applyRelief(texture, [ioCeramic, ioBand, ioSilo, ioSiloBand]);
+}
 
 export function ioWeather(geometry:T.BufferGeometry,seed=1) {
   const p=geometry.attributes.position,colors:number[]=[],rng=ioRandom(seed);

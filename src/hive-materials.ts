@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { applySurfaceMap } from './encounter-surfaces';
 
 // Small, deterministic surfaces keep the models textured before the reviewed art is installed.
 function surface(fungal: boolean) {
@@ -81,15 +82,9 @@ export const fungusGills = new T.MeshStandardMaterial({ color: 0x89653e, roughne
 export const mycelium = new T.MeshStandardMaterial({ color: 0xc4ae89, map: fungal.color, roughness: 0.96 });
 
 export function setAntChitinTexture(texture: T.Texture) {
-  for (const material of [antShell, antJoint]) {
-    material.map = texture;
-    material.needsUpdate = true;
-  }
+  applySurfaceMap(texture, [antShell, antJoint]);
 }
 
 export function setFungusTexture(texture: T.Texture) {
-  for (const material of [fungusCap, fungusStem, mycelium]) {
-    material.map = texture;
-    material.needsUpdate = true;
-  }
+  applySurfaceMap(texture, [fungusCap, fungusStem, mycelium]);
 }

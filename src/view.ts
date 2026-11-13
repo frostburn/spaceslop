@@ -25,6 +25,22 @@ export async function createFlightView(canvas: HTMLCanvasElement, level: LevelId
   signal.throwIfAborted();
   return new FlightView(canvas, level, createLevel, signal, pilots.find(entry => entry.id === pilot)?.livery);
 }
+
+function nextWarmupFrame(signal: AbortSignal) {
+  if (signal.aborted) return Promise.resolve();
+  return new Promise<void>(resolve => {
+    const frame = requestAnimationFrame(() => {
+      signal.removeEventListener('abort', abort);
+      resolve();
+    });
+    function abort() {
+      cancelAnimationFrame(frame);
+      resolve();
+    }
+    signal.addEventListener('abort', abort, { once: true });
+  });
+}
+
 const sceneColor = 0x0b1020;
 const teal = 0x88f2ff;
 const orange = 0xff885d;
@@ -202,9 +218,8 @@ export class FlightView {
     this.plane.add(p.root, this.player.root, this.drone, this.droneGoal, this.towline, this.cannonMarker, this.pulse, ...this.markers, ...ammo, this.combat.root, ...pods, ...this.wingLasers.map(r => r.root), ...this.drops.map(r => r.root));
   }
   async warmup(signal: AbortSignal, repaint: () => void) {
-    const nextFrame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
     const textures = (await this.texturesReady).flat();
-    await nextFrame();
+    await nextWarmupFrame(signal);
     if (signal.aborted)
       return;
     const camera = new T.OrthographicCamera(-24, 24, 24, -24, .1, 240);
@@ -212,15 +227,16 @@ export class FlightView {
     for (const texture of textures) {
       if (!texture)
         continue;
-      await nextFrame();
+      await nextWarmupFrame(signal);
       if (signal.aborted)
         return;
       this.renderer.initTexture(texture);
     }
     await compiled;
+    if (signal.aborted) return;
     const contacts = [...this.level.contacts];
     for (let i = 0;i < contacts.length;i += 3) {
-      await nextFrame();
+      await nextWarmupFrame(signal);
       if (signal.aborted)
         return;
       for (const model of contacts.slice(i, i + 3))
@@ -232,54 +248,63 @@ export class FlightView {
     const pods = this.wingPods.map(side => side.flatMap(r => [r.root, r.upgrade]));
     const ordnance = [this.player.root, this.drone, this.towlineEmitters, ...Object.values(this.projectiles).map(r => r.root), this.combat.root, this.playerMuzzle.root, this.droneMuzzle.root, ...this.drops.slice(0, powerupKinds.length).map(r => r.root), this.victoryFlares.root];
     const lasers = [...pods[1], ...this.wingLasers.map(r => r.root)];
-    this.level.prepare?.();
-    for (const objects of [...this.level.warmup, [this.cannonMarker, ...this.markers], pods[0], lasers, ordnance]) {
-      await nextFrame();
-      if (signal.aborted)
-        return;
-      if (objects === ordnance) {
-        for (const batch of Object.values(this.projectiles))
-          batch.prime();
-        this.combat.prime();
-        this.playerMuzzle.prime();
-        this.droneMuzzle.prime();
-        this.victoryFlares.pose(VICTORY_DURATION);
-        powerupKinds.forEach((kind, i) => this.drops[i].pose(kind, 0));
-      }
-      if (objects === lasers)
-        for (const laser of this.wingLasers)
-          laser.prime();
-      camera.position.set(0, 0, 95).applyQuaternion(this.plane.quaternion);
-      camera.up.set(0, 1, 0).applyQuaternion(this.plane.quaternion);
-      camera.lookAt(0, 0, 0);
-      const visible = objects.map(o => o.visible);
-      const viewport = this.renderer.getViewport(new T.Vector4());
-      for (const o of objects)
-        o.visible = true;
-      this.renderer.setViewport(0, 0, 16, 16);
-      this.renderer.setScissor(0, 0, 16, 16);
-      this.renderer.setScissorTest(true);
-      try {
-        this.level.capture?.(this.renderer, camera);
-        if (this.level.present) this.level.present(this.renderer, this.scene, camera);
-        else this.renderer.render(this.scene, camera);
-      }
-      finally {
-        objects.forEach((o, i) => {
-          o.visible = visible[i];
-        });
-        this.renderer.setScissorTest(false);
-        this.renderer.setViewport(viewport);
+    try {
+      this.level.prepare?.();
+      for (const objects of [...this.level.warmup, [this.cannonMarker, ...this.markers], pods[0], lasers, ordnance]) {
+        await nextWarmupFrame(signal);
+        if (signal.aborted)
+          return;
+        if (objects === ordnance) {
+          for (const batch of Object.values(this.projectiles))
+            batch.prime();
+          this.combat.prime();
+          this.playerMuzzle.prime();
+          this.droneMuzzle.prime();
+          this.victoryFlares.pose(VICTORY_DURATION);
+          powerupKinds.forEach((kind, i) => this.drops[i].pose(kind, 0));
+        }
+        if (objects === lasers)
+          for (const laser of this.wingLasers)
+            laser.prime();
+        camera.position.set(0, 0, 95).applyQuaternion(this.plane.quaternion);
+        camera.up.set(0, 1, 0).applyQuaternion(this.plane.quaternion);
+        camera.lookAt(0, 0, 0);
+        const visible = objects.map(o => o.visible);
+        const viewport = this.renderer.getViewport(new T.Vector4());
+        const scissor = this.renderer.getScissor(new T.Vector4());
+        const scissorTest = this.renderer.getScissorTest();
+        for (const o of objects)
+          o.visible = true;
+        this.renderer.setViewport(0, 0, 16, 16);
+        this.renderer.setScissor(0, 0, 16, 16);
+        this.renderer.setScissorTest(true);
+        try {
+          this.level.capture?.(this.renderer, camera);
+          if (this.level.present) this.level.present(this.renderer, this.scene, camera);
+          else this.renderer.render(this.scene, camera);
+        }
+        finally {
+          objects.forEach((o, i) => {
+            o.visible = visible[i];
+          });
+          this.renderer.setScissorTest(scissorTest);
+          this.renderer.setScissor(scissor);
+          this.renderer.setViewport(viewport);
+        }
         repaint();
       }
     }
-    this.level.afterWarmup?.();
+    finally {
+      this.level.afterWarmup?.();
+    }
   }
   dispose() {
     if (this.disposed)
       return;
     this.disposed = true;
-    void this.texturesReady.finally(() => {
+    // Preparation errors are reported by the session. Teardown still owns
+    // the resources it has, even if one of the texture promises rejected.
+    void this.texturesReady.catch(() => undefined).then(() => {
       this.level.dispose?.();
       disposeScene(this.scene);
       this.renderer.dispose();
