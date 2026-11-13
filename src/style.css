@@ -24,7 +24,11 @@ main {
 }
 
 .console { display: contents; }
-#game-app { overflow: clip; }
+#game-app {
+  overflow: clip;
+  -webkit-user-select: none;
+  user-select: none;
+}
 .hud { grid-area: hud; }
 .controls { grid-area: controls; }
 .pilot-console { display: none; }
