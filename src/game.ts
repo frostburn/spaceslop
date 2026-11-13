@@ -5,8 +5,8 @@ import {RAY_HP,RAY_ENTRANCE,RAY_FAN_AT,RAY_SEEKER_AT,RAY_PROJECTION,RAY_ORGAN_RA
 import { DEN_BURSTS, DEN_CYCLE, DEN_GUNS, DEN_HP, denBodyEntry, denMount, denPose } from './den/combat';
 import { DEN_TURRET_HP, createDenTurret, denDefensePoint, denMineSites, denTurretEntry, denTurretSites,
   stepDenMine, stepDenTurret, type DenMine, type DenTurret } from './den/defense';
-import { DEN_APPROACH, denScroll } from './den/route';
-import { DEN_PATROL_STAGGER, DEN_PATROL_WINDUP, denPatrolCanFire, denPatrolEntry, denPatrolPose, denPatrolScale, denWaves, type DenPatrol } from './den/patrol';
+import { DEN_APPROACH, denScroll, denSectionIndex } from './den/route';
+import { DEN_PATROL_WINDUP, denPatrolCanFire, denPatrolEntry, denPatrolPose, denPatrolStagger, denPatrolVolley, denWaves, type DenPatrol } from './den/patrol';
 import { broadsideShots, fleetWaves, FLEET_SAUCER_LIFE, FLEET_SAUCER_STAGGER, FLEET_SAUCER_WINDUP,
   saucerCanFire, saucerPose, saucerSize, saucerVolley, type FleetSaucer } from './fleet/combat';
 import { FLEET_APPROACH, tractorPose, tractorSites } from './fleet/route';
@@ -1295,9 +1295,10 @@ export class Flight {
     if (wave && this.time >= wave.time) {
       this.nextWave++;
       const reward = formationReward(wave.drop, wave.lanes.length);
+      const section = denSectionIndex(wave.time);
       for (const [slot, lane] of wave.lanes.entries()) {
-        const den: DenPatrol = { course: wave.course, side: wave.side, slot, heavy: slot === wave.guard };
-        const age = this.time - wave.time - slot * DEN_PATROL_STAGGER - dt;
+        const den: DenPatrol = { course: wave.course, side: wave.side, slot, heavy: slot === wave.guard, section };
+        const age = this.time - wave.time - slot * denPatrolStagger(den) - dt;
         const pose = denPatrolPose(age, lane, den);
         this.enemies.push({ x: pose.x, y: pose.y, heading: pose.heading, lane, age, den, fire: Infinity,
           hp: den.heavy ? 11 : 5, reward });
@@ -1317,14 +1318,9 @@ export class Flight {
       if (!denPatrolCanFire(pose, enemy.den)) { enemy.fire = Infinity; continue; }
       if (!Number.isFinite(enemy.fire)) enemy.fire = enemy.age + DEN_PATROL_WINDUP;
       if (enemy.age < enemy.fire) continue;
-      enemy.fire = enemy.age + (enemy.den.heavy ? 2.45 : 2.8);
-      const reach = .82 * denPatrolScale(enemy.den);
-      const x = enemy.x + Math.sin(pose.heading) * reach, y = enemy.y - Math.cos(pose.heading) * reach;
-      const aim = Math.atan2(this.player.x - x, Math.max(1.8, y - this.player.y));
-      for (const spread of enemy.den.heavy ? [-.22, 0, .22] : [0]) {
-        const angle = aim + spread, speed = enemy.den.heavy ? 4.95 : 4.7;
-        this.threats.push({ x, y, z: 0, vx: Math.sin(angle) * speed, vy: -Math.cos(angle) * speed, vz: 0, planar: true });
-      }
+      const { interval, shots } = denPatrolVolley(pose, this.player, enemy.den);
+      enemy.fire = enemy.age + interval;
+      this.threats.push(...shots);
     }
   }
 

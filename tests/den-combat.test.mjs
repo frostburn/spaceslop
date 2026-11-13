@@ -7,7 +7,7 @@ const server = await createServer({ configFile: false, server: { middlewareMode:
 after(() => server.close());
 const { DEN_CYCLE, denBodyEntry, denPose } = await server.ssrLoadModule('/src/den/combat.ts');
 const { Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
-const { DEN_APPROACH, DEN_DURATION, DEN_SCREENS, denScroll } = await server.ssrLoadModule('/src/den/route.ts');
+const { DEN_APPROACH, DEN_DURATION, DEN_SCREENS, denScroll, denSectionIndex } = await server.ssrLoadModule('/src/den/route.ts');
 const { DEN_PATROL_POOL, denWaves, denPatrolPose, denPatrolCanFire, denPatrolWarp } = await server.ssrLoadModule('/src/den/patrol.ts');
 const { turn16Hardpoints } = await server.ssrLoadModule('/src/den/patrol-atlas-16.ts');
 const { createDenPatrols } = await server.ssrLoadModule('/src/den/patrol-rig.ts');
@@ -50,7 +50,7 @@ test('patrols turn through both supported atlases and wait until they are fully 
     assert.equal(denPatrolWarp(angle, count).mirror, i > 0);
   }
   for (const side of [-1, 1]) {
-    const patrol = { course: 'cross', side, slot: 0, heavy: false };
+    const patrol = { course: 'cross', side, slot: 0, heavy: false, section: 0 };
     const initial = denPatrolPose(0, -1.1 * side, patrol);
     const settled = denPatrolPose(2.3, -1.1 * side, patrol);
     assert.equal(activePose(denPatrolWarp(initial.heading, 16)), 15);
@@ -351,4 +351,30 @@ test('reinforced Den formations fit the prewarmed patrol pool and still share th
   assert.equal(carrier.drops.length, 0);
   carrier.damageEnemy(members.at(-1), members.at(-1).hp);
   assert.deepEqual(carrier.drops.map(drop => drop.weapon), ['laser']);
+});
+
+test('the last Den section has faster patrols and denser fire after visible entry', () => {
+  const flight = new Flight('sentry', [], 'vex', 'den');
+  flight.invulnerable = flight.cooldown = flight.droneCooldown = 1e5;
+  const shotsBySection = Array(5).fill(0);
+  let firstScout, lastScout;
+  while (flight.phase === 'stage') {
+    const previousFire = new Map(flight.enemies.map(enemy => [enemy, enemy.fire]));
+    const previousShots = new Set(flight.threats);
+    flight.step(STEP);
+    for (const enemy of flight.enemies) {
+      if (!enemy.den) continue;
+      const { section, heavy } = enemy.den;
+      if (!heavy && section === 0) firstScout ??= enemy;
+      if (!heavy && section === 4) lastScout ??= enemy;
+      if (previousFire.get(enemy) <= enemy.age && Number.isFinite(enemy.fire) && enemy.fire > enemy.age)
+        assert(denPatrolCanFire(denPatrolPose(enemy.age, enemy.lane, enemy.den), enemy.den));
+    }
+    const section = denSectionIndex(flight.time);
+    shotsBySection[section] += flight.threats.filter(shot => !previousShots.has(shot)).length;
+  }
+  assert(shotsBySection[3] > 2 * shotsBySection[0] && shotsBySection[4] > shotsBySection[3]);
+  assert(firstScout && lastScout);
+  const speed = ({ lane, den }) => denPatrolPose(3, lane, den).y - denPatrolPose(4, lane, den).y;
+  assert(speed(lastScout) > speed(firstScout) * 1.4);
 });
