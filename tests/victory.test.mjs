@@ -123,24 +123,49 @@ test('salute rounds keep their equipped weapon and upgrade and travel along the 
   }
 });
 
-test('cockpit flares launch one by one and form a crest with a high center', () => {
-  const throughExit = createVictoryFlares(true);
-  const ordinary = createVictoryFlares();
-  const visible = () => throughExit.root.children.filter(flare => flare.visible);
-  for (const start of [SALUTE_START, VICTORY_DURATION + .36]) {
-    for (let i = 0; i < 5; i++) {
-      throughExit.pose(start + i * .048);
-      assert.equal(visible().length, i + 1);
-      assert(visible().at(-1).position.lengthSq() < 1e-12);
-    }
-    throughExit.pose(start + .47);
-    const crest = visible().map(flare => flare.position);
-    assert(crest.every(({ x, y }, i) => y > 0 && (i === 0 || x > crest[i - 1].x)));
-    assert(crest[0].y < crest[1].y && crest[1].y < crest[2].y);
-    assert(crest[2].y > crest[3].y && crest[3].y > crest[4].y);
+test('the accelerating exit leaves a continuous line of upright flares at their launch positions', () => {
+  const fighter = createFighterRig().root;
+  const ending = createWormholeEnding(fighter, 2.7);
+  const camera = new T.PerspectiveCamera(40, 9 / 16, .1, 240);
+  const origin = new T.Vector3(1.8, -4, 0);
+  const heading = new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 0), -1.45);
+  const flares = ending.cockpitFlares.root.children;
+  function pose(time) {
+    fighter.position.copy(origin);
+    fighter.quaternion.copy(heading);
+    camera.fov = 40;
+    ending.poseExit(time, fighter, camera);
   }
-  ordinary.pose(VICTORY_DURATION + 1.35);
-  assert(ordinary.root.children.every(flare => !flare.visible));
+  try {
+    pose(0);
+    assert(fighter.position.equals(origin));
+    assert(fighter.quaternion.equals(heading));
+    assert.equal(camera.position.x, 0);
+    const launch = .14;
+    pose(launch);
+    const nozzle = new T.Vector3(0, .025, .28).applyQuaternion(fighter.quaternion).add(fighter.position);
+    assert.equal(flares.filter(flare => flare.visible).length, 1);
+    assert(flares[0].position.distanceTo(nozzle) < 1e-10);
+
+    pose(.8);
+    const first = flares[0].position.clone();
+    assert.equal(first.x, nozzle.x);
+    assert.equal(first.z, nozzle.z);
+    assert(first.y > nozzle.y + 2);
+    assert(fighter.position.z < first.z);
+    assert(flares[1].position.z < first.z);
+    assert(flares.filter(flare => flare.visible).length >= 7);
+    const early = fighter.position.z;
+    pose(1.6);
+    const middle = fighter.position.z;
+    pose(2.4);
+    assert(middle - fighter.position.z > early - middle);
+    assert(flares.filter(flare => flare.visible).length >= 10);
+    pose(.8);
+    assert(flares[0].position.equals(first));
+  } finally {
+    ending.dispose();
+  }
 });
 
 test('the exterior holds on the exit, then follows the fighter and its trails to a repeatable freeze', () => {

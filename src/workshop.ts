@@ -75,7 +75,6 @@ import { createSaucerFactory } from './fleet/saucers';
 import { fleetLighting } from './fleet/scenery';
 import { HEIGHT, WIDTH } from './playfield';
 import { FlightView } from './view';
-import { VICTORY_DURATION } from './rendering/victory';
 import { WORMHOLE_ENDING_DURATION, WORMHOLE_EXIT_DURATION, WORMHOLE_EXIT_HOLD } from './wormhole/ending';
 import { CREDITS_ROLL_DURATION, mountEndingCredits } from './app/ending-credits';
 import './workshop.css';
@@ -406,7 +405,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const pose = element<HTMLOutputElement>('pose');
   const wireframe = element<HTMLInputElement>('wireframe');
   const endingKey = 'wormhole_ending';
-  const freezeAt = VICTORY_DURATION + WORMHOLE_ENDING_DURATION;
+  const freezeAt = WORMHOLE_ENDING_DURATION;
   const endingDuration = freezeAt + CREDITS_ROLL_DURATION;
   const endingPreview = element('ending-preview');
   let endingCredits: HTMLElement | undefined;
@@ -437,10 +436,9 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   function endingLabel() {
     if (endingState === 'idle' || endingState === 'loading') return 'Preparing ending…';
     if (endingState === 'failed') return 'Ending preview unavailable';
-    const exterior = VICTORY_DURATION + WORMHOLE_EXIT_DURATION;
+    const exterior = WORMHOLE_EXIT_DURATION;
     const shot = time >= freezeAt ? 'Credits' : time >= exterior + WORMHOLE_EXIT_HOLD
-      ? 'Fighter emerges' : time >= exterior ? 'Exterior hold' : time >= VICTORY_DURATION
-        ? 'Tunnel exit and cockpit flares' : 'Fons defeat and salute';
+      ? 'Fighter emerges' : time >= exterior ? 'Exterior hold' : 'Tunnel exit and cockpit flares';
     return `${time.toFixed(2)} s · ${shot}`;
   }
 

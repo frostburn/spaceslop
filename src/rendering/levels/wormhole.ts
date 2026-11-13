@@ -119,9 +119,9 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
       let exitGlow = 0;
       if (victory?.exitTime !== undefined) {
         const progress = victory.exitTime / ending.cutToExterior;
-        const fly = progress ** 2.65;
+        const fly = fighter.position.z / ending.exitPoint.z;
         exitPoint.copy(ending.exitPoint).project(victory.camera);
-        const lineUp = T.MathUtils.smoothstep(progress, 0, .8);
+        const lineUp = T.MathUtils.smoothstep(progress, .36, .98);
         frame.lensX = T.MathUtils.lerp(frame.lensX, exitPoint.x * WIDTH / HEIGHT, lineUp);
         frame.lensY = T.MathUtils.lerp(frame.lensY, exitPoint.y - apertureY, lineUp);
         frame.travel += victory.exitTime * (.9 + 2.5 * fly);
@@ -134,7 +134,7 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
       const incomingPortal = theme === 'heliostat' ? fonsEase(.76, 2.88, age) : 0;
       const outgoingPortal = previous === 'heliostat' ? 1 - fonsEase(.06, 1.32, age) : 0;
       const portalOpening = incomingPortal + outgoingPortal;
-      mirror = fighter.visible && victory?.exitTime === undefined
+      mirror = fighter.visible && (victory?.exitTime ?? 0) < .4
         ? wormholeReflectionPose(fighter.position.x, fighter.position.y, apertureY * halfHeight) : undefined;
       tunnel.pose(frame, mirror, exitGlow);
       tunnel.setRegulatorPortals(time, portalOpening);

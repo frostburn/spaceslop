@@ -4,6 +4,7 @@ export type TextureResult = T.Texture | undefined;
 export interface LevelEnding {
   duration: number;
   cutToExterior: number;
+  cockpitFlares: { root: T.Group; prime(): void };
   warmup(renderer: T.WebGLRenderer): void;
   poseExit(time: number, fighter: T.Group, camera: T.PerspectiveCamera): void;
   renderExterior(renderer: T.WebGLRenderer, time: number): void;

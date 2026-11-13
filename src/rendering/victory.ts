@@ -9,13 +9,6 @@ export const SALUTE_ANGLE = Math.PI / 6;
 const DEFEAT_DURATION = 1.5;
 const flareTimes = [SALUTE_START, 1.96, 2.37];
 const flareAngles = [-Math.PI / 9, 0, Math.PI / 9];
-const crestFlares = [
-  { angle: 31, speed: 3.2 },
-  { angle: 12, speed: 4.7 },
-  { angle: -2, speed: 5.6 },
-  { angle: -18, speed: 5.8 },
-  { angle: -39, speed: 5.7 },
-];
 const lastWingShot = 2.44;
 
 export function victoryFormation(time: number) {
@@ -135,7 +128,7 @@ export function createBossDefeat(boss: T.Group, plane: T.Group, level: LevelId) 
   };
 }
 
-export function createVictoryFlares(throughExit = false) {
+function createFlarePool(count: number) {
   const streakGeometry = new T.PlaneGeometry(1, 1);
   const sparkGeometry = new T.OctahedronGeometry(.125);
   // The salute stays readable in front of overhead scenery after combat stops.
@@ -162,42 +155,77 @@ export function createVictoryFlares(throughExit = false) {
   const root = new T.Group();
   root.name = 'victory-flares';
   root.visible = false;
-  // Vary the speeds so the middle of each rapid volley rises above both ends.
-  const shots = throughExit
-    ? [SALUTE_START, VICTORY_DURATION + .36, VICTORY_DURATION + 1.04, VICTORY_DURATION + 1.72]
-      .flatMap(start => crestFlares.map(({ angle, speed }, i) => ({
-        launch: start + i * .048, angle: T.MathUtils.degToRad(angle), speed,
-      })))
-    : flareTimes.flatMap(launch => flareAngles.map(angle => ({ launch, angle, speed: 4.35 })));
-  const lifetime = throughExit ? .72 : 1.04;
-  const fadeAt = throughExit ? .47 : .58;
-  const flares = shots.map(({ launch, angle, speed }) => {
+  const flares = Array.from({ length: count }, () => {
     const flare = new T.Group();
     const spark = new T.Mesh(sparkGeometry, sparkMaterial);
     const streak = new T.Mesh(streakGeometry, streakMaterial);
     spark.renderOrder = 24;
     streak.renderOrder = 23;
     spark.scale.set(.88, 1.38, .88);
-    flare.rotation.z = angle;
     flare.add(streak, spark);
     root.add(flare);
-    return { flare, streak, launch, speed, direction: new T.Vector3(-Math.sin(angle), Math.cos(angle), 0) };
+    return { flare, streak };
   });
+  return { root, flares };
+}
+
+export function createVictoryFlares() {
+  const { root, flares } = createFlarePool(flareTimes.length * flareAngles.length);
+  const shots = flareTimes.flatMap(launch => flareAngles.map(angle => ({
+    launch, angle, direction: new T.Vector3(-Math.sin(angle), Math.cos(angle), 0),
+  })));
+  flares.forEach(({ flare }, i) => { flare.rotation.z = shots[i].angle; });
   return {
     root,
     pose(time?: number) {
       root.visible = time !== undefined && time >= SALUTE_START;
       if (!root.visible || time === undefined) return;
-      for (const { flare, streak, launch, speed, direction } of flares) {
+      for (const [i, { flare, streak }] of flares.entries()) {
+        const { launch, direction } = shots[i];
         const age = time - launch;
-        flare.visible = age >= 0 && age < lifetime;
+        flare.visible = age >= 0 && age < 1.04;
         if (!flare.visible) continue;
-        flare.position.copy(direction).multiplyScalar(age * speed);
-        flare.scale.setScalar(1 - .88 * T.MathUtils.smoothstep(age, fadeAt, lifetime));
+        flare.position.copy(direction).multiplyScalar(age * 4.35);
+        flare.scale.setScalar(1 - .88 * T.MathUtils.smoothstep(age, .58, 1.04));
         const length = .47 + age * .73;
         streak.position.set(0, .08 - length / 2, -.018);
         streak.scale.set(.42, length, 1);
       }
+    },
+  };
+}
+
+export function createCockpitFlares(duration: number) {
+  const firstLaunch = .14;
+  const interval = .088;
+  const lifetime = 1.06;
+  const count = Math.ceil((duration - firstLaunch) / interval);
+  const { root, flares } = createFlarePool(count);
+  function pose(time: number, eye: Readonly<T.Vector3>, launchPosition: (launch: number, point: T.Vector3) => void) {
+    root.visible = true;
+    for (const [i, { flare, streak }] of flares.entries()) {
+      const launch = firstLaunch + i * interval;
+      const age = time - launch;
+      flare.visible = age >= 0 && age < lifetime;
+      if (!flare.visible) continue;
+
+      // Sample the cockpit at launch. A released flare only climbs in world Y.
+      launchPosition(launch, flare.position);
+      const rise = age * 4.6;
+      flare.position.y += rise;
+      flare.rotation.y = Math.atan2(eye.x - flare.position.x, eye.z - flare.position.z);
+      flare.scale.setScalar(.72 * (1 - .9 * T.MathUtils.smoothstep(age, .62, lifetime)));
+      const length = Math.min(.65 + age * .38, rise / flare.scale.y);
+      streak.position.set(0, -length / 2, 0);
+      streak.scale.set(.35, length, 1);
+    }
+  }
+  const warmupEye = new T.Vector3(0, 0, 22);
+  return {
+    root,
+    pose,
+    prime() {
+      pose(.5, warmupEye, (_launch, point) => point.set(0, -2, 0));
     },
   };
 }

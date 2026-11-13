@@ -3,9 +3,10 @@ import { poseBurners, shipBurners } from '../burners';
 import { disposeScene } from '../rendering/dispose';
 import { BOSS_CAMERA_DISTANCE, HEIGHT, WIDTH } from '../playfield';
 import type { LevelEnding } from '../rendering/level';
+import { createCockpitFlares } from '../rendering/victory';
 import { createApertureLightning } from './fons/lightning';
 
-export const WORMHOLE_EXIT_DURATION = 2.85;
+export const WORMHOLE_EXIT_DURATION = 3.35;
 export const WORMHOLE_EXIT_HOLD = .95;
 export const WORMHOLE_ENDING_DURATION = WORMHOLE_EXIT_DURATION + 3.15;
 
@@ -224,6 +225,7 @@ export function createWormholeEnding(fighter: T.Group, apertureY: number): Level
   dispose(): void;
 } {
   const exterior = new T.Scene();
+  const cockpitFlares = createCockpitFlares(WORMHOLE_EXIT_DURATION);
   const camera = new T.PerspectiveCamera(39, aspect, .1, 220);
   const trumpet = createExitTrumpet();
   const starfield = createStarfield();
@@ -250,6 +252,28 @@ export function createWormholeEnding(fighter: T.Group, apertureY: number): Level
   const bank = new T.Quaternion(), shipRotation = new T.Quaternion();
   const angle = new T.Vector3(), projected = new T.Vector3();
   const exitY = apertureY / (HEIGHT / 2) * (exitCameraZ - tunnelExitDepth) * Math.tan(T.MathUtils.degToRad(exitCameraFov / 2));
+  const cockpit = new T.Vector3(0, .025, .28);
+  const sampledRotation = new T.Quaternion();
+  const launchOrigin = new T.Vector3();
+  const launchRotation = new T.Quaternion();
+  const cockpitOffset = new T.Vector3();
+
+  function flyThrough(time: number, origin: Readonly<T.Vector3>, facing: Readonly<T.Quaternion>,
+    position: T.Vector3, rotation: T.Quaternion) {
+    const progress = time / WORMHOLE_EXIT_DURATION;
+    const travel = .20 * progress + .80 * progress ** 2.65;
+    const bankAngle = Math.sin(Math.PI * progress);
+    angle.set(-origin.x, exitY - origin.y, tunnelExitDepth).normalize();
+    shipRotation.setFromUnitVectors(shipForward, angle);
+    rotation.copy(facing).slerp(shipRotation, smooth(time, 0, .55));
+    rotation.multiply(bank.setFromAxisAngle(shipForward, .34 * bankAngle));
+    position.set(T.MathUtils.lerp(origin.x, 0, travel) - .58 * bankAngle,
+      T.MathUtils.lerp(origin.y, exitY, travel), tunnelExitDepth * travel);
+  }
+  function sampleCockpit(launch: number, point: T.Vector3) {
+    flyThrough(launch, launchOrigin, launchRotation, point, sampledRotation);
+    point.add(cockpitOffset.copy(cockpit).applyQuaternion(sampledRotation));
+  }
   function renderExterior(renderer: T.WebGLRenderer, time: number) {
     const age = T.MathUtils.clamp(time, 0, WORMHOLE_ENDING_DURATION - WORMHOLE_EXIT_DURATION);
     const burst = smooth(age, .62, WORMHOLE_EXIT_HOLD + .16) * (1 - smooth(age, 1.35, 2.1));
@@ -274,29 +298,26 @@ export function createWormholeEnding(fighter: T.Group, apertureY: number): Level
     duration: WORMHOLE_ENDING_DURATION,
     cutToExterior: WORMHOLE_EXIT_DURATION,
     exitPoint: new T.Vector3(0, exitY, tunnelExitDepth),
-    // The combat camera looks down the tunnel. Ease into a close rear quarter
-    // as the flares fire, then let the fighter pull ahead of the camera.
+    cockpitFlares,
     poseExit(time, fighter, camera) {
-      const pullIn = smooth(time, 0, .85);
-      const lineUp = smooth(time, 1.6, WORMHOLE_EXIT_DURATION);
-      const fly = (time / WORMHOLE_EXIT_DURATION) ** 2.65;
-      const bankAngle = Math.sin(Math.PI * time / WORMHOLE_EXIT_DURATION);
-      fighter.position.x -= .95 * bankAngle;
-      const followX = fighter.position.x * pullIn * (1 - lineUp);
-      fighter.position.y = T.MathUtils.lerp(fighter.position.y, exitY, fly);
-      fighter.position.z = tunnelExitDepth * fly;
-      angle.set(0, (exitY + 2.25) / -tunnelExitDepth, -1).normalize();
-      shipRotation.setFromUnitVectors(shipForward, angle);
-      fighter.quaternion.slerp(shipRotation, pullIn);
-      fighter.quaternion.multiply(bank.setFromAxisAngle(shipForward, .58 * bankAngle));
-      camera.position.set(-5.3 * pullIn * (1 - lineUp), 1.3 * pullIn * (1 - lineUp),
-        T.MathUtils.lerp(BOSS_CAMERA_DISTANCE - 15.9 * pullIn, exitCameraZ, lineUp));
-      aim.set(followX, -1.12 * pullIn * (1 - lineUp),
-        T.MathUtils.lerp(-1.05 * pullIn, tunnelExitDepth, lineUp));
-      camera.up.set(.12 * bankAngle, 1, 0);
+      launchOrigin.copy(fighter.position);
+      launchRotation.copy(fighter.quaternion);
+      flyThrough(time, launchOrigin, launchRotation, fighter.position, fighter.quaternion);
+      const pullIn = smooth(time, 0, .9);
+      const lineUp = smooth(time, 1.7, WORMHOLE_EXIT_DURATION);
+      const side = pullIn * (1 - lineUp);
+      camera.position.set(fighter.position.x * pullIn - 8.9 * side, fighter.position.y * side + 1.8 * side,
+        T.MathUtils.lerp(BOSS_CAMERA_DISTANCE, fighter.position.z + 7.2, pullIn));
+      camera.position.x *= 1 - lineUp;
+      camera.position.z = T.MathUtils.lerp(camera.position.z, exitCameraZ, lineUp);
+      const wake = Math.abs(fighter.position.z - launchOrigin.z) * .19;
+      aim.set(fighter.position.x * side, (fighter.position.y + 1.05) * side,
+        T.MathUtils.lerp(0, fighter.position.z + Math.min(2, wake) * (1 - lineUp), pullIn));
+      camera.up.set(0, 1, 0);
       camera.lookAt(aim);
-      camera.fov = T.MathUtils.lerp(camera.fov, exitCameraFov, pullIn);
+      camera.fov = T.MathUtils.lerp(camera.fov, exitCameraFov + 4 * (1 - lineUp), pullIn);
       camera.updateProjectionMatrix();
+      cockpitFlares.pose(time, camera.position, sampleCockpit);
     },
     renderExterior,
     warmup(renderer: T.WebGLRenderer) {
