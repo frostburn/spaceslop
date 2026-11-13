@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { applyRelief } from './encounter-surfaces';
 
 function random(seed: number) {
   return () => { seed = (Math.imul(seed, 1664525) + 1013904223) | 0; return (seed >>> 0) / 4294967296; };
@@ -30,11 +31,13 @@ function fallbackChitin() {
 }
 
 export function createTitanChitinSurface() {
-  let map: T.Texture = fallbackChitin();
+  const fallback = fallbackChitin();
+  let map: T.Texture = fallback;
   const materials: T.MeshStandardMaterial[] = [];
   return {
     material(color: number, roughness = .67, metalness = .09) {
-      const material = new T.MeshStandardMaterial({ color, roughness, metalness, map, bumpMap: map, bumpScale: .018 });
+      const material = new T.MeshStandardMaterial({ color, roughness, metalness, map: fallback, bumpMap: fallback, bumpScale: .018 });
+      if (map !== fallback) applyRelief(map, [material]);
       materials.push(material);
       return material;
     },
@@ -42,10 +45,12 @@ export function createTitanChitinSurface() {
       texture.wrapS = texture.wrapT = T.RepeatWrapping;
       texture.anisotropy = 4;
       map = texture;
-      for (const material of materials) {
-        material.map = material.bumpMap = texture;
-        material.needsUpdate = true;
+      applyRelief(texture, materials);
+      function release() {
+        texture.removeEventListener('dispose', release);
+        if (map === texture) map = fallback;
       }
+      texture.addEventListener('dispose', release);
     },
   };
 }

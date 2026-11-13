@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { applyRelief } from './encounter-surfaces';
 import { createMarineMouth } from './marine-mouth';
 import { sealMarineTube } from './marine-geometry';
 import { marineJawGeometry, marineEyeFrame, JAW_HINGE_Y, JAW_HINGE_Z } from './marine-jaw';
@@ -7,7 +8,6 @@ import { iceEnvironment } from './ice-surfaces';
 import { leviathanMotion, type MarineKind } from './marine';
 
 type Animal = MarineKind | 'mosasaur';
-const hideMaterials: T.MeshPhysicalMaterial[] = [];
 type SkinPattern = 'plain' | 'stripes' | 'spots';
 const skins = new Map<string, T.MeshPhysicalMaterial>();
 let hideTexture: T.Texture | undefined;
@@ -46,13 +46,20 @@ function skin(scales = 0, pattern: SkinPattern = 'plain') {
       diffuseColor.rgb *= 1.0-seam*.13;` : ''}`);
   };
   material.customProgramCacheKey = () => `marine-hide-v2-${key}`;
-  if (hideTexture) { material.map = material.bumpMap = hideTexture; }
-  skins.set(key, material); hideMaterials.push(material); return material;
+  if (hideTexture) applyRelief(hideTexture, [material]);
+  skins.set(key, material);
+  return material;
 }
 export function setMarineTexture(texture: T.Texture) {
   hideTexture = texture;
-  texture.wrapS = texture.wrapT = T.RepeatWrapping; texture.repeat.set(2,3);
-  for (const material of hideMaterials) { material.map = material.bumpMap = texture; material.needsUpdate = true; }
+  texture.wrapS = texture.wrapT = T.RepeatWrapping;
+  texture.repeat.set(2, 3);
+  applyRelief(texture, [...skins.values()]);
+  function release() {
+    texture.removeEventListener('dispose', release);
+    if (hideTexture === texture) hideTexture = undefined;
+  }
+  texture.addEventListener('dispose', release);
 }
 
 const geometryCache = new Map<string,T.BufferGeometry>();
