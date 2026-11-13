@@ -21,6 +21,7 @@ import { wingWeapons, type WingWeapon } from '../wing';
 import { FONS_RAIN_END, fonsPhase } from '../wormhole/fons/combat';
 import { fonsAttackCue } from '../wormhole/fons/attacks';
 import { fonsNames, type FonsVariant } from '../wormhole/fons/variants';
+import { wormholeBosses } from '../wormhole/route';
 
 export type FlightLoadout = { pilot: PilotId; drone: DroneWeapon; wings: (WingWeapon | undefined)[] };
 export type FlightShortcut = 'boss' | 'trench' | FonsVariant;
@@ -84,9 +85,11 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
   function syncUI() {
     const active = screen === 'active';
     const fighting = flight.phase === 'stage' || flight.phase === 'boss';
+    const encounter = flight.encounterLevel;
+    const bossTitle = flight.isFonsFight ? fonsNames[flight.fonsVariant].toUpperCase() : levels[encounter].boss;
     const label = {
       stage: levels[flight.level].sector,
-      approach: flight.isFonsFight ? 'FINAL APPROACH' : flight.level === 'wormhole' ? 'TITAN ECHO' : flight.isFleet ? 'BREACH APPROACH' : flight.isDen ? 'GANTRY APPROACH' : flight.level==='biolume'?'DARK CROWN':flight.level==='summer'?'LOTUS PALACE':flight.level==='heliostat'?'COLLECTOR APPROACH':flight.level==='boulevard'?'SUNSET PLAZA':flight.level === 'vents' ? 'ABYSSAL DROP' : flight.level === 'io' ? 'CALDERA APPROACH' : flight.level === 'titan' ? 'ASCENT' : 'CONTACT',
+      approach: flight.level === 'wormhole' ? 'SUPPLIES' : flight.isFleet ? 'BREACH APPROACH' : flight.isDen ? 'GANTRY APPROACH' : flight.level==='biolume'?'DARK CROWN':flight.level==='summer'?'LOTUS PALACE':flight.level==='heliostat'?'COLLECTOR APPROACH':flight.level==='boulevard'?'SUNSET PLAZA':flight.level === 'vents' ? 'ABYSSAL DROP' : flight.level === 'io' ? 'CALDERA APPROACH' : flight.level === 'titan' ? 'ASCENT' : 'CONTACT',
       boss: 'BOSS',
       won: 'CLEAR',
       lost: 'SIGNAL LOST',
@@ -103,13 +106,17 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
       sector.title = fleetSection(flight.time);
       sector.textContent = sector.title.toUpperCase();
     }
+    if (flight.level === 'wormhole' && (flight.phase === 'approach' || flight.phase === 'boss')) {
+      sector.textContent = `${label} · ${flight.wormholeBossNumber}/${wormholeBosses.length}`;
+      sector.title = bossTitle;
+    }
     score.textContent = String(flight.score).padStart(6, '0');
     hull.textContent = String(flight.hull).padStart(2, '0');
     charges.textContent = String(flight.charges).padStart(2, '0');
-    bossHud.hidden = flight.phase !== 'boss';
+    bossHud.hidden = flight.phase !== 'boss' && !(flight.level === 'wormhole' && flight.phase === 'approach');
     bossHealth.max = flight.bossMaxHealth;
     bossHealth.value = flight.bossHealth;
-    bossName.textContent = flight.isFonsFight ? fonsNames[flight.fonsVariant].toUpperCase() : levels[flight.level].boss+(flight.level==='summer'?' · '+flight.summerHeadsAlive+(flight.summerHeadsAlive===1?' HEAD':' HEADS'):'');
+    bossName.textContent = bossTitle + (encounter === 'summer' ? ` · ${flight.summerHeadsAlive} ${flight.summerHeadsAlive === 1 ? 'HEAD' : 'HEADS'}` : '');
     pulse.disabled = !active || !fighting || flight.charges === 0;
     pause.hidden = !active;
     panel.hidden = active;
@@ -129,6 +136,12 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     let tip = 'Tap for drone · Drag to steer';
     if (preparingGraphics)
       tip = 'Preparing graphics…';
+    else if (flight.level === 'wormhole' && flight.phase === 'approach') {
+      const repair = flight.drops.some(drop => drop.kind === 'repair');
+      const weapons = flight.drops.some(drop => drop.weapon);
+      tip = repair ? (weapons ? 'Collect the weapons and hull repair' : 'Collect the hull repair')
+        : weapons ? 'Collect weapon drops before the next fight' : 'Boss approaching';
+    }
     else if (flight.isFonsFight && flight.phase === 'boss') {
       const storm = fonsPhase(flight.fonsTime);
       if (storm.rain || storm.warning > 0) tip = 'Stay in the wake of a falling crystal';
@@ -143,14 +156,14 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     else if (flight.isFleet && flight.phase === 'boss')
       tip = flight.droneWeapon === 'towline' ? 'Sweep the arc across the saucer.' : 'Move after the side guns light up · Thread the rings';
     else if (flight.droneWeapon === 'towline') {
-      tip = flight.phase === 'boss' ? (flight.level==='biolume'?'Sweep the arc through seekers or the ray.':flight.level==='heliostat'||flight.level==='boulevard'?'Sweep the arc across the cyan core.':flight.level === 'ice' ? 'Sweep the arc across the mouth marker.' : flight.level === 'io' ? 'Sweep the arc across the cyan support, then exposed machinery.' : flight.isCicadaFight ? 'Sweep the arc across the glowing thorax vent.' : flight.level === 'vents' ? (flight.crabCoreOpen ? 'Sweep the arc across the exposed gills.' : 'Sweep the arc across a glowing claw joint.') : 'Sweep the arc across the green cannon.') : 'Park the drone · Sweep the arc';
+      tip = flight.phase === 'boss' ? (encounter==='biolume'?'Sweep the arc through seekers or the ray.':encounter==='heliostat'||encounter==='boulevard'?'Sweep the arc across the cyan core.':encounter === 'ice' ? 'Sweep the arc across the mouth marker.' : encounter === 'io' ? 'Sweep the arc across the cyan support, then exposed machinery.' : flight.isCicadaFight ? 'Sweep the arc across the glowing thorax vent.' : encounter === 'vents' ? (flight.crabCoreOpen ? 'Sweep the arc across the exposed gills.' : 'Sweep the arc across a glowing claw joint.') : 'Sweep the arc across the green cannon.') : 'Park the drone · Sweep the arc';
     }
-    else if(flight.phase==='boss'&&flight.level==='biolume')tip='Shoot seeking lanterns · Dodge their burst · Fire straight into the ray.';
-    else if(flight.phase==='boss'&&(flight.level==='boulevard'||flight.level==='heliostat'))tip='Target the cyan core · Move after the amber aim lock.';
-    else if (flight.phase === 'boss' && flight.level === 'preserve')
+    else if(flight.phase==='boss'&&encounter==='biolume')tip='Shoot seeking lanterns · Dodge their burst · Fire straight into the ray.';
+    else if(flight.phase==='boss'&&(encounter==='boulevard'||encounter==='heliostat'))tip='Target the cyan core · Move after the amber aim lock.';
+    else if (flight.phase === 'boss' && encounter === 'preserve')
       tip = 'Dodge the claw windups. Pulse interrupts an attack. Fire into the belly.';
     else if (flight.phase === 'boss')
-      tip = flight.level === 'ice' ? 'Tap the mouth marker. Dodge amber rings.' : flight.level === 'io' ? (flight.ioLegBroken ? 'Machinery exposed · Dodge the wheel shots.' : 'Break the cyan front support.') : flight.isCicadaFight ? 'Tap the glowing thorax vent. Dodge amber rings.' : flight.level === 'vents' ? (flight.crabCoreOpen ? 'Tap the gill chamber. Dodge amber rings.' : 'Tap the glowing joint. Break both claws.') : flight.level==='summer'?'Destroy all three hydra heads. Dodge amber rings.':'Tap the green cannon. Dodge amber rings.';
+      tip = encounter === 'ice' ? 'Tap the mouth marker. Dodge amber rings.' : encounter === 'io' ? (flight.ioLegBroken ? 'Machinery exposed · Dodge the wheel shots.' : 'Break the cyan front support.') : flight.isCicadaFight ? 'Tap the glowing thorax vent. Dodge amber rings.' : encounter === 'vents' ? (flight.crabCoreOpen ? 'Tap the gill chamber. Dodge amber rings.' : 'Tap the glowing joint. Break both claws.') : encounter==='summer'?'Destroy all three hydra heads. Dodge amber rings.':'Tap the green cannon. Dodge amber rings.';
     if (active && flight.perkTime > 0) {
       tip = flight.perkMessage;
     }

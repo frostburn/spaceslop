@@ -16,7 +16,7 @@ export interface LevelFrame {
 export interface LevelScene {
   root: T.Group;
   boss: T.Group;
-  victoryBoss?: T.Group; // The Wormhole has a second, final boss.
+  victoryBoss?: T.Group; // The Wormhole victory uses Fons regardless of the active encounter.
   models: (T.Object3D | undefined)[];
   ready: Promise<TextureResult[]>;
   stageDistance: number;

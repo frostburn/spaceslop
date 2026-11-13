@@ -30,10 +30,19 @@ for(const file of ['workshop.html','patrol-study.html','vent-study.html','io-stu
 for(const file of files.filter(f=>f.endsWith('.js'))){const text=await readFile(join(root,'assets',file),'utf8');assert(!text.includes('__qa'),'QA hooks leaked into production.');assert(!/(workshop|patrol-study|vent-study|io-study|heliostat-study|biolume-study|black-hole-study)\.html/.test(text),'Development links leaked into production.');assert(!/Play study|Orbit view|inspect-backdrop|Relief shading|Copy edits/.test(text),'Development renderer leaked into production code.');}
 for(const [id,pack] of Object.entries(packs.levels)){
  assert(!pack.media.some(path=>/biolume-study-(backdrop|foreground)/.test(path)),'DEV plate entered an offline level package.');
- if(id!=='den')assert(!pack.media.some(path=>/draconian-(accretion-disk|biker-atlas|galactic-center|gantry|cliffside|patrol-turns|cliff-props|defenses)/.test(path)),'Den art leaked into another level.');
- if(id!=='biolume')assert(!pack.media.some(path=>/biolume-(backdrop|foreground|glider|study-atlas|lantern-ray|frog-atlas)/.test(path)),'Lantern Grove art leaked into another level.');
- if(id!=='fleet')assert(!pack.media.some(path=>path.startsWith('encounters/fleet-')),'Fleet Clash art leaked into another level.');
- if(id==='wormhole')assert(!pack.media.some(path=>path.startsWith('encounters/')&&!/^encounters\/(interceptor-metal|titan-chitin|fons-mane)\.png\?/.test(path)),'Wormhole included unrelated stage media.');
+ if(id!=='den')assert(!pack.media.some(path=>/draconian-(accretion-disk|galactic-center|gantry|cliffside|patrol-turns|cliff-props|defenses)/.test(path)||
+  id!=='wormhole'&&path.startsWith('encounters/draconian-biker-atlas.')),'Den art leaked into another level.');
+ if(id!=='biolume')assert(!pack.media.some(path=>/biolume-(backdrop|foreground|glider|study-atlas|frog-atlas)/.test(path)||
+  id!=='wormhole'&&path.startsWith('encounters/biolume-lantern-ray.')),'Lantern Grove art leaked into another level.');
+ if(id!=='fleet')assert(!pack.media.some(path=>path.startsWith('encounters/fleet-')&&
+  !(id==='wormhole'&&path.startsWith('encounters/fleet-saucer-alloy.'))),'Fleet Clash art leaked into another level.');
+ if(id==='wormhole'){
+  const bossMaps = new Set(['interceptor-metal', 'ant-chitin', 'broodlock-fungus', 'ant-mold', 'io-ceramic', 'vent-crab',
+   'titan-chitin', 'marine-hide', 'feather-vane', 'draconian-scales', 'summer-hydra', 'biolume-lantern-ray',
+   'fleet-saucer-alloy', 'draconian-biker-atlas', 'fons-mane'].map(name=>`/encounters/${name}.png`));
+  assert(!pack.media.some(path=>path.startsWith('encounters/')&&!bossMaps.has(new URL(path,'https://assets.invalid/').pathname)),
+   'Wormhole included unrelated stage media.');
+ }
  else assert(!pack.media.some(path=>path.startsWith('encounters/fons-')),'Fons art leaked into another level.');
 }
 console.log('Menu size, isolated level packages, selective precaching and production dev-page exclusions passed.');

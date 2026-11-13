@@ -7,7 +7,7 @@ import { WING_FLASH_TIME, WING_FORMATION, wingWeapons, type WingWeapon } from '.
 import { createWingPod } from './wing-pod';
 import { createCombatEffects } from './combat-effects';
 import { createLaserContactTrace } from './laser-contact';
-import { createPowerupGraphic } from './powerup-graphics';
+import { createPowerupGraphic, powerupKinds, repairColor } from './powerup-graphics';
 import { createContinuousLaser, createMuzzleFlash, createProjectileBatch, projectileKinds, type ProjectileKind } from './projectile-graphics';
 import { ambusherFeedback } from './preserve-ambusher';
 import { faunaMuzzle } from './vent-fauna';
@@ -113,7 +113,7 @@ export class FlightView {
   private wingLasers = Array.from({ length: 2 }, createContinuousLaser);
   private laserContact = createLaserContactTrace(this.plane);
   private drops = Array.from({ length: 12 }, createPowerupGraphic);
-  private markers = Array.from({ length: 3 }, () => new T.Mesh(new T.RingGeometry(0.53, 0.61, 24), new T.MeshBasicMaterial({
+  private markers = Array.from({ length: 5 }, () => new T.Mesh(new T.RingGeometry(0.53, 0.61, 24), new T.MeshBasicMaterial({
     color: 0xffcc78,
     transparent: true,
     depthWrite: false
@@ -230,7 +230,7 @@ export class FlightView {
         });
     }
     const pods = this.wingPods.map(side => side.flatMap(r => [r.root, r.upgrade]));
-    const ordnance = [this.player.root, this.drone, this.towlineEmitters, ...Object.values(this.projectiles).map(r => r.root), this.combat.root, this.playerMuzzle.root, this.droneMuzzle.root, ...this.drops.slice(0, 4).map(r => r.root), this.victoryFlares.root];
+    const ordnance = [this.player.root, this.drone, this.towlineEmitters, ...Object.values(this.projectiles).map(r => r.root), this.combat.root, this.playerMuzzle.root, this.droneMuzzle.root, ...this.drops.slice(0, powerupKinds.length).map(r => r.root), this.victoryFlares.root];
     const lasers = [...pods[1], ...this.wingLasers.map(r => r.root)];
     this.level.prepare?.();
     for (const objects of [...this.level.warmup, [this.cannonMarker, ...this.markers], pods[0], lasers, ordnance]) {
@@ -244,7 +244,7 @@ export class FlightView {
         this.playerMuzzle.prime();
         this.droneMuzzle.prime();
         this.victoryFlares.pose(VICTORY_DURATION);
-        (Object.keys(wingWeapons) as WingWeapon[]).forEach((weapon, i) => this.drops[i].pose(weapon, 0));
+        powerupKinds.forEach((kind, i) => this.drops[i].pose(kind, 0));
       }
       if (objects === lasers)
         for (const laser of this.wingLasers)
@@ -432,7 +432,7 @@ export class FlightView {
         if (!this.seenDrops.has(drop))
           this.seenDrops.set(drop, this.animationTime);
         model.root.position.set(drop.x, drop.y, 0.22 + Math.sin(this.animationTime * 3) * 0.05);
-        model.pose(drop.weapon, this.animationTime, (this.animationTime - this.seenDrops.get(drop)!) / 0.22);
+        model.pose(drop.kind ?? drop.weapon, this.animationTime, (this.animationTime - this.seenDrops.get(drop)!) / 0.22);
       }
     }
     this.drawProjectiles(flight, saluteShots);
@@ -517,7 +517,7 @@ export class FlightView {
             model = this.level.models[index];
           if(target.summer?.kind==='hydra'&&wing.laserHead!==undefined)model=model?.getObjectByName('hydra-head-'+wing.laserHead);
         }
-        const shieldModel=flight.level==='summer'&&flight.phase==='boss'&&target===undefined?this.level.boss:undefined;
+        const shieldModel=flight.encounterLevel==='summer'&&flight.phase==='boss'&&target===undefined?this.level.boss:undefined;
         let end = flight.isDen || (typeof target === 'number' && flight.planarBoss) ? wing.beamEnd : typeof target === 'number' ? this.level.contact(target, distance ?? BOSS_CAMERA_DISTANCE, flight)
           : model ? this.laserContact(origin, wing.beamEnd, model, distance, this.viewPitch) : shieldModel?this.laserContact(origin,wing.beamEnd,shieldModel,distance,this.viewPitch):wing.beamEnd;
         if (flight.isFleet && typeof target === 'number') {
@@ -541,7 +541,7 @@ export class FlightView {
     return saluteShots;
   }
   private drawProjectiles(flight: Flight, saluteShots?: Flight['shots']) {
-    const shots = saluteShots ?? (flight.planarBoss && !flight.isFonsFight ? flight.shots.map(s => ({ ...s, ...planarProjectileLayer(s, .85) })) : flight.shots);
+    const shots = saluteShots ?? (flight.planarBoss && !flight.isFonsFight && flight.phase !== 'stage' ? flight.shots.map(s => ({ ...s, ...planarProjectileLayer(s, .85) })) : flight.shots);
     this.projectiles.ship.draw(shots.filter((shot) => !shot.drone && !shot.wing), this.animationTime);
     this.projectiles.drone.draw(shots.filter((shot) => shot.drone), this.animationTime);
     for (const weapon of ['homing', 'cannon', 'omega'] as const) {
@@ -549,9 +549,9 @@ export class FlightView {
     }
     const hostile = flight.isDen ? flight.threats.map(s => ({ ...s, ...planarProjectileLayer(s, .85) }))
       : flight.level === 'fleet' ? flight.threats.filter(s => !s.broadside) : flight.threats;
-    this.projectiles.hostile.draw(flight.level !== 'ice' && flight.level !== 'broodlock' && !flight.isFonsFight ? hostile : [], this.animationTime);
-    this.projectiles.brine.draw(flight.level === 'ice' ? flight.threats : [], this.animationTime);
-    this.projectiles.spore.draw(flight.level === 'broodlock' ? flight.threats : [], this.animationTime);
+    this.projectiles.hostile.draw(flight.encounterLevel !== 'ice' && flight.encounterLevel !== 'broodlock' && !flight.isFonsFight ? hostile : [], this.animationTime);
+    this.projectiles.brine.draw(flight.encounterLevel === 'ice' ? flight.threats : [], this.animationTime);
+    this.projectiles.spore.draw(flight.encounterLevel === 'broodlock' ? flight.threats : [], this.animationTime);
   }
   private drawFeedback(flight: Flight, elapsed: number) {
     this.combat.update(elapsed);
@@ -591,8 +591,8 @@ export class FlightView {
           at: -1
         });
     const bossLaserDamage = flight.bossLaserDamage - this.previousBossLaserDamage;
-    if (flight.phase !== 'won' && this.previousBossHealth - flight.bossHealth - bossLaserDamage > 1e-6 && this.animationTime - this.bossHitAt > 0.07) {
-      this.combat.emit('hit', flight.isCicadaFight ? flight.cicadaMuzzle() : flight.level==='summer'&&flight.summerLastHit?flight.summerLastHit:flight.isFleet||flight.isFonsFight?
+    if (flight.phase === 'boss' && this.previousBossHealth - flight.bossHealth - bossLaserDamage > 1e-6 && this.animationTime - this.bossHitAt > 0.07) {
+      this.combat.emit('hit', flight.isCicadaFight ? flight.cicadaMuzzle() : flight.encounterLevel==='summer'&&flight.summerLastHit?flight.summerLastHit:flight.isFleet||flight.isFonsFight?
         planarProjectileLayer({ x: flight.exposedCannonX, y: flight.bossAimY }, .85):{
         x: flight.exposedCannonX,
         y: flight.bossAimY,
@@ -605,10 +605,10 @@ export class FlightView {
       this.combat.emit(flight.hull === 0 ? 'kill' : 'hit', flight.player, orange);
       emitted = true;
     }
-    if (flight.phase === 'stage')
+    if (flight.phase === 'stage' || (flight.level === 'wormhole' && flight.phase === 'approach'))
       for (const drop of this.previousDrops) {
         if (!flight.drops.includes(drop) && drop.y > -8.5 && Math.hypot(drop.x - flight.player.x, drop.y - flight.player.y) < 1.6) {
-          this.combat.emit('pickup', drop, wingWeapons[drop.weapon].color);
+          this.combat.emit('pickup', drop, drop.kind === 'repair' ? repairColor : wingWeapons[drop.weapon].color);
           emitted = true;
         }
       }

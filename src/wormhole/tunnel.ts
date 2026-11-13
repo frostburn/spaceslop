@@ -6,10 +6,15 @@ import type { fonsPhase, fonsRocks } from './fons/combat';
 import { createFonsBackdrop } from './fons/backdrop';
 import type { FonsVariant } from './fons/variants';
 import { wallRiftShape } from './fons/wall-rift';
+import { regulatorPortal, regulatorPortalShader } from './regulator-portals';
 import { titanEcho } from './titan-echo';
+import { wallThemeIds, wallThemes, wallThemesShader, type TunnelTheme } from './wall-themes';
 
 export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
   const backdrop = createFonsBackdrop();
+  const palettes = Object.fromEntries(Object.entries(wallThemes).map(([id, colors]) =>
+    [id, colors.map(color => new T.Color(color))],
+  )) as Record<TunnelTheme, T.Color[]>;
   const uniforms = {
     ...backdrop.uniforms,
     travel: { value: 0 },
@@ -26,6 +31,10 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
     storm: { value: new T.Vector2() },
     cover: { value: [new T.Vector4(), new T.Vector4()] },
     wallRifts: { value: [new T.Vector4(), new T.Vector4()] },
+    themeIds: { value: new T.Vector2() },
+    themeMix: { value: 0 },
+    wallPalette: { value: palettes.cruise.map(color => color.clone()) },
+    regulatorPortals: { value: [new T.Vector4(), new T.Vector4()] },
   };
   const material = new T.ShaderMaterial({
     uniforms,
@@ -49,6 +58,9 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
       uniform vec2 storm;
       uniform vec4 cover[2];
       uniform vec4 wallRifts[2];
+      uniform vec2 themeIds;
+      uniform float themeMix;
+      uniform vec3 wallPalette[3];
       ${titanEcho}
       ${wallRiftShape}
       ${backdrop.fragmentShader}
@@ -61,6 +73,9 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
         float c = cos(angle), s = sin(angle);
         return vec2(c * ray.x - s * ray.y, s * ray.x + c * ray.y);
       }
+
+      ${wallThemesShader}
+      ${regulatorPortalShader}
 
       vec3 stars(vec2 ray, float scale, float seed) {
         vec2 grid = ray * scale;
@@ -162,6 +177,7 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
         float bend = lensStrength * (lensSquared + core) / (dot(delta, delta) + core);
         vec2 ray = screen - delta * bend;
         ray = bendAtInvictus(ray);
+        for (int i=0; i<2; i++) ray = bendAtRegulatorPortal(ray, regulatorPortals[i], screen);
         for (int i=0; i<2; i++) ray = bendAtRift(ray, wallRifts[i]);
 
         vec2 axis = vec2(0.0, ${apertureY.toFixed(8)});
@@ -183,12 +199,23 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
         float ripple = z * 2.7 + .87 * cos(theta * 2.0) + cloud;
         float wave = lobe(ripple, 12.0) * fine;
         float cold = .5 + .5 * cos(theta + .8 * sin(z * .28));
-        vec3 violet = mix(vec3(.11, .032, .27), vec3(.24, .032, .29), finale);
-        vec3 cyan = mix(vec3(.033, .32, .58), vec3(.035, .17, .31), finale);
-        vec3 tone = mix(violet, cyan, cold);
+        int toTheme = int(themeIds.y);
+        int fromTheme = themeMix >= 1.0 ? toTheme : int(themeIds.x);
+        float wire = mix(float(fromTheme == THEME_BOULEVARD), float(toTheme == THEME_BOULEVARD), themeMix);
+        vec3 tone = mix(wallPalette[0], wallPalette[1], cold);
+        vec3 accent = wallPalette[2];
         vec3 wall = tone * (.022 + .30 * folded * (.18 + .82 * cloud));
-        wall += mix(tone, vec3(.22, .66, .94), .43) * (strands * .27 + threads * .07);
+        wall += mix(tone, accent, .43) * (strands * .27 + threads * .07);
         wall += tone * wave * (.035 + .10 * folded);
+        if (fromTheme == toTheme) {
+          wall = themeWall(toTheme, wall, wallPalette[1], accent, theta, z, cloud, fine);
+        } else if (themeMix <= 0.0) {
+          wall = themeWall(fromTheme, wall, wallPalette[1], accent, theta, z, cloud, fine);
+        } else {
+          vec3 outgoing = themeWall(fromTheme, wall, wallPalette[1], accent, theta, z, cloud, fine);
+          vec3 incoming = themeWall(toTheme, wall, wallPalette[1], accent, theta, z, cloud, fine);
+          wall = mix(outgoing, incoming, themeMix);
+        }
 
         float stripAngle = theta * 2.0 - .53 + .49 * sin(z * .52);
         float strip = smoothstep(.49, .86, cos(stripAngle)) * distanceFade * echo;
@@ -201,14 +228,15 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
 
         vec3 color = vec3(.0018, .0032, .012);
         color += wall * distanceFade;
-        color += vec3(.039, .12, .21) * exp(-radius * 6.5) * (.65 + .35 * cloud);
+        color += wallPalette[1] * exp(-radius * 6.5) * (.29 + .18 * cloud) * (1.0 - wire * .86);
         // Two depths share the tunnel's helices and traveling ripples. The
         // throat tapers out the turn so the distant sky resolves without aliasing.
         float starTurn = distanceFade * (.32 * twist + .27 * sin(ripple) + .15 * sin(z * 1.49 - 3.0 * theta));
         float starStretch = distanceFade * (.079 * cos(ripple) + .041 * sin(z * 1.57 + theta * 2.0));
         vec2 nearStars = axis + rotateRay(fromAxis, starTurn) * (1.0 + starStretch);
         vec2 farStars = axis + rotateRay(fromAxis, starTurn * .57) * (1.0 + starStretch * .68);
-        color += (stars(nearStars, 31.0, 12.0) + .31 * stars(farStars, 57.0, 73.0)) * mix(.83, .32, distanceFade);
+        color += (stars(nearStars, 31.0, 12.0) + .31 * stars(farStars, 57.0, 73.0))
+          * mix(.83, .32, distanceFade) * (1.0 - wire * .67);
         // A distant crescent and nebula give the negative mirror recognizable
         // landmarks as the head-on tunnel opens into the final chamber.
         vec2 moon = ray - vec2(-.40,.77);
@@ -222,7 +250,7 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
         float nebula = smoothstep(.25,.93,cloud) * lobe(theta*2.0-z*.25,3.4);
         color += finale*vec3(.15,.012,.135)*nebula*distanceFade;
         color = showFonsBackdrop(color, ray, screen, storm.x);
-        color = reflectedWall(color, tone, ripple, theta);
+        color = mix(color, reflectedWall(color, tone, ripple, theta), 1.0 - wire * .70);
 
         float orbit = atan(delta.y, delta.x + .000001);
         float rim = abs(lensDistance - lensRadius * (1.0 + .017 * sin(orbit * 3.0 + travel)));
@@ -231,8 +259,9 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
         float coreLight = 1.0 - smoothstep(width, width * 3.25, rim);
         float bloom = exp(-rim * 78.0);
         float scatter = exp(-rim * 23.0);
-        vec3 lensColor = mix(vec3(.25, .67, 1.0), vec3(1.0, .51, .21), echo);
-        color += lensColor * lensStrength * ringShape * (coreLight * 1.9 + .63 * bloom + .17 * scatter);
+        vec3 lensColor = mix(accent, vec3(1.0, .51, .21), echo);
+        color += lensColor * lensStrength * ringShape * (coreLight * 1.9 + .63 * bloom + .17 * scatter)
+          * (1.0 - wire * .79);
         color += lensColor * .15 * echo * lensStrength * (1.0 - smoothstep(0.0, lensRadius, lensDistance));
         float shock = exp(-abs(lensDistance - waveRadius) * 36.0);
         color += lensColor * shock * distanceFade * waveStrength * (.13 + .63 * folded);
@@ -240,6 +269,7 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
         // Retain contrast along the flight lane while the walls move around it.
         float lane = (1.0 - smoothstep(.16, .45, abs(screen.x))) * (1.0 - smoothstep(.31, .65, screen.y));
         color *= 1.0 - .34 * lane;
+        for (int i=0; i<2; i++) color = drawRegulatorPortal(color, regulatorPortals[i], screen, travel);
         for (int i=0; i<2; i++) color = showRift(color, wallRifts[i]);
         color = corruptedRain(color);
         gl_FragColor = vec4(color, 1.0);
@@ -255,6 +285,19 @@ export function createWormholeTunnel(apertureY: number, reflection: T.Texture) {
   return {
     root,
     textures: backdrop.textures,
+    setTheme(from: TunnelTheme, to: TunnelTheme, amount: number) {
+      uniforms.themeIds.value.set(wallThemeIds[from], wallThemeIds[to]);
+      uniforms.themeMix.value = amount;
+      for (const [index, color] of uniforms.wallPalette.value.entries())
+        color.copy(palettes[from][index]).lerp(palettes[to][index], amount);
+      return uniforms.wallPalette.value[2];
+    },
+    setRegulatorPortals(time: number, opening: number) {
+      for (const [index, portal] of uniforms.regulatorPortals.value.entries()) {
+        const { x, y, roll } = regulatorPortal(index === 0 ? -1 : 1, time);
+        portal.set(x, y, opening, roll);
+      }
+    },
     pose(frame: ReturnType<typeof wormholeFrame>, mirror: WormholeReflectionPose) {
       uniforms.travel.value = frame.travel;
       uniforms.lensCenter.value.set(frame.lensX, apertureY + frame.lensY);

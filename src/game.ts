@@ -51,7 +51,7 @@ import { GROUNDSKEEPER_HP, GROUNDSKEEPER_RADIUS, groundskeeperContact, groundske
 import { PRESERVE_APPROACH } from './preserve-layout';
 import { CLOSE_CALLS_REQUIRED, HOT_DOCK_COOLDOWN, HOT_DOCK_DISTANCE, type PilotId } from './pilot-data';
 import { WING_FLASH_TIME, WING_FORMATION, wingShots, wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
-import { WORMHOLE_APPROACH } from './wormhole/route';
+import { WORMHOLE_SUPPLY_TIME, wormholeBosses } from './wormhole/route';
 import { FONS_APPROACH, FONS_HP, fonsBodyEntry, fonsPhase, fonsPose, fonsRockHits, fonsRocks, fonsSheltered } from './wormhole/fons/combat';
 import { fonsBeamHits, fonsVolleys } from './wormhole/fons/attacks';
 import type { FonsVariant } from './wormhole/fons/variants';
@@ -97,7 +97,9 @@ type Enemy = Point & {
   centipede?: CentipedeLink; cicada?: CicadaCourse; skipper?: boolean; crucible?: boolean; slag?: {vx:number;vy:number}; ventAnchor?:number; ventScale?:number; slot?: number; mortarAngle?:number; ventWorm?:boolean; shrimp?:ShrimpCourse; wormReach?:number; wormBend?:number; wormLocked?:boolean;
   course?: number; courseAt?: number; heading?: number; laserDamage?: number;
 };
-type Drop = Point & { weapon: WingWeapon };
+type WeaponDrop = Point & { weapon: WingWeapon; kind?: never };
+type Drop = WeaponDrop | (Point & { kind: 'repair'; weapon?: never });
+const supplyWeapons = Object.keys(wingWeapons) as WingWeapon[];
 type FormationReward = { weapon: WingWeapon; remaining: number; forfeited?: boolean };
 type Wing = {
   side: WingSide; weapon?: WingWeapon; upgraded: boolean; cooldown: number; flash: number;
@@ -116,6 +118,21 @@ const TOWLINE_DURATION = 0.3;
 const TOWLINE_DAMAGE = 3;
 const BOSS_IMPACT_TRAVEL = 0.48;
 const wormholeForward = { y: Math.cos(WORMHOLE_PITCH), z: -Math.sin(WORMHOLE_PITCH) };
+const bossHealthByLevel: Record<LevelId, number> = {
+  broodlock: BOSS_HP,
+  io: IO_HP,
+  vents: CRAB_HP,
+  titan: CICADA_HP,
+  heliostat: HELIOSTAT_HP,
+  ice: LEVIATHAN_HP,
+  preserve: GROUNDSKEEPER_HP,
+  summer: SUMMER_HP,
+  boulevard: BOULEVARD_HP,
+  biolume: RAY_HP,
+  fleet: FLEET_BOSS_HP,
+  den: DEN_HP,
+  wormhole: FONS_HP,
+};
 
 function projectShot({ x, y, z }: Point & { z: number }): Point {
   const scale = BOSS_CAMERA_DISTANCE / (BOSS_CAMERA_DISTANCE - z);
@@ -226,7 +243,7 @@ export class Flight {
   invulnerable = 0;
   charges = 2;
   score = 0;
-  bossHealth = BOSS_HP;
+  bossHealth: number;
   summerHydra=createHydraState(HYDRA_BOSS_HEAD_HP);
   summerLastHit?:Point&{z:number};
   private summerAttack=createHydraAttack();
@@ -278,8 +295,9 @@ export class Flight {
   private nextCrawler=0;
   private rayFanCycle=-1;
   private raySeekerCycle=-1;
-  readonly fleetBossAttack = createFleetBossAttack();
-  private fonsAt = -1;
+  fleetBossAttack = createFleetBossAttack();
+  private wormholeIndex = 0;
+  private wormholeEncounterAt = 0;
   private fonsForm: FonsVariant = 'normal';
   private wormholeFinalTime = 0;
   private heliostatEscalationAt=Infinity;
@@ -299,66 +317,86 @@ export class Flight {
     loadout: readonly (WingWeapon | undefined)[] = [],
     pilot: PilotId = 'vex',
     readonly level: LevelId = 'preserve',
+    private readonly random = Math.random,
   ) {
     this.droneWeapon = droneWeapon;
     this.pilot = pilot;
     this.denMines = level === 'den' ? denMineSites.map(() => ({})) : [];
-    if (level === 'fleet') this.bossHealth = FLEET_BOSS_HP;
-    if(level==='biolume')this.bossHealth=RAY_HP;
-    if(level==='summer')this.bossHealth=SUMMER_HP;
-    if (level === 'heliostat')this.bossHealth=HELIOSTAT_HP;
-    if (level === 'boulevard')this.bossHealth=BOULEVARD_HP;
-    if (level === 'preserve') this.bossHealth = GROUNDSKEEPER_HP;
-    if (level === 'vents')this.bossHealth=CRAB_HP;
-    if (level === 'io') this.bossHealth=IO_HP;
-    if (this.isCicadaFight) this.bossHealth=CICADA_HP;
+    this.bossHealth = this.bossMaxHealth;
     if (level === 'broodlock') this.obstacles = new HiveCollision();
-    if (level === 'ice') { this.obstacles = new IceCollision(); this.bossHealth=LEVIATHAN_HP; }
+    if (level === 'ice') this.obstacles = new IceCollision();
     if (droneWeapon === 'towline') this.towlineCooldown = TOWLINE_INTERVAL;
     for (const [index, wing] of this.wings.entries()) {
       const weapon = loadout[index];
       if (weapon) this.equip(wing, weapon);
     }
-    if (this.isDen) this.bossHealth = DEN_HP;
   }
 
-  get isDen() { return this.level === 'den'; }
-  get isFleet() { return this.level === 'fleet'; }
-  get isCicadaFight() { return this.level === 'titan' || (this.level === 'wormhole' && !this.isFonsFight); }
-  get isFonsFight() { return this.fonsAt >= 0; }
+  get encounterLevel() { return this.level === 'wormhole' ? wormholeBosses[this.wormholeIndex] : this.level; }
+  get wormholeBossNumber() { return this.wormholeIndex + 1; }
+  get isDen() { return this.encounterLevel === 'den'; }
+  get isFleet() { return this.encounterLevel === 'fleet'; }
+  get isCicadaFight() { return this.encounterLevel === 'titan'; }
+  get isFonsFight() { return this.encounterLevel === 'wormhole'; }
   get fonsVariant() { return this.fonsForm; }
   get fonsShielded() { return this.isFonsFight && fonsPhase(this.fonsTime).shielded; }
-  get planarBoss() { return this.level === 'biolume' || this.isDen || this.isFleet || this.isFonsFight; }
+  get planarBoss() { return this.encounterLevel === 'biolume' || this.isDen || this.isFleet || this.isFonsFight; }
   // These encounters keep their depth-based hit tests with a fixed view of the flight plane.
-  get keepDepthShotsForward() { return this.level === 'broodlock' || this.level === 'summer'; }
-  get weaponsActive() { return this.phase === 'stage' || this.phase === 'boss' || ((this.isDen || this.isFleet) && this.phase === 'approach'); }
+  get keepDepthShotsForward() { return this.encounterLevel === 'broodlock' || this.encounterLevel === 'summer'; }
+  get weaponsActive() { return this.phase === 'stage' || this.phase === 'boss' || ((this.level === 'den' || this.level === 'fleet') && this.phase === 'approach'); }
   get bossTime() { return this.phase === 'boss' ? this.time : this.finalBossTime; }
   get denBossTime() {
-    if (this.phase === 'approach') return this.time - DEN_APPROACH;
+    if (this.phase === 'approach') return this.time - this.transitionDuration;
     return this.bossTime;
   }
   get fleetBossTime() {
-    if (this.phase === 'approach') return this.time - FLEET_APPROACH;
+    if (this.phase === 'approach') return this.time - this.transitionDuration;
     return this.bossTime;
   }
   get wormholeTime() {
     if (this.phase === 'won' || this.phase === 'lost') return this.wormholeFinalTime;
     if (this.phase === 'stage') return this.time;
-    const start = this.isFonsFight ? this.fonsAt : this.stageDuration;
-    return start + this.time + (this.phase === 'boss' ? this.transitionDuration : 0);
+    return this.wormholeEncounterAt + this.time + (this.phase === 'boss' ? this.transitionDuration : 0);
   }
+  get wormholeEncounterTime() { return this.wormholeTime - this.wormholeEncounterAt; }
   get fonsTime() {
-    return this.isFonsFight ? this.wormholeTime - this.fonsAt - FONS_APPROACH : -FONS_APPROACH;
+    if (!this.isFonsFight) return -FONS_APPROACH;
+    return this.phase === 'approach' ? this.time - this.transitionDuration : this.bossTime;
   }
 
   startFonsApproach(variant: FonsVariant = 'normal') {
-    if (this.level !== 'wormhole' || this.isFonsFight) return;
-    this.fonsAt = Math.max(this.wormholeTime, this.stageDuration + WORMHOLE_APPROACH);
+    if (this.level !== 'wormhole' || this.isFonsFight || this.phase === 'won' || this.phase === 'lost') return;
     this.fonsForm = variant;
-    this.bossHealth = FONS_HP;
-    this.bossRecoil = 0;
-    this.markers = [];
+    this.startWormholeEncounter(wormholeBosses.length - 1);
+  }
+
+  private startWormholeEncounter(index: number, repair = false) {
+    this.wormholeEncounterAt = this.wormholeTime;
+    this.wormholeIndex = index;
     this.enter('approach');
+    this.bossHealth = this.bossMaxHealth;
+    this.bossLaserDamage = this.bossRecoil = this.volley = 0;
+    this.firedCannonX = this.firedCrabTarget = 0;
+    this.summerHydra = createHydraState(HYDRA_BOSS_HEAD_HP);
+    this.summerAttack = createHydraAttack();
+    this.summerLastHit = undefined;
+    this.groundskeeperAim = { ...this.player };
+    this.groundskeeperAimCycle = -1;
+    this.groundskeeperCancelledAt = -100;
+    this.crabClawHealth = [CRAB_CLAW_HP, CRAB_CLAW_HP];
+    this.crabBreakTimes = [-1, -1];
+    this.ioCollapseAge = -1;
+    this.heliostatAimCycle = this.heliostatCancelledCycle = -1;
+    this.heliostatEscalationAt = this.heliostatEscalationCycle = Infinity;
+    this.heliostatLockedPattern = 0;
+    this.rayFanCycle = this.raySeekerCycle = -1;
+    this.fleetBossAttack = createFleetBossAttack();
+    this.markers = [];
+    this.drops = [-1.7, 1.7].map((x, lane) => ({
+      x, y: 3.8 + 1.8 * lane,
+      weapon: supplyWeapons[Math.floor(this.random() * supplyWeapons.length)],
+    }));
+    if (repair) this.drops.push({ x: 0, y: 1.4, kind: 'repair' });
   }
 
   private planarBossEntry(a: Point, b: Point) {
@@ -373,10 +411,10 @@ export class Flight {
   get heliostatUnstableAge(){return Math.max(0,this.heliostatAttackTime-this.heliostatEscalationAt);}
   get heliostatTargets(){return this.heliostatAimCycle===Math.floor(this.heliostatAttackTime/HELIOSTAT_INTERVAL)&&this.heliostatCancelledCycle!==this.heliostatAimCycle?this.markers:[];}
 
-  get transitionDuration() { if (this.level === 'wormhole') return this.isFonsFight ? FONS_APPROACH : WORMHOLE_APPROACH; if (this.isFleet) return FLEET_APPROACH; if (this.isDen) return DEN_APPROACH; if(this.level==='biolume')return GROVE_APPROACH; if(this.level==='summer')return SUMMER_APPROACH;if(this.level==='heliostat')return HELIOSTAT_APPROACH;if(this.level==='boulevard')return BOULEVARD_APPROACH;return this.level === 'preserve' ? PRESERVE_APPROACH : this.level === 'vents' ? VENT_APPROACH : this.level === 'io' ? IO_APPROACH : this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
+  get transitionDuration() { if (this.level === 'wormhole') return WORMHOLE_SUPPLY_TIME; if (this.isFleet) return FLEET_APPROACH; if (this.isDen) return DEN_APPROACH; if(this.level==='biolume')return GROVE_APPROACH; if(this.level==='summer')return SUMMER_APPROACH;if(this.level==='heliostat')return HELIOSTAT_APPROACH;if(this.level==='boulevard')return BOULEVARD_APPROACH;return this.level === 'preserve' ? PRESERVE_APPROACH : this.level === 'vents' ? VENT_APPROACH : this.level === 'io' ? IO_APPROACH : this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
 
-  get bossMaxHealth() { if (this.isFonsFight) return FONS_HP; if (this.isCicadaFight) return CICADA_HP; if (this.isFleet) return FLEET_BOSS_HP; if (this.isDen) return DEN_HP; if(this.level==='biolume')return RAY_HP;if(this.level==='summer')return SUMMER_HP;if(this.level==='heliostat')return HELIOSTAT_HP;if(this.level==='boulevard')return BOULEVARD_HP;return this.level === 'preserve' ? GROUNDSKEEPER_HP : this.level === 'vents' ? CRAB_HP : this.level === 'io' ? IO_HP : this.level === 'ice' ? LEVIATHAN_HP : BOSS_HP; }
-  get bossTargetRadius() { if(this.level==='biolume')return RAY_ORGAN_RADIUS/RAY_PROJECTION;if(this.level==='summer')return .48*HYDRA_BOSS_SIZE;if(this.level==='boulevard'||this.level==='heliostat')return 1.25;return this.level === 'preserve' ? GROUNDSKEEPER_RADIUS : BOSS_CANNON_RADIUS; }
+  get bossMaxHealth() { return bossHealthByLevel[this.encounterLevel]; }
+  get bossTargetRadius() { if(this.encounterLevel==='biolume')return RAY_ORGAN_RADIUS/RAY_PROJECTION;if(this.encounterLevel==='summer')return .48*HYDRA_BOSS_SIZE;if(this.encounterLevel==='boulevard'||this.encounterLevel==='heliostat')return 1.25;return this.encounterLevel === 'preserve' ? GROUNDSKEEPER_RADIUS : BOSS_CANNON_RADIUS; }
   get summerTargetHead(){return nearestHydraHead(this.summerHydra,this.player.x/BOSS_PROJECTION,true);}
   get summerHeadsAlive(){return this.summerHydra.hp.filter(hp=>hp>0).length;}
   get summerBossTime(){return this.bossTime;}
@@ -411,13 +449,16 @@ export class Flight {
     if (this.isCicadaFight) return this.cicadaAim().y;
     if (this.isFleet) return fleetBossTarget(this.fleetBossTime).y;
     if (this.isDen) return denPose(this.denBossTime).y;
-    if(this.level==='biolume')return rayOrgan(this.rayTime,raySignal(this.rayTime).side).y/RAY_PROJECTION;
-    if(this.level==='summer')return hydraBossHead(this.time,this.summerTargetHead).y;
-    if (this.level === 'preserve') { const p = groundskeeperContact(this.groundskeeperTime, this.groundskeeperAim, this.groundskeeperCancelledAt); return p.y * 34 / (22 - p.z); }
-    return this.level === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).y : BOSS_Y;
+    if(this.encounterLevel==='biolume')return rayOrgan(this.rayTime,raySignal(this.rayTime).side).y/RAY_PROJECTION;
+    if(this.encounterLevel==='summer')return hydraBossHead(this.time,this.summerTargetHead).y;
+    if (this.encounterLevel === 'preserve') { const p = groundskeeperContact(this.groundskeeperTime, this.groundskeeperAim, this.groundskeeperCancelledAt); return p.y * 34 / (22 - p.z); }
+    return this.encounterLevel === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).y : BOSS_Y;
   }
 
-  get rayTime() { return this.bossTime - RAY_ENTRANCE; }
+  get rayTime() {
+    if (this.level !== 'wormhole') return this.bossTime - RAY_ENTRANCE;
+    return this.phase === 'approach' ? this.time - this.transitionDuration : this.bossTime;
+  }
 
   get stageDuration() { return levels[this.level].duration; }
 
@@ -458,10 +499,10 @@ export class Flight {
     if (this.isCicadaFight) return this.cicadaAim().x;
     if (this.isFleet) return fleetBossTarget(this.fleetBossTime).x;
     if (this.isDen) return denPose(this.denBossTime).x;
-    if(this.level==='biolume')return rayOrgan(this.rayTime,raySignal(this.rayTime).side).x/RAY_PROJECTION;
-    if(this.level==='summer')return hydraBossHead(this.time,this.summerTargetHead).x;
-    if (this.level === 'preserve'||this.level==='boulevard'||this.level==='heliostat') return 0;
-    return this.level==='vents'?this.crabTargetX+this.crabOffsetX:this.level === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).x : this.level === 'ice' ? 0 : this.volley % 2 === 0 ? -BOSS_CANNON_X : BOSS_CANNON_X;
+    if(this.encounterLevel==='biolume')return rayOrgan(this.rayTime,raySignal(this.rayTime).side).x/RAY_PROJECTION;
+    if(this.encounterLevel==='summer')return hydraBossHead(this.time,this.summerTargetHead).x;
+    if (this.encounterLevel === 'preserve'||this.encounterLevel==='boulevard'||this.encounterLevel==='heliostat') return 0;
+    return this.encounterLevel==='vents'?this.crabTargetX+this.crabOffsetX:this.encounterLevel === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).x : this.encounterLevel === 'ice' ? 0 : this.volley % 2 === 0 ? -BOSS_CANNON_X : BOSS_CANNON_X;
   }
 
   wingOrigin(side: WingSide) {
@@ -474,15 +515,15 @@ export class Flight {
   }
 
   get cannonWindup() {
-    if(this.level==='biolume'){const s=raySignal(this.rayTime);return this.phase==='boss'?Math.max(s.fan,s.seeker):0;}
-    if(this.level==='heliostat'){if(this.heliostatCancelledCycle===Math.floor(this.time/HELIOSTAT_INTERVAL))return 0;const t=this.time%HELIOSTAT_INTERVAL;return this.phase==='boss'&&t<HELIOSTAT_FIRE?clamp((t-HELIOSTAT_WINDUP)/(HELIOSTAT_FIRE-HELIOSTAT_WINDUP),0,1):0;}
-    if(this.level==='boulevard'){const t=this.time%BOULEVARD_INTERVAL;return this.phase==='boss'&&t<BOULEVARD_FIRE?clamp((t-BOULEVARD_WINDUP)/(BOULEVARD_FIRE-BOULEVARD_WINDUP),0,1):0;}
-    const interval = this.level === 'io' ? IO_INTERVAL : this.isCicadaFight ? CICADA_INTERVAL : this.level === 'ice' ? LEVIATHAN_INTERVAL : BOSS_VOLLEY_INTERVAL;
+    if(this.encounterLevel==='biolume'){const s=raySignal(this.rayTime);return this.phase==='boss'?Math.max(s.fan,s.seeker):0;}
+    if(this.encounterLevel==='heliostat'){if(this.heliostatCancelledCycle===Math.floor(this.time/HELIOSTAT_INTERVAL))return 0;const t=this.time%HELIOSTAT_INTERVAL;return this.phase==='boss'&&t<HELIOSTAT_FIRE?clamp((t-HELIOSTAT_WINDUP)/(HELIOSTAT_FIRE-HELIOSTAT_WINDUP),0,1):0;}
+    if(this.encounterLevel==='boulevard'){const t=this.time%BOULEVARD_INTERVAL;return this.phase==='boss'&&t<BOULEVARD_FIRE?clamp((t-BOULEVARD_WINDUP)/(BOULEVARD_FIRE-BOULEVARD_WINDUP),0,1):0;}
+    const interval = this.encounterLevel === 'io' ? IO_INTERVAL : this.isCicadaFight ? CICADA_INTERVAL : this.encounterLevel === 'ice' ? LEVIATHAN_INTERVAL : BOSS_VOLLEY_INTERVAL;
     if (this.phase !== 'boss' || this.volley !== Math.floor(this.time / interval)) return 0;
     const elapsed = this.time % interval;
-    if(this.level === 'io') return elapsed < IO_FIRE ? clamp((elapsed-IO_WINDUP)/(IO_FIRE-IO_WINDUP),0,1) : 0;
+    if(this.encounterLevel === 'io') return elapsed < IO_FIRE ? clamp((elapsed-IO_WINDUP)/(IO_FIRE-IO_WINDUP),0,1) : 0;
     if(this.isCicadaFight) return clamp((elapsed-CICADA_WINDUP)/(CICADA_FIRE-CICADA_WINDUP),0,1);
-    if(this.level === 'ice') return clamp((elapsed-LEVIATHAN_WINDUP)/(LEVIATHAN_FIRE-LEVIATHAN_WINDUP),0,1);
+    if(this.encounterLevel === 'ice') return clamp((elapsed-LEVIATHAN_WINDUP)/(LEVIATHAN_FIRE-LEVIATHAN_WINDUP),0,1);
     return clamp((elapsed - BOSS_WINDUP_AT) / (BOSS_FIRE_AT - BOSS_WINDUP_AT), 0, 1);
   }
 
@@ -527,16 +568,16 @@ export class Flight {
     this.charges--;
     this.pulseFlash = 0.3;
     this.threats = [];
-    if(this.level==='biolume'&&this.phase==='boss')for(const enemy of this.enemies)if(enemy.rayOrb)enemy.hp=0;
+    if(this.encounterLevel==='biolume'&&this.phase==='boss')for(const enemy of this.enemies)if(enemy.rayOrb)enemy.hp=0;
     if (this.phase === 'stage') {
       for (const enemy of this.enemies) {
         if (enemy.hp > 0 && !enemy.mine) this.damageEnemy(enemy, enemy.hp);
       }
       this.enemies = this.enemies.filter(enemy=>enemy.mine||enemy.ambusher?.defeatedAt!==undefined);
     } else {
-      if (this.level === 'preserve') this.groundskeeperCancelledAt = this.time;
-      if(this.level==='heliostat'){this.heliostatCancelledCycle=Math.floor(this.time/HELIOSTAT_INTERVAL);this.markers=[];}
-      if(this.level==='summer'){for(const side of HYDRA_SIDES)this.damageBoss(6,false,side);}
+      if (this.encounterLevel === 'preserve') this.groundskeeperCancelledAt = this.time;
+      if(this.encounterLevel==='heliostat'){this.heliostatCancelledCycle=Math.floor(this.time/HELIOSTAT_INTERVAL);this.markers=[];}
+      if(this.encounterLevel==='summer'){for(const side of HYDRA_SIDES)this.damageBoss(6,false,side);}
       else this.damageBoss(6);
     }
   }
@@ -544,7 +585,7 @@ export class Flight {
   step(dt: number) {
     if (this.phase === 'won' || this.phase === 'lost') return;
     this.time += dt;
-    if (this.level === 'io' && this.ioLegBroken && this.phase === 'boss') this.ioCollapseAge += dt;
+    if (this.encounterLevel === 'io' && this.ioLegBroken && this.phase === 'boss') this.ioCollapseAge += dt;
     if (this.phase === 'stage') this.stageProgress = this.hiveProgress;
     this.prepareObstacles();
     if (this.obstacles?.move(this.player, 0, 0, FIGHTER_HULL)) this.clearAim();
@@ -573,6 +614,7 @@ export class Flight {
       this.droneLaunch = undefined;
     }
     if (this.phase === 'approach') {
+      if (this.level === 'wormhole') this.collectDrops(dt);
       if (this.time >= this.transitionDuration) { this.enter('boss'); return; }
       if (!this.weaponsActive) return;
     }
@@ -602,7 +644,7 @@ export class Flight {
       const previous = { x: shot.x, y: shot.y,z:shot.z };
       if (shot.wing === 'homing') this.guideMissile(shot, boss, dt);
       this.advance(shot, dt);
-      if(boss&&this.level==='biolume'){
+      if(boss&&this.encounterLevel==='biolume'){
         const a=previous,b=shot;
         for(;;){let enemy:Enemy|undefined,first=Infinity;
           for(const candidate of this.enemies){if(!candidate.rayOrb||candidate.hp<=0||shot.pierced?.has(candidate))continue;const t=rayOrbEntry(candidate as Enemy&{rayOrb:RaySeeker},a,b);if(t<first){first=t;enemy=candidate;}}
@@ -626,12 +668,12 @@ export class Flight {
         if (shot.z > BOSS_DEPTH) return true;
         const untilImpact = (BOSS_DEPTH - shot.z) / shot.vz;
         const impact = { x: shot.x + shot.vx * untilImpact, y: shot.y + shot.vy * untilImpact };
-        if(this.level==='summer'){
+        if(this.encounterLevel==='summer'){
           const hit=hydraBossContact(this.summerHydra,this.time,impact);
           if(hit&&(shot.hydraTarget===undefined||shot.hydraTarget===hit.side))this.damageBoss(shot.damage??1,false,hit.side);
           return false;
         }
-        const lockedTarget = shot.targetsBoss && (this.level !== 'io' || shot.bossSupport === !this.ioLegBroken) && (this.level!=='vents'||shot.crabTarget===this.crabTargetX);
+        const lockedTarget = shot.targetsBoss && (this.encounterLevel !== 'io' || shot.bossSupport === !this.ioLegBroken) && (this.encounterLevel!=='vents'||shot.crabTarget===this.crabTargetX);
         if (lockedTarget ||
           ((shot.drone || shot.wing) && near(impact, cicadaTarget ?? { x: this.exposedCannonX, y: this.bossAimY }, this.bossTargetRadius))) {
           this.damageBoss(shot.damage ?? 1);
@@ -694,7 +736,10 @@ export class Flight {
 
     if (this.phase === 'stage') {
       this.collectDrops(dt);
-      if (this.time >= this.stageDuration) this.enter(this.level==='biolume'?'boss':'approach');
+      if (this.time >= this.stageDuration) {
+        if (this.level === 'wormhole') this.startWormholeEncounter(0);
+        else this.enter(this.level === 'biolume' ? 'boss' : 'approach');
+      }
     }
   }
 
@@ -746,12 +791,17 @@ export class Flight {
     this.drops = this.drops.filter(drop => {
       drop.y -= 3.35 * dt;
       if (!near(drop, this.player, 0.78)) return drop.y > -9;
-      this.collectWeapon(drop);
+      if (drop.kind === 'repair') {
+        const canRepair = this.hull < STARTING_HULL + Number(this.reinforcementUsed);
+        if (canRepair) this.hull++;
+        this.pickupMessage = canRepair ? 'Hull repaired · +1' : 'Hull already full';
+        this.pickupTime = 1.6;
+      } else this.collectWeapon(drop);
       return false;
     });
   }
 
-  private collectWeapon(drop: Drop) {
+  private collectWeapon(drop: WeaponDrop) {
     const nearbyWing = this.wings[drop.x <= this.player.x ? 0 : 1];
     const matching = nearbyWing.weapon === drop.weapon ? nearbyWing : this.wings.find(wing => wing.weapon === drop.weapon);
     const name = wingWeapons[drop.weapon].name;
@@ -796,7 +846,7 @@ export class Flight {
     boss &&= !this.planarBoss;
     const duration = spec.bossTravel;
     const cicadaTarget = boss && this.isCicadaFight ? this.cicadaAim(this.bossTime + duration) : undefined;
-    const hydraTarget = boss && this.level === 'summer' && wing.weapon === 'homing'
+    const hydraTarget = boss && this.encounterLevel === 'summer' && wing.weapon === 'homing'
       ? nearestHydraHead(this.summerHydra, origin.x / BOSS_PROJECTION, true) : undefined;
     const aimY = boss ? (hydraTarget === undefined ? cicadaTarget?.y ?? this.bossAimY : hydraBossHead(this.time, hydraTarget).y) : 0;
     if (boss && this.keepDepthShotsForward && origin.y + .1 >= aimY * BOSS_PROJECTION) boss = false;
@@ -825,7 +875,7 @@ export class Flight {
     let target: Enemy | number | undefined;
     let head:HydraSide|undefined;
     let endY = 8;
-    if(boss&&this.level==='summer'){
+    if(boss&&this.encounterLevel==='summer'){
       const native={x:origin.x/BOSS_PROJECTION,y:origin.y/BOSS_PROJECTION};
       const hit=hydraBossContact(this.summerHydra,this.time,native,{x:native.x,y:15});
       head=hit?.side;target=head;endY=hit?Math.max(origin.y,hydraBossHead(this.time,hit.side).y*BOSS_PROJECTION):8;
@@ -877,7 +927,7 @@ export class Flight {
       if(enemy?.summer?.kind==='hydra')head=hydraBeamContact(enemy,this.time,origin)?.side;
       if (enemy) endY = enemy.summer?.kind==='hydra' || enemy.ambusher || enemy.ventWorm || enemy.flyer ? 9 : enemy.y + (enemy.shrimp ? 1.4 : enemy.marine ? marineSpecs[enemy.marine].halfLength : 0);
     }
-    if(boss&&this.level==='biolume')for(const candidate of this.enemies){
+    if(boss&&this.encounterLevel==='biolume')for(const candidate of this.enemies){
       if(!candidate.rayOrb||candidate.hp<=0)continue;const dx=candidate.x-origin.x;
       if(Math.abs(dx)>RAY_SEEKER_RADIUS)continue;
       const entry=candidate.y-Math.sqrt(RAY_SEEKER_RADIUS**2-dx*dx);
@@ -902,9 +952,9 @@ export class Flight {
       const remaining = Math.max(dt, (depth - shot.z) / shot.vz);
       const steer = Math.min(1, 10 * dt);
       const cicadaTarget = this.isCicadaFight ? this.cicadaAim(this.bossTime + remaining) : undefined;
-      if(this.level==='summer'&&(shot.hydraTarget===undefined||!hydraAlive(this.summerHydra,shot.hydraTarget)))shot.hydraTarget=nearestHydraHead(this.summerHydra,shot.x,true);
+      if(this.encounterLevel==='summer'&&(shot.hydraTarget===undefined||!hydraAlive(this.summerHydra,shot.hydraTarget)))shot.hydraTarget=nearestHydraHead(this.summerHydra,shot.x,true);
       const x = fons ? fons.x * (1 - depth / BOSS_CAMERA_DISTANCE)
-        : this.level === 'summer' ? hydraBossHead(this.time,shot.hydraTarget!).x : cicadaTarget?.x ?? this.exposedCannonX;
+        : this.encounterLevel === 'summer' ? hydraBossHead(this.time,shot.hydraTarget!).x : cicadaTarget?.x ?? this.exposedCannonX;
       shot.vx += ((x - shot.x) / remaining - shot.vx) * steer;
       if (cicadaTarget) shot.vy += ((cicadaTarget.y - shot.y) / remaining - shot.vy) * steer;
       return;
@@ -925,7 +975,7 @@ export class Flight {
         distance = squared;
       }
     }
-    if (!closest && this.level === 'biolume' && this.phase === 'boss') {
+    if (!closest && this.encounterLevel === 'biolume' && this.phase === 'boss') {
       const target = rayOrgan(this.rayTime, raySignal(this.rayTime).side);
       if (shot.y < target.y) closest = target;
     }
@@ -969,7 +1019,7 @@ export class Flight {
     }
     if (this.towlineFlash === 0) return;
 
-    if(this.level==='biolume'&&this.phase==='boss')for(const enemy of this.enemies){
+    if(this.encounterLevel==='biolume'&&this.phase==='boss')for(const enemy of this.enemies){
       if(enemy.rayOrb&&enemy.hp>0&&!this.towlineEnemies.has(enemy)&&nearSegment(enemy,this.player,this.drone,RAY_SEEKER_RADIUS)){
         this.towlineEnemies.add(enemy);this.damageEnemy(enemy,this.towlineDamage);
       }
@@ -983,9 +1033,9 @@ export class Flight {
         }
         return;
       }
-      if(this.level==='summer'){
+      if(this.encounterLevel==='summer'){
         const start={x:this.player.x/BOSS_PROJECTION,y:this.player.y/BOSS_PROJECTION},end={x:this.drone.x/BOSS_PROJECTION,y:this.drone.y/BOSS_PROJECTION};
-        let hit;while((hit=hydraBossContact(this.summerHydra,this.time,start,end,0,this.towlineBossHeads))){this.towlineBossHeads.add(hit.side);this.damageBoss(this.towlineDamage,false,hit.side);}
+        let hit;while(this.phase==='boss'&&(hit=hydraBossContact(this.summerHydra,this.time,start,end,0,this.towlineBossHeads))){this.towlineBossHeads.add(hit.side);this.damageBoss(this.towlineDamage,false,hit.side);}
         return;
       }
       const cannon = { x: this.exposedCannonX * BOSS_PROJECTION, y: this.bossAimY * BOSS_PROJECTION };
@@ -1366,10 +1416,10 @@ export class Flight {
       this.stepDenBoss(dt);
       return;
     }
-    if(this.level==='biolume'){this.stepLanternRay(dt);return;}
-    if(this.level==='summer'){this.stepSummerHydra();return;}
-    if(this.level==='heliostat'){this.stepHeliostat();return;}
-    if (this.level === 'preserve') {
+    if(this.encounterLevel==='biolume'){this.stepLanternRay(dt);return;}
+    if(this.encounterLevel==='summer'){this.stepSummerHydra();return;}
+    if(this.encounterLevel==='heliostat'){this.stepHeliostat();return;}
+    if (this.encounterLevel === 'preserve') {
       const attack = groundskeeperAttack(this.time);
       if (attack.warning && this.groundskeeperAimCycle !== attack.cycle) {
         this.groundskeeperAim = { x: clamp(this.player.x, -3.5, 3.5), y: clamp(this.player.y, -6.8, 5.5) };
@@ -1378,15 +1428,15 @@ export class Flight {
       if (groundskeeperHits(this.time, this.time - dt, this.groundskeeperAim, this.player, this.groundskeeperCancelledAt)) this.hit();
       return;
     }
-    if(this.level==='boulevard'){this.stepBoulevard();return;}
-    if(this.level === 'io') { this.stepCaldera(); return; }
+    if(this.encounterLevel==='boulevard'){this.stepBoulevard();return;}
+    if(this.encounterLevel === 'io') { this.stepCaldera(); return; }
     if(this.isCicadaFight) { this.stepCicada(); return; }
-    if(this.level === 'ice') { this.stepLeviathan(); return; }
+    if(this.encounterLevel === 'ice') { this.stepLeviathan(); return; }
     const elapsed = this.time % BOSS_VOLLEY_INTERVAL;
     const volley = Math.floor(this.time / BOSS_VOLLEY_INTERVAL);
     if (elapsed >= BOSS_WINDUP_AT && this.markers.length === 0 && elapsed < BOSS_FIRE_AT) {
       const { x, y } = this.player;
-      this.markers = (this.level==='vents'&&this.crabCoreOpen?[-1.7,-.85,0,.85,1.7]:[-1.35, 0, 1.35]).map((offset) => ({
+      this.markers = (this.encounterLevel==='vents'&&this.crabCoreOpen?[-1.7,-.85,0,.85,1.7]:[-1.35, 0, 1.35]).map((offset) => ({
         x: clamp(x, -2.6, 2.6) + (this.volley % 2 === 0 ? offset : 0),
         y: clamp(y, -5.9, 5.25) + (this.volley % 2 === 0 ? 0 : offset),
       }));
@@ -1394,7 +1444,7 @@ export class Flight {
     if (elapsed >= BOSS_FIRE_AT && this.markers.length && this.volley === volley) {
       const x = this.exposedCannonX;
       const z = BOSS_DEPTH + BOSS_MUZZLE_Z;
-      this.firedCannonX = x;if(this.level==='vents')this.firedCrabTarget=this.crabTargetX;
+      this.firedCannonX = x;if(this.encounterLevel==='vents')this.firedCrabTarget=this.crabTargetX;
       this.bossRecoil = BOSS_RECOIL_TIME;
       this.threats.push(...this.markers.map((target) => ({
         x, y: this.bossAimY, z,
@@ -1572,11 +1622,11 @@ export class Flight {
 
     // Preserve horizontal drone placement while advancing visibly toward boss depth.
     const expansion = 1 / BOSS_PROJECTION - 1;
-    const aimX = cicadaTarget?.x ?? (this.level === 'io' || this.level === 'vents' || this.level === 'summer' ? this.exposedCannonX : 0);
+    const aimX = cicadaTarget?.x ?? (this.encounterLevel === 'io' || this.encounterLevel === 'vents' || this.encounterLevel === 'summer' ? this.exposedCannonX : 0);
     const dx = drone ? x * expansion : targetsBoss ? aimX - x : 0;
     const dy = aimY - y;
     this.shots.push({ x, y, z: 0, vx: dx / duration, vy: dy / duration,
-      vz: BOSS_DEPTH / duration, targetsBoss, bossSupport: this.level === 'io' ? !this.ioLegBroken : undefined, crabTarget:this.level==='vents'?this.crabTargetX:undefined,hydraTarget:this.level==='summer'&&targetsBoss?this.summerTargetHead:undefined, ...shot });
+      vz: BOSS_DEPTH / duration, targetsBoss, bossSupport: this.encounterLevel === 'io' ? !this.ioLegBroken : undefined, crabTarget:this.encounterLevel==='vents'?this.crabTargetX:undefined,hydraTarget:this.encounterLevel==='summer'&&targetsBoss?this.summerTargetHead:undefined, ...shot });
   }
 
   private advance(shot: Shot, dt: number) {
@@ -1612,7 +1662,7 @@ export class Flight {
   private damageBoss(damage: number, laser = false,head:HydraSide=this.summerTargetHead) {
     if (this.phase !== 'boss' || this.fonsShielded) return;
     const before = this.bossHealth;
-    if(this.level==='summer'){
+    if(this.encounterLevel==='summer'){
       if(!hydraAlive(this.summerHydra,head))return;
       damageHydraHead(this.summerHydra,head,damage,this.time);this.bossHealth=this.summerHydra.hp.reduce((sum,hp)=>sum+hp,0);
       if(!laser){const point=hydraBossHead(this.time,head);this.summerLastHit={...point,z:BOSS_DEPTH+1.1};}
@@ -1621,12 +1671,12 @@ export class Flight {
         this.pickupMessage=(head===0?'Central':head<0?'Left':'Right')+' head destroyed';this.pickupTime=2;
         for(const wing of this.wings)if(wing.laserHead===head){wing.laserHold=0;wing.laserTarget=undefined;}
       }
-    }else if(this.level==='vents'&&!this.crabCoreOpen){
+    }else if(this.encounterLevel==='vents'&&!this.crabCoreOpen){
       const index=this.crabTargetX<0?0:1;this.crabClawHealth[index]=Math.max(0,this.crabClawHealth[index]-damage);
       this.bossHealth=CRAB_CORE_HP+this.crabClawHealth[0]+this.crabClawHealth[1];
       if(this.crabClawHealth[index]===0){this.crabBreakTimes[index]=this.time;this.pickupMessage=this.crabCoreOpen?'Claws disabled · Gill chamber exposed':index===0?'Crusher joint broken':'Cutter joint broken';this.pickupTime=2.4;for(const wing of this.wings){wing.laserHold=0;wing.laserTarget=undefined;}}
     }else this.bossHealth = Math.max(0, this.bossHealth - damage);
-    if (this.level === 'io' && !this.ioLegBroken && this.bossHealth <= IO_HP-IO_LEG_HP) {
+    if (this.encounterLevel === 'io' && !this.ioLegBroken && this.bossHealth <= IO_HP-IO_LEG_HP) {
       this.bossHealth = IO_HP-IO_LEG_HP;
       this.ioCollapseAge = 0;
       for(const wing of this.wings){wing.laserHold=0;wing.laserTarget=undefined;}
@@ -1635,8 +1685,10 @@ export class Flight {
     if (laser) this.bossLaserDamage += before - this.bossHealth;
     if (this.bossHealth === 0) {
       this.score += this.isFonsFight ? 2500 : 1000;
-      if (this.level === 'wormhole' && !this.isFonsFight) this.startFonsApproach();
-      else this.enter('won');
+      if (this.level === 'wormhole' && !this.isFonsFight) {
+        const cleared = this.wormholeBossNumber;
+        this.startWormholeEncounter(cleared, cleared % 3 === 0);
+      } else this.enter('won');
     }
   }
 
@@ -1658,7 +1710,7 @@ export class Flight {
       this.droneTarget = undefined;
     }
     if (phase === 'approach' || phase === 'won') {
-      if (phase === 'won' || (!this.isDen && !this.isFleet)) this.shots = [];
+      if (phase === 'won' || this.level === 'wormhole' || (!this.isDen && !this.isFleet)) this.shots = [];
       this.threats = [];
       this.enemies = [];
       this.drops = [];
@@ -1668,8 +1720,10 @@ export class Flight {
         wing.beamEnd = undefined;
         wing.laserTarget = undefined;
         wing.laserHold = 0;
+        wing.laserHead = undefined;
       }
     }
+    if (phase === 'boss' && this.level === 'wormhole') this.drops = [];
     if (phase === 'boss'&&this.level!=='biolume') {
       this.cooldown = 0;
       this.droneCooldown = 0;

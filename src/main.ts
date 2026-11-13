@@ -108,7 +108,8 @@ function updateCards() {
     button.setAttribute('aria-pressed', String(id === selected));
     button.classList.toggle('saved-offline', saved.has(id));
     title.textContent = inCampaign ? `${card.number} · ${levels[id].name}` : levels[id].name;
-    const note = inCampaign ? (complete ? 'Cleared' : id === next ? 'Ready' : 'Locked') : `${levels[id].duration} second route`;
+    const note = inCampaign ? (complete ? 'Cleared' : id === next ? 'Ready' : 'Locked')
+      : id === 'wormhole' ? 'Boss rush' : `${levels[id].duration} second route`;
     detail.textContent = saved.has(id) ? `${note} · Saved offline` : note;
   }
 }
@@ -269,8 +270,8 @@ document.querySelector('#launch-flight')!.addEventListener('click', () => void l
 
 function updateShortcuts(id: LevelId) {
   const boss = document.querySelector<HTMLButtonElement>('#dev-boss')!;
-  const hasTransition: LevelId[] = ['den', 'titan', 'wormhole', 'summer', 'heliostat', 'boulevard', 'preserve', 'vents', 'io'];
-  boss.textContent = id === 'fleet' ? 'Launch at breach' : hasTransition.includes(id) ? 'Launch at transition' : 'Launch at boss';
+  const hasTransition: LevelId[] = ['den', 'titan', 'summer', 'heliostat', 'boulevard', 'preserve', 'vents', 'io'];
+  boss.textContent = id === 'fleet' ? 'Launch at breach' : id === 'wormhole' ? 'Launch at first supply drop' : hasTransition.includes(id) ? 'Launch at transition' : 'Launch at boss';
   document.querySelector<HTMLElement>('#dev-trench')!.hidden = id !== 'fleet';
   for (const button of briefing.querySelectorAll<HTMLElement>('[data-fons-start]')) button.hidden = id !== 'wormhole';
 }
