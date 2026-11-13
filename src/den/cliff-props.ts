@@ -16,6 +16,9 @@ const pennant = { crop: [212, 665, 415, 1224], pivot: [314, 668] } as const;
 const standard = { crop: [785, 742, 1089, 1140], pivot: [937, 745] } as const;
 const rod = { crop: [464, 550, 624, 578], pivot: [544, 564] } as const;
 const shadow = { crop: [470, 590, 622, 644], pivot: [546, 617] } as const;
+const cliffPole = { crop: [19, 751, 168, 874], pivot: [112, 787] } as const;
+const gantryPole = { crop: [25, 372, 125, 643], pivot: [75, 413] } as const;
+const cliffRailSlope = .36;
 // Stack feet and door brackets use pixels in the original cliff plate.
 const stacks = [
   { x: 148, y: 7379, width: 40, sprite: twin, mouths: [[846, 199], [1027, 199]] }, // Ribbed workshop roof
@@ -23,9 +26,21 @@ const stacks = [
   { x: 145, y: 2534, width: 32, sprite: single, mouths: [[313, 151]] }, // Upper Bastion roof
 ] as const;
 const doorBanners = [
-  { width: 20, sprite: standard, mounts: [[62, 6915], [161, 6850]] }, // Workshop bulkhead
-  { width: 18, sprite: pennant, mounts: [[89, 3553], [235, 3489]] }, // Lower Bastion gate
-  { width: 22, sprite: standard, mounts: [[93, 2640], [233, 2568]] }, // Upper Bastion gate
+  // Mirror each mount along the doorway's projected lintel.
+  { width: 33, sprite: standard, center: [106, 6866], offset: [61, -36] }, // Workshop bulkhead
+  { width: 30, sprite: pennant, center: [161.5, 3524], offset: [78.5, -40] }, // Lower Bastion gate
+  { width: 36, sprite: standard, center: [162.5, 2607], offset: [75.5, -38] }, // Upper Bastion gate
+] as const;
+const rockBanners = [
+  // Cloth pivots. The wall plates are 78 px to the left and 54 px below.
+  { x: 456, fallbackX: 491, y: 8960, sprite: standard }, // Beyond the outer docking cradle
+  { x: 440, fallbackX: 513, y: 5630, sprite: pennant }, // Rookery rock face
+  { x: 473, fallbackX: 508, y: 2150, sprite: standard }, // Above the Bastion
+] as const;
+// The feet land on the grating at y = 300, before the arena plate.
+const gantryBanners = [
+  { x: 98, fallbackX: 179, y: 87 },
+  { x: 400, fallbackX: 394, y: 87 },
 ] as const;
 
 function fallbackAtlas() {
@@ -90,6 +105,54 @@ function fallbackAtlas() {
     }
   }
   flange(466, 554, 156, 20);
+
+  function bar(x: number, y: number, endX: number, endY: number, thickness: number) {
+    const line = (offset: number, width: number, color: string) => {
+      c.strokeStyle = color;
+      c.lineWidth = width;
+      c.lineCap = 'round';
+      c.beginPath();
+      c.moveTo(x + offset, y + offset);
+      c.lineTo(endX + offset, endY + offset);
+      c.stroke();
+    };
+    line(0, thickness, '#292123');
+    line(-.6, thickness * .71, '#6e5240');
+    line(-1.4, thickness * .27, '#aa8261');
+  }
+  function cap(x: number, y: number, w: number, h: number) {
+    c.fillStyle = '#221a1b';
+    c.beginPath();
+    c.ellipse(x, y, w, h, 0, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = metal(x - w, w * 2);
+    c.beginPath();
+    c.ellipse(x, y - 2, w, h, 0, 0, Math.PI * 2);
+    c.fill();
+  }
+
+  // Cliff hardware: bolted wall plate, braced arm, short upright and angled rail.
+  flange(24, 827, 20, 33);
+  cap(34, 833, 3, 3);
+  cap(34, 853, 3, 3);
+  bar(35, 851, 67, 836, 5);
+  bar(34, 841, 68, 835, 9);
+  bar(68, 835, 68, 794, 8);
+  cap(68, 795, 5.5, 4.5);
+  const [railX, railY] = cliffPole.pivot;
+  const railSpan = 49;
+  bar(railX - railSpan, railY - 3 + railSpan * cliffRailSlope,
+    railX + railSpan, railY - 3 - railSpan * cliffRailSlope, 6);
+
+  // Gantry hardware: floor plate, collar and tall crossbar pole.
+  cap(75, 626, 17, 7);
+  bar(75, 622, 75, 391, 9);
+  bar(75, 623, 75, 610, 12);
+  cap(64, 625, 2.5, 2.5);
+  cap(86, 625, 2.5, 2.5);
+  cap(75, 392, 6.5, 6.5);
+  bar(37, 409, 113, 409, 7);
+
   c.save();
   c.translate(546, 617);
   c.scale(75, 25);
@@ -105,14 +168,16 @@ function fallbackAtlas() {
 }
 
 function propCard(sprite: Sprite, width: number, at: T.Vector2, map: T.Texture,
-  clock: { value: number }, order: number, cloth = false) {
+  clock: { value: number }, order: number, cloth = false, slope = 0) {
   const [l, t, r, b] = sprite.crop, [px, py] = sprite.pivot;
   const scale = width / (r - l);
   const geometry = new T.PlaneGeometry(1, 1, cloth ? 10 : 1, cloth ? 22 : 1);
   const position = geometry.getAttribute('position'), uv = geometry.getAttribute('uv');
-  for (let i = 0; i < position.count; i++) position.setXYZ(i,
-    (l + (r - l) * uv.getX(i) - px) * scale / PLATE_WIDTH,
-    (py - b + (b - t) * uv.getY(i)) * scale / SCREEN_HEIGHT, 0);
+  for (let i = 0; i < position.count; i++) {
+    const x = (l + (r - l) * uv.getX(i) - px) * scale;
+    const y = (py - b + (b - t) * uv.getY(i)) * scale + x * slope;
+    position.setXYZ(i, x / PLATE_WIDTH, y / SCREEN_HEIGHT, 0);
+  }
   const material = new T.ShaderMaterial({
     transparent: true, depthWrite: false,
     uniforms: {
@@ -237,18 +302,35 @@ export function createDenCliffProps() {
     root.add(foot, stack);
     return { y, at, foot, stack };
   });
-  const flags = doorBanners.flatMap(({ width, sprite, mounts }) => mounts.map(([x, y]) => {
+  function mountBanner(x: number, y: number, width: number, sprite: Sprite,
+    pole?: { sprite: Sprite; fallbackX: number; slope?: number }) {
     const at = new T.Vector2(x / PLATE_WIDTH, 0);
-    const cloth = propCard(sprite, width, at, fallback, clock, -988, true);
-    const rail = propCard(rod, width * 1.12, at, fallback, clock, -987);
+    const cloth = propCard(sprite, width, at, fallback, clock, -988, true, pole?.slope);
+    const hardware = pole?.sprite ?? rod;
+    const hardwareWidth = pole ? hardware.crop[2] - hardware.crop[0] : width * 1.12;
+    const rail = propCard(hardware, hardwareWidth, at, fallback, clock, pole ? -989 : -987);
+    cloth.geometry.computeBoundingBox();
+    rail.geometry.computeBoundingBox();
+    const bounds = cloth.geometry.boundingBox!.clone().union(rail.geometry.boundingBox!);
     cloth.name = 'den-banner';
     root.add(cloth, rail);
-    return { y, at, cloth, rail, wake: cloth.material.uniforms.wake };
-  }));
+    return { y, at, cloth, rail, bounds, fallbackX: pole?.fallbackX, wake: cloth.material.uniforms.wake };
+  }
+  const flags = [
+    ...doorBanners.flatMap(({ width, sprite, center: [x, y], offset: [dx, dy] }) =>
+      [-1, 1].map(side => mountBanner(x + side * dx, y + side * dy, width, sprite))),
+    ...rockBanners.map(({ x, fallbackX, y, sprite }) =>
+      mountBanner(x, y, 86, sprite, { sprite: cliffPole, fallbackX, slope: cliffRailSlope })),
+    ...gantryBanners.map(({ x, fallbackX, y }) =>
+      mountBanner(x, y, 65, pennant, { sprite: gantryPole, fallbackX })),
+  ];
   root.add(smoke);
   return {
     root,
     fallback,
+    useFallbackCliff() {
+      for (const { at, fallbackX } of flags) if (fallbackX !== undefined) at.x = fallbackX / PLATE_WIDTH;
+    },
     setArt(map: T.Texture) {
       const image = map.image as { width: number; height: number } | undefined;
       if (!image?.width || image.width !== image.height) throw new Error('Unsupported Den scenery atlas layout');
@@ -265,11 +347,12 @@ export function createDenCliffProps() {
         foot.visible = stack.visible = at.y > -.13 && at.y < 1.17;
         smoke.visible ||= at.y > -.25 && at.y < 1.16;
       }
-      for (const { y, at, cloth, rail, wake } of flags) {
+      for (const { y, at, cloth, rail, bounds, wake } of flags) {
         at.y = DEN_SCREENS - y / SCREEN_HEIGHT - scroll;
-        cloth.visible = rail.visible = at.y > -.02 && at.y < 1.16;
-        if (newFlight || !cloth.visible) wake.value = 0;
-        if (!cloth.visible || elapsed <= 0) continue;
+        const onScreen = at.y + bounds.max.y > 0 && at.y + bounds.min.y < 1;
+        cloth.visible = rail.visible = onScreen;
+        if (newFlight || !onScreen) wake.value = 0;
+        if (!onScreen || elapsed <= 0) continue;
         const x = (at.x - .5) * WIDTH, yWorld = (at.y - .54) * HEIGHT;
         const influence = (actor: { x: number; y: number }, speed: number) =>
           (1 - T.MathUtils.smoothstep(Math.hypot(actor.x - x, actor.y - yWorld), .25, 1.85))

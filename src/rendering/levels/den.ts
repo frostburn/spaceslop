@@ -35,6 +35,7 @@ export const createLevel: LevelFactory = ({ signal }) => {
   ]).then(([tiles, , , , chiefArt, patrolArt, propArt, defenseArt]) => {
     if (signal.aborted) { disposePlateTiles(tiles); return []; }
     scenery.setCliff(tiles);
+    if (!tiles.length) props.useFallbackCliff();
     scenery.update(0, 0, 0);
     return [...scenery.textures, props.fallback, chiefArt, patrolArt, propArt, defenseArt];
   });
