@@ -36,12 +36,12 @@ function drawMesh(context: CanvasRenderingContext2D, points: readonly Point[], s
       context.lineTo(points[i + columns].x, points[i + columns].y);
     }
   }
-  context.strokeStyle = '#89dedb88';
-  context.lineWidth = grid;
+  context.strokeStyle = '#89dedb66';
+  context.lineWidth = grid * .7;
   context.stroke();
   for (const [i, p] of points.entries()) {
     context.beginPath();
-    context.arc(p.x, p.y, grid * 1.9, 0, 2 * Math.PI);
+    context.arc(p.x, p.y, grid * 1.25, 0, 2 * Math.PI);
     context.fillStyle = patrolInteriorIndex(i) < 0 ? '#89a7b3' : '#a5f6e4';
     context.fill();
     if (locked?.has(i)) {
@@ -423,7 +423,7 @@ function start() {
     ])), null, 2);
     try {
       await navigator.clipboard.writeText(exportText.value);
-      status.textContent = 'Copied both 64-point grids for each edited handoff.';
+      status.textContent = `Copied both ${PATROL_VERTEX_COUNT}-point grids for each edited handoff.`;
     } catch {
       exportText.hidden = false;
       exportText.select();

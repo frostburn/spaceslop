@@ -86,6 +86,8 @@ test('the painted patrol sprite stays continuous when the handoff grids change',
     const texture = new Texture({ width, height });
     card.setArt(texture);
     const { index, attributes: { position, uv } } = card.root.geometry;
+    assert.equal(position.count, 256);
+    assert.equal(index.count, 6 * 15 ** 2);
     const step = Math.PI / (2 * (count - 1));
     const weights = card.root.material.uniforms.poseBlend;
     const sample = (frame, heading, attribute) => {
@@ -146,14 +148,15 @@ test('editing a pose grid affects only its handoff and invalid edits are rejecte
 
   const edited = [...atlas.handoffs], [outgoing, incoming] = edited[handoff];
   const [x, y] = patrolGridPoint(crop, outgoing, point);
-  const next = JSON.parse(JSON.stringify(movePatrolPoint(atlas, handoff, outgoing, point, x - 1, y + 2)));
+  const nextX = Math.round((x - 1) * 10) / 10, nextY = Math.round((y + 2) * 10) / 10;
+  const next = JSON.parse(JSON.stringify(movePatrolPoint(atlas, handoff, outgoing, point, nextX, nextY)));
   edited[handoff] = [next, incoming];
   card.setRegistration(atlas, edited);
   card.pose(heading);
   assert(Math.abs(weights.value - .5) < 1e-8);
   assert.notDeepEqual(Array.from(position.array), base);
-  assert(Math.abs(uv.getX(point) * atlas.width - (crop[0] + x - 1)) < .0001);
-  assert(Math.abs((1 - uv.getY(point)) * atlas.height - (crop[1] + y + 2)) < .0001);
+  assert(Math.abs(uv.getX(point) * atlas.width - (crop[0] + nextX)) < .0001);
+  assert(Math.abs((1 - uv.getY(point)) * atlas.height - (crop[1] + nextY)) < .0001);
   assert(uv.array.every((value, i) => Math.floor(i / 2) === point || value === originalUV[i]));
   const editedUV = Array.from(uv.array);
   card.pose(neighbor);
@@ -176,13 +179,13 @@ test('the padded grid rim can move while keeping the painted bike tip inside', a
   const atlas = patrolAtlasFor(1254, 1254), card = createPatrolWarpCard();
   const handoff = 0, frame = 1, crop = atlas.crops[frame], pad = patrolGridPadding(crop);
   const height = crop[3] - crop[1], outgoing = atlas.handoffs[handoff][0], incoming = atlas.handoffs[handoff][1];
-  const rimPoint = 7 * PATROL_GRID_SIZE + 4, tipPoint = rimPoint - PATROL_GRID_SIZE;
+  const rimPoint = (PATROL_GRID_SIZE - 1) * PATROL_GRID_SIZE + 2, tipPoint = rimPoint - PATROL_GRID_SIZE;
   const [rimX, rimY] = patrolGridPoint(crop, incoming, rimPoint), [tipX] = patrolGridPoint(crop, incoming, tipPoint);
   assert.equal(patrolRestPoint(crop, rimPoint)[1], height + pad);
   assert(rimY > height);
 
   const movedRim = movePatrolPoint(atlas, frame, incoming, rimPoint, rimX + 3, rimY + 6);
-  assert.deepEqual(movedRim[rimPoint], [Math.round((rimX + 3) * 10) / 10, rimY + 6]);
+  assert.deepEqual(movedRim[rimPoint], [Math.round((rimX + 3) * 10) / 10, Math.round((rimY + 6) * 10) / 10]);
   assert.equal(movePatrolPoint(atlas, frame, movedRim, rimPoint, rimX, height - 20)[rimPoint][1], height);
   const movedTip = movePatrolPoint(atlas, frame, movedRim, tipPoint, tipX, height + 1);
   assert.equal(movedTip[tipPoint][1], height + 1);

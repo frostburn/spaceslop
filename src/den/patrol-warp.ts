@@ -14,7 +14,7 @@ const crops = [
   [768, 621, 1143, 865, 962, 755],
 ] as const;
 
-export const PATROL_GRID_SIZE = 8;
+export const PATROL_GRID_SIZE = 16;
 export const PATROL_VERTEX_COUNT = PATROL_GRID_SIZE ** 2;
 const interiorSize = PATROL_GRID_SIZE - 2;
 const edge = PATROL_GRID_SIZE - 1;
@@ -108,6 +108,8 @@ function registerGrid(atlas: PatrolAtlas, frame: number, interior: PatrolGrid) {
     const dx = (x - pivotX) * pixel, dy = (y - pivotY) * pixel;
     return [cos * dx + sin * dy, sin * dx - cos * dy];
   };
+  if (interior.length !== PATROL_VERTEX_COUNT && interior.length !== interiorSize ** 2)
+    throw new Error('Patrol grid has the wrong number of points');
   const grid = expandPatrolGrid(crop, interior);
   for (const [point, [u, v]] of grid.entries()) {
     const column = point % PATROL_GRID_SIZE, row = Math.floor(point / PATROL_GRID_SIZE);
