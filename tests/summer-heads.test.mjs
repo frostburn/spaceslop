@@ -6,27 +6,28 @@ const server=await createServer({root:new URL('..',import.meta.url).pathname,con
 const {Flight,STEP,BOSS_PROJECTION}=await server.ssrLoadModule('/src/game.ts'),h=await server.ssrLoadModule('/src/summer/hydra-targets.ts');
 const {createHydraAssets,createRiverHydra}=await server.ssrLoadModule('/src/summer/hydra.ts'),{WING_FORMATION}=await server.ssrLoadModule('/src/wing.ts');
 const layout=await server.ssrLoadModule('/src/summer/layout.ts');
+const riverHP=h.HYDRA_HEAD_HP,bossHP=h.HYDRA_BOSS_HEAD_HP;
 function fixture(boss=false,weapon='primary'){
  const wing=['homing','cannon','laser','omega'].includes(weapon),f=new Flight(weapon==='towline'?'towline':'sentry',wing?[undefined,weapon]:[],'vex','summer');
  f.nextWave=22;f.invulnerable=100;f.cooldown=f.droneCooldown=1e5;
- const enemy={x:0,y:0,lane:0,age:0,fire:Infinity,hp:12,hydra:h.createHydraState(),summer:{kind:'hydra',formation:'vee',slot:0,mirror:1,at:0}};
+ const enemy={x:0,y:0,lane:0,age:0,fire:Infinity,hp:3*riverHP,hydra:h.createHydraState(),summer:{kind:'hydra',formation:'vee',slot:0,mirror:1,at:0}};
  if(boss){f.phase='boss';f.stepBoss=()=>{};}else{f.enemies=[enemy];f.stepStage=()=>{};}
  return{f,enemy,state:boss?f.summerHydra:enemy.hydra};
 }
 
 test('each river head absorbs only its own damage and the final head awards one kill/drop',()=>{
  const {f,enemy,state}=fixture();enemy.reward={weapon:'laser',remaining:1};
- f.damageEnemy(enemy,100,false,-1);assert.deepEqual(state.hp,[0,4,4]);assert.equal(enemy.hp,8);assert.equal(f.score,0);assert.equal(f.drops.length,0);
+ f.damageEnemy(enemy,100,false,-1);assert.deepEqual(state.hp,[0,riverHP,riverHP]);assert.equal(enemy.hp,2*riverHP);assert.equal(f.score,0);assert.equal(f.drops.length,0);
  assert(enemy.hitPoint.z>.5,'damage particles are behind the fallback head');
- f.damageEnemy(enemy,100,false,-1);assert.deepEqual(state.hp,[0,4,4]);
- f.damageEnemy(enemy,4,false,0);assert.equal(enemy.hp,4);assert.equal(f.score,0);
- f.damageEnemy(enemy,4,false,1);assert.equal(enemy.hp,0);assert.equal(f.score,100);assert.equal(f.drops.length,1);f.damageEnemy(enemy,100);assert.equal(f.score,100);
+ f.damageEnemy(enemy,100,false,-1);assert.deepEqual(state.hp,[0,riverHP,riverHP]);
+ f.damageEnemy(enemy,riverHP,false,0);assert.equal(enemy.hp,riverHP);assert.equal(f.score,0);
+ f.damageEnemy(enemy,riverHP,false,1);assert.equal(enemy.hp,0);assert.equal(f.score,100);assert.equal(f.drops.length,1);f.damageEnemy(enemy,100);assert.equal(f.score,100);
 });
 
 test('all three boss heads must be destroyed, with no overflow and no forced order',()=>{
  for(const order of[[-1,0,1],[1,-1,0],[0,1,-1]]){
   const {f,state}=fixture(true);
-  for(let i=0;i<3;i++){f.damageBoss(100,false,order[i]);assert.equal(state.hp[order[i]+1],0);assert.equal(f.bossHealth,(2-i)*30);assert.equal(f.phase,i===2?'won':'boss');}
+  for(let i=0;i<3;i++){f.damageBoss(100,false,order[i]);assert.equal(state.hp[order[i]+1],0);assert.equal(f.bossHealth,(2-i)*bossHP);assert.equal(f.phase,i===2?'won':'boss');}
   assert.equal(f.score,1000);f.damageBoss(100);assert.equal(f.score,1000);
  }
 });
@@ -49,27 +50,27 @@ for(const boss of[false,true])for(const weapon of['primary','sentry','towline','
 });
 
 test('dead heads leave swept shot, beam, touch and Towline contact and cannot shield a living head',()=>{
- const {enemy,state}=fixture();h.damageHydraHead(state,0,4,0);
+ const {enemy,state}=fixture();h.damageHydraHead(state,0,riverHP,0);
  const p=h.hydraHead(0,0),origin={x:p.x,y:-4};assert.equal(h.hydraContact(enemy,0,origin,{x:p.x,y:5}),undefined);assert.equal(h.hydraBeamEntry(enemy,0,origin),Infinity);assert(!h.hydraHit(enemy,0,p,p,.16));
  const left=h.hydraHead(0,-1);assert.equal(h.hydraContact(enemy,0,{x:left.x,y:-4},{x:left.x,y:5}).side,-1);
- const boss=h.createHydraState(30);h.damageHydraHead(boss,0,30,0);const bp=h.hydraBossHead(0,0);assert.equal(h.hydraBossContact(boss,0,bp),undefined);
+ const boss=h.createHydraState(bossHP);h.damageHydraHead(boss,0,bossHP,0);const bp=h.hydraBossHead(0,0);assert.equal(h.hydraBossContact(boss,0,bp),undefined);
 });
 
 test('an in-flight locked round cannot transfer a destroyed head hit to a surviving head',()=>{
- const {f,state}=fixture(true);f.fire({x:0,y:-4});assert.equal(f.shots[0].hydraTarget,0);f.damageBoss(30,false,0);
- for(let i=0;i<40;i++)f.step(STEP);assert.deepEqual(state.hp,[30,0,30]);assert.equal(f.bossHealth,60);
+ const {f,state}=fixture(true);f.fire({x:0,y:-4});assert.equal(f.shots[0].hydraTarget,0);f.damageBoss(bossHP,false,0);
+ for(let i=0;i<40;i++)f.step(STEP);assert.deepEqual(state.hp,[bossHP,0,bossHP]);assert.equal(f.bossHealth,2*bossHP);
 });
 
 test('each head silences its own river mouth and boss telegraph/volley',()=>{
- const {f,enemy}=fixture();f.stepStage=Object.getPrototypeOf(f).stepStage;enemy.fire=0;f.damageEnemy(enemy,4,false,0);f.stepStage(STEP);assert.equal(f.threats.length,2);
- const b=fixture(true).f;b.stepBoss=Object.getPrototypeOf(b).stepBoss;b.time=.7;b.stepBoss(STEP);assert.equal(b.markers.length,3);b.damageBoss(30,false,0);assert.equal(b.markers.length,2);b.time=1.2;b.stepBoss(STEP);assert.equal(b.threats.length,2);
+ const {f,enemy}=fixture();f.stepStage=Object.getPrototypeOf(f).stepStage;enemy.fire=0;f.damageEnemy(enemy,riverHP,false,0);f.stepStage(STEP);assert.equal(f.threats.length,2);
+ const b=fixture(true).f;b.stepBoss=Object.getPrototypeOf(b).stepBoss;b.time=.7;b.stepBoss(STEP);assert.equal(b.markers.length,3);b.damageBoss(bossHP,false,0);assert.equal(b.markers.length,2);b.time=1.2;b.stepBoss(STEP);assert.equal(b.threats.length,2);
  const origins=b.threats.map(s=>s.x).sort((a,b)=>a-b);assert.deepEqual(origins,[-1,1].map(s=>h.hydraBossHead(b.time,s).x));
  b.time=1.8;b.stepBoss(STEP);b.time=2.7;b.stepBoss(STEP);assert(b.markers.some(m=>m.x===b.player.x&&m.y===b.player.y),'surviving mouths never target the player');
 });
 
 test('Pulse damages heads separately and laser buildup resets on changing heads',()=>{
  const stage=fixture();stage.f.pulse();assert.deepEqual(stage.state.hp,[0,0,0]);assert.equal(stage.f.score,100);
- const {f,state}=fixture(true);f.pulse();assert.deepEqual(state.hp,[24,24,24]);assert.equal(f.bossHealth,72);
+ const {f,state}=fixture(true);f.pulse();assert.deepEqual(state.hp,Array(3).fill(bossHP-6));assert.equal(f.bossHealth,3*(bossHP-6));
  const l=fixture(false,'laser'),wing=l.f.wings[1];l.f.stepLaser(wing,{x:0,y:-3},false,.5);l.f.stepLaser(wing,{x:0,y:-3},false,.5);assert(wing.laserHold>0);
  l.f.damageEnemy(l.enemy,100,false,0);const left=h.hydraHead(0,-1);l.f.stepLaser(wing,{x:left.x,y:-3},false,STEP);assert.equal(wing.laserHead,-1);assert.equal(wing.laserHold,0);
 });
@@ -85,7 +86,7 @@ test('original front roots and settled reach are preserved without socket-cover 
   assert(Math.hypot(p.x-q.x,p.y-q.y)<1e-7,'original attachment moved');
   assert(n.anchor.position.z>n.fallbackHead.position.z+n.fallbackHead.scale.z,'laser anchor is buried in the fallback head');
  }
- h.damageHydraHead(state,-1,4,1);rig.pose(1.2,0,0,state);assert(rig.necks[0].head.visible&&rig.necks[0].head.position.z<.2);
+ h.damageHydraHead(state,-1,riverHP,1);rig.pose(1.2,0,0,state);assert(rig.necks[0].head.visible&&rig.necks[0].head.position.z<.2);
  rig.pose(2,0,0,state);assert(!rig.necks[0].head.visible&&!rig.necks[0].fallbackHead.visible);assert(rig.necks[1].head.visible&&rig.necks[2].head.visible);
  assets.setAtlas(new T.Texture());rig.pose(3,0,0,state);assert(rig.necks[0].segments.every(s=>!s.visible));rig.root.traverse(o=>{if(o.geometry)assert(geometries.has(o.geometry));});
  rig.pose(0,0,0,h.createHydraState());assert(rig.necks.every(n=>n.head.visible&&n.fallbackHead.visible));

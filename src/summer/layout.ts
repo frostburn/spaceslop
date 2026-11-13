@@ -1,7 +1,7 @@
 import {levels} from '../levels';
 import {mammothBankX} from './river';
 export {summerRiver,summerShoreDistance} from './river';
-export const SUMMER_DURATION=levels.summer.duration,SUMMER_APPROACH=6,SUMMER_SPEED=2.8,SUMMER_DISTANCE=22,SUMMER_FLOOR=-18,SUMMER_HP=90;
+export const SUMMER_DURATION=levels.summer.duration,SUMMER_APPROACH=6,SUMMER_SPEED=2.8,SUMMER_DISTANCE=22,SUMMER_FLOOR=-18;
 const clamp=(x:number)=>Math.max(0,Math.min(1,x));
 export const smooth=(x:number)=>{const t=clamp(x);return t*t*(3-2*t);};
 export function summerScroll(time:number){const u=clamp((time-SUMMER_DURATION)/SUMMER_APPROACH);return SUMMER_SPEED*(Math.max(0,Math.min(time,SUMMER_DURATION))+SUMMER_APPROACH*(u-u*u+u*u*u/3));}

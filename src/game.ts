@@ -6,17 +6,17 @@ import { DEN_BURSTS, DEN_CYCLE, DEN_GUNS, DEN_HP, denBodyEntry, denMount, denPos
 import { DEN_TURRET_HP, createDenTurret, denDefensePoint, denMineSites, denTurretEntry, denTurretSites,
   stepDenMine, stepDenTurret, type DenMine, type DenTurret } from './den/defense';
 import { DEN_APPROACH, denScroll } from './den/route';
-import { DEN_PATROL_STAGGER, DEN_PATROL_WINDUP, denPatrolCanFire, denPatrolEntry, denPatrolPose, denPatrolScale, denWaves, type DenPatrol } from './den/patrol';
+import { DEN_PATROL_STAGGER, DEN_PATROL_WINDUP, denPatrolCanFire, denPatrolEntry, denPatrolPose, denPatrolScale, denPatrolVolley, denWaves, type DenPatrol } from './den/patrol';
 import { broadsideShots, fleetWaves, FLEET_SAUCER_LIFE, FLEET_SAUCER_STAGGER, FLEET_SAUCER_WINDUP,
-  saucerCanFire, saucerPose, saucerSize, saucerVolley, type FleetSaucer } from './fleet/combat';
+  saucerCanFire, saucerFireInterval, saucerPose, saucerSize, saucerVolley, type FleetSaucer } from './fleet/combat';
 import { FLEET_APPROACH, tractorPose, tractorSites } from './fleet/route';
 import { createFleetBossAttack, FLEET_BOSS_HP, fleetBossEntry, fleetBossTarget, stepFleetBoss } from './fleet/boss';
 import { HELIOSTAT_HP,HELIOSTAT_APPROACH,HELIOSTAT_INTERVAL,HELIOSTAT_WINDUP,HELIOSTAT_FIRE,HELIOSTAT_CHANNEL,HELIOSTAT_FADE,HELIOSTAT_GUARD_FIRE,HELIOSTAT_SPAWN_LEAD,heliostatWaves,heliostatMotion,heliostatCanAttack,heliostatPlasmaHits,electricSites,electricHits,type HeliostatCourse } from './heliostat/combat';
-import {SUMMER_HP,SUMMER_APPROACH} from './summer/layout';
+import {SUMMER_APPROACH} from './summer/layout';
 import {createHydraAttack,stepHydraAttack} from './summer/hydra-attack';
 import {VORTEX_HP,VORTEX_RADIUS,VORTEX_FIRE,vortexEmission} from './summer/vortex';
 import {summerWaves,summerMotion,hydraBeamEntry,type SummerCourse} from './summer/combat';
-import {HYDRA_SIDES,HYDRA_HEAD_HP,HYDRA_BOSS_HEAD_HP,HYDRA_BOSS_SIZE,createHydraState,hydraAlive,damageHydraHead,damageRiverHydra,closestRiverHead,nearestHydraHead,hydraContact,hydraBeamContact,hydraBossHead,hydraBossContact,riverHydraHead,type HydraState,type HydraSide} from './summer/hydra-targets';
+import {SUMMER_HP,HYDRA_SIDES,HYDRA_HEAD_HP,HYDRA_BOSS_HEAD_HP,HYDRA_BOSS_SIZE,createHydraState,hydraAlive,damageHydraHead,damageRiverHydra,closestRiverHead,nearestHydraHead,hydraContact,hydraBeamContact,hydraBossHead,hydraBossContact,riverHydraHead,type HydraState,type HydraSide} from './summer/hydra-targets';
 import {heliostatLockTargets} from './heliostat/combat';
 import {crawlerSites,crawlerPose,stepCrawler,crawlerHits,CRAWLER_HP,type CrawlerState} from './heliostat/crawler';
 import {mineSites,minePose,triggerMine,mineBurst,MINE_WINDUP,MINE_JUMP,MINE_BURST_TIME,type BoulevardMine} from './boulevard-mines';
@@ -40,6 +40,7 @@ import {
 } from './encounters';
 import { marineMotion, marineSpecs, marineBodyHit, schoolDelay, type MarineSchool, type MarineFormation, LEVIATHAN_HP, LEVIATHAN_INTERVAL, LEVIATHAN_WINDUP, LEVIATHAN_FIRE, LEVIATHAN_TRAVEL, type MarineKind } from './marine';
 import { levels, type LevelId } from './levels';
+import { stageEnemyTuning } from './stage-enemy-tuning';
 import { IceCollision } from './ice-collision';
 import { ICE_CAMERA_DISTANCE } from './ice-layout';
 import { DRONE_HULL, FIGHTER_HULL, HiveCollision, POD_BOUNDS, POD_HULL } from './hive-collision';
@@ -1071,10 +1072,10 @@ export class Flight {
             : wave.ventAnchor !== undefined ? MORTAR_FIRST_FIRE
             : wave.crucible ? CRUCIBLE_FIRST_POUR
             : schoolDelay(school) + (wave.ant ? antFire[wave.ant].first : wave.marine === 'plesiosaur' ? 1.8 : wave.skipper ? 1.55 : 1.1) + index * .28,
-          hp: grove ? (grove.kind === 'frog' ? FROG_HP : grove.kind === 'sentry' ? 7 : grove.kind === 'skimmer' ? 2 : 3)
-            : summer ? (summer.kind === 'vortex' ? VORTEX_HP : summer.kind === 'hydra' ? HYDRA_HEAD_HP * 3 : summer.kind === 'drone' ? 4 : 2)
+          hp: grove ? (grove.kind === 'frog' ? FROG_HP : grove.kind === 'sentry' ? 9 : grove.kind === 'skimmer' ? 3 : 4)
+            : summer ? (summer.kind === 'vortex' ? VORTEX_HP : summer.kind === 'hydra' ? HYDRA_HEAD_HP * 3 : summer.kind === 'drone' ? 5 : 3)
             : heliostat ? (heliostat.kind === 'guard' ? 6 : 2)
-            : boulevard ? (boulevard.formation === 'intercept' ? 5 : boulevard.heavy ? 6 : 3)
+            : boulevard ? (boulevard.formation === 'intercept' ? 7 : boulevard.heavy ? 8 : 4)
             : flyer ? FLYER_HP
             : shrimp ? SHRIMP_HP
             : wave.ventWorm ? WORM_HP
@@ -1089,10 +1090,19 @@ export class Flight {
       }));
     }
 
-    stepCentipedes(this.enemies, dt);
+    const tuning = stageEnemyTuning[this.level];
+    stepCentipedes(this.enemies, dt * tuning.pace);
     for (const enemy of this.enemies) {
       if (enemy.hp <= 0) continue;
+      // Only mobile encounters use the faster clock. Anchored enemies,
+      // including hydra heads and mines, track the level's world scroll.
+      const mobile = Boolean(enemy.heliostat || enemy.boulevard || enemy.flyer || enemy.raptor
+        || enemy.shrimp || enemy.skipper || enemy.centipede || enemy.cicada || enemy.marine
+        || (enemy.grove && !enemy.frog) || enemy.summer?.kind === 'scout' || enemy.summer?.kind === 'drone');
+      const previousAge = enemy.age;
       enemy.age += dt;
+      if (mobile && enemy.age > 0) enemy.age += Math.min(dt, enemy.age) * (tuning.pace - 1);
+      const motionStep = enemy.age - previousAge;
       const motion = enemy.raptor ? raptorFlight(enemy.age) : undefined;
       if(enemy.crawler){
         const p=stepCrawler(enemy.crawler,this.time,this.player);enemy.x=p.x;enemy.y=p.y;
@@ -1133,7 +1143,8 @@ export class Flight {
           enemy.mortarAngle=mortarAim(enemy,this.player);
           if(enemy.age>=enemy.fire&&enemy.y<8){
             const origin=mortarMuzzle(enemy,enemy.mortarAngle);
-            for(const spread of [-.18,0,.18])this.threats.push({...origin,z:0,vx:Math.sin(enemy.mortarAngle+spread)*MORTAR_SHOT_SPEED,vy:-Math.cos(enemy.mortarAngle+spread)*MORTAR_SHOT_SPEED,vz:0});
+            const speed = MORTAR_SHOT_SPEED * tuning.shotSpeed;
+            for(const spread of [-.18,0,.18])this.threats.push({...origin,z:0,vx:Math.sin(enemy.mortarAngle+spread)*speed,vy:-Math.cos(enemy.mortarAngle+spread)*speed,vz:0});
             enemy.fire+=MORTAR_INTERVAL;
           }
         }
@@ -1141,8 +1152,9 @@ export class Flight {
         const p=shrimpMotion(enemy.age,enemy.lane,enemy.shrimp);enemy.x=p.x;enemy.y=p.y;enemy.heading=p.heading;
         if(enemy.age>=enemy.fire&&enemy.y<8){
           const origin=faunaMuzzle(enemy),angle=Math.atan2(this.player.x-origin.x,origin.y-this.player.y);
-          for(const spread of [-.065,.065])this.threats.push({...origin,z:0,vx:Math.sin(angle+spread)*4,vy:-Math.cos(angle+spread)*4,vz:0});
-          enemy.fire+=SHRIMP_INTERVAL;
+          const speed = 4 * tuning.shotSpeed;
+          for(const spread of [-.065,.065])this.threats.push({...origin,z:0,vx:Math.sin(angle+spread)*speed,vy:-Math.cos(angle+spread)*speed,vz:0});
+          enemy.fire += SHRIMP_INTERVAL * tuning.cadence * tuning.pace;
         }
       } else if (enemy.crucible) {
         const p=crucibleMotion(enemy.age,enemy.lane);enemy.x=p.x;enemy.y=p.y;
@@ -1163,11 +1175,11 @@ export class Flight {
         enemy.x = course.x; enemy.y = course.y; enemy.heading = course.heading;
       } else if (enemy.marine) {
         const swim = marineMotion(enemy.marine,enemy.age,enemy.lane,enemy.school);
-        const previous = marineMotion(enemy.marine,enemy.age-dt,enemy.lane,enemy.school);
+        const previous = marineMotion(enemy.marine,enemy.age-motionStep,enemy.lane,enemy.school);
         enemy.x=swim.x; enemy.y+=swim.y-previous.y; enemy.heading=swim.heading;
       } else if (enemy.ant && this.obstacles instanceof HiveCollision) steerHiveAnt(enemy, this.obstacles, this.stageDuration, dt);
       else {
-        enemy.y -= (motion?.speed ?? 2.25) * dt;
+        enemy.y -= (motion?.speed ?? 2.25) * motionStep;
         if (!motion || motion.pose === 'glide') enemy.x = enemy.lane + Math.sin(enemy.age * 1.55) * 0.46;
       }
       if (this.level === 'ice' && this.obstacles && enemy.y < 9) {
@@ -1175,7 +1187,7 @@ export class Flight {
         this.obstacles.move(enemy, 0, 0, hull, { minX: -2.4, maxX: 2.4, minY: -10, maxY: 10 });
       }
       if (!enemy.frog && enemy.summer?.kind!=='vortex' && !enemy.mine && !enemy.flyer && !enemy.ambusher && !enemy.shrimp && enemy.ventAnchor===undefined && !enemy.crucible && !enemy.slag && !motion && (!enemy.centipede || (enemy.centipede.slot === 0 && !enemy.centipede.chain.escape)) && enemy.age >= enemy.fire && enemy.y < 8 && (!enemy.grove||groveCanAttack(enemy.age,enemy.lane,enemy.grove)) && (!enemy.heliostat||heliostatCanAttack(enemy.age,enemy.lane,enemy.heliostat))) {
-        enemy.fire += enemy.grove ? (enemy.grove.kind === 'sentry' ? 2.7 : 2.8)
+        const interval = enemy.grove ? (enemy.grove.kind === 'sentry' ? 2.7 : 2.8)
           : enemy.heliostat ? (enemy.heliostat.kind === 'guard' ? 3.8 : 3.1)
           : enemy.boulevard ? (enemy.boulevard.formation === 'intercept' ? 2.8 : 3.4)
           : enemy.centipede ? 3.5
@@ -1183,16 +1195,28 @@ export class Flight {
           : enemy.marine === 'plesiosaur' ? 3.2
           : enemy.ant ? antFire[enemy.ant].interval
           : enemy.skipper ? 3.15 : 2.4;
+        enemy.fire += enemy.summer?.kind === 'hydra' ? interval
+          : interval * tuning.cadence * (mobile ? tuning.pace : 1);
         const dx = this.player.x - enemy.x;
         const dy = this.player.y - enemy.y;
         const angle = enemy.interceptorAim ?? Math.atan2(dx, dy);
-        const speed = enemy.grove ? 5.1 : enemy.marine ? (enemy.marine === 'plesiosaur' ? 4 : 5) : enemy.ant ? 3.8 : enemy.skipper ? 4.8 : 5.7;
-        const spread = enemy.grove?.kind==='sentry'?[-.2,0,.2]:enemy.summer?.kind==='hydra'?[-.25,0,.25]:enemy.heliostat?.kind==='guard'?[-.19,0,.19]:enemy.boulevard?.formation==='intercept'?[-.12,0,.12]:enemy.boulevard?.heavy?[-.18,0,.18]:enemy.marine === 'plesiosaur' ? [-.3,-.15,0,.15,.3] : enemy.ant === 'soldier' ? [-0.24, 0, 0.24] : [0];
+        const speed = tuning.shotSpeed * (enemy.grove ? 5.1 : enemy.marine ? (enemy.marine === 'plesiosaur' ? 4 : 5) : enemy.ant ? 3.8 : enemy.skipper ? 4.8 : 5.7);
+        const defaultSpread = 'wingmanSpread' in tuning && (enemy.slot ?? 0) % 2 === 1
+          ? tuning.wingmanSpread : tuning.spread;
+        const spread = enemy.grove?.kind === 'sentry' ? [-.32, -.16, 0, .16, .32]
+          : enemy.summer?.kind === 'hydra' ? [-.25, 0, .25]
+          : enemy.heliostat?.kind === 'guard' ? [-.19, 0, .19]
+          : enemy.boulevard?.formation === 'intercept' ? [-.12, 0, .12]
+          : enemy.marine === 'plesiosaur' ? [-.3, -.15, 0, .15, .3]
+          : enemy.ant === 'soldier' ? [-.24, 0, .24] : defaultSpread;
         for (const offset of spread) {
           const muzzle = enemy.grove?groveEnemySize(enemy.grove)*.95:enemy.heliostat?.kind === 'guard' ? .85 : enemy.marine ? marineSpecs[enemy.marine].halfLength : 0;
           const head=enemy.summer?.kind==='hydra'?riverHydraHead(enemy,this.time,Math.sign(offset)):undefined;
           if(head&&!hydraAlive(enemy.hydra,Math.sign(offset) as HydraSide))continue;
-          this.threats.push({ x: enemy.x + (head?.x??Math.sin(enemy.heading ?? 0)*muzzle), y: enemy.y + (head?head.y-.65:-Math.cos(enemy.heading ?? 0)*muzzle), z: 0,
+          const x = enemy.x + (head?.x ?? Math.sin(enemy.heading ?? 0) * muzzle);
+          const y = enemy.y + (head ? head.y - .65 : -Math.cos(enemy.heading ?? 0) * muzzle);
+          if ((enemy.grove || enemy.marine) && y < this.player.y + 1.25) continue;
+          this.threats.push({ x, y, z: 0,
             vx: Math.sin(angle + offset) * speed, vy: Math.cos(angle + offset) * speed, vz: 0 });
         }
         enemy.interceptorAim=undefined;
@@ -1253,7 +1277,7 @@ export class Flight {
         const age = this.time - wave.at - slot * FLEET_SAUCER_STAGGER - dt;
         const pose = saucerPose(age, lane, fleet);
         this.enemies.push({ x: pose.x, y: pose.y, lane, age, fleet, fire: Infinity,
-          hp: fleet.heavy ? 7 : 3, reward });
+          hp: fleet.heavy ? 10 : 4, reward });
       }
     }
 
@@ -1279,7 +1303,7 @@ export class Flight {
       }
       if (enemy.age < enemy.fire || !saucer.aim) continue;
       this.threats.push(...saucerVolley(enemy, saucer.aim, saucer));
-      enemy.fire = enemy.age + (saucer.heavy ? 2.8 : 3.35);
+      enemy.fire = enemy.age + saucerFireInterval(saucer);
       saucer.aim = undefined;
     }
 
@@ -1300,7 +1324,7 @@ export class Flight {
         const age = this.time - wave.time - slot * DEN_PATROL_STAGGER - dt;
         const pose = denPatrolPose(age, lane, den);
         this.enemies.push({ x: pose.x, y: pose.y, heading: pose.heading, lane, age, den, fire: Infinity,
-          hp: den.heavy ? 7 : 3, reward });
+          hp: den.heavy ? 11 : 5, reward });
       }
     }
 
@@ -1314,17 +1338,14 @@ export class Flight {
       if (enemy.age < 0) continue;
       if (Number.isFinite(denPatrolEntry(this.player, this.player, enemy, enemy.den, .23))) this.hit();
       if (this.phase !== 'stage') return;
-      if (!denPatrolCanFire(pose, enemy.den)) { enemy.fire = Infinity; continue; }
+      const reach = .82 * denPatrolScale(enemy.den);
+      const muzzle = { x: enemy.x + Math.sin(pose.heading) * reach, y: enemy.y - Math.cos(pose.heading) * reach };
+      if (!denPatrolCanFire(pose, enemy.den) || muzzle.y < this.player.y + 1.25) { enemy.fire = Infinity; continue; }
       if (!Number.isFinite(enemy.fire)) enemy.fire = enemy.age + DEN_PATROL_WINDUP;
       if (enemy.age < enemy.fire) continue;
-      enemy.fire = enemy.age + (enemy.den.heavy ? 2.45 : 2.8);
-      const reach = .82 * denPatrolScale(enemy.den);
-      const x = enemy.x + Math.sin(pose.heading) * reach, y = enemy.y - Math.cos(pose.heading) * reach;
-      const aim = Math.atan2(this.player.x - x, Math.max(1.8, y - this.player.y));
-      for (const spread of enemy.den.heavy ? [-.22, 0, .22] : [0]) {
-        const angle = aim + spread, speed = enemy.den.heavy ? 4.95 : 4.7;
-        this.threats.push({ x, y, z: 0, vx: Math.sin(angle) * speed, vy: -Math.cos(angle) * speed, vz: 0, planar: true });
-      }
+      const { interval, shots } = denPatrolVolley(muzzle, this.player, enemy.den);
+      enemy.fire = enemy.age + interval;
+      this.threats.push(...shots);
     }
   }
 
@@ -1468,7 +1489,8 @@ export class Flight {
     const elapsed=this.time%CICADA_INTERVAL, volley=Math.floor(this.time/CICADA_INTERVAL);
     if(elapsed>=CICADA_WINDUP && elapsed<CICADA_FIRE && !this.markers.length){
       const x=clamp(this.player.x,-2.5,2.5),y=clamp(this.player.y,-5.8,5.1);
-      this.markers=[-1.4,0,1.4].map(offset=>({x:x+(volley%2===0?offset:0),y:y+(volley%2===0?0:offset)}));
+      const offsets = this.level === 'wormhole' ? [-2.1, -1.05, 0, 1.05, 2.1] : [-1.4, 0, 1.4];
+      this.markers=offsets.map(offset=>({x:x+(volley%2===0?offset:0),y:y+(volley%2===0?0:offset)}));
     }
     if(elapsed>=CICADA_FIRE && this.markers.length && this.volley===volley){
       const origin = this.cicadaMuzzle();

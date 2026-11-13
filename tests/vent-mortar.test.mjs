@@ -4,6 +4,7 @@ import * as T from 'three';
 import {createServer} from 'vite';
 const server=await createServer({root:new URL('..',import.meta.url).pathname,configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true,entries:[]},appType:'custom'});after(()=>server.close());
 const m=await server.ssrLoadModule('/src/vent-mortar.ts'),{Flight,STEP}=await server.ssrLoadModule('/src/game.ts');
+const {stageEnemyTuning}=await server.ssrLoadModule('/src/stage-enemy-tuning.ts');
 const {createMortarAssets,createVentMortar}=await server.ssrLoadModule('/src/vent-mortar-rig.ts');
 const {ventAnchorPoint}=await server.ssrLoadModule('/src/vent-layout.ts');
 const assets=createMortarAssets(new T.DataTexture(new Uint8Array([255,255,255,255]),1,1));
@@ -30,7 +31,7 @@ test('the posed raster mouth and simulated volley origin agree for every aiming 
 test('anchored mortars telegraph and fire a three-pearl fan with a distinct cadence and score',()=>{
  const f=new Flight('sentry',[],'vex','vents');f.fire=()=>{};f.stepDroneWeapon=()=>{};f.time=9;const e=enemy(1.8-STEP);f.enemies=[e];f.step(STEP);
  assert.equal(f.threats.length,3);assert.equal(e.fire,m.MORTAR_FIRST_FIRE+m.MORTAR_INTERVAL);assert(m.mortarPose(1.79,1.8).charge>.98);
- for(const shot of f.threats)assert(Math.abs(Math.hypot(shot.vx,shot.vy)-m.MORTAR_SHOT_SPEED)<1e-9);
+ for(const shot of f.threats)assert(Math.abs(Math.hypot(shot.vx,shot.vy)-m.MORTAR_SHOT_SPEED*stageEnemyTuning.vents.shotSpeed)<1e-9);
  f.step(STEP);assert.equal(f.threats.length,3);f.damageEnemy(e,4);assert.equal(e.hp,0);assert.equal(f.score,150);
 });
 

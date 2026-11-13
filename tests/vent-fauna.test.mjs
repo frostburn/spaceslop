@@ -4,6 +4,7 @@ import * as T from 'three';
 import {createServer} from 'vite';
 const server=await createServer({root:new URL('..',import.meta.url).pathname,configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true,entries:[]},appType:'custom'});after(()=>server.close());
 const m=await server.ssrLoadModule('/src/vent-fauna.ts'),v=await server.ssrLoadModule('/src/vent-layout.ts'),{Flight,STEP}=await server.ssrLoadModule('/src/game.ts');
+const {stageEnemyTuning}=await server.ssrLoadModule('/src/stage-enemy-tuning.ts');
 const {createFaunaAssets,createWormAssets,createVentShrimp,createVentWorm}=await server.ssrLoadModule('/src/vent-fauna-rig.ts');
 const {createLaserContactTrace}=await server.ssrLoadModule('/src/laser-contact.ts');
 const assets=createFaunaAssets(new T.DataTexture(new Uint8Array([255,255,255,255]),1,1));
@@ -56,7 +57,7 @@ test('worm locks its attack during the warning, lunges without projectiles and r
  const f=new Flight('sentry',[],'vex','vents'),e=worm();f.time=19.7;f.nextWave=100;f.fire=()=>{};f.stepDroneWeapon=()=>{};e.age=2.7-STEP;e.fire=3.6;e.wormLocked=false;f.enemies=[e];f.invulnerable=100;
  f.step(STEP);const angle=e.mortarAngle,reach=e.wormReach;assert(e.wormLocked);f.player={x:-3,y:-3};f.step(.1);assert.equal(e.mortarAngle,angle);assert.equal(e.wormReach,reach);
  while(e.age<5.9)f.step(STEP);assert.equal(f.threats.length,0);assert(!e.wormLocked);assert.notEqual(e.mortarAngle,angle);assert.equal(e.fire,10.2);
- const patrol=new Flight('sentry',[],'vex','vents'),s=shrimp();patrol.nextWave=100;patrol.fire=()=>{};patrol.stepDroneWeapon=()=>{};s.fire=m.SHRIMP_FIRST_FIRE;s.age=s.fire-STEP;patrol.enemies=[s];patrol.step(STEP);assert.equal(patrol.threats.length,2);assert.equal(s.fire,m.SHRIMP_FIRST_FIRE+m.SHRIMP_INTERVAL);
+ const patrol=new Flight('sentry',[],'vex','vents'),s=shrimp();patrol.nextWave=100;patrol.fire=()=>{};patrol.stepDroneWeapon=()=>{};s.fire=m.SHRIMP_FIRST_FIRE;s.age=s.fire-STEP;patrol.enemies=[s];patrol.step(STEP);assert.equal(patrol.threats.length,2);assert.equal(s.fire,m.SHRIMP_FIRST_FIRE+m.SHRIMP_INTERVAL*stageEnemyTuning.vents.cadence*stageEnemyTuning.vents.pace);
 });
 
 test('the worm body hurts the ship along its length without dying on contact',()=>{

@@ -17,6 +17,7 @@ export function summerMotion(age:number,lane:number,c:SummerCourse,time:number){
 const weapons=['cannon','homing','laser','omega'] as const;
 export const summerWaves=Array.from({length:22},(_,i)=>{
   const hydra=i===5||i===12||i===18,vortexIndex=vortexWaveIndices.findIndex(index=>index===i),vortex=vortexIndex>=0,at=2+i*4.25;
-  return{time:at,lanes:hydra?[0]:vortex?[vortexIndex%2?-1.55:1.55]:[-2,0,2],drop:wingRewardForWave(weapons,i),summer:{kind:hydra?'hydra' as const:vortex?'vortex' as const:i%3===0?'drone' as const:'scout' as const,
+  const aerialLanes = i === 11 || i === 15 || i === 21 ? [-2.55, -.85, .85, 2.55] : [-2, 0, 2];
+  return{time:at,lanes:hydra?[0]:vortex?[vortexIndex%2?-1.55:1.55]:aerialLanes,drop:wingRewardForWave(weapons,i),summer:{kind:hydra?'hydra' as const:vortex?'vortex' as const:i%3===0?'drone' as const:'scout' as const,
     formation:(['vee','cross','loop','weave'] as const)[i%4],mirror:vortex?(vortexIndex%2?1:-1):i%2?1:-1,at}};
 });

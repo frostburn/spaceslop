@@ -1,6 +1,7 @@
 import { HEIGHT, WIDTH } from '../playfield';
 import type { WingWeapon } from '../wing';
 import { ellipseEntry } from '../planar-contact';
+import { stageEnemyTuning } from '../stage-enemy-tuning';
 
 type Point = { x: number; y: number };
 type Course = 'launch' | 'cross' | 'weave';
@@ -13,8 +14,10 @@ type DenWave = Omit<DenPatrol, 'slot' | 'heavy'> & {
 };
 
 export const DEN_PATROL_POOL = 10;
-export const DEN_PATROL_STAGGER = .58;
+const tuning = stageEnemyTuning.den;
+export const DEN_PATROL_STAGGER = .58 / tuning.pace;
 export const DEN_PATROL_WINDUP = .46;
+const guardSpread = [-.36, -.18, 0, .18, .36];
 
 export const denWaves: readonly DenWave[] = [
   { time: 3.0, course: 'launch', side: -1, lanes: [-1.15] },
@@ -28,20 +31,20 @@ export const denWaves: readonly DenWave[] = [
   { time: 43.6, course: 'launch', side: -1, lanes: [-2.2, -.9, .55] },
   { time: 48.1, course: 'cross', side: 1, lanes: [-2.4, -.85], guard: 0, drop: 'homing' },
   { time: 53.5, course: 'weave', side: 1, lanes: [-2.55, -.5, 1.8] },
-  { time: 58.3, course: 'cross', side: -1, lanes: [.5, 2.35], guard: 1, drop: 'cannon' },
+  { time: 58.3, course: 'cross', side: -1, lanes: [-1.3, .5, 2.35], guard: 1, drop: 'cannon' },
   { time: 63.4, course: 'launch', side: 1, lanes: [2.2, 1, -.3] },
-  { time: 68.7, course: 'weave', side: -1, lanes: [-2.25, .2, 2.35], guard: 1, drop: 'laser' },
+  { time: 68.7, course: 'weave', side: -1, lanes: [-2.45, -.8, .8, 2.45], guard: 1, drop: 'laser' },
   { time: 73.5, course: 'cross', side: 1, lanes: [-2.15, -.55, .8] },
   { time: 78.5, course: 'launch', side: -1, lanes: [-1.8, .05, 1.75], guard: 0 },
-  { time: 83.6, course: 'cross', side: -1, lanes: [.35, 1.85], guard: 1, drop: 'omega' },
-  { time: 89.2, course: 'weave', side: 1, lanes: [-2.5, 0, 2.4], guard: 1 },
-  { time: 94, course: 'cross', side: 1, lanes: [-1.55, .6], guard: 0 },
+  { time: 83.6, course: 'cross', side: -1, lanes: [-1.55, .35, 1.85], guard: 1, drop: 'omega' },
+  { time: 89.2, course: 'weave', side: 1, lanes: [-2.5, -.85, .85, 2.5], guard: 1 },
+  { time: 94, course: 'cross', side: 1, lanes: [-1.55, .6, 2.35], guard: 0 },
 ];
 
 export function denPatrolScale(patrol: DenPatrol) { return patrol.heavy ? 1.23 : 1; }
 
 export function denPatrolPose(age: number, lane: number, patrol: DenPatrol) {
-  const t = Math.max(0, age);
+  const t = Math.max(0, age) * tuning.pace;
   const speed = patrol.heavy ? 2.35 : 2.75;
   const weave = patrol.course === 'weave';
   const entry = weave ? 0 : patrol.course === 'cross' ? 2.3 : 1.8;
@@ -70,6 +73,21 @@ export function denPatrolPose(age: number, lane: number, patrol: DenPatrol) {
 export function denPatrolCanFire(pose: ReturnType<typeof denPatrolPose>, patrol: DenPatrol) {
   const radius = 1.14 * denPatrolScale(patrol);
   return Math.abs(pose.x) + radius < WIDTH / 2 && pose.y + radius < HEIGHT / 2 && pose.y > -4.1 && Math.abs(pose.heading) < .63;
+}
+
+export function denPatrolVolley(origin: Point, player: Point, patrol: DenPatrol) {
+  const interval = (patrol.heavy ? 2.45 : 2.8) * tuning.cadence;
+  const { x, y } = origin;
+  const aim = Math.atan2(player.x - x, Math.max(1.8, y - player.y));
+  const speed = (patrol.heavy ? 4.95 : 4.7) * tuning.shotSpeed;
+  const spread = patrol.heavy ? guardSpread : tuning.spread;
+  return {
+    interval,
+    shots: spread.map(offset => {
+      const angle = aim + offset;
+      return { x, y, z: 0, vx: Math.sin(angle) * speed, vy: -Math.cos(angle) * speed, vz: 0, planar: true };
+    }),
+  };
 }
 
 export function denPatrolWarp(heading: number, poseCount: number) {

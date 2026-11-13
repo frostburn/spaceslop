@@ -9,7 +9,7 @@ const c=await server.ssrLoadModule('/src/summer/combat.ts'),layout=await server.
 const {createLevel}=await server.ssrLoadModule('/src/rendering/levels/summer.ts');
 const {WING_FORMATION}=await server.ssrLoadModule('/src/wing.ts');
 const vortex=await server.ssrLoadModule('/src/summer/vortex.ts');
-const {riverHydraHead}=await server.ssrLoadModule('/src/summer/hydra-targets.ts');
+const {riverHydraHead,SUMMER_HP}=await server.ssrLoadModule('/src/summer/hydra-targets.ts');
 
 test('full summer route has three hydras, varied aerial formations, repeat drops and bounded prewarmed pools',()=>{
  const f=new Flight('sentry',[],'vex','summer');f.invulnerable=f.cooldown=f.droneCooldown=1e5;
@@ -24,7 +24,7 @@ test('full summer route has three hydras, varied aerial formations, repeat drops
  assert.deepEqual([...roster].sort(),['drone','hydra','scout','vortex']);assert.equal(hydras.size,3);assert.equal(spirals.size,4);assert.equal(formations.size,4);assert.equal(drops.size,4);
  assert(maxima.scout<=c.SUMMER_AIR_POOL/2&&maxima.drone<=c.SUMMER_AIR_POOL/2&&maxima.hydra<=c.SUMMER_HYDRA_POOL);
  assert(maxima.vortex<=vortex.VORTEX_POOL);
- for(let i=0;i<361;i++)f.step(STEP);assert.equal(f.phase,'boss');assert.equal(f.bossHealth,layout.SUMMER_HP);
+ for(let i=0;i<361;i++)f.step(STEP);assert.equal(f.phase,'boss');assert.equal(f.bossHealth,SUMMER_HP);
 });
 
 test('river hydras stay rooted to the same meltwater while every visible head accepts shots, beams and contact',()=>{

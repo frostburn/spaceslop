@@ -8,7 +8,8 @@ after(() => server.close());
 const { DEN_CYCLE, denBodyEntry, denPose } = await server.ssrLoadModule('/src/den/combat.ts');
 const { Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
 const { DEN_APPROACH, DEN_DURATION, DEN_SCREENS, denScroll } = await server.ssrLoadModule('/src/den/route.ts');
-const { denWaves, denPatrolPose, denPatrolCanFire, denPatrolWarp } = await server.ssrLoadModule('/src/den/patrol.ts');
+const { DEN_PATROL_POOL, denWaves, denPatrolPose, denPatrolCanFire, denPatrolWarp } = await server.ssrLoadModule('/src/den/patrol.ts');
+const { stageEnemyTuning } = await server.ssrLoadModule('/src/stage-enemy-tuning.ts');
 const { turn16Hardpoints } = await server.ssrLoadModule('/src/den/patrol-atlas-16.ts');
 const { createDenPatrols } = await server.ssrLoadModule('/src/den/patrol-rig.ts');
 const { createPatrolWarpCard, patrolAtlasFor, patrolGridPadding, patrolGridPoint, patrolGridTurn, patrolRestPoint, PATROL_GRID_SIZE } = await server.ssrLoadModule('/src/den/patrol-warp.ts');
@@ -52,7 +53,7 @@ test('patrols turn through both supported atlases and wait until they are fully 
   for (const side of [-1, 1]) {
     const patrol = { course: 'cross', side, slot: 0, heavy: false };
     const initial = denPatrolPose(0, -1.1 * side, patrol);
-    const settled = denPatrolPose(2.3, -1.1 * side, patrol);
+    const settled = denPatrolPose(2.3 / stageEnemyTuning.den.pace, -1.1 * side, patrol);
     assert.equal(activePose(denPatrolWarp(initial.heading, 16)), 15);
     assert(!denPatrolCanFire(initial, patrol));
     assert.equal(activePose(denPatrolWarp(settled.heading, 16)), 0);
@@ -308,15 +309,18 @@ test('the gantry encounter is winnable with the ordinary ship and planar shots',
   flight.step(0);
   assert.equal(flight.phase, 'approach');
   flight.deployDrone(0, -2.8);
-  let sawAttack = false;
+  let sawAttack = false, dodgeX = 0;
+  const dangerAt = x => flight.threats.some(shot => {
+    const until = (flight.player.y - shot.y) / shot.vy;
+    return until >= 0 && until < .45 && Math.abs(shot.x + shot.vx * until - x) < .62;
+  });
   for (let frame = 0; frame < 1750 && flight.phase !== 'won' && flight.phase !== 'lost'; frame++) {
-    const danger = flight.threats.some(shot => {
-      const until = (flight.player.y - shot.y) / shot.vy;
-      return until >= 0 && until < .39 && Math.abs(shot.x + shot.vx * until - flight.player.x) < .54;
-    });
-    if (danger && flight.charges) flight.pulse();
-    else if (danger) flight.steer(flight.player.x > 0 ? -1 : 1, 0, STEP);
-    else if (Math.abs(flight.player.x) > .12) flight.steer(-Math.sign(flight.player.x), 0, STEP);
+    if (dangerAt(flight.player.x)) {
+      if (flight.charges) flight.pulse();
+      else dodgeX = [-1.8, 1.8, -2.8, 2.8].find(x => !dangerAt(x)) ?? dodgeX;
+    } else if (!dangerAt(0)) dodgeX = 0;
+    const delta = dodgeX - flight.player.x;
+    if (Math.abs(delta) > .12) flight.steer(Math.sign(delta), 0, STEP);
     flight.step(STEP);
     sawAttack ||= flight.threats.length > 0;
     assert(flight.shots.every(shot => shot.z === 0 && shot.vz === 0));
@@ -326,4 +330,45 @@ test('the gantry encounter is winnable with the ordinary ship and planar shots',
   const time = flight.denBossTime;
   flight.step(STEP);
   assert.equal(flight.denBossTime, time);
+});
+
+test('reinforced Den formations fit the prewarmed patrol pool and still share their carrier reward', () => {
+  const flight = new Flight('sentry', [], 'vex', 'den');
+  flight.invulnerable = flight.cooldown = flight.droneCooldown = 1e5;
+  let maxPatrols = 0;
+  while (flight.phase === 'stage') {
+    flight.step(STEP);
+    maxPatrols = Math.max(maxPatrols, flight.enemies.filter(enemy => enemy.den && enemy.age >= 0).length);
+  }
+  assert(maxPatrols > 4 && maxPatrols <= DEN_PATROL_POOL);
+
+  const carrier = new Flight('sentry', [], 'vex', 'den');
+  carrier.time = 68.7;
+  carrier.nextWave = denWaves.findIndex(wave => wave.time === carrier.time);
+  carrier.step(0);
+  const members = carrier.enemies.filter(enemy => enemy.den);
+  assert.equal(members.length, 4);
+  for (const enemy of members.slice(0, -1)) carrier.damageEnemy(enemy, enemy.hp);
+  assert.equal(carrier.drops.length, 0);
+  carrier.damageEnemy(members.at(-1), members.at(-1).hp);
+  assert.deepEqual(carrier.drops.map(drop => drop.weapon), ['laser']);
+});
+
+test('Den patrols fire fans after visible entry from the docks onward', () => {
+  const flight = new Flight('sentry', [], 'vex', 'den');
+  flight.invulnerable = flight.cooldown = flight.droneCooldown = 1e5;
+  const volleys = new Set();
+  while (flight.time < 20) {
+    const before = flight.enemies.find(enemy => enemy.den);
+    const oldFire = before?.fire;
+    const previousShots = new Set(flight.threats);
+    flight.step(STEP);
+    if (!before || !(oldFire <= before.age && before.fire > before.age && Number.isFinite(before.fire))) continue;
+    assert(denPatrolCanFire(denPatrolPose(before.age, before.lane, before.den), before.den));
+    const speed = (before.den.heavy ? 4.95 : 4.7) * stageEnemyTuning.den.shotSpeed;
+    const shots = flight.threats.filter(shot => !previousShots.has(shot) && Math.abs(Math.hypot(shot.vx, shot.vy) - speed) < 1e-9);
+    assert(shots.length >= (before.den.heavy ? 5 : 3));
+    volleys.add(before);
+  }
+  assert(volleys.size > 1);
 });

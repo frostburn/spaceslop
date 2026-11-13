@@ -4,7 +4,7 @@ import { easeFleet, FLEET_APPROACH, projectedSaucerMount } from './route';
 type Point = { x: number; y: number };
 type Port = 0 | 1 | 2;
 
-export const FLEET_BOSS_HP = 108;
+export const FLEET_BOSS_HP = 138;
 export const FLEET_BOSS_CYCLE = 7.25;
 export const FLEET_BOSS_MOUNTS = [
   [-.61, .37, -.216], [.61, .37, -.216], [0, 0, -.363],

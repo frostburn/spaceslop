@@ -15,8 +15,8 @@ export const preserveWaves = [
   {time:62,lanes:[-2.3,0,2.3],raptor:1,flyer:{formation:'crossing',mirror:-1},drop:'cannon'},
   {time:67,lanes:[-2.3,0,2.3],flyer:{formation:'chevron',mirror:-1},drop:'laser'},
   {time:72,lanes:[-2.2,-.65,.65,2.2],raptor:3,flyer:{formation:'swoop',mirror:1},drop:'omega'},
-  {time:78,lanes:[-2.2],raptor:0},
+  {time:78,lanes:[-2.2,1.65],raptor:0,flyer:{formation:'crossing',mirror:-1}},
   {time:83,lanes:[0,0,0,0],flyer:{formation:'loop',mirror:-1},drop:'homing'},
   {time:88,lanes:[1.8],raptor:0,drop:'laser'},
-  {time:93,lanes:[-2.4,0,2.4],raptor:0,flyer:{formation:'swoop',mirror:1},drop:'omega'},
+  {time:93,lanes:[-2.4,-.7,.75,2.4],raptor:0,flyer:{formation:'swoop',mirror:1},drop:'omega'},
 ] as const;
