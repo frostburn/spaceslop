@@ -16,47 +16,9 @@ import {createSummerClouds} from '../../summer/clouds';
 import {createLowWisps} from '../../summer/wisps';
 import {createVortexDrone} from '../../summer/vortex-rig';
 import {VORTEX_POOL} from '../../summer/vortex';
+import {createJellyDonuts} from '../../summer/jelly-donut';
 
-function createJellyDonuts(count: number) {
-  const profile = [
-    [.21, -.03], [.25, -.095], [.50, -.12], [.58, -.08], [.61, -.025],
-    [.61, .025], [.58, .085], [.52, .11], [.50, .098], [.48, .116],
-    [.36, .126], [.29, .119], [.25, .087], [.21, .03], [.21, -.03],
-  ].map(([radius, height]) => new T.Vector2(radius, height));
-  const segments = 72;
-  const geometry = new T.LatheGeometry(profile, segments).rotateX(Math.PI / 2);
-  const silver = new T.Color(0xb9c5cf), darkSteel = new T.Color(0x323e4c);
-  const band = new T.Color();
-  const colors: number[] = [];
-  for (let i = 0; i <= segments; i++) {
-    // Three inset marks in the face make the circular disc's spin visible.
-    const mark = 1 - T.MathUtils.smoothstep(Math.abs(i % 24 - 12), 2, 4);
-    for (const [radius, height] of profile) {
-      const groove = radius === .50 && height > 0;
-      const inset = height > .09 ? mark * .9 : 0;
-      band.copy(silver).lerp(darkSteel, Math.max(groove ? .52 : 0, inset));
-      colors.push(band.r, band.g, band.b);
-    }
-  }
-  geometry.setAttribute('color', new T.Float32BufferAttribute(colors, 3));
-  const rotor = new T.Mesh(geometry, new T.MeshStandardMaterial({
-    vertexColors: true, metalness: .67, roughness: .31,
-  }));
-  rotor.name = 'jelly-donut-disc';
-  const lens = new T.Mesh(new T.SphereGeometry(.22, 24, 12), new T.MeshStandardMaterial({
-    color: 0xde1531, emissive: 0xd70824, emissiveIntensity: .62, roughness: .29,
-  }));
-  lens.name = 'jelly-donut-core';
-  lens.scale.z = .53;
-  lens.position.z = .047;
-  return Array.from({ length: count }, () => {
-    const root = new T.Group();
-    root.name = 'jelly-donut';
-    const disc = rotor.clone();
-    root.add(disc, lens.clone());
-    return { root, disc };
-  });
-}
+
 export const createLevel:LevelFactory=({plane,signal})=>{
   const root=new T.Group(),world=new T.Group();root.name='summer-thaw-level';root.add(world);
   const clouds=createSummerClouds(),wisps=createLowWisps(),terrain=createSummerTerrain(clouds.state),ice=createSummerIce(),palace=createLotusPalace(clouds.state),mammothAssets=createMammothAssets(),hydraAssets=createHydraAssets();
@@ -94,8 +56,8 @@ export const createLevel:LevelFactory=({plane,signal})=>{
         const rig=enemy.summer.kind==='drone'?donuts[donutIndex++]:scouts[scoutIndex++];if(!rig)continue;
         rig.root.visible=enemy.hp>0;rig.root.position.set(enemy.x,enemy.y,0);
         const {bank}=summerMotion(enemy.age,enemy.lane,enemy.summer,time);
-        rig.root.rotation.set(0,bank,'disc' in rig?0:Math.PI);
-        if('disc' in rig)rig.disc.rotation.z=1.65*animationTime*enemy.summer.mirror+.55*enemy.summer.slot;
+        rig.root.rotation.set(0,bank,'pose' in rig?0:Math.PI);
+        if('pose' in rig)rig.pose(animationTime,enemy.summer.mirror,.55*enemy.summer.slot);
         else poseBurners(rig.burners,animationTime,.6);
         models[i]=rig.root;
       }
