@@ -99,7 +99,32 @@ test('pickups use collection side, preserve an existing matching wing, and reset
   assert.equal(flight.score, 250);
 });
 
-test('Broodlock can award Brass Towline and one bonus hull per sortie', () => {
+test('four identical pickups equip both Mk II wings before Towline and points', () => {
+  for (const side of [-1, 1]) {
+    const flight = quietFlight();
+    const first = flight.wings.find(wing => wing.side === side);
+    const second = flight.wings.find(wing => wing.side === -side);
+    const loadout = () => [first.weapon, first.upgraded, second.weapon, second.upgraded];
+
+    collect(flight, 'cannon', side);
+    assert.deepEqual(loadout(), ['cannon', false, undefined, false]);
+    collect(flight, 'cannon', -side);
+    assert.deepEqual(loadout(), ['cannon', true, undefined, false]);
+    collect(flight, 'cannon', side);
+    assert.deepEqual(loadout(), ['cannon', true, 'cannon', false]);
+    collect(flight, 'cannon', side);
+    assert.deepEqual(loadout(), ['cannon', true, 'cannon', true]);
+    assert.equal(flight.droneWeapon, 'sentry');
+    assert.equal(flight.score, 0);
+    collect(flight, 'cannon', side);
+    assert.equal(flight.droneWeapon, 'towline');
+    assert.equal(flight.score, 0);
+    collect(flight, 'cannon', side);
+    assert.equal(flight.score, 250);
+  }
+});
+
+test('the first four Broodlock rewards equip both Mk II wings and Brass gains hull on the first surplus', () => {
   const flight = quietFlight('broodlock', 'brass');
   const startingHull = flight.hull;
   assert.equal(flight.perkReadout, 'Reinforcement · Ready');
@@ -112,7 +137,13 @@ test('Broodlock can award Brass Towline and one bonus hull per sortie', () => {
     flight.player = { x: drop.x, y: drop.y };
     flight.collectDrops(0);
   }
+  assert(flight.wings.every(wing => wing.weapon === 'cannon' && wing.upgraded));
+  assert.equal(flight.droneWeapon, 'sentry');
+  assert.equal(flight.hull, startingHull);
+  collect(flight, 'cannon');
   assert.equal(flight.droneWeapon, 'towline');
+  assert.equal(flight.hull, startingHull);
+  collect(flight, 'cannon');
   assert.equal(flight.hull, startingHull + 1);
   assert.equal(flight.perkMessage, 'Reinforcement · +1 Hull');
   assert.equal(flight.perkReadout, 'Reinforcement · Used');
@@ -153,8 +184,7 @@ test('wing and drone shots retain the upgrade state they were fired with', () =>
   flight.stepWing(wing, false, STEP);
   flight.fire(flight.drone, true, 2);
 
-  collect(flight, 'cannon');
-  collect(flight, 'cannon');
+  for (let i = 0; i < 4; i++) collect(flight, 'cannon');
   wing.cooldown = 0;
   flight.stepWing(wing, false, STEP);
   flight.fire(flight.drone, true);
@@ -164,7 +194,7 @@ test('wing and drone shots retain the upgrade state they were fired with', () =>
 
 test('Towline adds an independent three-damage pulse to parked Sentry fire', () => {
   const flight = quietFlight('preserve');
-  for (let i = 0; i < 3; i++) collect(flight, 'cannon');
+  for (let i = 0; i < 5; i++) collect(flight, 'cannon');
   flight.player = { x: -2, y: 0 };
   flight.drone = { x: 2, y: 0 };
   flight.droneCooldown = 0;

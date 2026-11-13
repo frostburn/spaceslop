@@ -15,9 +15,10 @@ Clearing a formation with a reward drops one pickup at the last kill. Pulse coun
 In The Return Channel, two random weapon pickups appear before every boss. After every three bosses, a repair capsule restores one hull, up to four hull or five if Brass has triggered Reinforcement.
 
 1. A new weapon equips on the side where the ship catches it. The opposite wing takes it if that wing is the only empty slot. With both slots occupied, the pickup replaces the weapon on the collection side.
-2. A matching pickup upgrades the equipped weapon to Mk II for 50% more damage, regardless of which side catches it.
-3. Another match for a Mk II weapon unlocks Towline for the rest of the sortie.
-4. With Towline unlocked, further matches for a Mk II weapon award 250 points. Brass's **Reinforcement** grants +1 hull on the first surplus pickup each sortie, even at full starting hull. Later surplus pickups award 250 points.
+2. A matching pickup upgrades a Mk I copy to Mk II for 50% more damage. If both wings can take the upgrade, the collection side takes it.
+3. Once the equipped copy is Mk II, the next match equips a second Mk I copy on an empty wing. The following match upgrades it to Mk II.
+4. Once both wings are occupied and every copy of the matching weapon is Mk II, the next match unlocks Towline for the rest of the sortie.
+5. With Towline unlocked, surplus pickups award 250 points. Brass's **Reinforcement** grants +1 hull on the first surplus pickup each sortie, even at full starting hull. Later surplus pickups award 250 points.
 
 - **Homing Cannon** fires weak guided missiles.
 - **Standard Cannon** fires straight down its lane.
