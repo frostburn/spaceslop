@@ -26,15 +26,23 @@ test('challenge unlocks are case-insensitive and Hardcore loss resets only Hardc
   assert(challengeAvailable(byCode, 'hardcore', new Set()));
   assert(!challengeAvailable(byCode, 'bullet-hell', new Set()));
 
-  assert(recordChallengeClear(progress, 'bullet-hell'));
-  assert(!recordChallengeClear(progress, 'bullet-hell'));
+  assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'io'), { next: 'broodlock', unlockedHardcore: false });
+  assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'broodlock'), { next: 'io', unlockedHardcore: false });
+  assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'broodlock'), { next: 'io', unlockedHardcore: false });
+  assert(!challengeAvailable(progress, 'hardcore', campaignClears));
+  assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'io'), { next: undefined, unlockedHardcore: true });
   assert(challengeAvailable(progress, 'hardcore', campaignClears));
-  recordChallengeClear(progress, 'hardcore');
+  recordChallengeClear(progress, 'hardcore', 'broodlock');
   const saved = decodeChallengeProgress(JSON.stringify(progress));
   assert.deepEqual(saved.cleared.hardcore, ['broodlock']);
   resetHardcoreProgress(saved);
-  assert.deepEqual(saved.cleared, { 'bullet-hell': ['broodlock'], hardcore: [] });
+  assert.deepEqual(saved.cleared, { 'bullet-hell': ['broodlock', 'io'], hardcore: [] });
   assert(challengeAvailable(saved, 'hardcore', campaignClears));
+
+  const firstStageSave = decodeChallengeProgress('{"unlocked":["hardcore"],"cleared":{"bullet-hell":["broodlock"]}}');
+  assert(challengeAvailable(firstStageSave, 'hardcore', campaignClears));
+  assert.deepEqual(recordChallengeClear(firstStageSave, 'bullet-hell', 'broodlock'), { next: 'io', unlockedHardcore: false });
+  assert.deepEqual(recordChallengeClear(firstStageSave, 'bullet-hell', 'io'), { next: undefined, unlockedHardcore: false });
 });
 
 test('both challenges share a denser route and boss than the regular campaign', () => {
@@ -57,6 +65,10 @@ test('both challenges share a denser route and boss than the regular campaign', 
   const hardcore = launch('hardcore');
   const challenge = sample(bulletHell, bulletHell.stageDuration);
   assert.deepEqual(challenge, sample(hardcore, hardcore.stageDuration));
+  const io = launch('bullet-hell', 'vex', 'io');
+  const ioStage = sample(io, io.stageDuration);
+  assert(ioStage.shots / io.stageDuration > challenge.shots / bulletHell.stageDuration);
+  assert(ioStage.meanSpeed > challenge.meanSpeed);
   assert.equal(bulletHell.stageDuration, regular.stageDuration);
   assert.equal(normal.enemies, 15);
   assert(challenge.enemies > normal.enemies);

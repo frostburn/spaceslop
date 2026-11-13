@@ -104,7 +104,7 @@ const patrols = [
   [80,[-2.4,-.7,1.1]], [85,[-1.2,.6,2.3]], [91,[-2.3,0,2.3]],
 ] as const;
 const drops=['homing','cannon','laser','omega'] as const;
-type IoWave={time:number;lanes:number[];drop?:typeof drops[number];skipper?:boolean;crucible?:boolean};
+export type IoWave={time:number;lanes:number[];drop?:typeof drops[number];skipper?:boolean;crucible?:boolean};
 const skippers:IoWave[]=patrols.map(([time,lanes],i)=>({time,lanes:[...lanes],drop:wingRewardForWave(drops,i),skipper:true}));
 const crucibles:IoWave[]=[
   {time:12.8,lanes:[1],crucible:true,drop:'cannon'},

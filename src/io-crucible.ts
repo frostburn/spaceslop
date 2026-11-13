@@ -13,8 +13,8 @@ export const SLAG_RADIUS=.24;
 export function crucibleMotion(age:number,direction:number){
   return {x:Math.sign(direction)*(-5.8+age*1.15),y:6.7-age*.23+Math.sin(age*.65)*.25};
 }
-export function crucibleValve(age:number,nextPour:number){
-  const since=age-(nextPour-CRUCIBLE_POUR_INTERVAL);
+export function crucibleValve(age:number,nextPour:number,interval=CRUCIBLE_POUR_INTERVAL){
+  const since=age-(nextPour-interval);
   if(since>=-1e-6&&since<.3)return 1-Math.max(0,since)/.3;
   return Math.max(0,Math.min(1,(age-nextPour+CRUCIBLE_WINDUP)/CRUCIBLE_WINDUP));
 }

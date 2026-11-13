@@ -106,6 +106,8 @@ function bossTip(flight: Flight) {
   const encounter = flight.encounterLevel;
   if (flight.isBroodlockChallenge) return towline ? 'Sweep the arc across the green cannon. Dodge the follow-up fan.'
     : 'Tap the green cannon. Dodge both spore fans.';
+  if (flight.isIoChallenge) return flight.ioLegBroken ? 'Target the exposed machinery. Dodge the third sweep.'
+    : 'Break the cyan support. Move after the wheel locks on.';
   if (flight.isFonsFight) {
     const storm = fonsPhase(flight.fonsTime);
     if (storm.rain || storm.warning > 0) return 'Stay in the wake of a falling crystal';

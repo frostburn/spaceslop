@@ -2,8 +2,8 @@ import { registerSW } from 'virtual:pwa-register';
 import { setupBriefing } from './app/briefing';
 import type { FlightLoadout, FlightShortcut } from './app/flight-session';
 import { saveLevelOffline, savedLevels, clearSavedLevels } from './app/offline';
-import { CHALLENGE_LEVEL, CHALLENGE_SAVE_KEY, challengeAvailable, challengeModes, challengeNames, decodeChallengeProgress,
-  readChallengeCode, recordChallengeClear, resetHardcoreProgress, unlockChallenge } from './campaign/challenges';
+import { CHALLENGE_SAVE_KEY, challengeAvailable, challengeModes, challengeNames, challengeRoutes, decodeChallengeProgress,
+  nextChallengeLevel, readChallengeCode, recordChallengeClear, resetHardcoreProgress, unlockChallenge, type ChallengeMode } from './campaign/challenges';
 import { campaign } from './campaign/missions';
 import { CAMPAIGN_SAVE_KEY, campaignStatus, decodeCampaignClears, recordCampaignClear } from './campaign/progress';
 import { ranks } from './campaign/ranks';
@@ -44,7 +44,7 @@ refreshChallenges();
 const requestedMode = query.get('mode');
 const requestedChallenge = challengeModes.find(mode => requestedMode === mode && challengeAvailable(challengeProgress, mode, cleared));
 let mode: MenuMode = requestedChallenge ?? (requestedMode === 'campaign' || (requestedMode !== 'free-flight' && !query.has('level')) ? 'campaign' : 'free-flight');
-let selected = requestedChallenge ? CHALLENGE_LEVEL : mode === 'campaign' ? campaignSelection() : readLevel(query.get('level'));
+let selected = requestedChallenge ? challengeSelection(requestedChallenge) : mode === 'campaign' ? campaignSelection() : readLevel(query.get('level'));
 let saved = new Set<LevelId>();
 let session: AbortController | undefined;
 let briefController: AbortController | undefined;
@@ -118,6 +118,10 @@ function campaignSelection() {
   return campaignStatus(cleared).next ?? campaign.at(-1)!.level;
 }
 
+function challengeSelection(challenge: ChallengeMode) {
+  return nextChallengeLevel(challengeProgress, challenge) ?? challengeRoutes[challenge].at(-1)!;
+}
+
 const levelCards = campaign.map(({ level: id }, index) => {
   const button = document.createElement('button');
   const title = document.createElement('strong');
@@ -132,20 +136,19 @@ const levelCards = campaign.map(({ level: id }, index) => {
 });
 
 function updateCards() {
-  const { next } = campaignStatus(cleared);
   const inCampaign = mode === 'campaign';
   const challenge = mode === 'bullet-hell' || mode === 'hardcore' ? mode : undefined;
+  const next = challenge ? nextChallengeLevel(challengeProgress, challenge) : campaignStatus(cleared).next;
   for (const name of challengeModes) modeButtons[name].hidden = !challengeAvailable(challengeProgress, name, cleared);
   for (const card of levelCards) {
     const { id, button, title, detail } = card;
-    const complete = cleared.has(id);
-    button.hidden = challenge !== undefined && id !== CHALLENGE_LEVEL;
-    button.disabled = inCampaign && !complete && id !== next;
+    const complete = challenge ? challengeProgress.cleared[challenge].includes(id) : cleared.has(id);
+    button.hidden = challenge !== undefined && !challengeRoutes[challenge].includes(id);
+    button.disabled = (inCampaign || challenge !== undefined) && !complete && id !== next;
     button.setAttribute('aria-pressed', String(id === selected));
     button.classList.toggle('saved-offline', saved.has(id));
-    title.textContent = inCampaign ? `${card.number} · ${levels[id].name}` : levels[id].name;
-    const note = challenge ? (challengeProgress.cleared[challenge].includes(id) ? 'Cleared' : 'Ready')
-      : inCampaign ? (complete ? 'Cleared' : id === next ? 'Ready' : 'Locked')
+    title.textContent = inCampaign || challenge ? `${card.number} · ${levels[id].name}` : levels[id].name;
+    const note = inCampaign || challenge ? (complete ? 'Cleared' : id === next ? 'Ready' : 'Locked')
       : id === 'wormhole' ? 'Boss rush' : `${levels[id].duration} second route`;
     detail.textContent = saved.has(id) ? `${note} · Saved offline` : note;
   }
@@ -193,7 +196,7 @@ modeButtons['free-flight'].addEventListener('click', () => {
 for (const challenge of challengeModes) modeButtons[challenge].addEventListener('click', () => {
   if (!challengeAvailable(challengeProgress, challenge, cleared) || mode === challenge) return;
   mode = challenge;
-  select(CHALLENGE_LEVEL);
+  select(challengeSelection(challenge));
 });
 const challengeCode = document.querySelector<HTMLInputElement>('#challenge-code')!;
 const challengeStatus = document.querySelector<HTMLElement>('#challenge-status')!;
@@ -234,7 +237,7 @@ function openBriefing() {
   const challengeRules = document.querySelector<HTMLElement>('#brief-challenge')!;
   challengeRules.hidden = mode === 'campaign' || mode === 'free-flight';
   challengeRules.textContent = mode === 'hardcore' ? `${challengeNames.hardcore} · One hit ends the run and resets Hardcore progress.`
-    : `${challengeNames['bullet-hell']} · Faster ship, denser spore patterns.`;
+    : `${challengeNames['bullet-hell']} · Faster ship, denser enemy fire.`;
   pilotPicker = setupPilotPicker(document.querySelector('#pilot-choices')!, document.querySelector('#pilot-perk-description')!, signal, mode === 'hardcore');
   if (import.meta.env.DEV) updateShortcuts(selected);
   missionList.hidden = true;
@@ -288,6 +291,12 @@ async function launchFlight(shortcut?: FlightShortcut) {
     mode: flightMode,
   };
   const controller = new AbortController();
+  function nextBriefing(next: LevelId) {
+    if (session !== controller) return;
+    returnToMenu();
+    select(next);
+    openBriefing();
+  }
   session = controller;
   closeBriefing();
   menu.hidden = true;
@@ -312,20 +321,16 @@ async function launchFlight(shortcut?: FlightShortcut) {
     if (controller.signal.aborted) return;
     const handle = await openFlightSession(id, loadout, controller.signal, shortcut, campaignFlight ? {
       onClear: () => completeMission(id),
-      onNext(next) {
-        if (session !== controller) return;
-        returnToMenu();
-        select(next);
-        openBriefing();
-      },
+      onNext: nextBriefing,
     } : undefined, flightMode !== 'regular' ? {
       onClear() {
         refreshChallenges();
-        const unlockedHardcore = recordChallengeClear(challengeProgress, flightMode);
+        const outcome = recordChallengeClear(challengeProgress, flightMode, id);
         saveChallenges();
         updateCards();
-        return unlockedHardcore;
+        return outcome;
       },
+      onNext: nextBriefing,
       onLoss() {
         if (flightMode !== 'hardcore') return;
         refreshChallenges();

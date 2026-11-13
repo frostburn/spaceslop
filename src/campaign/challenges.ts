@@ -1,11 +1,15 @@
 import type { LevelId } from '../levels';
 import { campaignClearIds, campaignStatus } from './progress';
 
-export const CHALLENGE_LEVEL = 'broodlock' satisfies LevelId;
 export const CHALLENGE_SAVE_KEY = 'spaceslop.challenge-progress';
 export const challengeModes = ['bullet-hell', 'hardcore'] as const;
 export type ChallengeMode = typeof challengeModes[number];
 export type FlightMode = 'regular' | ChallengeMode;
+
+export const challengeRoutes: Record<ChallengeMode, readonly LevelId[]> = {
+  'bullet-hell': ['broodlock', 'io'],
+  hardcore: ['broodlock'],
+};
 
 export const challengeNames = {
   'bullet-hell': 'Bullet Hell',
@@ -51,11 +55,16 @@ export function challengeAvailable(progress: ChallengeProgress, mode: ChallengeM
   return progress.unlocked.includes(mode) || (mode === 'bullet-hell' && campaignStatus(campaignClears).next === undefined);
 }
 
-export function recordChallengeClear(progress: ChallengeProgress, mode: ChallengeMode) {
+export function nextChallengeLevel(progress: ChallengeProgress, mode: ChallengeMode) {
+  return challengeRoutes[mode].find(level => !progress.cleared[mode].includes(level));
+}
+
+export function recordChallengeClear(progress: ChallengeProgress, mode: ChallengeMode, level: LevelId) {
+  const frontier = nextChallengeLevel(progress, mode);
   const cleared = progress.cleared[mode];
-  if (!cleared.includes(CHALLENGE_LEVEL)) cleared.push(CHALLENGE_LEVEL);
-  // Broodlock is the full challenge route until later missions are added.
-  return mode === 'bullet-hell' && unlockChallenge(progress, 'hardcore');
+  if (level === frontier) cleared.push(level);
+  const next = nextChallengeLevel(progress, mode);
+  return { next, unlockedHardcore: mode === 'bullet-hell' && level === frontier && next === undefined && unlockChallenge(progress, 'hardcore') };
 }
 
 export function resetHardcoreProgress(progress: ChallengeProgress) {

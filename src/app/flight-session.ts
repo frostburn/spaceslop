@@ -22,7 +22,11 @@ type CampaignRun = {
   onNext(level: LevelId): void;
 };
 
-type ChallengeRun = { onClear(): boolean; onLoss(): void };
+type ChallengeRun = {
+  onClear(): { next?: LevelId; unlockedHardcore: boolean };
+  onNext(level: LevelId): void;
+  onLoss(): void;
+};
 
 export async function openFlightSession(selectedLevel: LevelId, loadout: FlightLoadout, signal: AbortSignal, shortcut?: FlightShortcut, campaignRun?: CampaignRun, challengeRun?: ChallengeRun) {
   function element<T extends HTMLElement>(id: string) {
@@ -163,7 +167,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
       promotion = result.promoted;
       unlockedBulletHell = result.unlockedBulletHell;
     }
-    if (recordProgress && challengeRun) unlockedHardcore = challengeRun.onClear();
+    if (recordProgress && challengeRun) ({ next: nextLevel, unlockedHardcore } = challengeRun.onClear());
     if (view?.hasEnding && reduceMotion.matches) {
       victoryTime = view.victoryDuration;
     }
@@ -228,7 +232,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     } else finishCredits();
   }, { signal });
   nextMission.addEventListener('click', () => {
-    if (screen === 'results' && nextLevel) campaignRun?.onNext(nextLevel);
+    if (screen === 'results' && nextLevel) (campaignRun ?? challengeRun)?.onNext(nextLevel);
   }, { signal });
   function startFlight() {
     if (!view || signal.aborted || start.disabled || screen === 'active' || screen === 'credits')
