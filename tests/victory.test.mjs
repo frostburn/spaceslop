@@ -12,7 +12,7 @@ const server = await createServer({
 });
 after(() => server.close());
 const { BOSS_DEPTH, Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
-const { addVictoryWingShots, createBossDefeat, createVictoryFlares, SALUTE_ANGLE, SALUTE_START, VICTORY_DURATION, victoryLaserLength } =
+const { addVictoryWingShots, createBossDefeat, createVictoryFlares, SALUTE_ANGLE, SALUTE_START, VICTORY_DURATION, VICTORY_LASER_OVERSCAN, victoryLaserLength } =
   await server.ssrLoadModule('/src/rendering/victory.ts');
 
 test('a lethal projectile clears in-flight ordnance and records the final boss time', () => {
@@ -132,10 +132,10 @@ test('victory lasers extend past the first screen edge along each wing muzzle', 
       const direction = new T.Vector3(side * Math.sin(angle), Math.cos(angle), 0);
       const length = victoryLaserLength(frustum, muzzle, direction);
       const at = distance => muzzle.clone().addScaledVector(direction, distance);
-      const edge = at(length - .5).applyMatrix4(projection);
+      const edge = at(length - VICTORY_LASER_OVERSCAN).applyMatrix4(projection);
       assert(Math.abs(Math.max(Math.abs(edge.x), Math.abs(edge.y)) - 1) < 1e-12);
       assert(!frustum.containsPoint(at(length)));
-      assert(frustum.containsPoint(at(length - .51)));
+      assert(frustum.containsPoint(at(length - VICTORY_LASER_OVERSCAN - .01)));
     }
   }
 });
