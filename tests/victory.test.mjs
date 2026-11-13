@@ -12,7 +12,7 @@ const server = await createServer({
 });
 after(() => server.close());
 const { BOSS_DEPTH, Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
-const { addVictoryWingShots, createBossDefeat, createVictoryFlares, SALUTE_START, VICTORY_DURATION } =
+const { addVictoryWingShots, createBossDefeat, createVictoryFlares, SALUTE_ANGLE, SALUTE_START, VICTORY_DURATION, victoryLaserLength } =
   await server.ssrLoadModule('/src/rendering/victory.ts');
 
 test('a lethal projectile clears in-flight ordnance and records the final boss time', () => {
@@ -117,5 +117,25 @@ test('salute rounds keep their equipped weapon and upgrade and travel along the 
     assert(addVictoryWingShots(shots, weapon, true, VICTORY_DURATION, muzzle, direction) > 0);
     assert(shots.every(shot => shot.wing === weapon && shot.upgraded && shot.x < muzzle.x && shot.y > muzzle.y));
     assert(shots.every(shot => shot.vx < 0 && shot.vy > 0 && shot.vz === 0));
+  }
+});
+
+test('victory lasers extend past the first screen edge along each wing muzzle', () => {
+  const camera = new T.PerspectiveCamera(40, 9 / 16, .05, 240);
+  camera.position.set(0, 0, 22);
+  camera.updateMatrixWorld();
+  const projection = new T.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+  const frustum = new T.Frustum().setFromProjectionMatrix(projection);
+  for (const side of [-1, 1]) {
+    const muzzle = new T.Vector3(side * 1.25, -2.6, .085);
+    for (const angle of [SALUTE_ANGLE, .12]) {
+      const direction = new T.Vector3(side * Math.sin(angle), Math.cos(angle), 0);
+      const length = victoryLaserLength(frustum, muzzle, direction);
+      const at = distance => muzzle.clone().addScaledVector(direction, distance);
+      const edge = at(length - .5).applyMatrix4(projection);
+      assert(Math.abs(Math.max(Math.abs(edge.x), Math.abs(edge.y)) - 1) < 1e-12);
+      assert(!frustum.containsPoint(at(length)));
+      assert(frustum.containsPoint(at(length - .51)));
+    }
   }
 });

@@ -15,6 +15,16 @@ export function victoryFormation(time: number) {
   return T.MathUtils.smoothstep(time, .48, SALUTE_START);
 }
 
+export function victoryLaserLength(frustum: T.Frustum, muzzle: T.Vector3, direction: T.Vector3) {
+  let exit = Infinity;
+  for (const plane of frustum.planes) {
+    const towardEdge = -plane.normal.dot(direction);
+    if (towardEdge > 1e-6) exit = Math.min(exit, plane.distanceToPoint(muzzle) / towardEdge);
+  }
+  // Let the viewport clip the beam so its full width reaches the edge.
+  return Math.max(0, exit) + .5;
+}
+
 export function addVictoryWingShots(shots: Flight['shots'], weapon: WingProjectile, upgraded: boolean,
   time: number, muzzle: T.Vector3, direction: T.Vector3) {
   const spec = wingShots[weapon];
