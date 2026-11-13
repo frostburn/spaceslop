@@ -7,7 +7,7 @@ after(() => server.close());
 const { Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
 const { campaign } = await server.ssrLoadModule('/src/campaign/missions.ts');
 const { PATTERN_HIT_RADIUS, PATTERN_BULLET_CAPACITY } = await server.ssrLoadModule('/src/challenge-patterns.ts');
-const { challengeAvailable, decodeChallengeProgress, readChallengeCode, recordChallengeClear, resetHardcoreProgress, unlockChallenge } =
+const { challengeAvailable, decodeChallengeProgress, nextChallengeLevel, readChallengeCode, recordChallengeClear, resetHardcoreProgress, unlockChallenge } =
   await server.ssrLoadModule('/src/campaign/challenges.ts');
 
 const { heliostatChallengeBoss } = await server.ssrLoadModule('/src/heliostat/challenge.ts');
@@ -40,13 +40,17 @@ test('challenge unlocks are case-insensitive and Hardcore loss resets only Hardc
   assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'ice'), { next: 'titan', unlockedHardcore: false });
   assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'titan'), { next: 'heliostat', unlockedHardcore: false });
   assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'heliostat'), { next: 'ice', unlockedHardcore: false });
-  assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'ice'), { next: undefined, unlockedHardcore: true });
+  assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'ice'), { next: 'preserve', unlockedHardcore: false });
+  assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'summer'), { next: 'preserve', unlockedHardcore: false });
+  assert(!challengeAvailable(progress, 'hardcore', campaignClears));
+  assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'preserve'), { next: 'summer', unlockedHardcore: false });
+  assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'summer'), { next: undefined, unlockedHardcore: true });
   assert(challengeAvailable(progress, 'hardcore', campaignClears));
   recordChallengeClear(progress, 'hardcore', 'broodlock');
   const saved = decodeChallengeProgress(JSON.stringify(progress));
   assert.deepEqual(saved.cleared.hardcore, ['broodlock']);
   resetHardcoreProgress(saved);
-  assert.deepEqual(saved.cleared, { 'bullet-hell': ['broodlock', 'io', 'vents', 'titan', 'heliostat', 'ice'], hardcore: [] });
+  assert.deepEqual(saved.cleared, { 'bullet-hell': ['broodlock', 'io', 'vents', 'titan', 'heliostat', 'ice', 'preserve', 'summer'], hardcore: [] });
   assert(challengeAvailable(saved, 'hardcore', campaignClears));
 
   const firstStageSave = decodeChallengeProgress('{"unlocked":["hardcore"],"cleared":{"bullet-hell":["broodlock"]}}');
@@ -56,6 +60,10 @@ test('challenge unlocks are case-insensitive and Hardcore loss resets only Hardc
   const twoStageSave = decodeChallengeProgress(JSON.stringify(firstStageSave));
   assert.deepEqual(recordChallengeClear(twoStageSave, 'bullet-hell', 'vents'), { next: 'titan', unlockedHardcore: false });
   assert(challengeAvailable(twoStageSave, 'hardcore', campaignClears));
+
+  const frostwakeSave = decodeChallengeProgress('{"unlocked":["bullet-hell","hardcore"],"cleared":{"bullet-hell":["broodlock","io","vents","titan","heliostat","ice"]}}');
+  assert.equal(nextChallengeLevel(frostwakeSave, 'bullet-hell'), 'preserve');
+  assert(challengeAvailable(frostwakeSave, 'hardcore', campaignClears));
 });
 
 test('both challenges build dense fields of slow, readable projectiles', () => {

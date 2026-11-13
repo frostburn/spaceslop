@@ -111,6 +111,8 @@ function bossTip(flight: Flight) {
   if (flight.isTitanChallenge) return 'Target the glowing thorax vent. Move with the gap in the weather front.';
   if (flight.isHeliostatChallenge) return 'Target the cyan core. Follow the gap in the arcs and dodge the plasma rings.';
   if (flight.isIceChallenge) return 'Target the mouth marker. Thread the gap between the ice streams.';
+  if (flight.isPreserveChallenge) return 'Aim at the belly. Dodge the claws, then follow the gap in the feathers.';
+  if (flight.isSummerChallenge) return 'Follow the gap between the petals. Destroy heads to thin the streams.';
   if (flight.isFonsFight) {
     const storm = fonsPhase(flight.fonsTime);
     if (storm.rain || storm.warning > 0) return 'Stay in the wake of a falling crystal';

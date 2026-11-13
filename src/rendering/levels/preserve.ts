@@ -13,6 +13,9 @@ import { createFlyerAssets, createPreserveFlyer } from '../../preserve-flyer-rig
 import { FLYER_POOL, flyerMotion } from '../../preserve-flyer';
 import { createGroundskeeperEffects } from '../../groundskeeper-effects';
 import { preserveLighting } from '../../preserve-lighting';
+import { patternBurstCharge } from '../../challenge-patterns';
+import { groundskeeperFeatherShoulders, PRESERVE_FLYER_MUZZLE, PRESERVE_RAPTOR_MUZZLE, preserveChallengeFlyer, preserveChallengeRaptor } from '../../preserve-challenge';
+import { createPatternCharge } from '../pattern-charge';
 export const createLevel: LevelFactory = ({ plane, signal }) => {
   const root = new T.Group();
   const flyerAssets = createFlyerAssets(), flyers = Array.from({ length: FLYER_POOL }, () => createPreserveFlyer(flyerAssets));
@@ -21,6 +24,10 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
   const preserve = createPreserveScenery();
   const boss = preserve.boss;
   const effects = createGroundskeeperEffects();
+  const charge = createPatternCharge(0xffcc83);
+  const beaks = flyers.map(rig => charge.attach(rig.root, 0, -PRESERVE_FLYER_MUZZLE, .24));
+  const mouths = raptors.map(rig => charge.attach(rig.root, 0, PRESERVE_RAPTOR_MUZZLE, .24));
+  const shoulders = [-1, 1].map(() => charge.attach(boss.root, 0, 0, 0));
   const models: (T.Object3D | undefined)[] = [];
   addRoots(root, ...ambushers, ...raptors, preserve, effects, ...flyers);
   const contact = createBossLaserContact(plane, boss.root);
@@ -44,13 +51,22 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
     orientation: (_time, reveal) => preserveFrame(reveal),
     surfaces: [preserve.root],
     warmup: [[...flyers.map(r => r.root), ...raptors.map(r => r.root), ...ambushers.map(r=>r.root), preserve.root], [boss.root, effects.root]],
-    prepare() { preserve.prime(true); effects.prime(); ambushers.forEach(r=>r.prime(true)); flyers.forEach(r=>r.prime(true)); },
-    afterWarmup() {preserve.prime(false);ambushers.forEach(r=>r.prime(false));flyers.forEach(r=>r.prime(false));},
+    prepare() {
+      preserve.prime(true); effects.prime(); ambushers.forEach(r=>r.prime(true)); flyers.forEach(r=>r.prime(true));
+      beaks[0](1); mouths[0](1); shoulders[0](1);
+    },
+    afterWarmup() {
+      preserve.prime(false); ambushers.forEach(r=>r.prime(false)); flyers.forEach(r=>r.prime(false));
+      beaks[0](0); mouths[0](0); shoulders[0](0);
+    },
     contacts: [boss.root, ...ambushers.map(r=>r.root), ...raptors.map(r => r.root), ...flyers.map(r => r.root)],
     contact,
     update(frame) {
       const { flight, reveal: eased, time, animationTime, elapsed, newFlight, fighterSpeed, droneSpeed } = frame;
-      boss.pose(flight.groundskeeperTime, flight.groundskeeperAim, flight.groundskeeperCancelledAt);
+      const pose = boss.pose(flight.groundskeeperTime, flight.groundskeeperAim, flight.groundskeeperCancelledAt);
+      const featherCharge = flight.groundskeeperFeatherCharge;
+      const activeShoulders = groundskeeperFeatherShoulders(pose.kind);
+      for (const [i, glow] of shoulders.entries()) glow(activeShoulders.includes(i) ? featherCharge * 2.5 : 0, pose.arms[i].shoulder);
       effects.update(flight.groundskeeperTime, flight.groundskeeperAim, flight.groundskeeperCancelledAt, flight.phase === 'boss');
       models.length = flight.enemies.length;
       models.fill(undefined);
@@ -65,6 +81,7 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
         if (!enemy) continue;
         raptor.root.position.set(enemy.x,enemy.y,0);raptor.root.rotation.z=Math.PI;
         raptor.pose(enemy.age);models[flight.enemies.indexOf(enemy)]=raptor.root;
+        mouths[i](patternBurstCharge(enemy, preserveChallengeRaptor.windup));
       }
       const flock=flight.enemies.filter(enemy=>enemy.flyer);
       for (const [index, rig] of flyers.entries()) {
@@ -73,6 +90,7 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
         const p=flyerMotion(enemy.age,enemy.lane,enemy.flyer);
         rig.root.position.set(enemy.x, enemy.y, 0);
         rig.pose(enemy.age,enemy.flyer,p.bank,enemy.heading); models[flight.enemies.indexOf(enemy)] = rig.root;
+        beaks[index](patternBurstCharge(enemy, preserveChallengeFlyer.windup));
       }
       const reveal = eased;
       const wakes = flight.hull > 0 && reveal < 0.7 ? [
