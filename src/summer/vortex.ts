@@ -1,5 +1,5 @@
 // Pure timing/ordnance shared by flight simulation and the rotating emitter rig.
-export const VORTEX_HP=12,VORTEX_RADIUS=.8,VORTEX_POOL=2;
+export const VORTEX_HP=15,VORTEX_RADIUS=.8,VORTEX_POOL=2;
 export const VORTEX_ENTRY=2.2,VORTEX_FIRE=3,VORTEX_INTERVAL=.105,VORTEX_PULSES=20,VORTEX_CYCLE=3.9;
 export const vortexWaveIndices=[4,10,16,20] as const;
 const clamp=(x:number)=>Math.max(0,Math.min(1,x));

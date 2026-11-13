@@ -2,7 +2,7 @@
 // climbing comes from the bird's pitch, wing stroke and banking, not its hitbox.
 export type FlyerFormation = 'chevron' | 'crossing' | 'slalom' | 'loop' | 'swoop';
 export type FlyerCourse = { formation: FlyerFormation; mirror: number; slot: number; count: number };
-export const FLYER_HP = 2, FLYER_POOL = 10, FLYER_DELAY = .64;
+export const FLYER_HP = 3, FLYER_POOL = 10, FLYER_DELAY = .64;
 export const FLYER_LOOP_ENTRY = 2.5, FLYER_LOOP_DURATION = 2 * Math.PI / 1.6;
 const clamp = (v: number, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, v));
 const smooth = (v: number) => { const t = clamp(v); return t * t * (3 - 2 * t); };

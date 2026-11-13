@@ -63,7 +63,7 @@ test('rotated feathered anatomy accepts bullets, all sidearms, nearest laser con
   const e=enemy(heading);assert(m.flyerBodyHit(e,{x:0,y:-9},{x:0,y:9}));assert(!m.flyerBodyHit(e,{x:3,y:-9},{x:3,y:9}));assert(Number.isFinite(m.flyerBeamEntry(e,{x:0,y:-9})));
   for(const wing of[undefined,'cannon','homing','omega']){
    const target=enemy(heading),f=quiet(target);
-   f.shots=[{x:0,y:wing==='homing'?-.35:-1,z:0,vx:0,vy:120,vz:0,wing,damage:2,pierced:wing==='omega'?new Set():undefined}];
+   f.shots=[{x:0,y:wing==='homing'?-.35:-1,z:0,vx:0,vy:120,vz:0,wing,damage:m.FLYER_HP,pierced:wing==='omega'?new Set():undefined}];
    f.step(STEP);assert.equal(target.hp,0,`${wing??'ship'} misses a sideways dinosaur`);assert.equal(f.score,100);assert.equal(f.drops.length,1);
   }
   const a=enemy(heading),b=enemy(heading,2),f=quiet(a);f.enemies=[b,a];const w=f.wings[0];w.weapon='laser';

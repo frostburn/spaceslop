@@ -28,14 +28,14 @@ export const denWaves: readonly DenWave[] = [
   { time: 43.6, course: 'launch', side: -1, lanes: [-2.2, -.9, .55] },
   { time: 48.1, course: 'cross', side: 1, lanes: [-2.4, -.85], guard: 0, drop: 'homing' },
   { time: 53.5, course: 'weave', side: 1, lanes: [-2.55, -.5, 1.8] },
-  { time: 58.3, course: 'cross', side: -1, lanes: [.5, 2.35], guard: 1, drop: 'cannon' },
+  { time: 58.3, course: 'cross', side: -1, lanes: [-1.3, .5, 2.35], guard: 1, drop: 'cannon' },
   { time: 63.4, course: 'launch', side: 1, lanes: [2.2, 1, -.3] },
-  { time: 68.7, course: 'weave', side: -1, lanes: [-2.25, .2, 2.35], guard: 1, drop: 'laser' },
+  { time: 68.7, course: 'weave', side: -1, lanes: [-2.45, -.8, .8, 2.45], guard: 1, drop: 'laser' },
   { time: 73.5, course: 'cross', side: 1, lanes: [-2.15, -.55, .8] },
   { time: 78.5, course: 'launch', side: -1, lanes: [-1.8, .05, 1.75], guard: 0 },
-  { time: 83.6, course: 'cross', side: -1, lanes: [.35, 1.85], guard: 1, drop: 'omega' },
-  { time: 89.2, course: 'weave', side: 1, lanes: [-2.5, 0, 2.4], guard: 1 },
-  { time: 94, course: 'cross', side: 1, lanes: [-1.55, .6], guard: 0 },
+  { time: 83.6, course: 'cross', side: -1, lanes: [-1.55, .35, 1.85], guard: 1, drop: 'omega' },
+  { time: 89.2, course: 'weave', side: 1, lanes: [-2.5, -.85, .85, 2.5], guard: 1 },
+  { time: 94, course: 'cross', side: 1, lanes: [-1.55, .6, 2.35], guard: 0 },
 ];
 
 export function denPatrolScale(patrol: DenPatrol) { return patrol.heavy ? 1.23 : 1; }

@@ -35,15 +35,15 @@ export const fleetWaves: readonly FleetWave[] = [
   { at: 34.7, course: 'pincer', side: 1, lanes: [-2.3, 2.3], drop: 'cannon' },
   { at: 39.8, course: 'hold', side: 1, lanes: [-1.4, 1.1], guard: 0, drop: 'laser' },
   { at: 45.0, course: 'escort', side: 1, lanes: [-1.95, -.24, 1.6], drop: 'omega' },
-  { at: 50.3, course: 'sweep', side: 1, lanes: [-1.75, 0, 1.75] },
+  { at: 50.3, course: 'sweep', side: 1, lanes: [-2.25, -.75, .75, 2.25] },
   { at: 55.6, course: 'pincer', side: -1, lanes: [-2.18, 2.18], drop: 'homing' },
-  { at: 60.6, course: 'hold', side: -1, lanes: [-1.96, .05, 1.9], guard: 1, drop: 'cannon' },
+  { at: 60.6, course: 'hold', side: -1, lanes: [-2.12, -.7, .7, 2.12], guard: 1, drop: 'cannon' },
   { at: 65.6, course: 'sweep', side: 1, lanes: [-1.25, .15, 1.55] },
   { at: 71.2, course: 'escort', side: -1, lanes: [-1.5, 0, 1.5], drop: 'laser' },
-  { at: 76.5, course: 'pincer', side: -1, lanes: [-1.45, 1.45], drop: 'omega' },
-  { at: 82.3, course: 'hold', side: 1, lanes: [-1.4, .2, 1.55], guard: 1, drop: 'homing' },
+  { at: 76.5, course: 'pincer', side: -1, lanes: [-1.6, 1.6, -.5, .5], drop: 'omega' },
+  { at: 82.3, course: 'hold', side: 1, lanes: [-1.78, -.58, .58, 1.78], guard: 1, drop: 'homing' },
   { at: 87.7, course: 'sweep', side: -1, lanes: [-1.4, 0, 1.45], drop: 'cannon' },
-  { at: 92.8, course: 'pincer', side: 1, lanes: [-1.45, 1.45], guard: 1, drop: 'laser' },
+  { at: 92.8, course: 'pincer', side: 1, lanes: [-1.55, 1.55, -.5], guard: 1, drop: 'laser' },
 ];
 
 export const FLEET_SAUCER_POOL = 12;

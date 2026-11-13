@@ -3,7 +3,8 @@ export const HYDRA_SIDES=[-1,0,1] as const;
 export type HydraSide=typeof HYDRA_SIDES[number];
 type Triple=[number,number,number];
 export type HydraState={hp:Triple;brokenAt:Triple};
-export const HYDRA_HEAD_HP=4,HYDRA_BOSS_HEAD_HP=30,HYDRA_BOSS_SIZE=1.85;
+export const HYDRA_HEAD_HP=5,HYDRA_BOSS_HEAD_HP=34,HYDRA_BOSS_SIZE=1.85;
+export const SUMMER_HP = HYDRA_SIDES.length * HYDRA_BOSS_HEAD_HP;
 export const HYDRA_BODY_Y=3.9,HYDRA_BODY_DEPTH=-16.2,HYDRA_ROOT_Y=2.9,HYDRA_HEAD_Z=.2;
 export function createHydraState(hp=HYDRA_HEAD_HP):HydraState{return{hp:[hp,hp,hp],brokenAt:[-1,-1,-1]};}
 export function hydraAlive(state:HydraState|undefined,side:HydraSide){return !state||state.hp[side+1]>0;}

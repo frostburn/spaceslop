@@ -20,7 +20,7 @@ export const denMineSites = [
   { x: 347, y: 2160 },
 ] as const;
 
-export const DEN_TURRET_HP = 4;
+export const DEN_TURRET_HP = 6;
 export const DEN_TURRET_REACH = 1.05;
 export const DEN_TURRET_RECOIL = .15;
 export const DEN_TURRET_WINDUP = .66;

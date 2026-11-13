@@ -1,6 +1,6 @@
 import { PRESERVE_SPEED, PRESERVE_WIDTH_SCALE, PRESERVE_DISTANCE, PRESERVE_PITCH, preserveGround, preservePools, preserveScroll, preserveWater } from './preserve-layout';
 
-export const AMBUSHER_HP = 6, AMBUSHER_POOL = 2, AMBUSHER_SPAWN_LEAD = 12;
+export const AMBUSHER_HP = 8, AMBUSHER_POOL = 2, AMBUSHER_SPAWN_LEAD = 12;
 export const AMBUSHER_WINDUP = 1.1, AMBUSHER_LEAP = .62, AMBUSHER_BITE = .18, AMBUSHER_RETREAT = 1.05;
 export const AMBUSHER_DURATION = AMBUSHER_WINDUP + AMBUSHER_LEAP + AMBUSHER_BITE + AMBUSHER_RETREAT;
 export const AMBUSHER_SPECIES = 'Spinosaurus aegyptiacus';

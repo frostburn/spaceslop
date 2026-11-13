@@ -3,7 +3,7 @@ import { WIDTH } from '../../playfield';
 
 type Point = { x: number; y: number };
 type Side = -1 | 1;
-export const FONS_HP = 124;
+export const FONS_HP = 144;
 export const FONS_APPROACH = 3.25;
 export const FONS_CYCLE = 18.6;
 export const FONS_RAIN_AT = 11.65;

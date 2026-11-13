@@ -12,11 +12,11 @@ import { broadsideShots, fleetWaves, FLEET_SAUCER_LIFE, FLEET_SAUCER_STAGGER, FL
 import { FLEET_APPROACH, tractorPose, tractorSites } from './fleet/route';
 import { createFleetBossAttack, FLEET_BOSS_HP, fleetBossEntry, fleetBossTarget, stepFleetBoss } from './fleet/boss';
 import { HELIOSTAT_HP,HELIOSTAT_APPROACH,HELIOSTAT_INTERVAL,HELIOSTAT_WINDUP,HELIOSTAT_FIRE,HELIOSTAT_CHANNEL,HELIOSTAT_FADE,HELIOSTAT_GUARD_FIRE,HELIOSTAT_SPAWN_LEAD,heliostatWaves,heliostatMotion,heliostatCanAttack,heliostatPlasmaHits,electricSites,electricHits,type HeliostatCourse } from './heliostat/combat';
-import {SUMMER_HP,SUMMER_APPROACH} from './summer/layout';
+import {SUMMER_APPROACH} from './summer/layout';
 import {createHydraAttack,stepHydraAttack} from './summer/hydra-attack';
 import {VORTEX_HP,VORTEX_RADIUS,VORTEX_FIRE,vortexEmission} from './summer/vortex';
 import {summerWaves,summerMotion,hydraBeamEntry,type SummerCourse} from './summer/combat';
-import {HYDRA_SIDES,HYDRA_HEAD_HP,HYDRA_BOSS_HEAD_HP,HYDRA_BOSS_SIZE,createHydraState,hydraAlive,damageHydraHead,damageRiverHydra,closestRiverHead,nearestHydraHead,hydraContact,hydraBeamContact,hydraBossHead,hydraBossContact,riverHydraHead,type HydraState,type HydraSide} from './summer/hydra-targets';
+import {SUMMER_HP,HYDRA_SIDES,HYDRA_HEAD_HP,HYDRA_BOSS_HEAD_HP,HYDRA_BOSS_SIZE,createHydraState,hydraAlive,damageHydraHead,damageRiverHydra,closestRiverHead,nearestHydraHead,hydraContact,hydraBeamContact,hydraBossHead,hydraBossContact,riverHydraHead,type HydraState,type HydraSide} from './summer/hydra-targets';
 import {heliostatLockTargets} from './heliostat/combat';
 import {crawlerSites,crawlerPose,stepCrawler,crawlerHits,CRAWLER_HP,type CrawlerState} from './heliostat/crawler';
 import {mineSites,minePose,triggerMine,mineBurst,MINE_WINDUP,MINE_JUMP,MINE_BURST_TIME,type BoulevardMine} from './boulevard-mines';
@@ -1071,10 +1071,10 @@ export class Flight {
             : wave.ventAnchor !== undefined ? MORTAR_FIRST_FIRE
             : wave.crucible ? CRUCIBLE_FIRST_POUR
             : schoolDelay(school) + (wave.ant ? antFire[wave.ant].first : wave.marine === 'plesiosaur' ? 1.8 : wave.skipper ? 1.55 : 1.1) + index * .28,
-          hp: grove ? (grove.kind === 'frog' ? FROG_HP : grove.kind === 'sentry' ? 7 : grove.kind === 'skimmer' ? 2 : 3)
-            : summer ? (summer.kind === 'vortex' ? VORTEX_HP : summer.kind === 'hydra' ? HYDRA_HEAD_HP * 3 : summer.kind === 'drone' ? 4 : 2)
+          hp: grove ? (grove.kind === 'frog' ? FROG_HP : grove.kind === 'sentry' ? 9 : grove.kind === 'skimmer' ? 3 : 4)
+            : summer ? (summer.kind === 'vortex' ? VORTEX_HP : summer.kind === 'hydra' ? HYDRA_HEAD_HP * 3 : summer.kind === 'drone' ? 5 : 3)
             : heliostat ? (heliostat.kind === 'guard' ? 6 : 2)
-            : boulevard ? (boulevard.formation === 'intercept' ? 5 : boulevard.heavy ? 6 : 3)
+            : boulevard ? (boulevard.formation === 'intercept' ? 7 : boulevard.heavy ? 8 : 4)
             : flyer ? FLYER_HP
             : shrimp ? SHRIMP_HP
             : wave.ventWorm ? WORM_HP
@@ -1253,7 +1253,7 @@ export class Flight {
         const age = this.time - wave.at - slot * FLEET_SAUCER_STAGGER - dt;
         const pose = saucerPose(age, lane, fleet);
         this.enemies.push({ x: pose.x, y: pose.y, lane, age, fleet, fire: Infinity,
-          hp: fleet.heavy ? 7 : 3, reward });
+          hp: fleet.heavy ? 10 : 4, reward });
       }
     }
 
@@ -1300,7 +1300,7 @@ export class Flight {
         const age = this.time - wave.time - slot * DEN_PATROL_STAGGER - dt;
         const pose = denPatrolPose(age, lane, den);
         this.enemies.push({ x: pose.x, y: pose.y, heading: pose.heading, lane, age, den, fire: Infinity,
-          hp: den.heavy ? 7 : 3, reward });
+          hp: den.heavy ? 11 : 5, reward });
       }
     }
 
