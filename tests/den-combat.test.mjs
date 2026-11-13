@@ -11,7 +11,7 @@ const { DEN_APPROACH, DEN_DURATION, DEN_SCREENS, denScroll } = await server.ssrL
 const { denWaves, denPatrolPose, denPatrolCanFire, denPatrolWarp } = await server.ssrLoadModule('/src/den/patrol.ts');
 const { turn16Hardpoints } = await server.ssrLoadModule('/src/den/patrol-atlas-16.ts');
 const { createDenPatrols } = await server.ssrLoadModule('/src/den/patrol-rig.ts');
-const { createPatrolWarpCard } = await server.ssrLoadModule('/src/den/patrol-warp.ts');
+const { createPatrolWarpCard, patrolAtlasFor, patrolGridPadding, patrolGridPoint, patrolGridTurn, patrolRestPoint, PATROL_GRID_SIZE } = await server.ssrLoadModule('/src/den/patrol-warp.ts');
 const { DEN_TURRET_REACH, DEN_TURRET_RECOIL, DEN_MINE_FUSE, createDenTurret, denMinePose,
   denTurretSignal, stepDenTurret } = await server.ssrLoadModule('/src/den/defense.ts');
 
@@ -60,61 +60,149 @@ test('patrols turn through both supported atlases and wait until they are fully 
   }
 });
 
-test('patrol mesh stays continuous through atlas handoffs and straight ahead', () => {
-  const card = createPatrolWarpCard(), geometry = card.root.geometry;
-  const position = geometry.getAttribute('position');
-  const uv = geometry.getAttribute('uv'), nextUV = geometry.getAttribute('nextUV');
-  const sample = angle => {
-    card.pose(angle);
-    return {
-      shape: Array.from(position.array), uv: Array.from(uv.array), nextUV: Array.from(nextUV.array),
-      blend: card.root.material.uniforms.poseBlend.value,
-    };
-  };
-  const epsilon = 1e-5;
+function patrolPixel(card, attribute, x, y) {
+  const { index, attributes } = card.geometry, uv = attributes[attribute], { position } = attributes;
+  const triangle = new Triangle(), weights = new Vector3(), point = new Vector3(x, y, 0);
+  for (let i = 0; i < index.count; i += 3) {
+    const a = index.getX(i), b = index.getX(i + 1), c = index.getX(i + 2);
+    triangle.a.set(uv.getX(a), uv.getY(a), 0);
+    triangle.b.set(uv.getX(b), uv.getY(b), 0);
+    triangle.c.set(uv.getX(c), uv.getY(c), 0);
+    if (!triangle.getBarycoord(point, weights) || Math.min(weights.x, weights.y, weights.z) < -1e-5) continue;
+    return new Vector2(
+      weights.x * position.getX(a) + weights.y * position.getX(b) + weights.z * position.getX(c),
+      weights.x * position.getY(a) + weights.y * position.getY(b) + weights.z * position.getY(c),
+    );
+  }
+  assert.fail('Source pixel escaped the patrol grid');
+}
+
+test('the painted patrol sprite stays continuous when the handoff grids change', () => {
+  const card = createPatrolWarpCard(), epsilon = 1e-5;
   assert.throws(() => card.setArt(new Texture({ width: 640, height: 480 })), /Unsupported patrol atlas layout/);
   assert.equal(card.root.visible, false);
-  for (const [count, width, height] of [[7, 768, 512], [16, 627, 627]]) {
+  for (const [width, height] of [[768, 512], [627, 627]]) {
+    const atlas = patrolAtlasFor(width, height), count = atlas.crops.length;
     const texture = new Texture({ width, height });
     card.setArt(texture);
+    const { index, attributes: { position, uv } } = card.root.geometry;
+    assert.equal(position.count, 256);
+    assert.equal(index.count, 6 * 15 ** 2);
     const step = Math.PI / (2 * (count - 1));
-    const edge = count === 16 ? .16 : .3;
-    const straight = sample(0);
-    assert.deepEqual(sample(-epsilon).uv, sample(epsilon).uv);
-    assert.notDeepEqual(straight.uv, sample(Math.PI / 2).uv);
-    assert.equal(sample((edge - .01) * step).blend, 0);
-    assert(sample((edge + .01) * step).blend > 0);
-    assert.equal(sample((1 - edge + .01) * step).blend, 1);
-    for (const side of [-1, 1]) for (let i = 0; i < count - 1; i++) {
-      const angle = side * (i + .5) * step;
-      const a = sample(angle - epsilon), b = sample(angle + epsilon);
-      assert.deepEqual(a.uv, b.uv);
-      assert.deepEqual(a.nextUV, b.nextUV);
-      assert.notDeepEqual(a.uv, a.nextUV);
-      assert(Math.abs(a.blend - .5) < .001 && Math.abs(b.blend - .5) < .001);
-      assert(a.shape.every((coordinate, j) => Math.abs(coordinate - b.shape[j]) < .001));
+    const weights = card.root.material.uniforms.poseBlend;
+    const sample = (frame, heading, attribute) => {
+      const [l, t, r, b] = atlas.crops[frame];
+      card.pose(heading);
+      return [.2, .5, .8].flatMap(u => [.2, .5, .8].map(v =>
+        patrolPixel(card.root, attribute, (l + u * (r - l)) / atlas.width, 1 - (t + v * (b - t)) / atlas.height)));
+    };
+    const samePixels = (a, b) => a.forEach((pixel, i) => assert(pixel.distanceTo(b[i]) < .00001));
+    samePixels(sample(0, -epsilon, 'uv'), sample(0, epsilon, 'uv'));
+    const straight = Array.from(uv.array);
+    card.pose(Math.PI / 2);
+    assert.notDeepEqual(Array.from(uv.array), straight);
+    assert.equal(weights.value, 1);
+    card.pose(.05 * step);
+    assert.equal(weights.value > 0, count === 16);
+    card.pose(.95 * step);
+    assert.equal(weights.value < 1, count === 16);
+    for (const side of [-1, 1]) for (let frame = 1; frame < count; frame++) {
+      const key = frame * step, before = sample(frame, side * (key - epsilon), 'nextUV');
+      assert(Math.abs(weights.value - 1) < 1e-6);
+      const isLast = frame === count - 1;
+      const after = sample(frame, side * (key + epsilon), isLast ? 'nextUV' : 'uv');
+      assert(Math.abs(weights.value - (isLast ? 1 : 0)) < 1e-6);
+      samePixels(before, after);
       for (let eighth = 0; eighth < 8; eighth++) {
-        card.pose(side * (i + eighth / 8) * step);
-        for (let j = 0; j < geometry.index.count; j += 3) {
-          const a = geometry.index.getX(j), b = geometry.index.getX(j + 1), c = geometry.index.getX(j + 2);
+        card.pose(side * (frame - 1 + eighth / 8) * step);
+        for (let i = 0; i < index.count; i += 3) {
+          const a = index.getX(i), b = index.getX(i + 1), c = index.getX(i + 2);
           assert((position.getX(b) - position.getX(a)) * (position.getY(c) - position.getY(a))
             - (position.getY(b) - position.getY(a)) * (position.getX(c) - position.getX(a)) > 0);
         }
       }
-      const key = (i + 1) * step;
-      const before = sample(side * (key - epsilon)), after = sample(side * (key + epsilon));
-      assert.equal(before.blend, 1);
-      assert.equal(after.blend, 0);
-      assert.deepEqual(before.nextUV, after.uv);
-    }
-    if (count === 16) for (let i = -(count - 2); i < count - 1; i++) {
-      const angle = i * step, h = 1e-4;
-      const before = sample(angle - h).shape, at = sample(angle).shape, after = sample(angle + h).shape;
-      assert(at.every((x, j) => Math.abs((after[j] - x) - (x - before[j])) / h < .12));
     }
     texture.dispose();
   }
-  geometry.dispose();
+  card.root.geometry.dispose();
+  card.root.material.dispose();
+});
+
+test('editing a pose grid affects only its handoff and invalid edits are rejected atomically', async () => {
+  const { movePatrolPoint } = await server.ssrLoadModule('/src/studies/patrol-registration.ts');
+  const card = createPatrolWarpCard();
+  const texture = new Texture({ width: 627, height: 627 });
+  card.setArt(texture);
+  const handoff = 2, heading = -15 * Math.PI / 180, neighbor = -9 * Math.PI / 180, point = 3 * PATROL_GRID_SIZE + 4;
+  const { position, uv, nextUV } = card.root.geometry.attributes;
+  const weights = card.root.material.uniforms.poseBlend;
+  const atlas = patrolAtlasFor(627, 627), crop = atlas.crops[handoff];
+  card.pose(neighbor);
+  const neighborUV = Array.from(nextUV.array);
+  card.pose(heading, 0);
+  const base = Array.from(position.array), originalUV = Array.from(uv.array);
+  assert.equal(weights.value, 0);
+  card.pose(heading, 1);
+  assert.equal(weights.value, 1);
+  assert.deepEqual(Array.from(position.array), base);
+
+  const edited = [...atlas.handoffs], [outgoing, incoming] = edited[handoff];
+  const [x, y] = patrolGridPoint(crop, outgoing, point);
+  const nextX = Math.round((x - 1) * 10) / 10, nextY = Math.round((y + 2) * 10) / 10;
+  const next = JSON.parse(JSON.stringify(movePatrolPoint(atlas, handoff, outgoing, point, nextX, nextY)));
+  edited[handoff] = [next, incoming];
+  card.setRegistration(atlas, edited);
+  card.pose(heading);
+  assert(Math.abs(weights.value - .5) < 1e-8);
+  assert.notDeepEqual(Array.from(position.array), base);
+  assert(Math.abs(uv.getX(point) * atlas.width - (crop[0] + nextX)) < .0001);
+  assert(Math.abs((1 - uv.getY(point)) * atlas.height - (crop[1] + nextY)) < .0001);
+  assert(uv.array.every((value, i) => Math.floor(i / 2) === point || value === originalUV[i]));
+  const editedUV = Array.from(uv.array);
+  card.pose(neighbor);
+  assert.deepEqual(Array.from(nextUV.array), neighborUV);
+  const folded = [...edited];
+  folded[handoff] = [movePatrolPoint(atlas, handoff, next, point, 0, 0), incoming];
+  assert.throws(() => card.setRegistration(atlas, folded), /folds/);
+  card.pose(heading);
+  assert.deepEqual(Array.from(uv.array), editedUV);
+  card.setRegistration(atlas);
+  card.pose(heading);
+  assert.deepEqual(Array.from(position.array), base);
+  texture.dispose();
+  card.root.geometry.dispose();
+  card.root.material.dispose();
+});
+
+test('the padded grid rim can move while keeping the painted bike tip inside', async () => {
+  const { movePatrolPoint } = await server.ssrLoadModule('/src/studies/patrol-registration.ts');
+  const atlas = patrolAtlasFor(1254, 1254), card = createPatrolWarpCard();
+  const handoff = 0, frame = 1, crop = atlas.crops[frame], pad = patrolGridPadding(crop);
+  const height = crop[3] - crop[1], outgoing = atlas.handoffs[handoff][0], incoming = atlas.handoffs[handoff][1];
+  const rimPoint = (PATROL_GRID_SIZE - 1) * PATROL_GRID_SIZE + 2, tipPoint = rimPoint - PATROL_GRID_SIZE;
+  const [rimX, rimY] = patrolGridPoint(crop, incoming, rimPoint), [tipX] = patrolGridPoint(crop, incoming, tipPoint);
+  assert.equal(patrolRestPoint(crop, rimPoint)[1], height + pad);
+  assert(rimY > height);
+
+  const movedRim = movePatrolPoint(atlas, frame, incoming, rimPoint, rimX + 3, rimY + 6);
+  assert.deepEqual(movedRim[rimPoint], [Math.round((rimX + 3) * 10) / 10, Math.round((rimY + 6) * 10) / 10]);
+  assert.equal(movePatrolPoint(atlas, frame, movedRim, rimPoint, rimX, height - 20)[rimPoint][1], height);
+  const movedTip = movePatrolPoint(atlas, frame, movedRim, tipPoint, tipX, height + 1);
+  assert.equal(movedTip[tipPoint][1], height + 1);
+  const edited = [...atlas.handoffs];
+  edited[handoff] = [outgoing, movedTip];
+  card.setRegistration(atlas, edited);
+  card.pose(-Math.PI / 30);
+  const [x, y] = turn16Hardpoints[frame][2];
+  const actual = patrolPixel(card.root, 'uv', x / atlas.width, 1 - y / atlas.height);
+  const expected = new Vector2((x - crop[4]) * atlas.pixel, -(y - crop[5]) * atlas.pixel).rotateAround(new Vector2(), Math.PI / 30);
+  assert(actual.distanceTo(expected) < .00001);
+
+  const clipped = [...movedTip], invalid = [...edited];
+  clipped[rimPoint] = [rimX, height - 1];
+  invalid[handoff] = [outgoing, clipped];
+  assert.throws(() => card.setRegistration(atlas, invalid), /crosses the sprite crop/);
+  card.root.geometry.dispose();
   card.root.material.dispose();
 });
 
@@ -124,32 +212,18 @@ test('patrol exhaust sits on the engine pixels through both directions of a warp
   patrols.setArt(texture);
   const card = rig.root.getObjectByName('patrol-heading');
   const nozzles = rig.root.getObjectsByProperty('name', 'burner_nozzle');
-  const { geometry } = card, positions = geometry.getAttribute('position');
   assert.equal(nozzles.length, 2);
   assert(nozzles.every(nozzle => nozzle.position.z < card.position.z && nozzle.children[0].renderOrder < card.renderOrder));
-  const triangle = new Triangle(), weights = new Vector3();
   const mapPixel = (attr, frame, mount, mirror) => {
     const [x, y] = turn16Hardpoints[frame][mirror && frame !== 0 && mount < 2 ? 1 - mount : mount];
-    const uv = geometry.getAttribute(attr), point = new Vector3(x / 1254, 1 - y / 1254, 0);
-    for (let i = 0; i < geometry.index.count; i += 3) {
-      const a = geometry.index.getX(i), b = geometry.index.getX(i + 1), c = geometry.index.getX(i + 2);
-      triangle.a.set(uv.getX(a), uv.getY(a), 0);
-      triangle.b.set(uv.getX(b), uv.getY(b), 0);
-      triangle.c.set(uv.getX(c), uv.getY(c), 0);
-      if (!triangle.getBarycoord(point, weights) || Math.min(weights.x, weights.y, weights.z) < -1e-5) continue;
-      return new Vector2(
-        weights.x * positions.getX(a) + weights.y * positions.getX(b) + weights.z * positions.getX(c),
-        weights.x * positions.getY(a) + weights.y * positions.getY(b) + weights.z * positions.getY(c),
-      );
-    }
-    assert.fail('Engine or nose pixel escaped the warp');
+    return patrolPixel(card, attr, x / 1254, 1 - y / 1254);
   };
   for (let degrees = -90; degrees <= 90; degrees += 1.5) {
     const heading = degrees * Math.PI / 180;
-    const turn = denPatrolWarp(heading, 16);
+    const turn = patrolGridTurn(heading, 16);
     rig.pose(0, 0, heading, 1, .6, 0, 2);
-    const mounts = [0, 1, 2].map(i => mapPixel('uv', turn.first, i, turn.mirror)
-      .lerp(mapPixel('nextUV', turn.second, i, turn.mirror), turn.blend));
+    const mounts = [0, 1, 2].map(i => mapPixel('uv', turn.handoff, i, turn.mirror)
+      .lerp(mapPixel('nextUV', turn.handoff + 1, i, turn.mirror), turn.blend));
     const aft = mounts[0].clone().add(mounts[1]).multiplyScalar(.5).sub(mounts[2]).normalize();
     nozzles.forEach((nozzle, i) => {
       assert(Math.hypot(nozzle.position.x - mounts[i].x, nozzle.position.y - mounts[i].y) < .001);

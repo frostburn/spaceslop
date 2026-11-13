@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Draconian patrol blend · Spaceslop</title>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Draconian patrol blend</h1>
+        <a href="./workshop.html">Asset workshop</a>
+      </header>
+      <section class="sliders" aria-label="Preview controls">
+        <div class="slider">
+          <label for="heading">Heading</label><output id="heading-value" for="heading"></output>
+          <input id="heading" type="range" min="-90" max="90" step=".1" value="-3">
+        </div>
+        <div class="slider">
+          <label for="blend">Crossfade to incoming</label><output id="blend-value" for="blend"></output>
+          <input id="blend" type="range" min="0" max="100" step="1" value="50">
+        </div>
+        <div class="actions">
+          <button id="play" type="button">Play turn</button>
+          <button id="follow" type="button" disabled>Follow heading</button>
+          <label class="check"><input id="show-difference" type="checkbox" disabled> Difference preview</label>
+          <label class="check"><input id="show-mesh" type="checkbox"> Preview mesh</label>
+        </div>
+      </section>
+      <section class="views" aria-label="Sprite comparison">
+        <figure>
+          <figcaption id="outgoing">Outgoing pose</figcaption>
+          <canvas id="pose-a" aria-labelledby="outgoing"></canvas>
+        </figure>
+        <figure class="blend-view">
+          <figcaption>
+            <span id="preview-title">Blend preview</span>
+            <output id="match-score" aria-live="off" title="100% means the sprites match within their combined silhouette." hidden></output>
+          </figcaption>
+          <div class="preview">
+            <canvas id="preview" aria-label="Live blend using the game shader"></canvas>
+            <canvas id="mesh" aria-hidden="true"></canvas>
+          </div>
+        </figure>
+        <figure>
+          <figcaption id="incoming">Incoming pose</figcaption>
+          <canvas id="pose-b" aria-labelledby="incoming"></canvas>
+        </figure>
+      </section>
+      <section class="edit" aria-labelledby="edit-heading">
+        <h2 id="edit-heading">Control point</h2>
+        <p>Each handoff has its own pair of 16×16 grids. Drag any point on either grid. Edge points can move outside the dashed sprite bounds. The ring marks the corresponding point.</p>
+        <div class="fields">
+          <label>Handoff<select id="edit-handoff"></select></label>
+          <label>Grid<select id="edit-pose"><option value="0">Outgoing</option><option value="1">Incoming</option></select></label>
+          <label>Point<select id="edit-point"></select></label>
+        </div>
+        <div class="sliders">
+          <div class="slider">
+            <label for="point-x">Point X</label><output id="point-x-value" for="point-x"></output>
+            <input id="point-x" type="range" min="0" step=".1" value="0">
+          </div>
+          <div class="slider">
+            <label for="point-y">Point Y</label><output id="point-y-value" for="point-y"></output>
+            <input id="point-y" type="range" min="0" step=".1" value="0">
+          </div>
+          <div class="actions">
+            <label class="check"><input id="lock-point" type="checkbox"> Lock selected point</label>
+            <button id="reset-grid" type="button" title="Restore the selected grid and clear its locks" disabled>Reset grid</button>
+            <button id="copy-edits" type="button" disabled>Copy edits</button>
+          </div>
+        </div>
+        <textarea id="export" aria-label="Edited handoff grids" readonly hidden></textarea>
+      </section>
+      <section class="edit tuning" aria-labelledby="tune-heading">
+        <h2 id="tune-heading">Hill-climb</h2>
+        <p>Tunes the interior points in both turn directions while penalizing grid distortion. Gold squares mark locked points.</p>
+        <div class="fields">
+          <label>Search area
+            <select id="tune-scope">
+              <option value="nearby">Selected point and neighbors</option>
+              <option value="all">Whole handoff</option>
+            </select>
+          </label>
+        </div>
+        <div class="actions">
+          <button id="tune-start" type="button" disabled>Tune handoff</button>
+          <button id="tune-undo" type="button" disabled>Undo tune</button>
+          <progress id="tune-progress" aria-label="Hill-climb progress" hidden></progress>
+          <output id="tune-score" aria-live="off"></output>
+        </div>
+        <p id="tune-status" role="status"></p>
+      </section>
+      <p id="status" role="status">Loading patrol atlas…</p>
+    </main>
+    <script type="module" src="/src/studies/patrol-study.ts"></script>
+  </body>
+</html>
