@@ -27,7 +27,7 @@ export const createLevel: LevelFactory = ({ signal }) => {
     loadScrollPlate('denCliff', DEN_SCREENS, signal),
     loadEncounterTexture('denDisk', scenery.setDisk, undefined, signal),
     loadEncounterTexture('denSky', scenery.setSky, undefined, signal),
-    loadEncounterTexture('denGantry', scenery.setPlate, undefined, signal),
+    loadEncounterTexture('denGantry', map => { scenery.setPlate(map); props.useGantryArt(); }, undefined, signal),
     loadEncounterTexture('denBiker', boss.setArt, undefined, signal),
     loadEncounterTexture('denPatrol', patrols.setArt, undefined, signal),
     loadEncounterTexture('denProps', props.setArt, undefined, signal),

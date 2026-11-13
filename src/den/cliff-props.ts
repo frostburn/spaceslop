@@ -23,10 +23,20 @@ const stacks = [
   { x: 145, y: 2534, width: 32, sprite: single, mouths: [[313, 151]] }, // Upper Bastion roof
 ] as const;
 const doorBanners = [
-  { width: 20, sprite: standard, mounts: [[62, 6915], [161, 6850]] }, // Workshop bulkhead
-  { width: 18, sprite: pennant, mounts: [[89, 3553], [235, 3489]] }, // Lower Bastion gate
-  { width: 22, sprite: standard, mounts: [[93, 2640], [233, 2568]] }, // Upper Bastion gate
+  { width: 33, sprite: standard, mounts: [[62, 6915], [161, 6850]] }, // Workshop bulkhead
+  { width: 30, sprite: pennant, mounts: [[89, 3553], [235, 3489]] }, // Lower Bastion gate
+  { width: 36, sprite: standard, mounts: [[93, 2640], [233, 2568]] }, // Upper Bastion gate
 ] as const;
+const rockBanners = [
+  { x: 242, y: 8960, width: 84, sprite: standard }, // Beyond the outer docking cradle
+  { x: 270, y: 5630, width: 77, sprite: pennant }, // Rookery rock face
+  { x: 271, y: 2150, width: 93, sprite: standard }, // Above the Bastion
+] as const;
+// The gantry is the screen above the cliff plate. Both rails hang off its
+// ledges in screen coordinates, including when the procedural plate is used.
+const gantryBannerSides = [.125, .875];
+const gantryArtBannerY = -.439 * SCREEN_HEIGHT;
+const gantryFallbackBannerY = -.49 * SCREEN_HEIGHT;
 
 function fallbackAtlas() {
   const canvas = document.createElement('canvas');
@@ -237,18 +247,26 @@ export function createDenCliffProps() {
     root.add(foot, stack);
     return { y, at, foot, stack };
   });
-  const flags = doorBanners.flatMap(({ width, sprite, mounts }) => mounts.map(([x, y]) => {
+  function mountBanner(x: number, y: number, width: number, sprite: Sprite) {
     const at = new T.Vector2(x / PLATE_WIDTH, 0);
     const cloth = propCard(sprite, width, at, fallback, clock, -988, true);
     const rail = propCard(rod, width * 1.12, at, fallback, clock, -987);
+    const drop = (sprite.crop[3] - sprite.pivot[1]) * width / (sprite.crop[2] - sprite.crop[0]) / SCREEN_HEIGHT;
     cloth.name = 'den-banner';
     root.add(cloth, rail);
-    return { y, at, cloth, rail, wake: cloth.material.uniforms.wake };
-  }));
+    return { y, at, cloth, rail, drop, wake: cloth.material.uniforms.wake };
+  }
+  const gantryFlags = gantryBannerSides.map(x => mountBanner(x * PLATE_WIDTH, gantryFallbackBannerY, 88, pennant));
+  const flags = [
+    ...doorBanners.flatMap(({ width, sprite, mounts }) => mounts.map(([x, y]) => mountBanner(x, y, width, sprite))),
+    ...rockBanners.map(({ x, y, width, sprite }) => mountBanner(x, y, width, sprite)),
+    ...gantryFlags,
+  ];
   root.add(smoke);
   return {
     root,
     fallback,
+    useGantryArt() { gantryFlags.forEach(flag => { flag.y = gantryArtBannerY; }); },
     setArt(map: T.Texture) {
       const image = map.image as { width: number; height: number } | undefined;
       if (!image?.width || image.width !== image.height) throw new Error('Unsupported Den scenery atlas layout');
@@ -265,11 +283,12 @@ export function createDenCliffProps() {
         foot.visible = stack.visible = at.y > -.13 && at.y < 1.17;
         smoke.visible ||= at.y > -.25 && at.y < 1.16;
       }
-      for (const { y, at, cloth, rail, wake } of flags) {
+      for (const { y, at, cloth, rail, drop, wake } of flags) {
         at.y = DEN_SCREENS - y / SCREEN_HEIGHT - scroll;
-        cloth.visible = rail.visible = at.y > -.02 && at.y < 1.16;
-        if (newFlight || !cloth.visible) wake.value = 0;
-        if (!cloth.visible || elapsed <= 0) continue;
+        const onScreen = at.y > -.02 && at.y < 1 + drop;
+        cloth.visible = rail.visible = onScreen;
+        if (newFlight || !onScreen) wake.value = 0;
+        if (!onScreen || elapsed <= 0) continue;
         const x = (at.x - .5) * WIDTH, yWorld = (at.y - .54) * HEIGHT;
         const influence = (actor: { x: number; y: number }, speed: number) =>
           (1 - T.MathUtils.smoothstep(Math.hypot(actor.x - x, actor.y - yWorld), .25, 1.85))
