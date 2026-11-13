@@ -803,16 +803,18 @@ export class Flight {
 
   private collectWeapon(drop: WeaponDrop) {
     const nearbyWing = this.wings[drop.x <= this.player.x ? 0 : 1];
-    const matching = nearbyWing.weapon === drop.weapon ? nearbyWing : this.wings.find(wing => wing.weapon === drop.weapon);
+    const canUpgrade = (wing: Wing) => wing.weapon === drop.weapon && !wing.upgraded;
+    const upgrade = canUpgrade(nearbyWing) ? nearbyWing : this.wings.find(canUpgrade);
+    const empty = nearbyWing.weapon ? this.wings.find(wing => !wing.weapon) : nearbyWing;
     const name = wingWeapons[drop.weapon].name;
     let message: string;
-    if (!matching) {
-      const wing = nearbyWing.weapon ? (this.wings.find(slot => !slot.weapon) ?? nearbyWing) : nearbyWing;
+    if (upgrade) {
+      upgrade.upgraded = true;
+      message = `${upgrade.side < 0 ? 'Left' : 'Right'} wing · ${name} II`;
+    } else if (empty || !this.wings.some(wing => wing.weapon === drop.weapon)) {
+      const wing = empty ?? nearbyWing;
       this.equip(wing, drop.weapon);
       message = `${wing.side < 0 ? 'Left' : 'Right'} wing · ${name}`;
-    } else if (!matching.upgraded) {
-      matching.upgraded = true;
-      message = `${matching.side < 0 ? 'Left' : 'Right'} wing · ${name} II`;
     } else if (this.droneWeapon === 'sentry') {
       this.droneWeapon = 'towline';
       this.towlineCooldown = 0;

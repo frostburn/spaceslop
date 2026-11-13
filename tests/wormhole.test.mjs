@@ -318,6 +318,12 @@ test('supply capsules use existing weapon upgrades and restore one hull up to th
   for (let i = 0; i < 12; i++) {
     finishApproach(flight);
     defeatEncounter(flight);
+    if (i === 0) {
+      [...flight.drops].forEach(collect);
+      assert(flight.wings.every(wing => wing.weapon === 'cannon' && wing.upgraded));
+      assert.equal(flight.droneWeapon, 'sentry');
+      Object.assign(flight.player, { x: 3.5, y: -5.3 });
+    }
     const repair = flight.drops.find(drop => drop.kind === 'repair');
     if (!repair) continue;
     if (i === 2) {
@@ -331,8 +337,11 @@ test('supply capsules use existing weapon upgrades and restore one hull up to th
       assert.equal(flight.hull, 4);
       assert.equal(flight.pickupMessage, 'Hull already full');
     } else if (i === 8) {
-      flight.droneWeapon = 'towline';
-      collect(flight.drops[0]);
+      const weapons = flight.drops.filter(drop => drop.weapon);
+      collect(weapons[0]);
+      assert.equal(flight.droneWeapon, 'towline');
+      assert.equal(flight.hull, 4);
+      collect(weapons[1]);
       assert.equal(flight.hull, 5);
       flight.hull = 4;
       collect(repair);
