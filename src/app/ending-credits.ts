@@ -1,4 +1,5 @@
 import markup from './ending-credits.html?raw';
+import '../spaceslop-logo.css';
 import './ending-credits.css';
 
 export const CREDITS_ROLL_DURATION = 20;

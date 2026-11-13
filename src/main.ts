@@ -10,6 +10,7 @@ import { setupPilotPicker } from './pilots';
 import { readWingWeapon, wingWeapons } from './wing';
 import { fonsNames, fonsVariants } from './wormhole/fons/variants';
 import './style.css';
+import './spaceslop-logo.css';
 
 const menu = document.querySelector<HTMLElement>('#front-menu')!;
 const app = document.querySelector<HTMLElement>('#game-app')!;

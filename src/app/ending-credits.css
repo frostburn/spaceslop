@@ -34,15 +34,87 @@
   to { transform: translateY(calc(-100% - 2rem)); }
 }
 #ending-title {
-  margin: 0;
-  font-family: system-ui, sans-serif;
-  font-style: italic;
-  font-weight: 900;
-  font-size: clamp(1.45rem, 11cqw, 3.4rem);
-  letter-spacing: -.05em;
-  text-transform: uppercase;
-  line-height: 1.05;
-  color: #fff5e5;
+  --logo-size: clamp(1.15rem, 14cqw, 4.2rem);
+  margin: 0 auto .23em;
+  text-shadow: none;
+}
+.logo-star-reflection { display: none; }
+@property --logo-gradient-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 180deg;
+}
+@property --credits-light-x {
+  syntax: '<percentage>';
+  inherits: true;
+  initial-value: 50%;
+}
+@property --logo-steel {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: #347ad4;
+}
+@property --logo-sky {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: #54d8ff;
+}
+@property --logo-violet {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: #913bd1;
+}
+@property --logo-rose {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: #f47ae0;
+}
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  #ending-title {
+    --logo-pointer-x: var(--credits-light-x, 50%);
+    animation: credits-metal 16s ease-in-out infinite;
+  }
+  .logo-star-reflection {
+    display: block;
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    -webkit-text-stroke: 0;
+    -webkit-background-clip: text;
+    background-clip: text;
+    background-image:
+      radial-gradient(ellipse 1.7px 1px at 18% 27%, #e8fcff 15%, transparent),
+      radial-gradient(ellipse 1.1px .8px at 72% 74%, #ecbfff 16%, transparent),
+      radial-gradient(ellipse 1.4px 1px at 46% 61%, #fff1d8 22%, transparent),
+      radial-gradient(ellipse .8px .65px at 84% 36%, #b4dbff 15%, transparent),
+      radial-gradient(ellipse 2px .8px at 31% 83%, #e3d8ff 12%, transparent);
+    background-size: 81px 37px, 97px 43px, 73px 39px, 53px 26px, 101px 34px;
+    opacity: .46;
+    animation: credits-starlight 18s ease-in-out infinite alternate;
+  }
+  .logo-star-reflection::before { content: attr(data-wordmark); }
+}
+@keyframes credits-metal {
+  0%, 100% { --credits-light-x: 24%; --logo-gradient-angle: 177deg; }
+  50% {
+    --credits-light-x: 77%;
+    --logo-gradient-angle: 184deg;
+    --logo-steel: #526ed8;
+    --logo-sky: #81d9ff;
+    --logo-violet: #723dc9;
+    --logo-rose: #f08ee6;
+  }
+}
+@keyframes credits-starlight {
+  from { background-position: 0 0, 12px 0, 9px 0, 2px 5px, 0 4px; opacity: .44; }
+  to { background-position: 32px -7px, 31px -8px, 36px -4px, 22px 0, 32px -4px; opacity: .68; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #ending-title, .logo-star-reflection { animation: none; }
+}
+@media (forced-colors: active) {
+  #ending-title { animation: none; }
+  .logo-star-reflection { display: none; }
 }
 .ending-byline {
   margin: .4rem 0 0;
