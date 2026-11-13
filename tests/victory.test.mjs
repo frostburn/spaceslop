@@ -123,7 +123,7 @@ test('salute rounds keep their equipped weapon and upgrade and travel along the 
   }
 });
 
-test('the accelerating exit leaves a continuous line of upright flares at their launch positions', () => {
+test('the accelerating exit leaves a continuous flare wake that curls back and stops firing before the cut', () => {
   const fighter = createFighterRig().root;
   const ending = createWormholeEnding(fighter, 2.7);
   const camera = new T.PerspectiveCamera(40, 9 / 16, .1, 240);
@@ -146,12 +146,15 @@ test('the accelerating exit leaves a continuous line of upright flares at their 
     const nozzle = new T.Vector3(0, .025, .28).applyQuaternion(fighter.quaternion).add(fighter.position);
     assert.equal(flares.filter(flare => flare.visible).length, 1);
     assert(flares[0].position.distanceTo(nozzle) < 1e-10);
+    const direction = new T.Vector3(0, 1, 0);
+    assert(direction.applyQuaternion(flares[0].quaternion).distanceTo(new T.Vector3(0, 1, 0)) < 1e-10);
 
     pose(.8);
     const first = flares[0].position.clone();
     assert.equal(first.x, nozzle.x);
-    assert.equal(first.z, nozzle.z);
-    assert(first.y > nozzle.y + 2);
+    assert(first.z > nozzle.z + 1);
+    assert(first.y > nozzle.y + 1);
+    assert(direction.set(0, 1, 0).applyQuaternion(flares[0].quaternion).z > .9);
     assert(fighter.position.z < first.z);
     assert(flares[1].position.z < first.z);
     assert(flares.filter(flare => flare.visible).length >= 7);
@@ -161,6 +164,12 @@ test('the accelerating exit leaves a continuous line of upright flares at their 
     pose(2.4);
     assert(middle - fighter.position.z > early - middle);
     assert(flares.filter(flare => flare.visible).length >= 10);
+    pose(ending.cutToExterior - .6);
+    const tail = flares.findLast(flare => flare.visible);
+    const tailPosition = tail.position.clone();
+    pose(ending.cutToExterior - .05);
+    assert.equal(flares.findLast(flare => flare.visible), tail);
+    assert(tail.position.z > tailPosition.z);
     pose(.8);
     assert(flares[0].position.equals(first));
   } finally {

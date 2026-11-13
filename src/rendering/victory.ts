@@ -199,8 +199,12 @@ export function createCockpitFlares(duration: number) {
   const firstLaunch = .14;
   const interval = .088;
   const lifetime = 1.06;
-  const count = Math.ceil((duration - firstLaunch) / interval);
+  const cutoff = duration - .65;
+  const count = Math.max(0, Math.ceil((cutoff - firstLaunch) / interval));
   const { root, flares } = createFlarePool(count);
+  const towardEye = new T.Vector3(), tangent = new T.Vector3();
+  const across = new T.Vector3(), normal = new T.Vector3();
+  const basis = new T.Matrix4();
   function pose(time: number, eye: Readonly<T.Vector3>, launchPosition: (launch: number, point: T.Vector3) => void) {
     root.visible = true;
     for (const [i, { flare, streak }] of flares.entries()) {
@@ -209,13 +213,24 @@ export function createCockpitFlares(duration: number) {
       flare.visible = age >= 0 && age < lifetime;
       if (!flare.visible) continue;
 
-      // Sample the cockpit at launch. A released flare only climbs in world Y.
+      // The flare leaves vertically, then turns toward +Z as the ship dives toward -Z.
       launchPosition(launch, flare.position);
-      const rise = age * 4.6;
+      const turnTime = .28;
+      const vertical = Math.exp(-age / turnTime);
+      const climb = turnTime * (1 - vertical);
+      const rise = 4.6 * climb;
+      const drift = 3.6 * (age - climb);
       flare.position.y += rise;
-      flare.rotation.y = Math.atan2(eye.x - flare.position.x, eye.z - flare.position.z);
+      flare.position.z += drift;
+      tangent.set(0, 4.6 * vertical, 3.6 * (1 - vertical)).normalize();
+      towardEye.subVectors(eye, flare.position);
+      across.crossVectors(tangent, towardEye);
+      if (across.lengthSq() < 1e-8) across.set(1, 0, 0);
+      across.normalize();
+      normal.crossVectors(across, tangent);
+      flare.quaternion.setFromRotationMatrix(basis.makeBasis(across, tangent, normal));
       flare.scale.setScalar(.72 * (1 - .9 * T.MathUtils.smoothstep(age, .62, lifetime)));
-      const length = Math.min(.65 + age * .38, rise / flare.scale.y);
+      const length = Math.min(.65 + age * .38, Math.hypot(rise, drift) / flare.scale.y);
       streak.position.set(0, -length / 2, 0);
       streak.scale.set(.35, length, 1);
     }
