@@ -13,7 +13,7 @@ import { loadEncounterTexture } from '../encounter-texture';
 import { BOSS_RECOIL_TIME } from '../encounters';
 import { createFleetBossRig } from '../fleet/boss-rig';
 import { createSaucerFactory } from '../fleet/saucers';
-import { BOSS_CANNON_X, BOSS_DEPTH, BOSS_Y } from '../game';
+import { BOSS_CAMERA_DISTANCE, BOSS_CANNON_X, BOSS_DEPTH, BOSS_Y, type Flight } from '../game';
 import { groundskeeperFlight } from '../groundskeeper';
 import { createGroundskeeperEffects } from '../groundskeeper-effects';
 import { createGroundskeeper } from '../groundskeeper-rig';
@@ -36,6 +36,7 @@ import { SUMMER_APPROACH, SUMMER_DURATION } from '../summer/layout';
 import { createTitanChitinSurface } from '../titan-insect-surfaces';
 import { createVentBoss } from '../vent-boss';
 import { ventBossPose, ventWorld, VENT_APPROACH, VENT_DURATION } from '../vent-layout';
+import { createRegulatorPortalFeeds } from './regulator-portals';
 
 type BossPose = (frame: LevelFrame, time: number) => void;
 
@@ -45,6 +46,13 @@ export type WormholeBoss = {
   pose: BossPose;
   contact?: ReturnType<typeof createBossLaserContact>;
 };
+
+function regulatorState(flight: Flight) {
+  return {
+    unstable: flight.heliostatUnstableAge, pattern: flight.heliostatPattern,
+    attackTime: flight.heliostatAttackTime, active: flight.heliostatTargets.length === 2,
+  };
+}
 
 export function createWormholeBosses(plane: T.Group, signal: AbortSignal) {
   const effects = new T.Group();
@@ -78,12 +86,12 @@ export function createWormholeBosses(plane: T.Group, signal: AbortSignal) {
   const heliostatMaterials = createHeliostatMaterials();
   const heliostatArt: HeliostatArt = {};
   const plasmaResources = createPlasmaResources();
-  const regulator = createHeliostatRegulator(heliostatMaterials, plasmaResources);
+  const regulator = createHeliostatRegulator(heliostatMaterials, plasmaResources, false);
+  const portalFeeds = createRegulatorPortalFeeds(plasmaResources, regulator.intakes);
   const plasma = createAttackPlasma(plasmaResources);
   regulator.root.position.set(0, BOSS_Y, BOSS_DEPTH);
   regulator.root.rotation.x = -HELIOSTAT_PITCH;
-  regulator.ducts.visible = false;
-  effects.add(plasma.root);
+  effects.add(plasma.root, portalFeeds.root);
 
   const leviathan = createLeviathan();
   leviathan.root.position.set(0, BOSS_Y, BOSS_DEPTH);
@@ -138,10 +146,7 @@ export function createWormholeBosses(plane: T.Group, signal: AbortSignal) {
     }),
     heliostat: boss(regulator.root, ({ flight, animationTime }) => {
       heliostatMaterials.updateThermal(animationTime);
-      regulator.pose(animationTime, flight.cannonWindup, flight.bossRecoil / BOSS_RECOIL_TIME, {
-        unstable: flight.heliostatUnstableAge, pattern: flight.heliostatPattern,
-        attackTime: flight.heliostatAttackTime, active: flight.heliostatTargets.length === 2,
-      });
+      regulator.pose(animationTime, flight.cannonWindup, flight.bossRecoil / BOSS_RECOIL_TIME, regulatorState(flight));
     }),
     ice: boss(leviathan.root, ({ flight }, time) => {
       leviathan.pose(1, flight.cannonWindup, 0, 0, flight.bossRecoil / BOSS_RECOIL_TIME, time);
@@ -190,10 +195,11 @@ export function createWormholeBosses(plane: T.Group, signal: AbortSignal) {
     roster, effects, models, ready,
     contacts: [...Object.values(roster).map(({ model }) => model), ...seekers.map(({ root }) => root)],
     surfaces: [cruiser.root],
-    warmup: [...warmup, [plasma.root, groundskeeperEffects.root, seekers[0].root]],
+    warmup: [...warmup, [plasma.root, portalFeeds.root, groundskeeperEffects.root, seekers[0].root]],
     prepare() {
       restoreRegulator = regulator.prime();
       plasma.prime();
+      portalFeeds.update(0, BOSS_CAMERA_DISTANCE, 1, 0, { unstable: 0, pattern: 0, attackTime: 0 });
       groundskeeperEffects.prime();
       chief.pose(1.55, true);
       command.prime();
@@ -201,7 +207,7 @@ export function createWormholeBosses(plane: T.Group, signal: AbortSignal) {
     afterWarmup() {
       restoreRegulator?.();
       restoreRegulator = undefined;
-      plasma.root.visible = groundskeeperEffects.root.visible = false;
+      plasma.root.visible = portalFeeds.root.visible = groundskeeperEffects.root.visible = false;
     },
     applyArmor(texture: T.Texture) {
       const metal = texture.clone();
@@ -210,9 +216,12 @@ export function createWormholeBosses(plane: T.Group, signal: AbortSignal) {
       heliostatArt.heliostatMetal = metal;
       heliostatMaterials.setArt(heliostatArt, true);
     },
-    updateEffects({ flight, animationTime }: LevelFrame) {
+    updateEffects({ flight, animationTime, distance }: LevelFrame, portalFeed: number) {
       const battle = flight.phase === 'boss' || flight.phase === 'lost';
       plasma.update(flight.heliostatAttackTime, animationTime, flight.heliostatTargets, battle && flight.encounterLevel === 'heliostat', flight.heliostatPattern);
+      if (portalFeed > .002)
+        portalFeeds.update(animationTime, distance, portalFeed, flight.cannonWindup, regulatorState(flight));
+      else portalFeeds.root.visible = false;
       groundskeeperEffects.root.visible = battle && flight.encounterLevel === 'preserve';
       if (groundskeeperEffects.root.visible)
         groundskeeperEffects.update(flight.groundskeeperTime, flight.groundskeeperAim, flight.groundskeeperCancelledAt, true);

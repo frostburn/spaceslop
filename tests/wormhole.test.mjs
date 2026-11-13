@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { Color, Euler, Vector3 } from 'three';
+import { Color, Euler, Group, Object3D, Vector3 } from 'three';
 import { createServer } from 'vite';
 
 const server = await createServer({
@@ -9,7 +9,7 @@ const server = await createServer({
   optimizeDeps: { noDiscovery: true, entries: [] }, appType: 'custom',
 });
 after(() => server.close());
-const { Flight, STEP, BOSS_CAMERA_DISTANCE, BOSS_Y, BOSS_PROJECTION } = await server.ssrLoadModule('/src/game.ts');
+const { Flight, STEP, BOSS_CAMERA_DISTANCE, BOSS_Y, BOSS_PROJECTION, HEIGHT } = await server.ssrLoadModule('/src/game.ts');
 const { levels } = await server.ssrLoadModule('/src/levels.ts');
 const { wormholeFrame, WORMHOLE_SUPPLY_TIME, wormholeBosses } = await server.ssrLoadModule('/src/wormhole/route.ts');
 const { CICADA_FIRE, CICADA_HP, CICADA_WINDUP } = await server.ssrLoadModule('/src/cicada.ts');
@@ -22,6 +22,46 @@ const { fonsBeams, fonsBeamHits, fonsCrownfireFlash, fonsTuskTip, fonsVolleys } 
 const { createFonsMantle } = await server.ssrLoadModule('/src/wormhole/fons/mantle.ts');
 const { createFonsLightning } = await server.ssrLoadModule('/src/wormhole/fons/lightning.ts');
 const { createFonsBackdrop } = await server.ssrLoadModule('/src/wormhole/fons/backdrop.ts');
+const { regulatorPortal, createRegulatorPortalFeeds } = await server.ssrLoadModule('/src/wormhole/regulator-portals.ts');
+const { createPlasmaResources } = await server.ssrLoadModule('/src/heliostat/plasma.ts');
+
+test('the far-wall feeds stay registered to the portal and its matching moving intake', () => {
+  const regulator = new Group();
+  regulator.rotation.x = -1.3;
+  regulator.position.set(0, 4.2, -12);
+  const sides = [-1, 1];
+  const intakes = sides.map(side => {
+    const lens = new Object3D();
+    lens.position.set(side * 3.5, -.2, .3);
+    regulator.add(lens);
+    return lens;
+  });
+  const resources = createPlasmaResources();
+  const feeds = createRegulatorPortalFeeds(resources, intakes);
+  const state = { unstable: 0, pattern: 0, attackTime: 2.4, active: true };
+  try {
+    feeds.update(0, BOSS_CAMERA_DISTANCE, 0, 0, state);
+    assert(!feeds.root.visible);
+    for (const depth of [-124, -12]) {
+      regulator.position.z = depth;
+      feeds.update(2.4, BOSS_CAMERA_DISTANCE, 1, 0, state);
+      assert(feeds.root.visible);
+      for (const [index, side] of sides.entries()) {
+        const uniforms = feeds.root.children[index].children[0].material.uniforms;
+        const source = uniforms.a.value, end = uniforms.d.value;
+        const projection = BOSS_CAMERA_DISTANCE / (BOSS_CAMERA_DISTANCE - source.z);
+        const portal = regulatorPortal(side);
+        assert(source.z < end.z);
+        assert(Math.abs(source.x * projection / (HEIGHT / 2) - portal.x) < 1e-9);
+        assert(Math.abs(source.y * projection / (HEIGHT / 2) - portal.y) < 1e-9);
+        assert(end.distanceTo(intakes[index].getWorldPosition(new Vector3())) < 1e-9);
+      }
+    }
+  } finally {
+    resources.geometry.dispose();
+    feeds.root.traverse(object => object.material?.dispose());
+  }
+});
 
 test('the royal backdrops follow their variant and Invictus cycles smoothly on the encounter clock', () => {
   const { uniforms, textures, update } = createFonsBackdrop();

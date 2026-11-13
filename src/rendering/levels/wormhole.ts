@@ -8,13 +8,15 @@ import { createFonsEnvironment } from '../../wormhole/fons/environment';
 import { createFonsLightning } from '../../wormhole/fons/lightning';
 import { createFonsRig } from '../../wormhole/fons/rig';
 import { createWormholeBosses, type WormholeBoss } from '../../wormhole/bosses';
-import { wormholeFrame } from '../../wormhole/route';
+import { wormholeBosses, wormholeFrame } from '../../wormhole/route';
 import { createWormholeTunnel } from '../../wormhole/tunnel';
+import type { TunnelTheme } from '../../wormhole/wall-themes';
 import type { LevelFactory } from '../level';
 
 const halfHeight = HEIGHT / 2;
 const apertureY = BOSS_Y * BOSS_PROJECTION / halfHeight;
 const headOn = { pitch: WORMHOLE_PITCH, bank: 0 };
+const titanEcho = (theme: TunnelTheme) => theme === 'titan' ? 2.72 : theme === 'cruise' ? .80 : .06;
 
 export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
   const root = new T.Group();
@@ -27,6 +29,7 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
   const fons = createFonsRig(environment.texture);
   const lightning = createFonsLightning(apertureY * halfHeight);
   let mirror: WormholeReflectionPose;
+  let directFinale = false;
   const bosses = createWormholeBosses(plane, signal);
   const encounters = Object.values(bosses.roster);
   let active: WormholeBoss | undefined;
@@ -95,10 +98,20 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
       const age = flight.phase === 'stage' ? time - flight.stageDuration : flight.wormholeEncounterTime;
       const frame = wormholeFrame(time, flight.stageDuration, age, flight.isFonsFight);
       const finale = flight.isFonsFight ? fonsEase(-FONS_APPROACH, -1.2, fonsTime) : 0;
-      frame.echo *= 1 - finale;
+      const theme = flight.phase === 'stage' || age < 0 ? 'cruise' : flight.encounterLevel;
+      if (newFlight) directFinale = flight.isFonsFight;
+      const previous = theme === 'cruise' || directFinale ? 'cruise'
+        : wormholeBosses[flight.wormholeBossNumber - 2] ?? 'cruise';
+      const blend = flight.isFonsFight ? fonsEase(1.1, 4.1, age) : fonsEase(.36, 2.82, age);
+      const light = tunnel.setTheme(previous, theme, blend);
+      frame.echo *= T.MathUtils.lerp(titanEcho(previous), titanEcho(theme), blend) * (1 - finale);
       frame.lensStrength += finale * .32 * (1 - fonsEase(-1.2, .8, fonsTime));
+      const incomingPortal = theme === 'heliostat' ? fonsEase(.76, 2.88, age) : 0;
+      const outgoingPortal = previous === 'heliostat' ? 1 - fonsEase(.06, 1.32, age) : 0;
+      const portalOpening = incomingPortal + outgoingPortal;
       mirror = fighter.visible ? wormholeReflectionPose(fighter.position.x, fighter.position.y, apertureY * halfHeight) : undefined;
       tunnel.pose(frame, mirror);
+      tunnel.setRegulatorPortals(portalOpening);
       fons.root.visible = flight.isFonsFight && fonsTime >= -FONS_APPROACH + .61 && (flight.bossHealth > 0 || victory !== undefined);
       attacks.root.visible = flight.isFonsFight && fonsTime >= -1.7 && flight.bossHealth > 0;
       if (fons.root.visible) {
@@ -114,8 +127,8 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
       const crackle = flight.isFonsFight && fonsTime < 0 ? lightning.update(fonsTime, distance) : 0;
       const shipRadius = Math.hypot(fighter.position.x / halfHeight - frame.lensX, fighter.position.y / halfHeight - apertureY - frame.lensY);
       const waveLight = frame.waveStrength * Math.exp(-8 * Math.abs(frame.waveRadius - shipRadius));
-      rim.color.copy(amber).lerp(cyan, finale).lerp(violet, crackle * .68);
-      rim.intensity = .54 + frame.echo * 1.65 + waveLight * 1.8 + finale * 1.4 + crackle * .82;
+      rim.color.copy(light).lerp(amber, .62 * frame.echo).lerp(cyan, finale).lerp(violet, crackle * .68);
+      rim.intensity = .62 + frame.echo * 1.1 + waveLight * 1.8 + finale * 1.4 + crackle * .82 + incomingPortal * .36;
       rim.position.set(frame.lensX * 19 - 2, 6, -14);
       const next = flight.phase === 'stage' || flight.encounterLevel === 'wormhole'
         ? undefined : bosses.roster[flight.encounterLevel];
@@ -145,7 +158,9 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
           );
         }
       }
-      bosses.updateEffects(levelFrame);
+      const feed = theme === 'heliostat' ? incomingPortal * fonsEase(.02, .44, frame.arrival)
+        : retreating?.model === bosses.roster.heliostat.model ? outgoingPortal * (1 - fonsEase(0, .76, age)) : 0;
+      bosses.updateEffects(levelFrame, feed);
     },
   };
 };
