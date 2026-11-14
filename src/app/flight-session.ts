@@ -78,6 +78,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
   type Screen = 'loading' | 'active' | 'paused' | 'credits' | 'results';
   let screen: Screen = 'loading';
   const { mode } = loadout;
+  const restartHardcoreCampaign = mode === 'hardcore' && challengeRun !== undefined && !shortcut;
   const createFlight = () => new Flight(loadout.drone, loadout.wings, loadout.pilot, selectedLevel, undefined, mode);
   let flight = createFlight();
   let nextLevel: LevelId | undefined;
@@ -193,7 +194,8 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     nextMission.textContent = nextLevel ? `Next briefing · ${levels[nextLevel].name}` : 'Next briefing';
     promotionSubtitle.textContent = promotion ? `Promoted to ${ranks[promotion].name}` : '';
     message.textContent = report.join(' · ');
-    start.textContent = 'Fly again';
+    start.textContent = restartHardcoreCampaign && flight.phase === 'lost' && selectedLevel !== 'broodlock'
+      ? 'Restart at Broodlock' : 'Fly again';
     panel.scrollTop = 0;
     syncUI();
     if (fromCredits && !contextLost) start.focus({ preventScroll: true });
@@ -240,6 +242,10 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
   function startFlight() {
     if (!view || signal.aborted || start.disabled || screen === 'active' || screen === 'credits')
       return;
+    if (restartHardcoreCampaign && screen === 'results' && flight.phase === 'lost' && selectedLevel !== 'broodlock') {
+      challengeRun.onNext('broodlock');
+      return;
+    }
     if (screen !== 'paused') {
       if (screen === 'results') flight = createFlight();
       nextLevel = undefined;
