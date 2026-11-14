@@ -1,19 +1,20 @@
 import { BOSS_CAMERA_DISTANCE, WIDTH } from '../../playfield';
-import { FONS_CYCLE, fonsEase, fonsEmitter, fonsPhase, fonsPose, fonsTuskPaths, type FonsTusk } from './combat';
+import { patternBullet, type PatternColor } from '../../challenge-patterns';
+import { FONS_CYCLE, FONS_RAIN_END, fonsEase, fonsEmitter, fonsPhase, fonsPose, fonsTuskPaths, type FonsTusk } from './combat';
 import type { FonsVariant } from './variants';
 
 type Point = { x: number; y: number };
 type Side = -1 | 1;
-type Shot = Point & { z: number; vx: number; vy: number; vz: number; planar: true };
+type Shot = Point & { z: number; vx: number; vy: number; vz: number; planar: true; pattern?: PatternColor };
 type Beam = { from: Point; to: Point; width: number; active: boolean; warning: number; impact?: number };
 
 const standardVolleys = [1.02, 1.78, 2.54, 3.30];
-const crownfire = [
-  { at: 1.38, tusks: 'outer' },
-  { at: 1.98, tusks: 'inner' },
-  { at: 2.95, tusks: 'outer' },
-  { at: 3.55, tusks: 'inner' },
-] as const;
+type Barrage = { first: number; spacing: number; rows: number };
+const crownfire = {
+  rex: [{ first: 1.12, spacing: .126, rows: 22 }, { first: FONS_RAIN_END + 2.14, spacing: .156, rows: 6 }],
+  invictus: [{ first: 1.04, spacing: .117, rows: 22 }, { first: FONS_RAIN_END + 1.89, spacing: .144, rows: 8 }],
+} satisfies Record<Exclude<FonsVariant, 'normal'>, readonly Barrage[]>;
+const horizonRows = { first: 4.96, spacing: .145, rows: 7 };
 const crownfireCharge = .50;
 const horizonCharge = 4.24;
 const horizonStrike = 4.93;
@@ -42,31 +43,54 @@ export function fonsTuskTip(pose: ReturnType<typeof fonsPose>, side: Side, tusk:
   };
 }
 
+const endOf = (barrage: Barrage) => barrage.first + (barrage.rows - 1) * barrage.spacing;
+
+function crownfireTusks(row: number, encore: boolean): FonsTusk {
+  return (row + Number(encore)) % 2 === 0 ? 'outer' : 'inner';
+}
+
+export function fonsCrownfireStart(variant: Exclude<FonsVariant, 'normal'>) {
+  return crownfire[variant][0].first - crownfireCharge;
+}
+
 export function fonsCrownfireFlash(age: number, variant: FonsVariant) {
-  if (variant === 'normal') return;
-  for (const { at, tusks } of crownfire) {
-    if (age <= at - crownfireCharge || age >= at + .10) continue;
-    return {
-      tusks,
-      power: age < at
-        ? .78 * fonsEase(at - crownfireCharge, at, age)
-        : 1 - fonsEase(at, at + .10, age),
-    };
+  const power = { outer: 0, inner: 0 };
+  if (variant === 'normal') return power;
+  for (const [index, barrage] of crownfire[variant].entries()) {
+    if (age <= barrage.first - crownfireCharge || age > endOf(barrage) + .13) continue;
+    for (const tusks of ['outer', 'inner'] as const) {
+      const first = barrage.first + (crownfireTusks(0, index > 0) === tusks ? 0 : barrage.spacing);
+      if (age <= first - crownfireCharge) continue;
+      const row = Math.max(0, Math.min(barrage.rows - 1, Math.floor((age - barrage.first + 1e-8) / barrage.spacing)));
+      const elapsed = Math.max(0, age - barrage.first - row * barrage.spacing);
+      const live = age < first ? .68 * fonsEase(first - crownfireCharge, first, age)
+        : Math.max(0, 1 - elapsed / .13) * (crownfireTusks(row, index > 0) === tusks ? 1 : .26);
+      power[tusks] = live;
+    }
   }
+  return power;
 }
 
 export function fonsAttackCue(age: number, variant: FonsVariant) {
   if (variant === 'invictus' && age >= horizonCharge && age < horizonEnd)
-    return 'False Horizon · Watch the wall strike';
-  if (variant !== 'normal' && age >= crownfire[0].at - crownfireCharge && age < 4.45)
-    return 'Crownfire · Thread the staggered fans';
+    return age < horizonReturn ? 'False Horizon · Move away from the glowing wall' : 'False Horizon · Stay ahead of the sweep';
+  if (variant !== 'normal') {
+    if (crownfire[variant].some(barrage => age >= barrage.first - crownfireCharge && age < endOf(barrage) + .35))
+      return variant === 'rex' ? 'Crownfire · Follow the gap between the fans' : 'Crownfire · Follow the opening in the braid';
+  }
+}
+
+function horizonWall(cycle: number) {
+  const side: Side = cycle % 2 ? 1 : -1;
+  return { side, x: side * (WIDTH / 2 - .22), y: 2.48 };
 }
 
 export function fonsBeams(time: number, variant: FonsVariant = 'normal', pose = fonsPose(time)): [Beam, Beam] {
   const { age, cycle } = fonsPhase(time);
   const side: Side = cycle % 2 ? 1 : -1;
   if (variant === 'invictus') {
-    const wall = { x: side * (WIDTH / 2 - .22), y: 2.48 };
+    const { x, y } = horizonWall(cycle);
+    const wall = { x, y };
     const sweep = fonsEase(horizonReturn, horizonEnd, age);
     return [{
       from: fonsEmitter(pose, side), to: wall, width: .25,
@@ -106,38 +130,73 @@ export function fonsBeamHits(time: number, player: Point, variant: FonsVariant =
   });
 }
 
-export function fonsVolleys(time: number, dt: number, player: Point, variant: FonsVariant = 'normal') {
+function royalFan(time: number, variant: Exclude<FonsVariant, 'normal'>, target: Point, cycle: number,
+  row: number, barrage: Barrage, encore: boolean) {
+  const pose = fonsPose(time);
+  const invictus = variant === 'invictus';
+  const tusks = crownfireTusks(row, encore);
+  const progress = row / (barrage.rows - 1);
+  const turn = cycle % 2 ? -1 : 1;
+  const phase = progress * Math.PI * 2;
+  // Finish toward the side opposite the False Horizon warning, which is mirrored each cycle.
+  const sweep = invictus ? -1.55 * Math.cos(progress * Math.PI) + .46 * Math.sin(phase * 2)
+    : 1.78 * Math.cos(phase + .25);
+  const gap = target.x * .22 + turn * sweep * (encore ? .66 : 1);
+  const height = -6.10;
+  const count = encore ? 9 : 11;
+  const shots = [];
+  for (const side of [-1, 1] as const) {
+    const origin = fonsTuskTip(pose, side, tusks);
+    const direction = invictus && tusks === 'inner' && !encore ? -side : side;
+    for (let lane = 0; lane < count; lane++) {
+      const ripple = Math.sin(phase * 1.25 - lane * .51 + side * turn);
+      const stagger = tusks === 'inner' ? .21 : 0;
+      const x = gap + direction * (1.64 + stagger + lane * .43 + .13 * ripple);
+      const aim = Math.atan2(x - origin.x, origin.y - height);
+      const speed = 5.18 + .27 * ripple + (tusks === 'inner' ? -.15 : .15) + (invictus ? .12 : 0);
+      const primary = invictus ? (lane + row) % 2 === 0 : side === turn;
+      shots.push(patternBullet(origin, aim, speed, primary ? 'primary' : 'accent'));
+    }
+  }
+  return shots;
+}
+
+function horizonFan(cycle: number, row: number) {
+  const { side, x, y } = horizonWall(cycle);
+  const phase = row / (horizonRows.rows - 1);
+  return Array.from({ length: 8 }, (_, lane) => {
+    // The shards spread through the upper chamber while the beam sweeps below.
+    const aim = -side * (1.32 + lane * .052 + phase * .13);
+    return patternBullet({ x, y }, aim, 4.87 + .19 * Math.sin(row * .63 - lane * .58), lane % 2 ? 'accent' : 'primary');
+  });
+}
+
+export function fonsVolleys(time: number, dt: number, player: Point, variant: FonsVariant = 'normal', crownfireTarget = player): Shot[] {
   const { age, cycle } = fonsPhase(time);
   const shots: Shot[] = [];
   const crossed = (at: number) => at > age - dt && at <= age;
-  function emit(origin: Point, angle: number, speed: number) {
-    shots.push({ ...origin, z: 0, vx: speed * Math.sin(angle), vy: -speed * Math.cos(angle), vz: 0, planar: true });
-  }
   if (variant === 'normal') {
     for (const [index, at] of standardVolleys.entries()) {
       if (!crossed(at)) continue;
       const side: Side = (index + cycle) % 2 === 0 ? -1 : 1;
       const origin = fonsEmitter(fonsPose(cycle * FONS_CYCLE + at), side);
       const aim = Math.atan2(Math.max(-2.9, Math.min(2.9, player.x)) - origin.x, Math.max(2.9, origin.y - player.y));
-      for (let i = -3; i <= 3; i++) emit(origin, aim + i * .17, 6.1 + .24 * Math.abs(i));
+      for (let i = -3; i <= 3; i++) {
+        const angle = aim + i * .17, speed = 6.1 + .24 * Math.abs(i);
+        shots.push({ ...origin, z: 0, vx: speed * Math.sin(angle), vy: -speed * Math.cos(angle), vz: 0, planar: true });
+      }
     }
     return shots;
   }
 
-  for (const [index, { at, tusks }] of crownfire.entries()) {
-    if (!crossed(at)) continue;
-    const pose = fonsPose(cycle * FONS_CYCLE + at);
-    const order = (cycle + Math.floor(index / 2)) % 2 === 0 ? -1 : 1;
-    const outer = tusks === 'outer';
-    // The second pair sends bolts into the first fan's gaps near the lower
-    // flight lane. Fons alternates which side has more room in each doublet.
-    for (let i = outer ? -3 : -2; i <= 2; i++) {
-      const lane = i + (outer ? .5 : 0);
-      const side = lane === 0 ? order : lane < 0 ? -1 : 1;
-      const origin = fonsTuskTip(pose, side, tusks);
-      const laneX = lane * 1.43 + order * .37;
-      emit(origin, Math.atan2(laneX - origin.x, origin.y + 5.35), outer ? 6.30 : 6.65);
+  for (const [index, barrage] of crownfire[variant].entries()) {
+    for (let row = 0; row < barrage.rows; row++) {
+      const at = barrage.first + row * barrage.spacing;
+      if (crossed(at)) shots.push(...royalFan(cycle * FONS_CYCLE + at, variant, crownfireTarget, cycle, row, barrage, index > 0));
     }
+  }
+  if (variant === 'invictus') for (let row = 0; row < horizonRows.rows; row++) {
+    if (crossed(horizonRows.first + row * horizonRows.spacing)) shots.push(...horizonFan(cycle, row));
   }
   return shots;
 }

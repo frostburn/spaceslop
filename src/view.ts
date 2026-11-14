@@ -198,6 +198,9 @@ export class FlightView {
     const palette = mode === 'regular' ? undefined : patternPalettes[levelId];
     if (palette) {
       this.patternProjectiles = createPatternProjectileBatch(palette);
+      this.plane.add(this.patternProjectiles.root);
+    }
+    if (palette || levelId === 'wormhole') {
       this.dodgeMarker = new T.Group();
       this.dodgeMarker.name = 'fighter-dodge-point';
       const rim = new T.Mesh(new T.RingGeometry(PATTERN_HIT_RADIUS - .022, PATTERN_HIT_RADIUS, 32),
@@ -207,7 +210,7 @@ export class FlightView {
       rim.renderOrder = center.renderOrder = 14;
       this.dodgeMarker.add(rim, center);
       this.dodgeMarker.visible = false;
-      this.plane.add(this.patternProjectiles.root, this.dodgeMarker);
+      this.plane.add(this.dodgeMarker);
     }
     this.playerBurners = shipBurners(this.player.root);
     this.drone = createDroneRig(livery);
@@ -292,7 +295,8 @@ export class FlightView {
     const pods = this.wingPods.map(side => side.flatMap(r => [r.root, r.upgrade]));
     const flares = this.level.ending?.cockpitFlares.root ?? this.victoryFlares!.root;
     const ordnance = [this.player.root, this.drone, this.towlineEmitters, ...Object.values(this.projectiles).map(r => r.root), this.combat.root, this.playerMuzzle.root, this.droneMuzzle.root, ...this.drops.slice(0, powerupKinds.length).map(r => r.root), flares];
-    if (this.patternProjectiles && this.dodgeMarker) ordnance.push(this.patternProjectiles.root, this.dodgeMarker);
+    if (this.patternProjectiles) ordnance.push(this.patternProjectiles.root);
+    if (this.dodgeMarker) ordnance.push(this.dodgeMarker);
     const lasers = [...pods[1], ...this.wingLasers.map(r => r.root)];
     try {
       this.level.prepare?.();
@@ -492,7 +496,9 @@ export class FlightView {
     if (formation > 0) this.player.root.quaternion.slerp(this.victoryFacing, formation);
     this.player.root.visible = flight.hull > 0 && (victoryTime !== undefined || Math.floor(flight.invulnerable * 12) % 2 === 0);
     if (this.dodgeMarker) {
-      this.dodgeMarker.visible = this.player.root.visible && (flight.phase === 'stage' || flight.phase === 'boss');
+      this.dodgeMarker.visible = this.player.root.visible && (this.levelId === 'wormhole'
+        ? flight.isFonsFight && flight.fonsVariant !== 'normal' && flight.phase === 'boss'
+        : flight.phase === 'stage' || flight.phase === 'boss');
       this.dodgeMarker.position.set(flight.player.x, flight.player.y, 0);
     }
     if (ending && exitTime !== undefined) {

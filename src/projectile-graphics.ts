@@ -101,7 +101,7 @@ export function createPatternProjectileBatch(palette: PatternPalette) {
   const axis = new T.Vector3(0, 0, 1);
   const size = new T.Vector3(.52, { seed: .57, ember: .63, pearl: .52, shard: .71, feather: .73, petal: .64 }[palette.shape], 1);
 
-  function draw(shots: Flight['threats']) {
+  function draw(shots: readonly Flight['threats'][number][]) {
     let count = 0;
     for (const shot of shots) {
       if (!shot.pattern) continue;

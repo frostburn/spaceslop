@@ -1,4 +1,5 @@
 import type { LevelId } from '../levels';
+import { campaign } from './missions';
 import { campaignClearIds, campaignStatus } from './progress';
 
 export const CHALLENGE_SAVE_KEY = 'spaceslop.challenge-progress';
@@ -6,10 +7,8 @@ export const challengeModes = ['bullet-hell', 'hardcore'] as const;
 export type ChallengeMode = typeof challengeModes[number];
 export type FlightMode = 'regular' | ChallengeMode;
 
-export const challengeRoutes: Record<ChallengeMode, readonly LevelId[]> = {
-  'bullet-hell': ['broodlock', 'io', 'vents', 'titan', 'heliostat', 'ice', 'preserve', 'summer', 'boulevard', 'biolume', 'fleet', 'den'],
-  hardcore: ['broodlock'],
-};
+const route = campaign.map(mission => mission.level);
+export const challengeRoutes: Record<ChallengeMode, readonly LevelId[]> = { 'bullet-hell': route, hardcore: route };
 
 export const challengeNames = {
   'bullet-hell': 'Bullet Hell',

@@ -79,8 +79,8 @@ import { PRESERVE_APPROACH } from './preserve-layout';
 import { CLOSE_CALLS_REQUIRED, HOT_DOCK_COOLDOWN, HOT_DOCK_DISTANCE, type PilotId } from './pilot-data';
 import { WING_FLASH_TIME, WING_FORMATION, wingShots, wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
 import { WORMHOLE_SUPPLY_TIME, wormholeBosses } from './wormhole/route';
-import { FONS_APPROACH, FONS_HP, fonsBodyEntry, fonsPhase, fonsPose, fonsRockHits, fonsRocks, fonsSheltered } from './wormhole/fons/combat';
-import { fonsBeamHits, fonsVolleys } from './wormhole/fons/attacks';
+import { FONS_APPROACH, fonsBodyEntry, fonsHealth, fonsPhase, fonsPose, fonsRockHits, fonsRocks, fonsSheltered } from './wormhole/fons/combat';
+import { fonsBeamHits, fonsCrownfireStart, fonsVolleys } from './wormhole/fons/attacks';
 import type { FonsVariant } from './wormhole/fons/variants';
 
 export { BOSS_CAMERA_DISTANCE, HEIGHT, WIDTH } from './playfield';
@@ -147,7 +147,7 @@ const TOWLINE_DURATION = 0.3;
 const TOWLINE_DAMAGE = 3;
 const BOSS_IMPACT_TRAVEL = 0.48;
 const wormholeForward = { y: Math.cos(WORMHOLE_PITCH), z: -Math.sin(WORMHOLE_PITCH) };
-const bossHealthByLevel: Record<LevelId, number> = {
+const bossHealthByLevel: Record<Exclude<LevelId, 'wormhole'>, number> = {
   broodlock: BOSS_HP,
   io: IO_HP,
   vents: CRAB_HP,
@@ -160,7 +160,6 @@ const bossHealthByLevel: Record<LevelId, number> = {
   biolume: RAY_HP,
   fleet: FLEET_BOSS_HP,
   den: DEN_HP,
-  wormhole: FONS_HP,
 };
 
 function projectShot({ x, y, z }: Point & { z: number }): Point {
@@ -330,7 +329,8 @@ export class Flight {
   fleetBossAttack = createFleetBossAttack();
   private wormholeIndex = 0;
   private wormholeEncounterAt = 0;
-  private fonsForm: FonsVariant = 'normal';
+  private fonsForm: FonsVariant;
+  private fonsCrownfireAim?: { cycle: number; point: Point };
   private wormholeFinalTime = 0;
   private heliostatEscalationAt=Infinity;
   private heliostatEscalationCycle=Infinity;
@@ -354,6 +354,7 @@ export class Flight {
   ) {
     this.droneWeapon = droneWeapon;
     this.pilot = pilot;
+    this.fonsForm = mode === 'hardcore' ? 'invictus' : mode === 'bullet-hell' ? 'rex' : 'normal';
     this.hull = mode === 'hardcore' ? 1 : STARTING_HULL;
     this.denMines = level === 'den' ? denMineSites.map(() => ({})) : [];
     if (this.isVentChallenge) this.crabClawHealth = [ventChallengeBoss.clawHealth, ventChallengeBoss.clawHealth];
@@ -412,7 +413,7 @@ export class Flight {
     return this.phase === 'approach' ? this.time - this.transitionDuration : this.bossTime;
   }
 
-  startFonsApproach(variant: FonsVariant = 'normal') {
+  startFonsApproach(variant: FonsVariant = this.fonsForm) {
     if (this.level !== 'wormhole' || this.isFonsFight || this.phase === 'won' || this.phase === 'lost') return;
     this.fonsForm = variant;
     this.startWormholeEncounter(wormholeBosses.length - 1);
@@ -493,7 +494,8 @@ export class Flight {
     if (this.isGroveChallenge) return groveChallengeBoss.health;
     if (this.isFleetChallenge) return fleetChallengeBoss.health;
     if (this.isDenChallenge) return denChallengeBoss.health;
-    return bossHealthByLevel[this.encounterLevel];
+    const encounter = this.encounterLevel;
+    return encounter === 'wormhole' ? fonsHealth[this.fonsVariant] : bossHealthByLevel[encounter];
   }
   get bossTargetRadius() { if(this.encounterLevel==='biolume')return RAY_ORGAN_RADIUS/RAY_PROJECTION;if(this.encounterLevel==='summer')return .48*HYDRA_BOSS_SIZE;if(this.encounterLevel==='boulevard'||this.encounterLevel==='heliostat')return 1.25;return this.encounterLevel === 'preserve' ? GROUNDSKEEPER_RADIUS : BOSS_CANNON_RADIUS; }
   get summerTargetHead(){return nearestHydraHead(this.summerHydra,this.player.x/BOSS_PROJECTION,true);}
@@ -1680,9 +1682,13 @@ export class Flight {
     }
     if (this.isFonsFight) {
       const time = this.fonsTime, rocks = fonsRocks(time);
-      if (fonsRockHits(rocks, this.player) || fonsBeamHits(time, this.player, this.fonsVariant) ||
-          (fonsPhase(time).rain && !fonsSheltered(rocks, this.player))) this.hit();
-      if (this.phase === 'boss') this.threats.push(...fonsVolleys(time, dt, this.player, this.fonsVariant));
+      const variant = this.fonsVariant, { age, cycle, rain } = fonsPhase(time);
+      if (fonsRockHits(rocks, this.player) || fonsBeamHits(time, this.player, variant) ||
+          (rain && !fonsSheltered(rocks, this.player))) this.hit();
+      if (this.phase !== 'boss') return;
+      if (variant !== 'normal' && age >= fonsCrownfireStart(variant) && this.fonsCrownfireAim?.cycle !== cycle)
+        this.fonsCrownfireAim = { cycle, point: { ...this.player } };
+      this.threats.push(...fonsVolleys(time, dt, this.player, variant, this.fonsCrownfireAim?.point));
       return;
     }
     if (this.isFleet) {

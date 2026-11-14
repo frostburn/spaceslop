@@ -10,7 +10,7 @@ import { createFlightView, type FlightView } from '../view';
 import type { WingWeapon } from '../wing';
 import type { FonsVariant } from '../wormhole/fons/variants';
 import { createRankDisplays } from './briefing';
-import { mountEndingCredits } from './ending-credits';
+import { endingMessage, endingMessages, mountEndingCredits } from './ending-credits';
 import { flightReadout } from './flight-hud';
 import { bindFlightInput } from './input';
 
@@ -185,7 +185,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
       if (promotion) setPilotRank(promotion);
       if (!nextLevel) report.push('Campaign complete');
     }
-    if (unlockedHardcore) report.push('Bullet Hell Hardcore unlocked');
+    if (unlockedHardcore) report.push(endingMessages['bullet-hell']);
     if (flight.phase === 'lost' && recordProgress && challengeRun) {
       challengeRun.onLoss();
       if (mode === 'hardcore') report.push('Hardcore progress reset');
@@ -201,7 +201,10 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
   function finishCredits() {
     if (screen !== 'credits') return;
     credits.classList.remove('rolling');
-    unlockNotice.hidden = !unlockedBulletHell;
+    const completedChallenge = recordProgress && challengeRun !== undefined && nextLevel === undefined;
+    const closingMessage = endingMessage(mode, completedChallenge, unlockedBulletHell);
+    unlockNotice.textContent = closingMessage ?? '';
+    unlockNotice.hidden = closingMessage === undefined;
     continueCredits.hidden = false;
     const wasFocused = document.activeElement === skipCredits;
     skipCredits.hidden = true;
