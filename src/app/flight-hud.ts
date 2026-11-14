@@ -113,6 +113,8 @@ function bossTip(flight: Flight) {
   if (flight.isIceChallenge) return 'Target the mouth marker. Thread the gap between the ice streams.';
   if (flight.isPreserveChallenge) return 'Aim at the belly. Dodge the claws, then follow the gap in the feathers.';
   if (flight.isSummerChallenge) return 'Follow the gap between the petals. Destroy heads to thin the streams.';
+  if (flight.isBoulevardChallenge) return 'Follow the gap in the neon lanes. Keep the cruiser ahead of you.';
+  if (flight.isGroveChallenge) return 'Slip between the fronds. Shoot seeking lanterns from a distance.';
   if (flight.isFonsFight) {
     const storm = fonsPhase(flight.fonsTime);
     if (storm.rain || storm.warning > 0) return 'Stay in the wake of a falling crystal';

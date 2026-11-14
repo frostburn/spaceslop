@@ -16,7 +16,10 @@ import {createSeedPods} from '../../biolume/modules';
 import {createLanternRay,createRaySeekerAssets,createRaySeekerRig} from '../../biolume/lantern-ray-rig';
 import {RAY_SEEKER_POOL} from '../../biolume/lantern-ray';
 import {GROVE_ENEMY_POOL,groveEnemySize,groveMotion} from '../../biolume/combat';
+import {groveChallengeTiming} from '../../biolume/challenge';
+import {patternBurstCharge} from '../../challenge-patterns';
 import {GROVE_DISTANCE,GROVE_POD_POOL,grovePods,groveSitePoint} from '../../biolume/route';
+import {createPatternCharge} from '../pattern-charge';
 
 export const createLevel:LevelFactory=({plane,scene,signal})=>{
   const root=new T.Group();root.name='lantern-grove-level';
@@ -26,6 +29,7 @@ export const createLevel:LevelFactory=({plane,scene,signal})=>{
   const pods=createSeedPods(uniforms.emissionGain,GROVE_POD_POOL);
   const water=createGroveWater(plane,scene,plates);
   const gains=Array.from({length:GROVE_ENEMY_POOL},()=>({value:1})),gliders=gains.map(g=>createGliderRig(g));
+  const chargeLight=createPatternCharge(0xffcd62),gliderCharges=gliders.map(r=>chargeLight.attach(r.root,0,-.82,.30));
   const boss=createLanternRay(),seekerAssets=createRaySeekerAssets(),seekers=Array.from({length:RAY_SEEKER_POOL},()=>createRaySeekerRig(seekerAssets));boss.root.visible=false;
   const frogAssets=createFrogAssets(),frogAtlas=createFrogAtlas();
   const frogs=Array.from({length:FROG_POOL},()=>createFrogRig(frogAssets,frogAtlas));
@@ -44,7 +48,7 @@ export const createLevel:LevelFactory=({plane,scene,signal})=>{
   return{root,boss:boss.root,models,ready,stageDistance:GROVE_DISTANCE,fixedCamera:true,orientation:()=>({pitch:0,bank:0,viewPitch:0}),
     background:0,keyIntensity:0,skyIntensity:0,toneMapping:T.ACESFilmicToneMapping,exposure:1.1,
     contacts:[boss.root,...frogs.map(r=>r.body),...gliders.map(r=>r.root),...seekers.map(r=>r.root)],warmup:[[plates.root,water.root,...pods.meshes,ecology.root,...branches.map(branch=>branch.root)],[boss.root,...gliders.map(r=>r.root),...seekers.map(r=>r.root),...frogs.map(r=>r.root)]],
-    prepare(){frogs.forEach(r=>r.prime());plates.prime(true);water.prime(true);restores=gliders.map(r=>r.prime());},afterWarmup(){plates.prime(false);water.prime(false);restores.forEach(r=>r());restores=[];},
+    prepare(){frogs.forEach(r=>r.prime());plates.prime(true);water.prime(true);gliderCharges[0](1);restores=gliders.map(r=>r.prime());},afterWarmup(){plates.prime(false);water.prime(false);gliderCharges[0](0);restores.forEach(r=>r());restores=[];},
     capture:water.capture,
     contact:createBossLaserContact(plane,boss.root),
     update(frame){
@@ -56,13 +60,16 @@ export const createLevel:LevelFactory=({plane,scene,signal})=>{
         mesh.rotation.z=.025*Math.sin(animationTime*.8+site.at);
       }
       boss.root.visible=time>=f.stageDuration;
-      if(boss.root.visible)boss.pose(f.rayTime,f.bossHealth<=0);
+      if(boss.root.visible)boss.pose(f.rayTime,f.bossHealth<=0,f.rayAttackSignal);
       for(const r of actors)r.root.visible=false;models.length=f.enemies.length;models.fill(undefined);let gi=0,si=0,fi=0;
       for(const[i,enemy]of f.enemies.entries()){
         if(enemy.rayOrb&&enemy.hp>0){const rig=seekers[si++];if(rig){rig.root.visible=true;rig.pose(enemy as typeof enemy&{rayOrb:NonNullable<typeof enemy.rayOrb>});models[i]=rig.root;}continue;}
         if(enemy.frog&&enemy.hp>0){const rig=frogs[fi++];if(rig){rig.root.visible=true;rig.pose(enemy,enemy.frog,enemy.age);models[i]=rig.body;}continue;}
         if(!enemy.grove||enemy.hp<=0)continue;const rig=gliders[gi];if(!rig)break;
-        gains[gi++].value=1+Math.max(0,1-(enemy.fire-enemy.age)/.65);
+        const challenge=f.isGroveChallenge;
+        const charge=challenge?patternBurstCharge(enemy,groveChallengeTiming(enemy.grove).windup):Math.max(0,1-(enemy.fire-enemy.age)/.65);
+        gliderCharges[gi](challenge?charge:0);
+        gains[gi++].value=1+charge;
         rig.root.visible=true;rig.root.position.set(enemy.x,enemy.y,.1);rig.root.rotation.set(0,groveMotion(enemy.age,enemy.lane,enemy.grove).bank,enemy.heading??0);rig.root.scale.setScalar(groveEnemySize(enemy.grove));rig.pose(enemy.age);models[i]=rig.root;
       }
       const avoid=[f.player,f.drone,...f.enemies.filter(e=>e.hp>0)];

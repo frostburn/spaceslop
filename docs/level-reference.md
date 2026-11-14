@@ -197,10 +197,14 @@ The former façade atlas is retired in favor of modeled architecture. The unused
 
 Vite dev exposes **Launch at transition**. The **Synthwave boulevard** workshop sector includes **Boulevard · Full route**, **Pursuit cruiser** and **Hovercar patrol**, with camera presets, scrubbing and play/pause. **Chrome / vector arch** isolates the complete gate, and **Central fountain** exposes the basin, jets and spray for close inspection. The route timeline covers all three districts, the transition and eighteen seconds of pursuit. Controls and actor/weapon targets stay in the stable flight plane throughout the camera move.
 
+**Bullet Hell** adds staggered patrol volleys, sweeping interceptor turrets and two expanding rings from each jumping mine. The Pursuit Cruiser alternates mirrored chevrons with crossing pink and cyan lanes. Follow the gap as it moves across the plaza.
+
 The river has rounded, unevenly spaced bends, changing channel width and gravel point bars on the inside banks. Shader banks, planted foliage, grazing footprints and hydra bodies share the same channel profile. It meanders beneath the straight flight path; the camera never follows it. The overhead mammoth replacement retains the existing filename. The paired side-lotus atlas and separate far-wall cutout are delivered through chat and loaded only for Summer; missing files use modeled flowers. The former opaque roof petals have been removed so they cannot conceal the far-wall bloom.
 
 
 ## Lantern Grove
+
+**Bullet Hell** threads gold and violet fans between the aerial patrols and the bank frogs. The Lantern Ray alternates the organ firing the fan and sends a shootable seeking lantern from the opposite side in the lull. Destroying a seeker releases a two-speed ring of seeds.
 
 Select **Lantern Grove · Bioluminescence** (`?level=biolume`) for a 100-second, ten-screen route: Lantern Grove, Root Bridges, Blackwater Basin, Lantern Nursery and Dark Crown. The ship flies straight beneath a translucent canopy while pod banks, leaf veins, engines, projectiles and glider glands provide local light. There is no ambient fill. The foreground has a small additional scroll parallax; both layers finish aligned on the final clearing. The last four seconds coast smoothly to rest.
 
