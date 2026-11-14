@@ -64,6 +64,8 @@ const patternPalettes: Partial<Record<LevelId, PatternPalette>> = {
   summer: { primary: 0xca63f4, accent: 0x36d9d8, shape: 'petal' },
   boulevard: { primary: 0xff72cb, accent: 0x70f4ff, shape: 'shard' },
   biolume: { primary: 0xffcd62, accent: 0xb990ff, shape: 'seed' },
+  fleet: { primary: 0xffac57, accent: 0xabadff, shape: 'pearl' },
+  den: { primary: 0xff725f, accent: 0xd4fa88, shape: 'ember' },
 };
 function planarProjectileLayer({x, y}: { x: number; y: number }, z: number) {
   const scale = (BOSS_CAMERA_DISTANCE - z) / BOSS_CAMERA_DISTANCE;

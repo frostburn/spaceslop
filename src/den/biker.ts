@@ -146,8 +146,9 @@ export function createDenBiker() {
   const plumes = shipBurners(root);
   const flashMaterial = new T.MeshBasicMaterial({ color: 0xff9a3c, transparent: true, blending: T.AdditiveBlending, depthWrite: false });
   const flashShape = new T.ConeGeometry(.13, .39, 5).rotateZ(Math.PI).translate(0, -.12, 0);
-  const flashes = DEN_GUNS.map(gun => {
-    const mesh = new T.Mesh(flashShape, flashMaterial);
+  const flashes = DEN_GUNS.map((gun, index) => {
+    const mesh = new T.Mesh(flashShape, index === 0 ? flashMaterial : flashMaterial.clone());
+    mesh.name = `gantry-gun-flash-${index}`;
     mesh.position.set(gun.x, gun.y, .6);
     root.add(mesh);
     return mesh;
@@ -160,7 +161,7 @@ export function createDenBiker() {
       fallbackBike.visible = fallbackRider.visible = false;
       cards.forEach(mesh => { mesh.visible = true; });
     },
-    pose(time: number, alive: boolean) {
+    pose(time: number, alive: boolean, challengeSignal?: (gun: number) => { charge: number; flash: number }) {
       const pose = denPose(time);
       root.visible = alive;
       root.position.set(pose.x, pose.y, .07);
@@ -170,10 +171,13 @@ export function createDenBiker() {
       else grip.rotation.set(-.96 * pose.rev, 0, -.57 * pose.rev);
       for (const deform of bend) deform(time, pose.throttle, pose.bank);
       poseBurners(plumes, time, alive ? pose.throttle : 0);
-      flashMaterial.opacity = pose.flash;
-      flashes.forEach((flash, index) => {
-        flash.visible = alive && index === pose.firingGun;
-        flash.scale.setScalar(.66 + .85 * pose.flash);
+      flashes.forEach((mesh, index) => {
+        const signal = challengeSignal?.(index);
+        const power = signal ? Math.max(signal.flash, .48 * signal.charge) : pose.flash;
+        mesh.visible = alive && (signal ? power > .05 : index === pose.firingGun);
+        mesh.material.opacity = power;
+        mesh.material.color.setHex(signal ? (index === 0 ? 0xff725f : 0xd4fa88) : 0xff9a3c);
+        mesh.scale.setScalar(.66 + .85 * power);
       });
     },
   };

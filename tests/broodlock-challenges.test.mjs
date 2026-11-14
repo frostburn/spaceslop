@@ -48,13 +48,17 @@ test('challenge unlocks are case-insensitive and Hardcore loss resets only Hardc
   assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'biolume'), { next: 'boulevard', unlockedHardcore: false });
   assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'boulevard'), { next: 'biolume', unlockedHardcore: false });
   assert(!challengeAvailable(progress, 'hardcore', campaignClears));
-  assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'biolume'), { next: undefined, unlockedHardcore: true });
+  assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'biolume'), { next: 'fleet', unlockedHardcore: false });
+  assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'den'), { next: 'fleet', unlockedHardcore: false });
+  assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'fleet'), { next: 'den', unlockedHardcore: false });
+  assert(!challengeAvailable(progress, 'hardcore', campaignClears));
+  assert.deepEqual(recordChallengeClear(progress, 'bullet-hell', 'den'), { next: undefined, unlockedHardcore: true });
   assert(challengeAvailable(progress, 'hardcore', campaignClears));
   recordChallengeClear(progress, 'hardcore', 'broodlock');
   const saved = decodeChallengeProgress(JSON.stringify(progress));
   assert.deepEqual(saved.cleared.hardcore, ['broodlock']);
   resetHardcoreProgress(saved);
-  assert.deepEqual(saved.cleared, { 'bullet-hell': ['broodlock', 'io', 'vents', 'titan', 'heliostat', 'ice', 'preserve', 'summer', 'boulevard', 'biolume'], hardcore: [] });
+  assert.deepEqual(saved.cleared, { 'bullet-hell': ['broodlock', 'io', 'vents', 'titan', 'heliostat', 'ice', 'preserve', 'summer', 'boulevard', 'biolume', 'fleet', 'den'], hardcore: [] });
   assert(challengeAvailable(saved, 'hardcore', campaignClears));
 
   const firstStageSave = decodeChallengeProgress('{"unlocked":["hardcore"],"cleared":{"bullet-hell":["broodlock"]}}');
@@ -73,6 +77,11 @@ test('challenge unlocks are case-insensitive and Hardcore loss resets only Hardc
   }));
   assert.equal(nextChallengeLevel(lotusSave, 'bullet-hell'), 'boulevard');
   assert(challengeAvailable(lotusSave, 'hardcore', campaignClears));
+  const groveSave = decodeChallengeProgress(JSON.stringify({
+    unlocked: ['bullet-hell', 'hardcore'], cleared: { 'bullet-hell': saved.cleared['bullet-hell'].slice(0, 10) },
+  }));
+  assert.equal(nextChallengeLevel(groveSave, 'bullet-hell'), 'fleet');
+  assert(challengeAvailable(groveSave, 'hardcore', campaignClears));
 });
 
 test('both challenges build dense fields of slow, readable projectiles', () => {

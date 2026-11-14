@@ -2,7 +2,7 @@ import { ellipseEntry } from '../planar-contact';
 import { easeFleet, FLEET_APPROACH, projectedSaucerMount } from './route';
 
 type Point = { x: number; y: number };
-type Port = 0 | 1 | 2;
+export type FleetBossPort = 0 | 1 | 2;
 
 export const FLEET_BOSS_HP = 138;
 export const FLEET_BOSS_CYCLE = 7.25;
@@ -11,7 +11,7 @@ export const FLEET_BOSS_MOUNTS = [
 ] as const;
 
 const locks = [.53, 1.64] as const;
-const bursts: readonly { at: number; port: Port; echo?: boolean; rapid?: boolean }[] = [
+const bursts: readonly { at: number; port: FleetBossPort; echo?: boolean; rapid?: boolean }[] = [
   { at: 1.42, port: 0 }, { at: 1.64, port: 0, echo: true },
   { at: 2.53, port: 1 }, { at: 2.75, port: 1, echo: true },
   { at: 4.62, port: 2 }, { at: 5.20, port: 2, echo: true },
@@ -52,7 +52,7 @@ export function fleetBossEntry(time: number, a: Point, b: Point) {
   }, 0, width / 2, height / 2 + .23);
 }
 
-export function fleetBossSignal(time: number, port: Port, rapid: boolean) {
+export function fleetBossSignal(time: number, port: FleetBossPort, rapid: boolean) {
   if (time < 0) return { charge: 0, flash: 0 };
   const phase = time % FLEET_BOSS_CYCLE;
   const windup = port === 2 ? 1.15 : .89;

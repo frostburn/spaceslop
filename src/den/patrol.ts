@@ -43,8 +43,8 @@ export const denWaves: readonly DenWave[] = [
 
 export function denPatrolScale(patrol: DenPatrol) { return patrol.heavy ? 1.23 : 1; }
 
-export function denPatrolPose(age: number, lane: number, patrol: DenPatrol) {
-  const t = Math.max(0, age) * tuning.pace;
+export function denPatrolPose(age: number, lane: number, patrol: DenPatrol, pace: number = tuning.pace) {
+  const t = Math.max(0, age) * pace;
   const speed = patrol.heavy ? 2.35 : 2.75;
   const weave = patrol.course === 'weave';
   const entry = weave ? 0 : patrol.course === 'cross' ? 2.3 : 1.8;

@@ -99,6 +99,8 @@ After Fons falls, the victory clock continues into the tunnel exit shot and the 
 
 ## Fleet Clash
 
+**Bullet Hell** layers amber and blue-violet saucer volleys with paired bolts from the existing broadside guns. The Gray Command Saucer sweeps the field from its side ports and follows with a rotating pulse wheel from its central lens. The emitter lights follow the same attack clock as the bullets.
+
 `fleet/route.ts` registers the complete Pleiadian hulls, gun sockets, Gray carriers, and tractor passes along the 98-second flight lane. The same top-down camera passes the outer broadsides and flies over the trench ship from the open stern to the forward breach. The narrower trench ship retains its stern entry and exhaust clearance at the existing scroll speed. Both hull variants use full 1:2 alpha plates and source-built substitutes in the same coordinates. The fixed starfield, drifting planet pair and small background fleet cross at separate depths. The five fleet maps are optional and load only for this sector.
 
 `fleet/pleiadian-craft.ts` shares the shuttle and fighter construction across the exchange, wrecks and pursuit. The painted gold inlays use a registered metalness and roughness map, the beveled trim reflects the fleet environment, and scorch patches dull both the paint and the finish. The four fighters trail two weaving saucers in a scripted midground pass ahead of the trench. Their tracers and exhaust animate on the shared route clock.
@@ -106,6 +108,8 @@ After Fons falls, the victory clock continues into the tunnel exit shot and the 
 `fleet/combat.ts` owns the saucer courses, aim locks, and broadside timing. Guns fire from the measured sockets once visible. Outer guns and the trench entrance alternate burst heights, and guns deeper in the trench fire at both heights. The tractor rig shares the carried wreck positions with collision. Scout and heavy saucers bank on the same course clock that places their combat targets. The command saucer banks into view as the flight coasts to the breach. `fleet/boss.ts` shares the boss pose and projected emitter positions with the rig and registers swept hull contacts for every weapon. The paired aimed fans lock before firing and alternating radial pulses gain a third ring on the next cycle below half health. Friendly ordnance stays planar through the approach and fight. `rendering/levels/fleet.ts` warms the background ships, shared lathed meshes, boss emitters, gun flashes, tractor beam and amber bolts before launch. The dev hangar can launch at either the trench entrance or the breach approach.
 
 ## Draconian Den
+
+**Bullet Hell** sends longer coral and lime volleys through the chasm. Cliff turrets fire staggered fans and mines burst into branching spokes. The Gantry Chief fires from both bike guns as he crosses the gantry, then sends interleaved rows through a shifting gap.
 
 `den/route.ts` owns the ten-screen registration and the continuous coast across the grate into the separate gantry plate. Den and Lantern Grove share `rendering/scroll-plate.ts`, which decodes an optional raster into bounded screen textures with neighboring pixels in the gutters. The Den composites two adjacent plate tiles over its side-on black-hole view. The cliff artwork includes fixed scenery and rookery nests. During the approach, the lensed sky swings toward the chief as the arena enters view. Flight and ordnance stay in the same plane.
 

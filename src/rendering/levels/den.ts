@@ -2,6 +2,8 @@ import * as T from 'three';
 import { createDenBiker } from '../../den/biker';
 import { createDenCliffProps } from '../../den/cliff-props';
 import { createDenDefenses } from '../../den/defense-rig';
+import { DEN_CHALLENGE_PACE, denChallengeGunSignal, denChallengeTiming } from '../../den/challenge';
+import { patternBurstCharge } from '../../challenge-patterns';
 import { DEN_PATROL_POOL, DEN_PATROL_WINDUP, denPatrolPose, denPatrolScale } from '../../den/patrol';
 import { createDenPatrols } from '../../den/patrol-rig';
 import { DEN_DURATION, DEN_SCREENS, denScroll } from '../../den/route';
@@ -64,8 +66,10 @@ export const createLevel: LevelFactory = ({ signal }) => {
     update(frame) {
       const { flight, time, reveal, animationTime } = frame;
       const scroll = denScroll(time);
+      const challenge = flight.isDenChallenge;
       if (time >= DEN_DURATION) {
-        boss.pose(flight.denBossTime, flight.bossHealth > 0);
+        const attackTime = flight.bossTorrentCancelled ? -1 : flight.denBossTime;
+        boss.pose(flight.denBossTime, flight.bossHealth > 0, challenge ? gun => denChallengeGunSignal(attackTime, gun) : undefined);
         boss.root.position.y += (DEN_SCREENS - scroll) * HEIGHT;
       } else boss.root.visible = false;
 
@@ -77,8 +81,9 @@ export const createLevel: LevelFactory = ({ signal }) => {
         if (!enemy.den || enemy.hp <= 0 || enemy.age < 0) continue;
         const rig = patrols.rigs[index++];
         if (!rig) break;
-        const pose = denPatrolPose(enemy.age, enemy.lane, enemy.den);
-        const charge = Math.max(0, 1 - (enemy.fire - enemy.age) / DEN_PATROL_WINDUP);
+        const pose = denPatrolPose(enemy.age, enemy.lane, enemy.den, challenge ? DEN_CHALLENGE_PACE : undefined);
+        const charge = challenge ? patternBurstCharge(enemy, denChallengeTiming(enemy.den).windup)
+          : Math.max(0, 1 - (enemy.fire - enemy.age) / DEN_PATROL_WINDUP);
         rig.pose(enemy.x, enemy.y, pose.heading, denPatrolScale(enemy.den), pose.throttle, charge, animationTime + index * .13);
         models[i] = rig.root;
       }

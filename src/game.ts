@@ -8,6 +8,8 @@ import { CHALLENGE_ANT_PACE, challengeAntFirstShot, challengeGuardian, challenge
 import type { FlightMode } from './campaign/challenges';
 import { bossPatternCharge, PATTERN_GRAZE_RADIUS, PATTERN_HIT_RADIUS, type BossPattern, type PatternColor } from './challenge-patterns';
 import { DEN_BURSTS, DEN_CYCLE, DEN_GUNS, DEN_HP, denBodyEntry, denMount, denPose } from './den/combat';
+import { DEN_CHALLENGE_PACE, denChallengeBoss, denChallengeBossRow, denChallengeFirstShot, denChallengeMineBurst,
+  denChallengeTurretRow, denChallengeWaves, stepDenChallengeRider } from './den/challenge';
 import { DEN_TURRET_HP, createDenTurret, denDefensePoint, denMineSites, denTurretEntry, denTurretSites,
   stepDenMine, stepDenTurret, type DenMine, type DenTurret } from './den/defense';
 import { DEN_APPROACH, denScroll } from './den/route';
@@ -16,6 +18,8 @@ import { broadsideShots, fleetWaves, FLEET_SAUCER_LIFE, FLEET_SAUCER_STAGGER, FL
   saucerCanFire, saucerFireInterval, saucerPose, saucerSize, saucerVolley, type FleetSaucer } from './fleet/combat';
 import { FLEET_APPROACH, tractorPose, tractorSites } from './fleet/route';
 import { createFleetBossAttack, FLEET_BOSS_HP, fleetBossEntry, fleetBossTarget, stepFleetBoss } from './fleet/boss';
+import { FLEET_CHALLENGE_PACE, fleetChallengeBoss, fleetChallengeBossRow, fleetChallengeBroadside,
+  fleetChallengeFirstShot, fleetChallengeTiming, fleetChallengeWaves, stepFleetChallengeSaucer } from './fleet/challenge';
 import { HELIOSTAT_HP,HELIOSTAT_APPROACH,HELIOSTAT_INTERVAL,HELIOSTAT_WINDUP,HELIOSTAT_FIRE,HELIOSTAT_CHANNEL,HELIOSTAT_FADE,HELIOSTAT_LENS_DELAY,HELIOSTAT_GUARD_FIRE,HELIOSTAT_SPAWN_LEAD,heliostatWaves,heliostatMotion,heliostatCanAttack,heliostatPlasmaHits,electricSites,electricHits,type HeliostatCourse } from './heliostat/combat';
 import {SUMMER_APPROACH} from './summer/layout';
 import {createHydraAttack,stepHydraAttack} from './summer/hydra-attack';
@@ -375,6 +379,8 @@ export class Flight {
   get isSummerChallenge() { return this.level === 'summer' && this.mode !== 'regular'; }
   get isBoulevardChallenge() { return this.level === 'boulevard' && this.mode !== 'regular'; }
   get isGroveChallenge() { return this.level === 'biolume' && this.mode !== 'regular'; }
+  get isFleetChallenge() { return this.level === 'fleet' && this.mode !== 'regular'; }
+  get isDenChallenge() { return this.level === 'den' && this.mode !== 'regular'; }
   get wormholeBossNumber() { return this.wormholeIndex + 1; }
   get isDen() { return this.encounterLevel === 'den'; }
   get isFleet() { return this.encounterLevel === 'fleet'; }
@@ -485,6 +491,8 @@ export class Flight {
     if (this.isSummerChallenge) return HYDRA_SIDES.length * this.summerHeadMaxHealth;
     if (this.isBoulevardChallenge) return boulevardChallengeBoss.health;
     if (this.isGroveChallenge) return groveChallengeBoss.health;
+    if (this.isFleetChallenge) return fleetChallengeBoss.health;
+    if (this.isDenChallenge) return denChallengeBoss.health;
     return bossHealthByLevel[this.encounterLevel];
   }
   get bossTargetRadius() { if(this.encounterLevel==='biolume')return RAY_ORGAN_RADIUS/RAY_PROJECTION;if(this.encounterLevel==='summer')return .48*HYDRA_BOSS_SIZE;if(this.encounterLevel==='boulevard'||this.encounterLevel==='heliostat')return 1.25;return this.encounterLevel === 'preserve' ? GROUNDSKEEPER_RADIUS : BOSS_CANNON_RADIUS; }
@@ -559,6 +567,17 @@ export class Flight {
     const signal = groveChallengeRaySignal(this.rayTime);
     if (signal.cycle === this.cancelledTorrentCycle) signal.fan = 0;
     return signal;
+  }
+
+  private get interruptibleTorrentCycle() {
+    if (this.isBoulevardChallenge) return Math.floor(this.time / boulevardChallengeBoss.interval);
+    if (this.isGroveChallenge && this.rayTime >= 0) return Math.floor(this.rayTime / groveChallengeBoss.interval);
+    if (this.isFleetChallenge) return Math.floor(this.time / fleetChallengeBoss.interval);
+    if (this.isDenChallenge) return Math.floor(this.time / denChallengeBoss.interval);
+  }
+
+  get bossTorrentCancelled() {
+    return this.phase === 'boss' && this.interruptibleTorrentCycle === this.cancelledTorrentCycle;
   }
 
   get stageDuration() { return levels[this.level].duration; }
@@ -698,9 +717,9 @@ export class Flight {
         this.heliostatCancelledCycle = this.heliostatAttack.cycle;
         this.markers = [];
       }
-      if (this.isBoulevardChallenge || (this.isGroveChallenge && this.rayTime >= 0)) {
-        this.cancelledTorrentCycle = this.isBoulevardChallenge
-          ? Math.floor(this.time / boulevardChallengeBoss.interval) : this.rayAttackSignal.cycle;
+      const torrentCycle = this.interruptibleTorrentCycle;
+      if (torrentCycle !== undefined) {
+        this.cancelledTorrentCycle = torrentCycle;
         this.markers = [];
       }
       if (this.encounterLevel === 'summer') {
@@ -1521,6 +1540,7 @@ export class Flight {
 
   private stepDenDefenses(dt: number) {
     const scroll = denScroll(this.time);
+    const challenge = this.isDenChallenge;
     while (this.nextDenTurret < denTurretSites.length) {
       const point = denDefensePoint(denTurretSites[this.nextDenTurret], scroll);
       if (point.y > 9.6) break;
@@ -1536,29 +1556,36 @@ export class Flight {
       enemy.x = point.x;
       enemy.y = point.y;
       enemy.age += dt;
+      const row = turret.shot;
       const muzzle = stepDenTurret(turret, point, this.player, this.time, dt);
       if (!muzzle) continue;
-      this.threats.push({ x: muzzle.x, y: muzzle.y, z: 0, vx: Math.sin(muzzle.heading) * 5.8,
-        vy: -Math.cos(muzzle.heading) * 5.8, vz: 0, planar: true });
+      if (challenge) this.threats.push(...denChallengeTurretRow(muzzle, row));
+      else this.threats.push({ x: muzzle.x, y: muzzle.y, z: 0, vx: Math.sin(muzzle.heading) * 5.8,
+          vy: -Math.cos(muzzle.heading) * 5.8, vz: 0, planar: true });
     }
     for (const [site, mine] of this.denMines.entries()) {
       const burst = stepDenMine(site, mine, scroll, this.time, this.player);
       if (!burst) continue;
-      for (const shot of mineBurst(burst.x, burst.y, 10, 4, (site % 2) * Math.PI / 10))
+      if (challenge) this.threats.push(...denChallengeMineBurst(burst, site));
+      else for (const shot of mineBurst(burst.x, burst.y, 10, 4, (site % 2) * Math.PI / 10))
         this.threats.push({ ...shot, planar: true });
     }
   }
 
   private stepFleet(dt: number) {
-    while (this.nextWave < fleetWaves.length && this.time >= fleetWaves[this.nextWave].at) {
-      const wave = fleetWaves[this.nextWave++];
+    const challenge = this.isFleetChallenge;
+    const waves = challenge ? fleetChallengeWaves : fleetWaves;
+    const pace = challenge ? FLEET_CHALLENGE_PACE : undefined;
+    while (this.nextWave < waves.length && this.time >= waves[this.nextWave].at) {
+      const wave = waves[this.nextWave++];
       if (this.time - wave.at > FLEET_SAUCER_LIFE) continue;
       const reward = formationReward(wave.drop, wave.lanes.length);
       for (const [slot, lane] of wave.lanes.entries()) {
         const fleet: FleetSaucer = { course: wave.course, side: wave.side, slot, heavy: slot === wave.guard };
         const age = this.time - wave.at - slot * FLEET_SAUCER_STAGGER - dt;
-        const pose = saucerPose(age, lane, fleet);
-        this.enemies.push({ x: pose.x, y: pose.y, lane, age, fleet, fire: Infinity,
+        const pose = saucerPose(age, lane, fleet, pace);
+        const fire = challenge ? Math.max(fleetChallengeFirstShot(fleet), age + dt + fleetChallengeTiming(fleet).windup) : Infinity;
+        this.enemies.push({ x: pose.x, y: pose.y, lane, age, fleet, fire,
           hp: fleet.heavy ? 10 : 4, reward });
       }
     }
@@ -1567,11 +1594,16 @@ export class Flight {
       const saucer = enemy.fleet;
       if (!saucer || enemy.hp <= 0) continue;
       enemy.age += dt;
-      const pose = saucerPose(enemy.age, enemy.lane, saucer);
+      const pose = saucerPose(enemy.age, enemy.lane, saucer, pace);
       enemy.x = pose.x;
       enemy.y = pose.y;
       if (near(enemy, this.player, enemyRadius(enemy) + .23)) this.hit();
       if (this.phase !== 'stage') return;
+      if (challenge) {
+        const shots = stepFleetChallengeSaucer(enemy, saucer, this.player, this.time);
+        if (shots) this.threats.push(...shots);
+        continue;
+      }
       if (!saucerCanFire(enemy, saucer)) {
         enemy.fire = Infinity;
         saucer.aim = undefined;
@@ -1589,7 +1621,8 @@ export class Flight {
       saucer.aim = undefined;
     }
 
-    this.threats.push(...broadsideShots(this.time - dt, this.time));
+    const broadside = broadsideShots(this.time - dt, this.time);
+    this.threats.push(...(challenge ? fleetChallengeBroadside(broadside) : broadside));
     for (const site of tractorSites) {
       const cargo = site.wreck && tractorPose(site, this.time);
       if (cargo && cargo.visibility > .6 && near(cargo, this.player, .68)) this.hit();
@@ -1597,15 +1630,18 @@ export class Flight {
   }
 
   private stepDenPatrols(dt: number) {
-    const wave = denWaves[this.nextWave];
+    const challenge = this.isDenChallenge;
+    const pace = challenge ? DEN_CHALLENGE_PACE : undefined;
+    const wave = (challenge ? denChallengeWaves : denWaves)[this.nextWave];
     if (wave && this.time >= wave.time) {
       this.nextWave++;
       const reward = formationReward(wave.drop, wave.lanes.length);
       for (const [slot, lane] of wave.lanes.entries()) {
         const den: DenPatrol = { course: wave.course, side: wave.side, slot, heavy: slot === wave.guard };
         const age = this.time - wave.time - slot * DEN_PATROL_STAGGER - dt;
-        const pose = denPatrolPose(age, lane, den);
-        this.enemies.push({ x: pose.x, y: pose.y, heading: pose.heading, lane, age, den, fire: Infinity,
+        const pose = denPatrolPose(age, lane, den, pace);
+        const fire = challenge ? denChallengeFirstShot(den) : Infinity;
+        this.enemies.push({ x: pose.x, y: pose.y, heading: pose.heading, lane, age, den, fire,
           hp: den.heavy ? 11 : 5, reward });
       }
     }
@@ -1613,13 +1649,18 @@ export class Flight {
     for (const enemy of this.enemies) {
       if (!enemy.den || enemy.hp <= 0) continue;
       enemy.age += dt;
-      const pose = denPatrolPose(enemy.age, enemy.lane, enemy.den);
+      const pose = denPatrolPose(enemy.age, enemy.lane, enemy.den, pace);
       enemy.x = pose.x;
       enemy.y = pose.y;
       enemy.heading = pose.heading;
       if (enemy.age < 0) continue;
       if (Number.isFinite(denPatrolEntry(this.player, this.player, enemy, enemy.den, .23))) this.hit();
       if (this.phase !== 'stage') return;
+      if (challenge) {
+        const shots = stepDenChallengeRider(enemy, enemy.den, pose, this.player, this.time);
+        if (shots) this.threats.push(...shots);
+        continue;
+      }
       const reach = .82 * denPatrolScale(enemy.den);
       const muzzle = { x: enemy.x + Math.sin(pose.heading) * reach, y: enemy.y - Math.cos(pose.heading) * reach };
       if (!denPatrolCanFire(pose, enemy.den) || muzzle.y < this.player.y + 1.25) { enemy.fire = Infinity; continue; }
@@ -1645,12 +1686,16 @@ export class Flight {
       return;
     }
     if (this.isFleet) {
-      this.threats.push(...stepFleetBoss(this.fleetBossAttack, this.time, dt, this.player, this.bossHealth));
+      if (this.isFleetChallenge) this.stepChallengeBoss(fleetChallengeBoss);
+      else this.threats.push(...stepFleetBoss(this.fleetBossAttack, this.time, dt, this.player, this.bossHealth));
       if (Number.isFinite(this.planarBossEntry(this.player, this.player))) this.hit();
       return;
     }
     if (this.isDen) {
-      this.stepDenBoss(dt);
+      if (this.isDenChallenge) {
+        this.stepChallengeBoss(denChallengeBoss);
+        if (Number.isFinite(this.planarBossEntry(this.player, this.player))) this.hit();
+      } else this.stepDenBoss(dt);
       return;
     }
     if(this.encounterLevel==='biolume'){this.stepLanternRay(dt);return;}
@@ -1751,6 +1796,10 @@ export class Flight {
     } else if (this.isGroveChallenge) {
       const origin = rayOrgan(this.rayTime, this.rayAttackSignal.side);
       this.threats.push(...groveChallengeRayRow(origin, target, cycle, row));
+    } else if (this.isFleetChallenge) {
+      this.threats.push(...fleetChallengeBossRow(this.fleetBossTime, target, cycle, row));
+    } else if (this.isDenChallenge) {
+      this.threats.push(...denChallengeBossRow(this.denBossTime, target, cycle, row));
     } else {
       const x = this.exposedCannonX;
       this.firedCannonX = x;

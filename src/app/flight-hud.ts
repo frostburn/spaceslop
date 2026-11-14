@@ -115,6 +115,8 @@ function bossTip(flight: Flight) {
   if (flight.isSummerChallenge) return 'Follow the gap between the petals. Destroy heads to thin the streams.';
   if (flight.isBoulevardChallenge) return 'Follow the gap in the neon lanes. Keep the cruiser ahead of you.';
   if (flight.isGroveChallenge) return 'Slip between the fronds. Shoot seeking lanterns from a distance.';
+  if (flight.isFleetChallenge) return 'Follow the opening between the side guns. Watch the central lens for the pulse wheel.';
+  if (flight.isDenChallenge) return 'Follow the gap as the Chief crosses the gantry. Both guns fire when the bike straightens.';
   if (flight.isFonsFight) {
     const storm = fonsPhase(flight.fonsTime);
     if (storm.rain || storm.warning > 0) return 'Stay in the wake of a falling crystal';

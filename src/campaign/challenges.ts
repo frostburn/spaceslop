@@ -7,7 +7,7 @@ export type ChallengeMode = typeof challengeModes[number];
 export type FlightMode = 'regular' | ChallengeMode;
 
 export const challengeRoutes: Record<ChallengeMode, readonly LevelId[]> = {
-  'bullet-hell': ['broodlock', 'io', 'vents', 'titan', 'heliostat', 'ice', 'preserve', 'summer', 'boulevard', 'biolume'],
+  'bullet-hell': ['broodlock', 'io', 'vents', 'titan', 'heliostat', 'ice', 'preserve', 'summer', 'boulevard', 'biolume', 'fleet', 'den'],
   hardcore: ['broodlock'],
 };
 
