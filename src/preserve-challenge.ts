@@ -110,11 +110,11 @@ export function preserveChallengeBossRow(time: number, aim: Point, cancelledAt: 
     const origin = shoulders[side < 0 ? 0 : shoulders.length - 1];
     const height = Math.max(-5.5, Math.min(origin.y - 2.5, target.y));
     for (let i = 0; i < 10; i++) {
-      const x = gap + side * (1.26 + i * .49);
-      const bearing = Math.atan2(x - origin.x, origin.y - height);
-      // Fletch each row with a fast shaft and slower tips, mirrored with the rake.
-      const speed = 4.88 + .57 * Math.sin(Math.PI * (i + 1) / 11) + side * reverse * .14;
-      shots.push(patternBullet(origin, bearing, speed, side === reverse ? 'accent' : 'primary'));
+      const barb = Math.sin((i + 1) * Math.PI / 11 + reverse * (progress * 3.2 - 1) * side);
+      const x = gap + side * (1.42 + i * .49 + .22 * barb);
+      const bearing = Math.atan2(x - origin.x, origin.y - height + .6 * barb);
+      const speed = 4.94 + .95 * barb + side * reverse * .14;
+      shots.push(patternBullet(origin, bearing, speed, barb < .25 ? 'accent' : 'primary'));
     }
   }
   return shots;

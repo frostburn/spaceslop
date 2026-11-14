@@ -2,9 +2,11 @@ import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { shipAlloy } from './encounter-surfaces';
 import type { Flight } from './game';
+import type { LevelId } from './levels';
 import { wingWeapons } from './wing';
 import { createLaserAblation, createLaserShield } from './laser-ablation';
 import { PATTERN_BULLET_CAPACITY } from './challenge-patterns';
+import { BOSS_CAMERA_DISTANCE } from './playfield';
 
 type Shot = Flight['shots'][number];
 export const projectileKinds = ['ship', 'drone', 'homing', 'cannon', 'omega', 'hostile', 'spore', 'brine'] as const;
@@ -49,22 +51,37 @@ const facingGLSL = `float viewFacing(vec3 n, vec3 eye) {
 
 const patternShapes = { seed: 0, ember: 1, pearl: 2, shard: 3, feather: 4, petal: 5 };
 export type PatternPalette = { primary: number; accent: number; shape: keyof typeof patternShapes };
+export const bossPatternPalettes = {
+  broodlock: { primary: 0xffa842, accent: 0xef91ff, shape: 'seed' },
+  io: { primary: 0xffab36, accent: 0xff6d8a, shape: 'ember' },
+  vents: { primary: 0x8deaff, accent: 0xdf99ff, shape: 'pearl' },
+  titan: { primary: 0xbd83ff, accent: 0x8dffd7, shape: 'seed' },
+  heliostat: { primary: 0xffd05b, accent: 0xff75bd, shape: 'pearl' },
+  ice: { primary: 0x839cff, accent: 0xff98d1, shape: 'shard' },
+  preserve: { primary: 0xffad58, accent: 0xf2e3bb, shape: 'feather' },
+  summer: { primary: 0xca63f4, accent: 0x36d9d8, shape: 'petal' },
+  boulevard: { primary: 0xff72cb, accent: 0x70f4ff, shape: 'shard' },
+  biolume: { primary: 0xffcd62, accent: 0xb990ff, shape: 'seed' },
+  fleet: { primary: 0xffac57, accent: 0xabadff, shape: 'pearl' },
+  den: { primary: 0xff725f, accent: 0xd4fa88, shape: 'ember' },
+} satisfies Record<Exclude<LevelId, 'wormhole'>, PatternPalette>;
 
-export function createPatternProjectileBatch(palette: PatternPalette) {
+export function createPatternProjectileBatch(initial: PatternPalette) {
   const root = new T.Group();
   root.name = 'challenge-projectiles';
   const material = new T.ShaderMaterial({
-    uniforms: { shape: { value: patternShapes[palette.shape] } },
+    uniforms: { shape: { value: patternShapes[initial.shape] } },
     transparent: true,
     depthTest: false,
     depthWrite: false,
-    vertexShader: `varying vec2 cell; varying vec3 ink;
+    vertexShader: `attribute float visibility; varying vec2 cell; varying vec3 ink; varying float alpha;
       void main() {
         cell = uv * 2.0 - 1.0;
         ink = instanceColor;
+        alpha = visibility;
         gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
       }`,
-    fragmentShader: `uniform int shape; varying vec2 cell; varying vec3 ink;
+    fragmentShader: `uniform int shape; varying vec2 cell; varying vec3 ink; varying float alpha;
       void main() {
         vec2 p = cell / vec2(0.56, 0.67);
         float radius = length(p);
@@ -82,12 +99,14 @@ export function createPatternProjectileBatch(palette: PatternPalette) {
         float light = 1.0 - smoothstep(0.12, 0.70, length(p - vec2(-0.10, 0.16)));
         color = mix(color, vec3(1.0, 0.97, 0.89), light * 0.88);
         color = mix(ink * 0.73, color, body);
-        gl_FragColor = vec4(color, max(body, glow));
+        gl_FragColor = vec4(color, max(body, glow) * alpha);
         #include <colorspace_fragment>
       }`,
   });
-  const primary = new T.Color(palette.primary), accent = new T.Color(palette.accent);
+  const primary = new T.Color(initial.primary), accent = new T.Color(initial.accent);
   const geometry = new T.PlaneGeometry(1, 1);
+  const visibility = new T.InstancedBufferAttribute(new Float32Array(PATTERN_BULLET_CAPACITY), 1).setUsage(T.DynamicDrawUsage);
+  geometry.setAttribute('visibility', visibility);
   const mesh = new T.InstancedMesh(geometry, material, PATTERN_BULLET_CAPACITY);
   mesh.frustumCulled = false;
   mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);
@@ -99,16 +118,37 @@ export function createPatternProjectileBatch(palette: PatternPalette) {
   root.visible = false;
   const matrix = new T.Matrix4(), position = new T.Vector3(), rotation = new T.Quaternion();
   const axis = new T.Vector3(0, 0, 1);
-  const size = new T.Vector3(.52, { seed: .57, ember: .63, pearl: .52, shard: .71, feather: .73, petal: .64 }[palette.shape], 1);
+  const heights = { seed: .57, ember: .63, pearl: .52, shard: .71, feather: .73, petal: .64 };
+  const size = new T.Vector3(.52, heights[initial.shape], 1), arcSize = new T.Vector3();
+  let palette = initial;
 
-  function draw(shots: readonly Flight['threats'][number][]) {
+  function draw(shots: readonly Flight['threats'][number][], colors = initial) {
+    if (colors !== palette) {
+      palette = colors;
+      primary.setHex(colors.primary);
+      accent.setHex(colors.accent);
+      size.y = heights[colors.shape];
+      material.uniforms.shape.value = patternShapes[colors.shape];
+    }
     let count = 0;
     for (const shot of shots) {
       if (!shot.pattern) continue;
-      position.set(shot.x, shot.y, 0);
-      rotation.setFromAxisAngle(axis, Math.atan2(-shot.vx, shot.vy));
-      matrix.compose(position, rotation, size);
+      let opacity = 1;
+      if (shot.arc) {
+        const z = shot.z, scale = 1 - z / BOSS_CAMERA_DISTANCE;
+        const approach = Math.min(1, (shot.age ?? 0) / shot.arc.approach);
+        // Distant pellets grow and brighten to match the other live shots.
+        const sizeFactor = scale * (.48 + .52 * approach ** 1.4);
+        opacity = .44 + .56 * approach;
+        position.set(shot.x * scale, shot.y * scale, z);
+        matrix.makeRotationZ(Math.atan2(-shot.vx, shot.vy)).scale(arcSize.copy(size).multiplyScalar(sizeFactor)).setPosition(position);
+      } else {
+        position.set(shot.x, shot.y, 0);
+        rotation.setFromAxisAngle(axis, Math.atan2(-shot.vx, shot.vy));
+        matrix.compose(position, rotation, size);
+      }
       mesh.setMatrixAt(count, matrix);
+      visibility.setX(count, opacity);
       mesh.setColorAt(count++, shot.pattern === 'accent' ? accent : primary);
     }
     root.visible = count > 0;
@@ -116,6 +156,7 @@ export function createPatternProjectileBatch(palette: PatternPalette) {
     if (count === 0) return;
     mesh.instanceMatrix.needsUpdate = true;
     mesh.instanceColor!.needsUpdate = true;
+    visibility.needsUpdate = true;
   }
   return { root, draw, prime: () => draw([{ x: 0, y: 0, z: 0, vx: 0, vy: -5, vz: 0, pattern: 'primary' }]) };
 }

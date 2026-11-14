@@ -509,6 +509,75 @@ test('the campaign rush selects Rex or Invictus and Hardcore skips the hull repa
   }
 });
 
+test('both challenge rushes run the standalone boss patterns and reset them between rematches', () => {
+  for (const mode of ['bullet-hell', 'hardcore']) {
+    const rush = new Flight('sentry', [], 'vex', 'wormhole', () => .5, mode);
+    rush.time = rush.stageDuration;
+    rush.step(0);
+    for (const level of wormholeBosses.slice(0, -1)) {
+      assert.equal(rush.encounterLevel, level);
+      const solo = new Flight('sentry', [], 'vex', level, () => .5, mode);
+      solo.time = solo.stageDuration;
+      solo.step(0);
+      if (solo.phase === 'approach') finishApproach(solo);
+      if (level === 'biolume') solo.time -= solo.rayTime;
+      finishApproach(rush);
+      assert.equal(rush.bossHealth, solo.bossHealth);
+      assert.equal(rush.bossHealth, solo.bossMaxHealth);
+      if (level === 'summer') assert.deepEqual(rush.summerHydra.hp, solo.summerHydra.hp);
+      if (level === 'vents') assert.deepEqual(rush.crabClawHealth, solo.crabClawHealth);
+      assert.equal(rush.bossPattern, undefined);
+      assert.equal(rush.bossTorrentCancelled, false);
+      for (const flight of [solo, rush]) {
+        flight.invulnerable = flight.cooldown = flight.droneCooldown = Infinity;
+        flight.player = { x: -1, y: -5.8 };
+      }
+
+      let peak = 0, plasma = false, seekers = false, depth = false;
+      let slowest = Infinity, fastest = 0;
+      for (let tick = 0; tick < 15 / STEP; tick++) {
+        for (const flight of [solo, rush]) {
+          flight.player.x = 2.6 * Math.sin(tick * STEP * 1.6);
+          flight.step(STEP);
+        }
+        peak = Math.max(peak, rush.threats.length);
+        plasma ||= rush.heliostatTargets.length === 2 && level === 'heliostat';
+        seekers ||= rush.enemies.some(e => e.rayOrb);
+        depth ||= rush.threats.some(s => s.arc);
+        for (const shot of rush.threats) if (shot.pattern && !shot.arc) {
+          const speed = Math.hypot(shot.vx, shot.vy);
+          slowest = Math.min(slowest, speed);
+          fastest = Math.max(fastest, speed);
+        }
+        if (tick % 15 === 0) {
+          assert.equal(rush.threats.length, solo.threats.length, level);
+          for (const [i, shot] of rush.threats.entries()) {
+            const other = solo.threats[i];
+            assert.equal(shot.pattern, other.pattern, level);
+            assert.equal(Boolean(shot.arc), Boolean(other.arc), level);
+            assert(Math.hypot(shot.x - other.x, shot.y - other.y, shot.z - other.z) < 1e-9, level);
+            assert(Math.hypot(shot.vx - other.vx, shot.vy - other.vy, shot.vz - other.vz) < 1e-9, level);
+          }
+          assert.deepEqual(rush.markers, solo.markers, level);
+        }
+      }
+      assert(peak > 40 && peak <= PATTERN_BULLET_CAPACITY, level);
+      assert(fastest - slowest > 1, level);
+      if (level === 'heliostat') assert(plasma);
+      if (level === 'biolume') assert(seekers);
+      if (level === 'fleet' || level === 'den') {
+        assert(depth, level);
+        rush.pulse();
+        assert(rush.bossTorrentCancelled);
+        assert.equal(rush.threats.length, 0);
+      }
+      defeatEncounter(rush);
+    }
+    assert.equal(rush.encounterLevel, 'wormhole');
+    assert.equal(rush.threats.length, 0);
+  }
+});
+
 test('Invictus adds shards at the wall and both colored barrages fit the renderer across cycles', async () => {
   const { createFonsEffects } = await server.ssrLoadModule('/src/wormhole/fons/effects.ts');
   const { disposeScene } = await server.ssrLoadModule('/src/rendering/dispose.ts');

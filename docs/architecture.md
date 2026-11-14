@@ -83,7 +83,7 @@ After Fons falls, the victory clock continues into the tunnel exit shot and the 
 
 `wormhole/route.ts` keeps the tunnel scroll and aperture on one level clock. The encounter order comes from `campaign/missions.ts`, ending at Fons Inversus. One flight carries hull, score, weapons and remaining Pulse charges through all the fights. Each approach releases two independent weapon rolls. A third capsule restores one hull after every third clear, up to the current hull capacity. Fons is the final clear.
 
-`wormhole/bosses.ts` positions the existing boss rigs in the tunnel at their usual combat coordinates. The wormhole loads and warms their models, optional boss maps and attack effects before launch. The tunnel's fixed forward view aligns the ship and its opening ordnance with the tunnel axis. The Titan rematch shares the original cicada flight path and uses a wider warned volley.
+`wormhole/bosses.ts` positions the existing boss rigs in the tunnel at their usual combat coordinates. The wormhole loads and warms their models, optional boss maps and attack effects before launch. The tunnel's fixed forward view aligns the ship and its opening ordnance with the tunnel axis. The regular Titan rematch shares the original cicada flight path and uses a wider warned volley. Bullet Hell and Hardcore use each encounter's standalone boss clock and attack patterns, including the Command Saucer's and Gantry Chief's depth volleys. One warmed projectile batch switches palettes for each rematch.
 
 `wormhole/wall-themes.ts` colors and patterns the tunnel for each encounter. The tunnel blends from the outgoing chamber during the supply approach. `cruiser-wall.ts` draws the Pursuit Cruiser's tunnel as staggered polygon rings joined by straight triangular edges. The rings scroll and twist on the tunnel clock without uploading new geometry. Titan's chamber brings the haze panorama forward. `regulator-portals.ts` moves two small openings independently across the far wall and projects their centers into the scene. Plasma follows a prewarmed tube from each opening to its matching magnetic lens. The regulator's aimed attacks keep their existing paths and timing.
 
@@ -99,7 +99,7 @@ After Fons falls, the victory clock continues into the tunnel exit shot and the 
 
 ## Fleet Clash
 
-**Bullet Hell** layers amber and blue-violet saucer volleys with paired bolts from the existing broadside guns. The Gray Command Saucer sweeps the field from its side ports and follows with a rotating pulse wheel from its central lens. The emitter lights follow the same attack clock as the bullets.
+**Bullet Hell** layers amber and blue-violet saucer volleys with paired bolts from the existing broadside guns. The Gray Command Saucer alternates side-port wakes and the pulse wheel with a depth volley from its central lens. The depth volley curls into nested rings that drift sideways and separate along the screen. The emitter lights follow the same attack clock as the bullets.
 
 `fleet/route.ts` registers the complete Pleiadian hulls, gun sockets, Gray carriers, and tractor passes along the 98-second flight lane. The same top-down camera passes the outer broadsides and flies over the trench ship from the open stern to the forward breach. The narrower trench ship retains its stern entry and exhaust clearance at the existing scroll speed. Both hull variants use full 1:2 alpha plates and source-built substitutes in the same coordinates. The fixed starfield, drifting planet pair and small background fleet cross at separate depths. The five fleet maps are optional and load only for this sector.
 
@@ -109,7 +109,7 @@ After Fons falls, the victory clock continues into the tunnel exit shot and the 
 
 ## Draconian Den
 
-**Bullet Hell** sends longer coral and lime volleys through the chasm. Cliff turrets fire staggered fans and mines burst into branching spokes. The Gantry Chief fires from both bike guns as he crosses the gantry, then sends interleaved rows through a shifting gap.
+**Bullet Hell** sends longer coral and lime volleys through the chasm. Cliff turrets fire staggered fans and mines burst into branching spokes. The Gantry Chief alternates his crossing volleys with two counterrotating loops that fan out and curl back as they climb. `depth-barrage.ts` keeps their projected positions in sync with the Command Saucer's rings and the fighter's hit test. Pellets approach at different speeds and can hit once they finish approaching.
 
 `den/route.ts` owns the ten-screen registration and the continuous coast across the grate into the separate gantry plate. Den and Lantern Grove share `rendering/scroll-plate.ts`, which decodes an optional raster into bounded screen textures with neighboring pixels in the gutters. The Den composites two adjacent plate tiles over its side-on black-hole view. The cliff artwork includes fixed scenery and rookery nests. During the approach, the lensed sky swings toward the chief as the arena enters view. Flight and ordnance stay in the same plane.
 

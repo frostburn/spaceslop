@@ -129,7 +129,7 @@ test('Bullet Hell Io keeps the same route length and its overlapping patrols fit
   assert([...slag].every(drop => Math.abs(Math.hypot(drop.slag.vx, drop.slag.vy) - ioChallengeCrucible.speed) < 1e-10));
 });
 
-test('the challenge Caldera leaves a gap in every row and lengthens the curtain at the next lock', () => {
+test('the challenge Caldera fires staggered embers and lengthens the curtain at the next lock', () => {
   const flight = quietChallenge();
   flight.phase = 'boss';
   const advanceTo = (time, inspect = () => {}) => {
@@ -153,13 +153,14 @@ test('the challenge Caldera leaves a gap in every row and lengthens the curtain 
     const muzzle = calderaWheel(IO_DURATION + IO_APPROACH + flight.time, flight.ioCollapse);
     const scale = BOSS_CAMERA_DISTANCE / (BOSS_CAMERA_DISTANCE - muzzle.z);
     const crossing = row.map(shot => {
-      assert(shot.planar && shot.pattern === 'primary');
+      assert(shot.planar && shot.pattern);
       assert(Math.abs(shot.x - shot.vx * STEP - muzzle.x * scale) < 1e-8);
       assert(Math.abs(shot.y - shot.vy * STEP - muzzle.y * scale) < 1e-8);
       return shot.x + shot.vx * ((-4.8 - shot.y) / shot.vy);
     });
+    const speeds = row.map(shot => Math.hypot(shot.vx, shot.vy));
+    assert(Math.max(...speeds) - Math.min(...speeds) > 1.6);
     assert(crossing.some((x, index) => index > 0 && x - crossing[index - 1] > 1.8));
-    assert(crossing.every(x => Math.abs(x + 1.32 * Math.sin(1.1)) >= .92 - 1e-9));
   }), 1);
   assert.equal(flight.bossHealth, ioChallengeBoss.health);
   flight.damageBoss(ioChallengeBoss.supportHealth);

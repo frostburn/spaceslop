@@ -7,6 +7,7 @@ export const DEN_HP = 144;
 export const DEN_CYCLE = 5.15;
 export const DEN_BURSTS = [1.48, 1.86, 2.27, 3.38] as const;
 export const DEN_GUNS = [{ x: -1.49, y: -1.02 }, { x: 1.49, y: -1.02 }] as const;
+export const DEN_MUZZLE_DEPTH = .67;
 
 const ease = (t: number) => {
   const x = Math.max(0, Math.min(1, t));

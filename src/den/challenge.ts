@@ -1,6 +1,7 @@
-import { bossPatternCharge, patternBullet, stepPatternBurst, type BossPattern } from '../challenge-patterns';
+import { bossPatternCharge, patternBullet, rippleRow, stepPatternBurst, type BossPattern } from '../challenge-patterns';
 import { wingRewardForWave } from '../wing';
-import { DEN_CYCLE, DEN_GUNS, denMount, denPose } from './combat';
+import { depthBullet } from '../depth-barrage';
+import { DEN_CYCLE, DEN_GUNS, DEN_MUZZLE_DEPTH, denMount, denPose } from './combat';
 import { denPatrolCanFire, denPatrolScale, type DenPatrol } from './patrol';
 
 type Point = { x: number; y: number };
@@ -85,10 +86,42 @@ export function denChallengeMineBurst(origin: Point, site: number) {
 export const denChallengeBoss = { health: 282, interval: DEN_CYCLE, lockAt: .51,
   first: 1.24, spacing: .16, rows: 18 } satisfies BossPattern & { health: number };
 const sweepRows = 9;
+const loopSpokes = 26;
+const denArcTiming = { interval: DEN_CYCLE, lockAt: .47, first: 1.24,
+  spacing: .043, rows: 2 * loopSpokes } satisfies BossPattern;
+
+export function denBossPattern(cycle: number) {
+  return cycle % 2 ? denArcTiming : denChallengeBoss;
+}
+
+export function denDepthBarrage(time: number, target: Point, cycle: number, row: number) {
+  const sign = cycle % 4 === 1 ? 1 : -1;
+  const returnPass = row >= loopSpokes, spoke = row % loopSpokes;
+  const angle = Math.PI * spoke * 2 / loopSpokes + (returnPass ? .34 : 0);
+  const center = { x: target.x * .24 + sign * .35, y: Math.max(-6.3, Math.min(-3.55, .68 * target.y - 1.95)) };
+  const pose = denPose(time);
+  return DEN_GUNS.map((gun, index) => {
+    const side = index === 0 ? -1 : 1;
+    const x = Math.cos(angle), y = Math.sin(angle);
+    const radius = 1 + .15 * Math.cos(angle * 4);
+    return depthBullet({
+      origin: { ...denMount(pose, gun), z: DEN_MUZZLE_DEPTH },
+      approach: 1.07 + .29 * side * Math.sin(angle + .45) + .1 * Math.cos(angle * 3),
+      duration: 2.95, delay: spoke * denArcTiming.spacing,
+      localX: x * radius * 1.19, localY: y * radius * 1.29,
+      angle: -.48 * side, spin: -sign * side * 1.24, driftX: side * (returnPass ? -1.24 : 1.12),
+      driftY: side === sign ? 1.03 : 2.5, bend: -side * (.86 + .28 * x),
+      x: center.x + side * (returnPass ? 2.06 : 1.04),
+      y: center.y + (side === sign ? 0 : .4) + (returnPass ? -1.1 : 0),
+    }, index === 0 ? 'primary' : 'accent');
+  });
+}
 
 export function denChallengeGunSignal(time: number, gun: number) {
   if (time < 0) return { charge: 0, flash: 0 };
   const cycle = Math.floor(time / DEN_CYCLE), phase = time % DEN_CYCLE;
+  if (denBossPattern(cycle) === denArcTiming)
+    return { charge: bossPatternCharge(phase, denArcTiming, denArcTiming.rows), flash: 0 };
   const charge = bossPatternCharge(phase, denChallengeBoss, denChallengeBoss.rows);
   const row = (phase - denChallengeBoss.first) / denChallengeBoss.spacing;
   const strength = row >= sweepRows || gun === cycle % 2 ? 1 : .55;
@@ -97,20 +130,25 @@ export function denChallengeGunSignal(time: number, gun: number) {
 }
 
 export function denChallengeBossRow(time: number, target: Point, cycle: number, row: number) {
-  const pose = denPose(time), reverse = cycle % 2 ? -1 : 1;
+  const pose = denPose(time);
+  if (cycle % 4 === 2) {
+    const gun = (row + (row >= sweepRows ? 1 : 0)) % DEN_GUNS.length;
+    const side = gun === 0 ? 1 : -1;
+    return rippleRow(denMount(pose, DEN_GUNS[gun]), -.27 + .28 * Math.sin(row * .6), side, row, 20, 4.95, 1.0);
+  }
   const crossing = row < sweepRows, progress = row / (denChallengeBoss.rows - 1);
-  const gap = target.x * .24 + reverse * (1.64 * Math.cos(progress * Math.PI * 1.42) + .2);
+  const gap = target.x * .24 + 1.64 * Math.cos(progress * Math.PI * 1.42) + .2;
   const height = Math.max(-5.9, Math.min(-4.2, target.y));
   const shots = [];
   for (const [i, gun] of DEN_GUNS.entries()) {
     const origin = denMount(pose, gun), side = i === 0 ? -1 : 1;
     for (let lane = 0; lane < 12; lane++) {
       const stride = crossing ? .49 : .44;
-      const stagger = .17 * Math.sin(row * .46 - lane * .6 + side * reverse);
+      const stagger = .17 * Math.sin(row * .46 - lane * .6 + side);
       const x = gap + side * (1.45 + stride * lane + stagger);
       const aim = Math.atan2(x - origin.x, origin.y - height);
-      const pulse = .33 * Math.sin(lane * .36 + .5) + .14 * side * reverse;
-      const speed = 5.27 + pulse - (crossing && i !== cycle % 2 ? .37 : 0);
+      const pulse = .87 * Math.sin(lane * .57 - progress * 8.6 + side * 1.2) + .14 * side;
+      const speed = 5.17 + pulse - (crossing && i === 1 ? .31 : 0);
       shots.push(patternBullet(origin, aim, speed, (i + (crossing ? 0 : lane)) % 2 ? 'accent' : 'primary'));
     }
   }

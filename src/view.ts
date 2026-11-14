@@ -10,8 +10,8 @@ import { createWingPod } from './wing-pod';
 import { createCombatEffects } from './combat-effects';
 import { createLaserContactTrace } from './laser-contact';
 import { createPowerupGraphic, powerupKinds, repairColor } from './powerup-graphics';
-import { createContinuousLaser, createMuzzleFlash, createPatternProjectileBatch, createProjectileBatch, projectileKinds,
-  type PatternPalette, type ProjectileKind } from './projectile-graphics';
+import { bossPatternPalettes, createContinuousLaser, createMuzzleFlash, createPatternProjectileBatch, createProjectileBatch, projectileKinds,
+  type ProjectileKind } from './projectile-graphics';
 import { ambusherFeedback } from './preserve-ambusher';
 import { faunaMuzzle } from './vent-fauna';
 import type { LevelId } from './levels';
@@ -52,20 +52,6 @@ const victoryShipY = -2.25;
 const challengeExhaust = {
   'bullet-hell': { core: 0xffc17a, flame: 0xff7a21 },
   hardcore: { core: 0xff9380, flame: 0xff2d1f },
-};
-const patternPalettes: Partial<Record<LevelId, PatternPalette>> = {
-  broodlock: { primary: 0xffa842, accent: 0xef91ff, shape: 'seed' },
-  io: { primary: 0xffab36, accent: 0xff6d8a, shape: 'ember' },
-  vents: { primary: 0x8deaff, accent: 0xdf99ff, shape: 'pearl' },
-  titan: { primary: 0xbd83ff, accent: 0x8dffd7, shape: 'seed' },
-  heliostat: { primary: 0xffd05b, accent: 0xff75bd, shape: 'pearl' },
-  ice: { primary: 0x839cff, accent: 0xff98d1, shape: 'shard' },
-  preserve: { primary: 0xffad58, accent: 0xf2e3bb, shape: 'feather' },
-  summer: { primary: 0xca63f4, accent: 0x36d9d8, shape: 'petal' },
-  boulevard: { primary: 0xff72cb, accent: 0x70f4ff, shape: 'shard' },
-  biolume: { primary: 0xffcd62, accent: 0xb990ff, shape: 'seed' },
-  fleet: { primary: 0xffac57, accent: 0xabadff, shape: 'pearl' },
-  den: { primary: 0xff725f, accent: 0xd4fa88, shape: 'ember' },
 };
 function planarProjectileLayer({x, y}: { x: number; y: number }, z: number) {
   const scale = (BOSS_CAMERA_DISTANCE - z) / BOSS_CAMERA_DISTANCE;
@@ -195,7 +181,7 @@ export class FlightView {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = T.PCFShadowMap;
     this.player = createFighterRig(livery, mode === 'regular' ? undefined : challengeExhaust[mode]);
-    const palette = mode === 'regular' ? undefined : patternPalettes[levelId];
+    const palette = mode === 'regular' ? undefined : bossPatternPalettes[levelId === 'wormhole' ? 'broodlock' : levelId];
     if (palette) {
       this.patternProjectiles = createPatternProjectileBatch(palette);
       this.plane.add(this.patternProjectiles.root);
@@ -497,7 +483,7 @@ export class FlightView {
     this.player.root.visible = flight.hull > 0 && (victoryTime !== undefined || Math.floor(flight.invulnerable * 12) % 2 === 0);
     if (this.dodgeMarker) {
       this.dodgeMarker.visible = this.player.root.visible && (this.levelId === 'wormhole'
-        ? flight.isFonsFight && flight.fonsVariant !== 'normal' && flight.phase === 'boss'
+        ? flight.phase === 'boss' && (flight.isFonsFight ? flight.fonsVariant !== 'normal' : flight.mode !== 'regular')
         : flight.phase === 'stage' || flight.phase === 'boss');
       this.dodgeMarker.position.set(flight.player.x, flight.player.y, 0);
     }
@@ -695,7 +681,11 @@ export class FlightView {
     for (const weapon of ['homing', 'cannon', 'omega'] as const) {
       this.projectiles[weapon].draw(shots.filter((shot) => shot.wing === weapon), this.animationTime);
     }
-    this.patternProjectiles?.draw(flight.threats);
+    const encounter = flight.encounterLevel;
+    if (flight.level === 'wormhole') {
+      this.patternProjectiles?.draw(encounter === 'wormhole' ? [] : flight.threats,
+        encounter === 'wormhole' ? undefined : bossPatternPalettes[encounter]);
+    } else this.patternProjectiles?.draw(flight.threats);
     const threats = this.patternProjectiles ? flight.threats.filter(s => !s.pattern) : flight.threats;
     const hostile = flight.isDen ? threats.map(s => ({ ...s, ...planarProjectileLayer(s, .85) }))
       : flight.level === 'fleet' ? threats.filter(s => !s.broadside) : threats;

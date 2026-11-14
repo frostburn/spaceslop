@@ -1,5 +1,5 @@
 import { BOSS_MUZZLE_Z } from './encounters';
-import { patternBearing, patternBullet, stepPatternBurst, type BossPattern } from './challenge-patterns';
+import { patternBearing, patternBullet, rippleRow, stepPatternBurst, type BossPattern } from './challenge-patterns';
 import { BOSS_CAMERA_DISTANCE } from './playfield';
 import { faunaMuzzle } from './vent-fauna';
 import { ventAnchors, ventBossPose, ventWorld, VENT_APPROACH, VENT_CRAB_SCALE, VENT_DURATION, VENT_SPAWN_LEAD, type VentWave } from './vent-layout';
@@ -74,15 +74,18 @@ export function ventChallengeBossRow(time: number, localX: number, target: Point
   const scale = BOSS_CAMERA_DISTANCE / (BOSS_CAMERA_DISTANCE - point.z - (BOSS_MUZZLE_Z + .015) * VENT_CRAB_SCALE);
   const origin = { x: (point.x + localX) * scale, y: point.y * scale };
   const mirror = cycle % 2 === 0 ? 1 : -1;
-  const sweep = mirror * Math.sin(row * .37 - 1.15) * (extended ? .43 : .35);
-  const center = patternBearing(origin, target, .25) * .55 + sweep;
+  const aim = patternBearing(origin, target, .25) * .55;
+  if (cycle % 3 === 1) return rippleRow(origin, aim, mirror, row, 14, extended ? 4.86 : 4.55, .94);
+  const center = aim + mirror * .40 * Math.sin(row * .34 - .65);
   const shots = [];
-  // Each arm keeps an open side and bends around the same empty center.
+  // Alternate which claw leads the pair of expanding wakes.
   for (const side of [-1, 1]) {
     const length = side === mirror ? 6 : 5;
     for (let index = 0; index < length; index++) {
-      const angle = center + side * (.24 + .127 * index);
-      shots.push(patternBullet(origin, angle, 5.48 - .12 * index, side === mirror ? 'accent' : 'primary'));
+      const wave = row * .48 - .43 * index + side * mirror;
+      const angle = center + side * (.31 + .136 * index) + .27 * Math.sin(wave);
+      const speed = 4.88 + .84 * Math.cos(wave) + (extended ? .15 * side * mirror : 0);
+      shots.push(patternBullet(origin, angle, speed, side === mirror ? 'accent' : 'primary'));
     }
   }
   return shots;

@@ -3,20 +3,23 @@ import { setAntMoldTexture } from '../ant-mold';
 import { createHiveGuardian } from '../ant-rigs';
 import { RAY_SEEKER_POOL, type RayOrb } from '../biolume/lantern-ray';
 import { createLanternRay, createRaySeekerAssets, createRaySeekerRig } from '../biolume/lantern-ray-rig';
-import { BOULEVARD_PITCH } from '../boulevard';
+import { BOULEVARD_APPROACH, BOULEVARD_DURATION, BOULEVARD_PITCH, CRUISER_MUZZLE_Y } from '../boulevard';
 import { createBoulevardMaterials } from '../boulevard-materials';
 import { createPursuitCruiser } from '../boulevard-rigs';
 import { cicadaFlight } from '../cicada';
 import { createCicada } from '../cicada-rig';
 import { createDenBiker } from '../den/biker';
+import { denChallengeGunSignal } from '../den/challenge';
 import { loadEncounterTexture } from '../encounter-texture';
 import { BOSS_RECOIL_TIME } from '../encounters';
 import { createFleetBossRig } from '../fleet/boss-rig';
+import { fleetChallengeGunSignal } from '../fleet/challenge';
 import { createSaucerFactory } from '../fleet/saucers';
 import { BOSS_CAMERA_DISTANCE, BOSS_CANNON_X, BOSS_DEPTH, BOSS_Y, type Flight } from '../game';
 import { groundskeeperFlight } from '../groundskeeper';
 import { createGroundskeeperEffects } from '../groundskeeper-effects';
 import { createGroundskeeper } from '../groundskeeper-rig';
+import { groundskeeperFeatherShoulders } from '../preserve-challenge';
 import { createHeliostatRegulator } from '../heliostat/boss';
 import type { HeliostatArt } from '../heliostat/art';
 import { HELIOSTAT_PITCH } from '../heliostat/combat';
@@ -31,6 +34,7 @@ import type { LevelId } from '../levels';
 import { createLeviathan, setMarineTexture } from '../marine-rigs';
 import { PRESERVE_BOSS_PITCH, PRESERVE_WIDTH_SCALE } from '../preserve-layout';
 import type { LevelFrame } from '../rendering/level';
+import { createPatternCharge } from '../rendering/pattern-charge';
 import { createHydraAssets, createRiverHydra } from '../summer/hydra';
 import { SUMMER_APPROACH, SUMMER_DURATION } from '../summer/layout';
 import { createTitanChitinSurface } from '../titan-insect-surfaces';
@@ -102,6 +106,8 @@ export function createWormholeBosses(plane: T.Group, signal: AbortSignal) {
   groundskeeper.root.position.set(anchor.x, anchor.y, anchor.z);
   groundskeeper.root.rotation.x = -PRESERVE_BOSS_PITCH;
   groundskeeper.root.scale.x = PRESERVE_WIDTH_SCALE;
+  const featherCharge = createPatternCharge(0xffcc83);
+  const shoulders = [0, 1].map(() => featherCharge.attach(groundskeeper.root, 0, 0, 0));
   groundskeeperEffects.root.visible = false;
   effects.add(groundskeeperEffects.root);
 
@@ -113,6 +119,8 @@ export function createWormholeBosses(plane: T.Group, signal: AbortSignal) {
   const cruiser = createPursuitCruiser(boulevardMaterials);
   cruiser.root.position.set(0, BOSS_Y, BOSS_DEPTH);
   cruiser.root.rotation.x = -BOULEVARD_PITCH;
+  const cruiserCharges = [createPatternCharge(0xff72cb), createPatternCharge(0x70f4ff)]
+    .map((charge, i) => charge.attach(cruiser.guns[i].rotor, 0, CRUISER_MUZZLE_Y, 0));
 
   const ray = createLanternRay();
   const seekerAssets = createRaySeekerAssets();
@@ -152,17 +160,31 @@ export function createWormholeBosses(plane: T.Group, signal: AbortSignal) {
       leviathan.pose(1, flight.cannonWindup, 0, 0, flight.bossRecoil / BOSS_RECOIL_TIME, time);
     }),
     preserve: boss(groundskeeper.root, ({ flight }) => {
-      groundskeeper.pose(flight.groundskeeperTime, flight.groundskeeperAim, flight.groundskeeperCancelledAt);
+      const pose = groundskeeper.pose(flight.groundskeeperTime, flight.groundskeeperAim, flight.groundskeeperCancelledAt);
+      const active = groundskeeperFeatherShoulders(pose.kind);
+      for (const [i, glow] of shoulders.entries())
+        glow(active.includes(i) ? flight.groundskeeperFeatherCharge * 2.5 : 0, pose.arms[i].shoulder);
     }),
     summer: boss(hydra.root, ({ flight }, time) => {
-      hydra.pose(SUMMER_DURATION + SUMMER_APPROACH + time, flight.cannonWindup, 0, flight.summerHydra, time);
+      hydra.pose(SUMMER_DURATION + SUMMER_APPROACH + time,
+        flight.isSummerChallenge ? side => flight.summerHeadCharge(side) : flight.cannonWindup,
+        0, flight.summerHydra, time, undefined, flight.summerHeadMaxHealth);
     }),
     boulevard: boss(cruiser.root, ({ flight }, time) => {
-      cruiser.pose(time, flight.cannonWindup, flight.bossRecoil / BOSS_RECOIL_TIME);
+      const age = flight.isBoulevardChallenge ? BOULEVARD_DURATION + BOULEVARD_APPROACH + time : time;
+      cruiser.pose(age, flight.cannonWindup, flight.bossRecoil / BOSS_RECOIL_TIME);
+      for (const charge of cruiserCharges) charge(flight.isBoulevardChallenge ? flight.cannonWindup : 0);
     }),
-    biolume: boss(ray.root, ({ flight }) => ray.pose(flight.rayTime), true),
-    fleet: boss(command.root, ({ flight, distance }) => command.pose(flight.fleetBossTime, flight.fleetBossAttack.rapid, distance), true),
-    den: boss(chief.root, ({ flight }) => chief.pose(flight.denBossTime, true), true),
+    biolume: boss(ray.root, ({ flight }) => ray.pose(flight.rayTime, false, flight.rayAttackSignal), true),
+    fleet: boss(command.root, ({ flight, distance }) => {
+      const time = flight.fleetBossTime, attack = flight.bossTorrentCancelled ? -1 : time;
+      command.pose(time, flight.fleetBossAttack.rapid, distance, true,
+        flight.isFleetChallenge ? port => fleetChallengeGunSignal(attack, port) : undefined);
+    }, true),
+    den: boss(chief.root, ({ flight }) => {
+      const time = flight.denBossTime, attack = flight.bossTorrentCancelled ? -1 : time;
+      chief.pose(time, true, flight.isDenChallenge ? gun => denChallengeGunSignal(attack, gun) : undefined);
+    }, true),
   };
 
   const ready = Promise.all([
@@ -201,12 +223,16 @@ export function createWormholeBosses(plane: T.Group, signal: AbortSignal) {
       plasma.prime();
       portalFeeds.update(0, BOSS_CAMERA_DISTANCE, 1, 0, { unstable: 0, pattern: 0, attackTime: 0 });
       groundskeeperEffects.prime();
+      shoulders.forEach(glow => glow(1));
+      cruiserCharges.forEach(glow => glow(1));
       chief.pose(1.55, true);
       command.prime();
     },
     afterWarmup() {
       restoreRegulator?.();
       restoreRegulator = undefined;
+      shoulders.forEach(glow => glow(0));
+      cruiserCharges.forEach(glow => glow(0));
       plasma.root.visible = portalFeeds.root.visible = groundskeeperEffects.root.visible = false;
     },
     applyArmor(texture: T.Texture) {

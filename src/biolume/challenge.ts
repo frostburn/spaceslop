@@ -1,4 +1,4 @@
-import { bossPatternCharge, patternBullet, stepPatternBurst, type BossPattern } from '../challenge-patterns';
+import { bossPatternCharge, patternBullet, rippleRow, stepPatternBurst, type BossPattern } from '../challenge-patterns';
 import { wingRewardForWave } from '../wing';
 import { groveCanAttack, groveEnemySize, groveWaves, type GroveCourse } from './combat';
 
@@ -81,17 +81,18 @@ export function groveChallengeRaySignal(time: number) {
 
 export function groveChallengeRayRow(origin: Point, target: Point, cycle: number, row: number) {
   const side = cycle % 2 ? 1 : -1, curling = cycle % 4 >= 2;
+  if (curling && row % 3 === 0) return rippleRow(origin, side * .44, -side, row, 19, 4.52, 1.03);
   const phase = row / (groveChallengeBoss.rows - 1);
   const gap = target.x * .23 + side * (curling ? 1.72 * Math.sin((phase * 1.34 - .45) * Math.PI)
     : (2 * phase - 1) * 1.68 + .33 * Math.sin(phase * Math.PI * 2));
   const height = Math.max(-5.5, Math.min(-3.8, target.y));
   const shots = [];
   for (const wing of [-1, 1]) for (let vein = 0; vein < 6; vein++) {
-    const ripple = .22 * Math.sin(phase * Math.PI * 2.3 - vein * .71 + wing * side);
+    const ripple = Math.sin(phase * Math.PI * 2.75 - vein * .71 + wing * side);
     for (const strand of [-1, 1]) {
-      const x = gap + wing * (1.58 + vein * .75 + strand * (.21 + ripple * .58));
-      const angle = Math.atan2(x - origin.x, origin.y - height);
-      const speed = 5.04 + (curling ? wing * side * ripple : ripple) + strand * (.24 + vein * .019);
+      const x = gap + wing * (1.58 + vein * .75 + strand * (.21 + ripple * .22));
+      const angle = Math.atan2(x - origin.x, origin.y - height + .48 * ripple * strand);
+      const speed = 5.15 + (curling ? wing * side : 1) * .46 * ripple + strand * (.26 + .42 * ripple);
       shots.push(patternBullet(origin, angle, speed, strand > 0 ? 'primary' : 'accent'));
     }
   }

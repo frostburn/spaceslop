@@ -65,9 +65,9 @@ export function iceChallengeBossRow(origin: Point, target: Point, cycle: number,
     const twist = Math.sin(phase * 1.5 - i * .63 + (side === turn ? 0 : .75));
     for (const strand of [-1, 1]) {
       // Faster and slower strands wind around each other across the fan.
-      const x = opening + side * (1.26 + i * 1.02 + strand * (.2 + .25 * twist));
-      const angle = Math.atan2(x - origin.x, origin.y - height);
-      const speed = 5.07 + .09 * i + strand * (.29 + .11 * twist);
+      const x = opening + side * (1.48 + i * 1.02 + strand * (.23 + .29 * twist));
+      const angle = Math.atan2(x - origin.x, origin.y - Math.min(height, origin.y - 3) + .45 * strand * twist);
+      const speed = 4.98 + .21 * Math.cos(phase + i * .73) + strand * (.28 + .66 * twist);
       shots.push(patternBullet(origin, angle, speed, strand === 1 ? 'accent' : 'primary'));
     }
   }

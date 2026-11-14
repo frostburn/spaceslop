@@ -70,15 +70,17 @@ export const ioChallengeBoss = { health: 132, supportHealth: 32, interval: 4.3, 
 const curtainY = -4.8;
 export function calderaChallengeRow(origin: Point, target: Point, cycle: number, row: number) {
   const mirror = cycle % 2 === 0 ? 1 : -1;
-  const gap = Math.max(-2.05, Math.min(2.05, target.x * .3 + mirror * (1.32 * Math.sin(row * .28 - 1.1))));
-  const shift = row % 2 === 0 ? 0 : .32;
+  const gap = target.x * .24 + mirror * 1.55 * Math.sin(row * .41 - .8);
+  const shift = row % 2 === 0 ? -.16 : .16;
   const shots = [];
   for (let column = -8; column <= 8; column++) {
-    const x = .64 * column + shift;
-    if (Math.abs(x - gap) < .92) continue;
-    // Lay out the curtain at a fixed height so the moving wheel cannot close its gap.
-    const angle = Math.atan2(x - origin.x, origin.y - curtainY);
-    shots.push(patternBullet(origin, angle, 5.15, row % 2 === 0 ? 'primary' : 'accent'));
+    const tooth = Math.sin(row * .66 - mirror * column * .57);
+    const x = .67 * column + shift + .27 * tooth;
+    const opening = row % 4 < 2 ? gap : gap - mirror * 1.35;
+    if (Math.abs(x - opening) < 1.14) continue;
+    const angle = Math.atan2(x - origin.x, origin.y - curtainY + .7 * tooth);
+    const speed = 4.82 + .97 * tooth + (column % 2 ? -.29 : .29);
+    shots.push(patternBullet(origin, angle, speed, tooth > 0 ? 'primary' : 'accent'));
   }
   return shots;
 }

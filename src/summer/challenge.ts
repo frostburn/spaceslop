@@ -135,8 +135,8 @@ export function lotusChallengeBossRow(state: HydraState, time: number, depth: nu
       const radius = side ? 1.64 + i * .49 : opening + (i % 4) * .81;
       const x = gap + branch * radius;
       const angle = Math.atan2(x - origin.x, origin.y - height);
-      const petal = Math.sin(Math.PI * ((side ? i : i % 4) + 1) / (side ? 9 : 5));
-      const speed = (side ? 5.12 : 4.8) + .47 * petal + .16 * Math.sin(localRow * .7 + side * 2);
+      const petal = Math.sin(Math.PI * ((side ? i : i % 4) + 1) / (side ? 9 : 5) + localRow * (.42 + side * .11));
+      const speed = (side ? 5.05 : 4.88) + .81 * petal + .19 * Math.cos(localRow * .61 + side * 2);
       shots.push(patternBullet(origin, angle, speed, side === 0 ? 'accent' : 'primary'));
     }
   }

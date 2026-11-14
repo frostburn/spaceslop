@@ -1,8 +1,9 @@
-import { bossPatternCharge, patternBullet, stepPatternBurst, type BossPattern } from '../challenge-patterns';
+import { bossPatternCharge, patternBullet, rippleRow, stepPatternBurst, type BossPattern } from '../challenge-patterns';
 import { wingRewardForWave } from '../wing';
+import { depthBullet } from '../depth-barrage';
 import { FLEET_BOSS_MOUNTS, fleetBossPose, type FleetBossPort } from './boss';
 import { saucerCanFire, saucerSize, type broadsideShots, type FleetSaucer } from './combat';
-import { projectedSaucerMount } from './route';
+import { projectedSaucerMount, saucerMount } from './route';
 
 type Point = { x: number; y: number };
 type Patrol = readonly [at: number, course: FleetSaucer['course'], side: FleetSaucer['side'], lanes: readonly number[], guard?: number];
@@ -75,10 +76,37 @@ export const fleetChallengeBoss = { health: 268, interval: 6.4, lockAt: .5,
 const sideRows = 13;
 const wheelStart = fleetChallengeBoss.first + sideRows * fleetChallengeBoss.spacing;
 const wheelTiming = { ...fleetChallengeBoss, first: wheelStart, lockAt: wheelStart - .64 };
+const ringSpokes = 28;
+const fleetSpiralTiming = { interval: fleetChallengeBoss.interval, lockAt: .44,
+  first: 1.30, spacing: .046, rows: 2 * ringSpokes } satisfies BossPattern;
+
+export function fleetBossPattern(cycle: number) {
+  return cycle % 2 ? fleetSpiralTiming : fleetChallengeBoss;
+}
+
+export function fleetDepthBarrage(time: number, target: Point, cycle: number, row: number) {
+  const sign = cycle % 4 === 1 ? 1 : -1;
+  const ring = Math.floor(row / ringSpokes), spoke = row % ringSpokes;
+  const step = 2 * Math.PI * spoke / ringSpokes;
+  const origin = saucerMount(fleetBossPose(time), FLEET_BOSS_MOUNTS[2]);
+  const center = { x: target.x * .27 - sign * .66, y: Math.max(-4.8, Math.min(-2.9, target.y + .82)) };
+  const angle = -sign * .38 + ring * .14;
+  return [1, 1.48].map((scale, band) => depthBullet({
+    origin, approach: 1.26 + .25 * Math.cos(step) + .13 * Math.sin(step * 2 + band * .7) + band * .16,
+    duration: 3.05, delay: spoke * fleetSpiralTiming.spacing,
+    localX: 1.06 * scale * Math.cos(step), localY: 1.19 * scale * Math.sin(step),
+    angle, spin: sign * (band ? .92 : 1.40), driftX: sign * 1.79,
+    driftY: ring === 0 ? 1.16 : .84, bend: -sign * (.83 + .25 * Math.cos(step)),
+    x: center.x, y: center.y + (ring === 0 ? -.28 : .18),
+  }, band ? 'accent' : 'primary'));
+}
 
 export function fleetChallengeGunSignal(time: number, port: FleetBossPort) {
   if (time < 0) return { charge: 0, flash: 0 };
-  const phase = time % fleetChallengeBoss.interval, wheel = port === 2;
+  const cycle = Math.floor(time / fleetChallengeBoss.interval), phase = time % fleetChallengeBoss.interval, wheel = port === 2;
+  const special = fleetBossPattern(cycle) === fleetSpiralTiming;
+  if (special) return wheel ? { charge: bossPatternCharge(phase, fleetSpiralTiming, fleetSpiralTiming.rows), flash: 0 }
+    : { charge: 0, flash: 0 };
   const timing = wheel ? wheelTiming : fleetChallengeBoss;
   const rows = wheel ? timing.rows - sideRows : sideRows;
   const row = (phase - timing.first) / timing.spacing;
@@ -89,7 +117,7 @@ export function fleetChallengeGunSignal(time: number, port: FleetBossPort) {
 
 export function fleetChallengeBossRow(time: number, target: Point, cycle: number, row: number) {
   const pose = fleetBossPose(time);
-  const reverse = cycle % 2 ? -1 : 1;
+  const reverse = cycle % 4 === 0 ? 1 : -1;
   const height = Math.max(-5.65, Math.min(-4.1, target.y));
   if (row >= sideRows) {
     const origin = projectedSaucerMount(pose, FLEET_BOSS_MOUNTS[2]);
@@ -101,23 +129,28 @@ export function fleetChallengeBossRow(time: number, target: Point, cycle: number
       const x = origin.x + (origin.y - height) * Math.tan(angle);
       // Turn the wheel around a gap that travels along the lower flight lane.
       if (Math.cos(angle) > 0 && Math.abs(x - gap) < 1.62) continue;
-      shots.push(patternBullet(origin, angle, 4.95 + .2 * (i % 2) + .18 * Math.sin(spoke * .8),
+      shots.push(patternBullet(origin, angle, 4.73 + .98 * Math.sin(spoke * .52 - i * .43) + .24 * (i % 2),
         (i + spoke) % 2 ? 'primary' : 'accent'));
     }
     return shots;
   }
 
+  if (cycle % 4 === 2) {
+    const port = row % 2 as 0 | 1, side = port === 0 ? -1 : 1;
+    const origin = projectedSaucerMount(pose, FLEET_BOSS_MOUNTS[port]);
+    return rippleRow(origin, .43 + .35 * Math.sin(row * .57) * side, side, row, 18, 4.83, 1.04);
+  }
   const progress = row / (sideRows - 1);
   const gap = target.x * .23 + reverse * (2 * progress - 1) * 1.7;
   const shots = [];
   for (const port of [0, 1] as const) {
     const origin = projectedSaucerMount(pose, FLEET_BOSS_MOUNTS[port]);
-    const side = (port === 0 ? -1 : 1) * (cycle % 4 < 2 ? 1 : -1);
+    const side = port === 0 ? -1 : 1;
     for (let i = 0; i < 11; i++) {
-      const curl = Math.sin(i * .5 - progress * 2.6 + side * .55);
+      const curl = Math.sin(i * .55 - progress * 7.8 + side * .55);
       const x = gap + side * (1.53 + .48 * i + .14 * curl);
       const aim = Math.atan2(x - origin.x, origin.y - height);
-      shots.push(patternBullet(origin, aim, 5.25 + .37 * curl + .10 * side * reverse,
+      shots.push(patternBullet(origin, aim, 5.18 + .91 * curl + .10 * side * reverse,
         port === 0 ? 'primary' : 'accent'));
     }
   }

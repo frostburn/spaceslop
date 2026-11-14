@@ -1,5 +1,5 @@
 import { antScales, type AntKind } from '../ant-navigation';
-import { patternBearing, patternBullet, stepPatternBurst, type BossPattern } from '../challenge-patterns';
+import { patternBearing, patternBullet, rippleRow, stepPatternBurst, type BossPattern } from '../challenge-patterns';
 import type { WingWeapon } from '../wing';
 
 type Point = { x: number; y: number };
@@ -46,11 +46,14 @@ export const challengeGuardian = { health: 96, interval: 3.8, lockAt: .38, first
 const petalAngles = [-.91, -.76, -.58, -.42, -.26, .26, .42, .58, .76, .91];
 
 export function challengeGuardianVolley(origin: Point, target: Point, cycle: number, row: number) {
-  const mirror = cycle % 2 === 0 ? 1 : -1;
-  const sweep = Math.sin((row / (challengeGuardian.rows - 1) - .5) * Math.PI) * .31 * mirror;
-  const aim = patternBearing(origin, target, .23) * .7 + sweep;
+  const phase = row / (challengeGuardian.rows - 1) * 2 * Math.PI;
+  const aim = patternBearing(origin, target, .23) * .53;
+  if (cycle % 2) return rippleRow(origin, aim, -1, row, 12, 4.12, .66);
   return petalAngles.map(offset => {
     const inner = Math.abs(offset) <= .42;
-    return patternBullet(origin, aim + offset, inner ? 4.8 : 4.1, inner ? 'accent' : 'primary');
+    const side = Math.sign(offset), tip = Math.abs(offset);
+    const flare = .14 * Math.sin(phase + tip * 3 + side);
+    const speed = (inner ? 4.6 : 4.05) + .83 * Math.sin(phase - tip * 3 + side);
+    return patternBullet(origin, aim + offset + flare, speed, inner ? 'accent' : 'primary');
   });
 }

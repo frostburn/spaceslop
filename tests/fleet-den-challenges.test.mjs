@@ -25,13 +25,19 @@ const { Flight, STEP, BOSS_CAMERA_DISTANCE } = await server.ssrLoadModule('/src/
 const { PATTERN_BULLET_CAPACITY } = await server.ssrLoadModule('/src/challenge-patterns.ts');
 const { FLEET_SAUCER_POOL, broadsideShots, broadsideGuns } = await server.ssrLoadModule('/src/fleet/combat.ts');
 const { FLEET_BOSS_MOUNTS, fleetBossPose } = await server.ssrLoadModule('/src/fleet/boss.ts');
-const { FLEET_TRENCH_AT, projectedSaucerMount } = await server.ssrLoadModule('/src/fleet/route.ts');
-const { fleetChallengeBoss, fleetChallengeGunSignal } = await server.ssrLoadModule('/src/fleet/challenge.ts');
+const { FLEET_TRENCH_AT, projectedSaucerMount, saucerMount } = await server.ssrLoadModule('/src/fleet/route.ts');
+const { fleetBossPattern, fleetChallengeBoss, fleetChallengeGunSignal } = await server.ssrLoadModule('/src/fleet/challenge.ts');
 const { DEN_PATROL_POOL } = await server.ssrLoadModule('/src/den/patrol.ts');
-const { DEN_GUNS, denMount, denPose } = await server.ssrLoadModule('/src/den/combat.ts');
+const { DEN_GUNS, DEN_MUZZLE_DEPTH, denMount, denPose } = await server.ssrLoadModule('/src/den/combat.ts');
 const { DEN_MINE_FUSE, denMinePose, denTurretSites } = await server.ssrLoadModule('/src/den/defense.ts');
 const { denScroll } = await server.ssrLoadModule('/src/den/route.ts');
-const { denChallengeBoss } = await server.ssrLoadModule('/src/den/challenge.ts');
+const { denBossPattern, denChallengeBoss, denChallengeGunSignal } = await server.ssrLoadModule('/src/den/challenge.ts');
+const { depthArcPoint } = await server.ssrLoadModule('/src/depth-barrage.ts');
+
+const depthAttacks = [
+  { level: 'fleet', pattern: fleetBossPattern(1), signal: fleetChallengeGunSignal, gun: 2, sample: 2.65 },
+  { level: 'den', pattern: denBossPattern(1), signal: denChallengeGunSignal, gun: 0, sample: 2.35 },
+];
 
 function launch(level, mode = 'bullet-hell') {
   const flight = new Flight('sentry', [], 'vex', level, () => .5, mode);
@@ -153,8 +159,8 @@ test('the command saucer warns at its side ports before opening the pulse wheel'
   assert(f.bossTorrentCancelled && f.threats.length === 0);
   advance(f, pattern.interval - STEP);
   assert.equal(f.threats.length, 0);
-  advance(f, pattern.interval + pattern.first);
-  assert(!f.bossTorrentCancelled && f.threats.length > 0);
+  advance(f, pattern.interval + fleetBossPattern(1).first);
+  assert(!f.bossTorrentCancelled && f.threats.some(shot => shot.arc));
 });
 
 test('the Gantry Chief fires from both guns during the posed sweep', () => {
@@ -179,9 +185,80 @@ test('the Gantry Chief fires from both guns during the posed sweep', () => {
   assert(f.bossTorrentCancelled && f.threats.length === 0);
 });
 
+test('the depth volleys begin at the boss guns and form moving pockets inside the flight area', () => {
+  for (const { level, pattern, signal, gun, sample } of depthAttacks) {
+    const f = atBoss(level), start = pattern.interval + pattern.first;
+    advance(f, start - .2);
+    assert(signal(f.bossTime, gun).charge > .5, level);
+    if (level === 'fleet') assert.equal(signal(f.bossTime, 0).charge, 0);
+    while (!f.threats.some(shot => shot.arc) && f.time <= start + STEP) f.step(STEP);
+    const first = f.threats.filter(shot => shot.arc);
+    assert.equal(first.length, 2);
+    for (const [i, shot] of first.entries()) {
+      const origin = level === 'fleet' ? saucerMount(fleetBossPose(f.bossTime), FLEET_BOSS_MOUNTS[2])
+        : { ...denMount(denPose(f.bossTime), DEN_GUNS[i]), z: DEN_MUZZLE_DEPTH };
+      assert.deepEqual(shot.arc.origin, origin);
+      const muzzle = depthArcPoint(shot.arc, 0);
+      const scale = 1 - muzzle.z / BOSS_CAMERA_DISTANCE;
+      assert(Math.hypot(muzzle.x * scale - origin.x, muzzle.y * scale - origin.y) < 1e-8);
+      const middle = depthArcPoint(shot.arc, shot.arc.approach * .5);
+      const arrival = depthArcPoint(shot.arc, shot.arc.approach);
+      const lineX = arrival.x - muzzle.x, lineY = arrival.y - muzzle.y;
+      const deviation = Math.abs(lineY * (middle.x - muzzle.x) - lineX * (middle.y - muzzle.y)) / Math.hypot(lineX, lineY);
+      assert(deviation > .35, level);
+      assert(muzzle.z < middle.z && middle.z < arrival.z, level);
+    }
+
+    f.player.x = -3.85;
+    advance(f, start + sample);
+    for (const color of ['primary', 'accent']) {
+      const { arc } = first[color === 'primary' ? 0 : 1];
+      const ring = f.threats.filter(s => s.pattern === color && s.arc?.y === arc.y && s.arc?.x === arc.x &&
+        s.age >= s.arc.approach && Math.abs(s.x) < 4.5 && Math.abs(s.y) < 8);
+      assert(ring.length >= 20, level);
+      const mean = points => {
+        const center = points.reduce((total, p) => ({ x: total.x + p.x, y: total.y + p.y }), { x: 0, y: 0 });
+        return { x: center.x / points.length, y: center.y / points.length };
+      };
+      const { x, y } = mean(ring);
+      const angles = ring.map(s => Math.atan2(s.y - y, s.x - x)).sort((a, b) => a - b);
+      assert(angles.every((angle, i) => (angles[i + 1] ?? angles[0] + 2 * Math.PI) - angle < Math.PI / 2), level);
+      assert(ring.every(s => Math.hypot(s.x - x, s.y - y) > .75), level);
+      assert(f.threats.every(s => !s.arc || s.age < s.arc.approach || Math.hypot(s.x - x, s.y - y) > .5), level);
+      const next = mean(ring.map(s => depthArcPoint(s.arc, s.age + .3)));
+      assert(Math.abs(next.x - x) > .09 && next.y - y > .07, level);
+    }
+
+    f.pulse();
+    assert(f.bossTorrentCancelled && f.threats.length === 0, level);
+    advance(f, 2 * pattern.interval - STEP);
+    assert.equal(f.threats.length, 0, level);
+  }
+});
+
+test('approaching pellets are harmless until they reach the fighter', () => {
+  for (const { level, pattern } of depthAttacks) {
+    const f = atBoss(level);
+    advance(f, pattern.interval + pattern.first);
+    const shot = f.threats.find(shot => shot.arc);
+    f.threats = [shot];
+    f.invulnerable = 0;
+    const hull = f.hull;
+    const { arc } = shot;
+    Object.assign(shot, depthArcPoint(arc, arc.approach - 1.5 * STEP), { age: arc.approach - 1.5 * STEP });
+    Object.assign(f.player, depthArcPoint(arc, arc.approach));
+    f.step(STEP);
+    assert.equal(f.hull, hull, level);
+    assert.equal(f.closeCalls, 0, level);
+    f.step(STEP);
+    assert.equal(f.hull, hull - 1, level);
+    assert(!f.threats.includes(shot));
+  }
+});
+
 test('both bosses and their warnings render with procedural assets and the warmed bullet batch', async () => {
   const { FlightView } = await server.ssrLoadModule('/src/view.ts');
-  const { createPatternProjectileBatch, createProjectileBatch, projectileKinds } = await server.ssrLoadModule('/src/projectile-graphics.ts');
+  const { bossPatternPalettes, createPatternProjectileBatch, createProjectileBatch, projectileKinds } = await server.ssrLoadModule('/src/projectile-graphics.ts');
   const { disposeScene } = await server.ssrLoadModule('/src/rendering/dispose.ts');
   for (const [level, time, shape] of [['fleet', fleetChallengeBoss.first + .25, 'pearl'],
     ['den', denChallengeBoss.first + .25, 'ember']]) {
@@ -205,6 +282,24 @@ test('both bosses and their warnings render with procedural assets and the warme
       assert(f.threats.length > 0 && patternProjectiles.root.visible);
       assert.equal(patternProjectiles.root.children[0].count, f.threats.length);
       assert(!projectiles.hostile.root.visible);
+      const { pattern } = depthAttacks.find(attack => attack.level === level);
+      advance(f, pattern.interval + pattern.first + 1.9);
+      const bullets = f.threats.filter(shot => shot.arc);
+      const distant = bullets.findIndex(s => s.age < s.arc.approach - .5);
+      const live = bullets.findIndex(s => s.age > s.arc.approach);
+      assert(distant >= 0 && live >= 0, level);
+      patternProjectiles.draw(bullets, bossPatternPalettes[level]);
+      const mesh = patternProjectiles.root.children[0], matrix = new T.Matrix4();
+      assert.equal(mesh.count, bullets.length);
+      assert(mesh.geometry.attributes.visibility.getX(distant) < .85);
+      assert.equal(mesh.geometry.attributes.visibility.getX(live), 1);
+      for (const index of [distant, live]) {
+        mesh.getMatrixAt(index, matrix);
+        const position = new T.Vector3().setFromMatrixPosition(matrix);
+        const scale = 1 - position.z / BOSS_CAMERA_DISTANCE;
+        const shot = bullets[index];
+        assert(Math.hypot(position.x / scale - shot.x, position.y / scale - shot.y, position.z - shot.z) < 1e-6, level);
+      }
     } finally {
       stage.dispose?.();
       disposeScene(scene);

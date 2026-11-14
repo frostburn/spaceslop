@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { addBurner, burnerMaterial, poseBurners, shipBurners } from '../burners';
-import { DEN_GUNS, denPose } from './combat';
+import { DEN_GUNS, DEN_MUZZLE_DEPTH, denPose } from './combat';
 
 const BIKE_SCALE = .00845;
 const GRIP_HEIGHT = (300 - 166) * BIKE_SCALE;
@@ -149,7 +149,7 @@ export function createDenBiker() {
   const flashes = DEN_GUNS.map((gun, index) => {
     const mesh = new T.Mesh(flashShape, index === 0 ? flashMaterial : flashMaterial.clone());
     mesh.name = `gantry-gun-flash-${index}`;
-    mesh.position.set(gun.x, gun.y, .6);
+    mesh.position.set(gun.x, gun.y, DEN_MUZZLE_DEPTH - .07);
     root.add(mesh);
     return mesh;
   });

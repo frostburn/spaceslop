@@ -48,6 +48,18 @@ export function patternBullet(origin: Point, angle: number, speed: number, patte
   return { ...origin, z: 0, vx: Math.sin(angle) * speed, vy: -Math.cos(angle) * speed, vz: 0, planar: true as const, pattern };
 }
 
+// Fast spokes overtake the slower ones as the next ring expands.
+export function rippleRow(origin: Point, bearing: number, turn: number, row: number, count: number, pace: number, swing: number) {
+  const offset = turn * row * .21;
+  return Array.from({ length: count }, (_, spoke) => {
+    const phase = 2 * Math.PI * spoke / count;
+    const pulse = Math.sin(phase * 3 - row * .59);
+    const angle = bearing + phase + offset + .14 * Math.cos(phase * 2 + row * .37);
+    const speed = pace + swing * pulse + (spoke % 2 ? -.22 : .22);
+    return patternBullet(origin, angle, speed, pulse < 0 ? 'accent' : 'primary');
+  });
+}
+
 export type BossPattern = {
   interval: number;
   lockAt: number;

@@ -104,10 +104,11 @@ export function heliostatChallengeBossRow(origins: readonly Point[], target: Poi
     if (row < delay || (unstable && side === lead && row > end - 2)) continue;
     const arc = row - delay;
     for (let i = 0; i < 9; i++) {
-      const x = opening + side * (1.14 + i * .48 + .12 * Math.sin(arc * .56));
-      const angle = Math.atan2(x - origin.x, origin.y - height);
-      const speed = 4.73 + .66 * Math.sin(Math.PI * (i + 1) / 10) + .11 * Math.sin(arc * .43 + index);
-      shots.push(patternBullet(origin, angle, speed, side === -1 ? 'primary' : 'accent'));
+      const wave = Math.sin(Math.PI * (i + 1) / 10 + .57 * arc * side * lead);
+      const x = opening + side * (1.5 + i * .48 + .17 * wave);
+      const angle = Math.atan2(x - origin.x, origin.y - Math.min(origin.y - 3, height) + .55 * wave);
+      const speed = 4.95 + .94 * wave;
+      shots.push(patternBullet(origin, angle, speed, (side === -1) === (wave > 0) ? 'primary' : 'accent'));
     }
   }
   return shots;

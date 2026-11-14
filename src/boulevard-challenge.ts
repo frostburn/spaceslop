@@ -105,10 +105,10 @@ export function boulevardChallengeBossRow(muzzles: readonly [Point, Point], targ
     const side = (emitter === 0 ? -1 : 1) * (crossing ? -1 : 1);
     const origin = muzzles[emitter];
     for (let lane = 0; lane < 11; lane++) {
-      // Adjacent lanes arrive at staggered times, forming chevrons through the moving gap.
-      const x = gap + side * (1.04 + lane * .48 + (row % 2) * .18);
-      const angle = Math.atan2(x - origin.x, origin.y - height);
-      const speed = 5.5 - .05 * lane - (crossing ? .28 * (lane % 2) : 0) + side * reverse * .12;
+      const beat = Math.cos(lane * .65 - phase * 9.5 + emitter * 1.2);
+      const x = gap + side * (1.28 + lane * .49 + (row % 2) * .16 + .16 * beat);
+      const angle = Math.atan2(x - origin.x, origin.y - height + .5 * beat);
+      const speed = 5.15 + .76 * beat + (crossing && lane % 2 ? -.32 : 0) + side * reverse * .12;
       shots.push(patternBullet(origin, angle, speed, emitter === 0 ? 'primary' : 'accent'));
     }
   }

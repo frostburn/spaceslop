@@ -1,4 +1,4 @@
-import { patternBearing, patternBullet, stepPatternBurst, type BossPattern } from './challenge-patterns';
+import { patternBearing, patternBullet, rippleRow, stepPatternBurst, type BossPattern } from './challenge-patterns';
 import type { CentipedeLink } from './centipede';
 import type { CicadaCourse } from './titan-insects';
 import { wingRewardForWave } from './wing';
@@ -61,15 +61,16 @@ export const titanChallengeBoss = { health: 160, interval: 5.1, lockAt: .38,
 export function titanChallengeBossRow(origin: Point, target: Point, cycle: number, row: number) {
   const direction = cycle % 2 === 0 ? 1 : -1;
   const front = row / (titanChallengeBoss.rows - 1);
-  const opening = target.x * .24 + direction * (.62 * Math.sin(Math.PI * (front - .5)) + .85 * (front * 2 - 1));
-  const height = Math.max(-5.5, target.y);
+  if (cycle % 3 === 2) return rippleRow(origin, direction * front * .8, direction, row, 16, 4.66, 1.08);
+  const opening = target.x * .22 + direction * (1.23 * Math.sin(front * Math.PI * 2 - .58));
+  const height = Math.min(origin.y - 3.3, Math.max(-5.6, target.y));
   const shots = [];
   for (const side of [-1, 1]) for (let i = 0; i < 7; i++) {
-    const x = opening + side * (.91 + i * .6);
-    const angle = Math.atan2(x - origin.x, origin.y - height);
-    // Unequal velocities tilt each front as it travels away from the vent.
-    const speed = 5.23 - i * .095 + side * direction * .19;
-    shots.push(patternBullet(origin, angle, speed, (row + (side === direction ? 0 : 1)) % 3 === 0 ? 'accent' : 'primary'));
+    const wingbeat = Math.sin(front * Math.PI * 3 - i * .58 + side * direction * .7);
+    const x = opening + side * (1.19 + i * .64 + .27 * wingbeat);
+    const angle = Math.atan2(x - origin.x, origin.y - height + .65 * wingbeat);
+    const speed = 4.86 + .96 * wingbeat + .28 * side * direction;
+    shots.push(patternBullet(origin, angle, speed, wingbeat > .12 ? 'accent' : 'primary'));
   }
   return shots;
 }
