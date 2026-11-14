@@ -1,5 +1,5 @@
 import * as T from 'three';
-import { FLEET_BOSS_MOUNTS, fleetBossPose, fleetBossSignal } from './boss';
+import { FLEET_BOSS_MOUNTS, fleetBossPose, fleetBossSignal, type FleetBossPort } from './boss';
 import type { createSaucerFactory } from './saucers';
 
 export function createFleetBossRig(factory: ReturnType<typeof createSaucerFactory>) {
@@ -44,16 +44,23 @@ export function createFleetBossRig(factory: ReturnType<typeof createSaucerFactor
 
   return {
     root,
-    pose(time: number, rapid: boolean, distance: number, alive = true) {
+    pose(time: number, rapid: boolean, distance: number, alive = true,
+      challengeSignal?: (port: FleetBossPort) => ReturnType<typeof fleetBossSignal>) {
       const pose = fleetBossPose(time);
       const factor = 1 - pose.depth / distance;
       root.position.set(pose.x * factor, pose.y * factor, pose.depth);
       root.scale.setScalar(pose.radius * factor);
       rig.attitude(pose, 0, 0);
       for (const { port, lens, glow, halo } of banks) {
-        const { charge, flash } = alive ? fleetBossSignal(time, port, rapid) : { charge: 0, flash: 0 };
+        const { charge, flash } = alive ? challengeSignal?.(port) ?? fleetBossSignal(time, port, rapid) : { charge: 0, flash: 0 };
         const ember = .35 + .91 * charge + 1.28 * flash;
-        lens.color.setRGB(ember, .029 + charge * (port === 2 ? .46 : .13) + flash * .96, .018 + .04 * charge + .54 * flash);
+        if (challengeSignal) {
+          glow.color.setHex(port === 1 ? 0xabadff : 0xffac57);
+          lens.color.copy(glow.color).multiplyScalar(ember);
+        } else {
+          glow.color.setHex(port === 2 ? 0xff9b54 : 0xff3f2f);
+          lens.color.setRGB(ember, .029 + charge * (port === 2 ? .46 : .13) + flash * .96, .018 + .04 * charge + .54 * flash);
+        }
         halo.visible = charge > .05 || flash > 0;
         halo.scale.setScalar(.91 + .31 * charge + .7 * flash);
         glow.opacity = charge * .46 + flash * .52;

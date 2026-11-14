@@ -1,8 +1,15 @@
 import {FROG_HP,FROG_RADIUS,createFrogState,stepFrog,frogHeading,frogTongueHits,type FrogState} from './biolume/frog';
 import {groveWaves,groveMotion,groveEnemySize,groveCanAttack,GROVE_SPAWN_LEAD,type GroveCourse} from './biolume/combat';
+import { GROVE_CHALLENGE_PACE, GROVE_CHALLENGE_SEEKER_AT, groveChallengeBoss, groveChallengeFirstShot,
+  groveChallengeRayRow, groveChallengeRaySignal, groveChallengeSeekerBurst, groveChallengeWaves, stepGroveChallengeGlider } from './biolume/challenge';
 import {GROVE_APPROACH} from './biolume/route';
 import {RAY_HP,RAY_ENTRANCE,RAY_FAN_AT,RAY_SEEKER_AT,RAY_PROJECTION,RAY_ORGAN_RADIUS,RAY_SEEKER_RADIUS,RAY_SEEKER_HP,RAY_SEEKER_POOL,raySignal,rayOrgan,rayBodyEntry,stepRaySeeker,rayOrbEntry,raySeekerBurst,type RaySeeker} from './biolume/lantern-ray';
+import { CHALLENGE_ANT_PACE, challengeAntFirstShot, challengeGuardian, challengeGuardianVolley, challengeWaves, stepChallengeAnt } from './broodlock/challenge';
+import type { FlightMode } from './campaign/challenges';
+import { bossPatternCharge, PATTERN_GRAZE_RADIUS, PATTERN_HIT_RADIUS, type BossPattern, type PatternColor } from './challenge-patterns';
 import { DEN_BURSTS, DEN_CYCLE, DEN_GUNS, DEN_HP, denBodyEntry, denMount, denPose } from './den/combat';
+import { DEN_CHALLENGE_PACE, denChallengeBoss, denChallengeBossRow, denChallengeFirstShot, denChallengeMineBurst,
+  denChallengeTurretRow, denChallengeWaves, stepDenChallengeRider } from './den/challenge';
 import { DEN_TURRET_HP, createDenTurret, denDefensePoint, denMineSites, denTurretEntry, denTurretSites,
   stepDenMine, stepDenTurret, type DenMine, type DenTurret } from './den/defense';
 import { DEN_APPROACH, denScroll } from './den/route';
@@ -11,16 +18,22 @@ import { broadsideShots, fleetWaves, FLEET_SAUCER_LIFE, FLEET_SAUCER_STAGGER, FL
   saucerCanFire, saucerFireInterval, saucerPose, saucerSize, saucerVolley, type FleetSaucer } from './fleet/combat';
 import { FLEET_APPROACH, tractorPose, tractorSites } from './fleet/route';
 import { createFleetBossAttack, FLEET_BOSS_HP, fleetBossEntry, fleetBossTarget, stepFleetBoss } from './fleet/boss';
-import { HELIOSTAT_HP,HELIOSTAT_APPROACH,HELIOSTAT_INTERVAL,HELIOSTAT_WINDUP,HELIOSTAT_FIRE,HELIOSTAT_CHANNEL,HELIOSTAT_FADE,HELIOSTAT_GUARD_FIRE,HELIOSTAT_SPAWN_LEAD,heliostatWaves,heliostatMotion,heliostatCanAttack,heliostatPlasmaHits,electricSites,electricHits,type HeliostatCourse } from './heliostat/combat';
+import { FLEET_CHALLENGE_PACE, fleetChallengeBoss, fleetChallengeBossRow, fleetChallengeBroadside,
+  fleetChallengeFirstShot, fleetChallengeTiming, fleetChallengeWaves, stepFleetChallengeSaucer } from './fleet/challenge';
+import { HELIOSTAT_HP,HELIOSTAT_APPROACH,HELIOSTAT_INTERVAL,HELIOSTAT_WINDUP,HELIOSTAT_FIRE,HELIOSTAT_CHANNEL,HELIOSTAT_FADE,HELIOSTAT_LENS_DELAY,HELIOSTAT_GUARD_FIRE,HELIOSTAT_SPAWN_LEAD,heliostatWaves,heliostatMotion,heliostatCanAttack,heliostatPlasmaHits,electricSites,electricHits,type HeliostatCourse } from './heliostat/combat';
 import {SUMMER_APPROACH} from './summer/layout';
 import {createHydraAttack,stepHydraAttack} from './summer/hydra-attack';
+import { LOTUS_CHALLENGE_HEAD_HP, SUMMER_CHALLENGE_PACE, lotusChallengeBoss, lotusChallengeBossRow, lotusChallengeHeadCharge,
+  stepSummerChallengeActor, summerChallengeFirstShot, summerChallengeVortex, summerChallengeWaves } from './summer/challenge';
 import {VORTEX_HP,VORTEX_RADIUS,VORTEX_FIRE,vortexEmission} from './summer/vortex';
 import {summerWaves,summerMotion,hydraBeamEntry,type SummerCourse} from './summer/combat';
 import {SUMMER_HP,HYDRA_SIDES,HYDRA_HEAD_HP,HYDRA_BOSS_HEAD_HP,HYDRA_BOSS_SIZE,createHydraState,hydraAlive,damageHydraHead,damageRiverHydra,closestRiverHead,nearestHydraHead,hydraContact,hydraBeamContact,hydraBossHead,hydraBossContact,riverHydraHead,type HydraState,type HydraSide} from './summer/hydra-targets';
 import {heliostatLockTargets} from './heliostat/combat';
 import {crawlerSites,crawlerPose,stepCrawler,crawlerHits,CRAWLER_HP,type CrawlerState} from './heliostat/crawler';
 import {mineSites,minePose,triggerMine,mineBurst,MINE_WINDUP,MINE_JUMP,MINE_BURST_TIME,type BoulevardMine} from './boulevard-mines';
-import {BOULEVARD_HP,BOULEVARD_APPROACH,BOULEVARD_INTERVAL,BOULEVARD_WINDUP,BOULEVARD_FIRE,BOULEVARD_TRAVEL,BOULEVARD_SPAWN_LEAD,boulevardWaves,boulevardMotion,turnBoulevardTurret,type BoulevardCourse} from './boulevard';
+import {BOULEVARD_HP,BOULEVARD_APPROACH,BOULEVARD_INTERVAL,BOULEVARD_WINDUP,BOULEVARD_FIRE,BOULEVARD_TRAVEL,BOULEVARD_SPAWN_LEAD,boulevardWaves,boulevardMotion,boulevardCruiserMuzzle,turnBoulevardTurret,type BoulevardCourse} from './boulevard';
+import { BOULEVARD_CHALLENGE_PACE, boulevardChallengeBoss, boulevardChallengeBossRow, boulevardChallengeFirstShot,
+  boulevardChallengeMineBurst, boulevardChallengeWaves, stepBoulevardChallengeDriver } from './boulevard-challenge';
 import { AMBUSHER_HP, AMBUSHER_SPAWN_LEAD, AMBUSHER_CORPSE_TIME, ambusherSites, ambusherHome, createAmbusherState, stepAmbusher, ambusherPose, ambusherHulls, ambusherBodyHit, ambusherBeamEntry, ambusherHits, defeatAmbusher, type AmbusherState } from './preserve-ambusher';
 import { preserveWaves } from './preserve-waves';
 import { FLYER_HP, flyerMotion, flyerBodyHit, flyerBeamEntry, type FlyerCourse } from './preserve-flyer';
@@ -29,8 +42,12 @@ import {wormPose,WORM_WINDUP,WORM_REACH} from './vent-worm';
 import {SHRIMP_HP,SHRIMP_FIRST_FIRE,SHRIMP_INTERVAL,WORM_HP,WORM_FIRST_ATTACK,WORM_INTERVAL,shrimpMotion,faunaMuzzle,faunaBodyHit,faunaBeamEntry,type ShrimpCourse} from './vent-fauna';
 import {MORTAR_HP,MORTAR_RADIUS,MORTAR_FIRST_FIRE,MORTAR_INTERVAL,MORTAR_SHOT_SPEED,mortarAim,mortarMuzzle} from './vent-mortar';
 import {ventOrbit,VENT_APPROACH,VENT_SPAWN_LEAD,ventWaves,ventAnchorPoint} from './vent-layout';
+import { stepVentChallengeMortar, stepVentChallengeShrimp, ventChallengeBoss, ventChallengeBossRow,
+  ventChallengeShrimp, ventChallengeShrimpFirstShot, ventChallengeWaves } from './vent-challenge';
 import { CRUCIBLE_HP, CRUCIBLE_RADIUS, CRUCIBLE_FIRST_POUR, CRUCIBLE_POUR_INTERVAL, CRUCIBLE_MUZZLE_Y, SLAG_RADIUS, crucibleMotion, slagSpeed } from './io-crucible';
 import { IO_DURATION, IO_HP, IO_LEG_HP, IO_APPROACH, IO_INTERVAL, IO_WINDUP, IO_FIRE, IO_TRAVEL, calderaContact, calderaWheel, skipperMotion, ioWaves, smooth01 } from './io-layout';
+import { calderaChallengeRow, ioChallengeBoss, ioChallengeCrucible,
+  ioChallengeSkipper, ioChallengeSkipperFirstShot, ioChallengeWaves, stepIoChallengeCrucible, stepIoChallengeSkipper } from './io-challenge';
 import { bindCentipede, severCentipede, stepCentipedes, CENTIPEDE_SPACING, type CentipedeLink } from './centipede';
 import { cicadaMotion, titanInsectWaves, type CicadaCourse } from './titan-insects';
 import { TITAN_ROUTE_DURATION, TITAN_ROUTE_END } from './titan-layout';
@@ -39,21 +56,31 @@ import {
   BOSS_FIRE_AT, BOSS_MUZZLE_Z, BOSS_RECOIL_TIME, BOSS_VOLLEY_INTERVAL, BOSS_WINDUP_AT, raptorFlight,
 } from './encounters';
 import { marineMotion, marineSpecs, marineBodyHit, schoolDelay, type MarineSchool, type MarineFormation, LEVIATHAN_HP, LEVIATHAN_INTERVAL, LEVIATHAN_WINDUP, LEVIATHAN_FIRE, LEVIATHAN_TRAVEL, type MarineKind } from './marine';
+import { TITAN_CHALLENGE_PACE, stepTitanChallengeInsect, titanChallengeBoss, titanChallengeBossRow,
+  titanChallengeFirstShot, titanChallengeWaves } from './titan-challenge';
+import { HELIOSTAT_CHALLENGE_PACE, heliostatChallengeAttack, heliostatChallengeBoss, heliostatChallengeBossRow,
+  heliostatChallengeFirstShot, heliostatChallengePlasmaTargets, heliostatChallengeWaves, stepHeliostatChallengeActor } from './heliostat/challenge';
+import { ICE_CHALLENGE_PACE, iceChallengeBoss, iceChallengeBossRow, iceChallengeFirstShot,
+  iceChallengeWaves, stepIceChallengeMarine } from './ice-challenge';
+import { leviathanMuzzle } from './marine';
+import { heliostatEmitter } from './heliostat/combat';
 import { levels, type LevelId } from './levels';
 import { stageEnemyTuning } from './stage-enemy-tuning';
 import { IceCollision } from './ice-collision';
 import { ICE_CAMERA_DISTANCE } from './ice-layout';
 import { DRONE_HULL, FIGHTER_HULL, HiveCollision, POD_BOUNDS, POD_HULL } from './hive-collision';
 import { HIVE_CAMERA_DISTANCE } from './hive-layout';
-import { steerHiveAnt } from './ant-navigation';
+import { steerHiveAnt, type AntKind } from './ant-navigation';
 import { BOSS_CAMERA_DISTANCE, HEIGHT, WIDTH } from './playfield';
-import { GROUNDSKEEPER_HP, GROUNDSKEEPER_RADIUS, groundskeeperContact, groundskeeperAttack, groundskeeperHits } from './groundskeeper';
+import { GROUNDSKEEPER_HP, GROUNDSKEEPER_CYCLE, GROUNDSKEEPER_RADIUS, groundskeeperContact, groundskeeperAttack, groundskeeperHits } from './groundskeeper';
+import { PRESERVE_CHALLENGE_PACE, preserveChallengeBoss, preserveChallengeBossRow, preserveChallengeFirstShot,
+  preserveChallengeWaves, stepPreserveChallengeFlyer } from './preserve-challenge';
 import { PRESERVE_APPROACH } from './preserve-layout';
 import { CLOSE_CALLS_REQUIRED, HOT_DOCK_COOLDOWN, HOT_DOCK_DISTANCE, type PilotId } from './pilot-data';
 import { WING_FLASH_TIME, WING_FORMATION, wingShots, wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
 import { WORMHOLE_SUPPLY_TIME, wormholeBosses } from './wormhole/route';
-import { FONS_APPROACH, FONS_HP, fonsBodyEntry, fonsPhase, fonsPose, fonsRockHits, fonsRocks, fonsSheltered } from './wormhole/fons/combat';
-import { fonsBeamHits, fonsVolleys } from './wormhole/fons/attacks';
+import { FONS_APPROACH, fonsBodyEntry, fonsHealth, fonsPhase, fonsPose, fonsRockHits, fonsRocks, fonsSheltered } from './wormhole/fons/combat';
+import { fonsBeamHits, fonsCrownfireStart, fonsVolleys } from './wormhole/fons/attacks';
 import type { FonsVariant } from './wormhole/fons/variants';
 
 export { BOSS_CAMERA_DISTANCE, HEIGHT, WIDTH } from './playfield';
@@ -78,7 +105,7 @@ type Shot = Point & {
   hydraTarget?:HydraSide;hydraPierced?:Map<Enemy,Set<HydraSide>>;
   planarBossHit?: boolean;
 };
-type Threat = Shot & { graze?: 'near' | 'counted';planar?:boolean; broadside?: true };
+type Threat = Shot & { graze?: 'near' | 'counted';planar?:boolean; broadside?: true; pattern?: PatternColor };
 type Enemy = Point & {
   fleet?: FleetSaucer;
   den?: DenPatrol;
@@ -93,7 +120,8 @@ type Enemy = Point & {
   mine?: BoulevardMine; interceptorAim?:number; interceptorHeading?:number;
   flyer?: FlyerCourse;
   ambusher?: AmbusherState;
-  lane: number; age: number; fire: number; hp: number; reward?: FormationReward; raptor?: boolean; ant?: 'worker' | 'soldier'; marine?: MarineKind; school?: MarineSchool;
+  lane: number; age: number; fire: number; hp: number; reward?: FormationReward; raptor?: boolean; ant?: AntKind; lockedAim?: Point; marine?: MarineKind; school?: MarineSchool;
+  burst?: { target: Point; row: number };
   centipede?: CentipedeLink; cicada?: CicadaCourse; skipper?: boolean; crucible?: boolean; slag?: {vx:number;vy:number}; ventAnchor?:number; ventScale?:number; slot?: number; mortarAngle?:number; ventWorm?:boolean; shrimp?:ShrimpCourse; wormReach?:number; wormBend?:number; wormLocked?:boolean;
   course?: number; courseAt?: number; heading?: number; laserDamage?: number;
 };
@@ -111,6 +139,7 @@ const STARTING_HULL = 4;
 const SURPLUS_PICKUP_SCORE = 250;
 const UPGRADED_WING_DAMAGE = 1.5;
 const SHIP_SPEED = 6.5;
+const CHALLENGE_SHIP_SPEED = 7.6;
 const DRONE_SPEED = 4 * SHIP_SPEED;
 const DRONE_FIRE_INTERVAL = 0.44;
 const TOWLINE_INTERVAL = 1.05;
@@ -118,7 +147,7 @@ const TOWLINE_DURATION = 0.3;
 const TOWLINE_DAMAGE = 3;
 const BOSS_IMPACT_TRAVEL = 0.48;
 const wormholeForward = { y: Math.cos(WORMHOLE_PITCH), z: -Math.sin(WORMHOLE_PITCH) };
-const bossHealthByLevel: Record<LevelId, number> = {
+const bossHealthByLevel: Record<Exclude<LevelId, 'wormhole'>, number> = {
   broodlock: BOSS_HP,
   io: IO_HP,
   vents: CRAB_HP,
@@ -131,7 +160,6 @@ const bossHealthByLevel: Record<LevelId, number> = {
   biolume: RAY_HP,
   fleet: FLEET_BOSS_HP,
   den: DEN_HP,
-  wormhole: FONS_HP,
 };
 
 function projectShot({ x, y, z }: Point & { z: number }): Point {
@@ -143,13 +171,13 @@ function formationReward(weapon: WingWeapon | undefined, remaining = 1): Formati
   return weapon ? { weapon, remaining } : undefined;
 }
 
-type Wave = { time: number; lanes: number[]; drop?: WingWeapon;
+type Wave = { time: number; lanes: readonly number[]; drop?: WingWeapon;
   grove?:Omit<GroveCourse,'slot'>;
   summer?:Omit<SummerCourse,'slot'>;
   heliostat?: Omit<HeliostatCourse,'slot'>;
   boulevard?: Omit<BoulevardCourse,'slot'>;
   flyer?: Omit<FlyerCourse, 'slot' | 'count'>;
-  raptor?: number; ant?: 'worker' | 'soldier'; marine?: MarineKind; formation?: MarineFormation; mirror?: number;
+  raptor?: number; ant?: AntKind; marine?: MarineKind; formation?: MarineFormation; mirror?: number;
   centipede?: number; cicada?: Omit<CicadaCourse, 'slot' | 'count'>; skipper?: boolean; crucible?: boolean; ventAnchor?:number; ventWorm?:boolean; shrimp?:Omit<ShrimpCourse,'slot'> };
 
 const stageWaves: Wave[] = preserveWaves.map(wave => ({ ...wave, lanes: [...wave.lanes] }));
@@ -239,19 +267,22 @@ export class Flight {
   player = { x: 0, y: -5.3 };
   drone = { x: -1.15, y: -6.15 };
   droneTarget?: Point;
-  hull = STARTING_HULL;
+  hull: number;
   invulnerable = 0;
   charges = 2;
   score = 0;
   bossHealth: number;
-  summerHydra=createHydraState(HYDRA_BOSS_HEAD_HP);
+  summerHydra: HydraState;
   summerLastHit?:Point&{z:number};
   private summerAttack=createHydraAttack();
+  private lotusCancelledCycle = -1;
   groundskeeperAim = { x: 0, y: -5.3 };
   groundskeeperCancelledAt = -100;
   private groundskeeperAimCycle = -1;
   crabClawHealth=[CRAB_CLAW_HP,CRAB_CLAW_HP];
   private crabBreakTimes=[-1,-1];
+  private bossPattern?: { cycle: number; target: Point; row: number; rows: number };
+  private cancelledTorrentCycle = -1;
   bossLaserDamage = 0;
   firedCannonX = 0;
   firedCrabTarget=0;
@@ -298,7 +329,8 @@ export class Flight {
   fleetBossAttack = createFleetBossAttack();
   private wormholeIndex = 0;
   private wormholeEncounterAt = 0;
-  private fonsForm: FonsVariant = 'normal';
+  private fonsForm: FonsVariant;
+  private fonsCrownfireAim?: { cycle: number; point: Point };
   private wormholeFinalTime = 0;
   private heliostatEscalationAt=Infinity;
   private heliostatEscalationCycle=Infinity;
@@ -318,10 +350,15 @@ export class Flight {
     pilot: PilotId = 'vex',
     readonly level: LevelId = 'preserve',
     private readonly random = Math.random,
+    readonly mode: FlightMode = 'regular',
   ) {
     this.droneWeapon = droneWeapon;
     this.pilot = pilot;
+    this.fonsForm = mode === 'hardcore' ? 'invictus' : mode === 'bullet-hell' ? 'rex' : 'normal';
+    this.hull = mode === 'hardcore' ? 1 : STARTING_HULL;
     this.denMines = level === 'den' ? denMineSites.map(() => ({})) : [];
+    if (this.isVentChallenge) this.crabClawHealth = [ventChallengeBoss.clawHealth, ventChallengeBoss.clawHealth];
+    this.summerHydra = createHydraState(this.summerHeadMaxHealth);
     this.bossHealth = this.bossMaxHealth;
     if (level === 'broodlock') this.obstacles = new HiveCollision();
     if (level === 'ice') this.obstacles = new IceCollision();
@@ -333,6 +370,18 @@ export class Flight {
   }
 
   get encounterLevel() { return this.level === 'wormhole' ? wormholeBosses[this.wormholeIndex] : this.level; }
+  get isBroodlockChallenge() { return this.level === 'broodlock' && this.mode !== 'regular'; }
+  get isIoChallenge() { return this.level === 'io' && this.mode !== 'regular'; }
+  get isVentChallenge() { return this.level === 'vents' && this.mode !== 'regular'; }
+  get isTitanChallenge() { return this.level === 'titan' && this.mode !== 'regular'; }
+  get isHeliostatChallenge() { return this.level === 'heliostat' && this.mode !== 'regular'; }
+  get isIceChallenge() { return this.level === 'ice' && this.mode !== 'regular'; }
+  get isPreserveChallenge() { return this.level === 'preserve' && this.mode !== 'regular'; }
+  get isSummerChallenge() { return this.level === 'summer' && this.mode !== 'regular'; }
+  get isBoulevardChallenge() { return this.level === 'boulevard' && this.mode !== 'regular'; }
+  get isGroveChallenge() { return this.level === 'biolume' && this.mode !== 'regular'; }
+  get isFleetChallenge() { return this.level === 'fleet' && this.mode !== 'regular'; }
+  get isDenChallenge() { return this.level === 'den' && this.mode !== 'regular'; }
   get wormholeBossNumber() { return this.wormholeIndex + 1; }
   get isDen() { return this.encounterLevel === 'den'; }
   get isFleet() { return this.encounterLevel === 'fleet'; }
@@ -342,7 +391,7 @@ export class Flight {
   get fonsShielded() { return this.isFonsFight && fonsPhase(this.fonsTime).shielded; }
   get planarBoss() { return this.encounterLevel === 'biolume' || this.isDen || this.isFleet || this.isFonsFight; }
   // These encounters keep their depth-based hit tests with a fixed view of the flight plane.
-  get keepDepthShotsForward() { return this.encounterLevel === 'broodlock' || this.encounterLevel === 'summer'; }
+  get keepDepthShotsForward() { return this.encounterLevel === 'broodlock' || this.encounterLevel === 'summer' || this.isBoulevardChallenge; }
   get weaponsActive() { return this.phase === 'stage' || this.phase === 'boss' || ((this.level === 'den' || this.level === 'fleet') && this.phase === 'approach'); }
   get bossTime() { return this.phase === 'boss' ? this.time : this.finalBossTime; }
   get denBossTime() {
@@ -364,7 +413,7 @@ export class Flight {
     return this.phase === 'approach' ? this.time - this.transitionDuration : this.bossTime;
   }
 
-  startFonsApproach(variant: FonsVariant = 'normal') {
+  startFonsApproach(variant: FonsVariant = this.fonsForm) {
     if (this.level !== 'wormhole' || this.isFonsFight || this.phase === 'won' || this.phase === 'lost') return;
     this.fonsForm = variant;
     this.startWormholeEncounter(wormholeBosses.length - 1);
@@ -404,7 +453,7 @@ export class Flight {
       x, y: 3.8 + 1.8 * lane,
       weapon: supplyWeapons[Math.floor(this.random() * supplyWeapons.length)],
     }));
-    if (repair) this.drops.push({ x: 0, y: 1.4, kind: 'repair' });
+    if (repair && this.mode !== 'hardcore') this.drops.push({ x: 0, y: 1.4, kind: 'repair' });
   }
 
   private planarBossEntry(a: Point, b: Point) {
@@ -413,24 +462,63 @@ export class Flight {
     return this.isDen ? denBodyEntry(this.denBossTime, a, b) : rayBodyEntry(this.rayTime, a, b);
   }
 
-  get heliostatAttackTime(){return this.bossTime;}
+  private get heliostatAttack() {
+    const time = this.bossTime;
+    if (this.isHeliostatChallenge) return heliostatChallengeAttack(time);
+    const cycle = Math.floor(time / HELIOSTAT_INTERVAL);
+    return { round: cycle, plasma: true, cycle, elapsed: time % HELIOSTAT_INTERVAL };
+  }
+
+  get heliostatAttackTime() { return this.isHeliostatChallenge ? this.heliostatAttack.elapsed : this.bossTime; }
   get heliostatPattern(){return this.heliostatLockedPattern;}
   get heliostatUnstable(){return Number.isFinite(this.heliostatEscalationAt);}
-  get heliostatUnstableAge(){return Math.max(0,this.heliostatAttackTime-this.heliostatEscalationAt);}
-  get heliostatTargets(){return this.heliostatAimCycle===Math.floor(this.heliostatAttackTime/HELIOSTAT_INTERVAL)&&this.heliostatCancelledCycle!==this.heliostatAimCycle?this.markers:[];}
+  get heliostatUnstableAge(){return Math.max(0,this.bossTime-this.heliostatEscalationAt);}
+  get heliostatTargets() {
+    const attack = this.heliostatAttack;
+    return attack.plasma && this.heliostatAimCycle === attack.cycle && this.heliostatCancelledCycle !== attack.cycle
+      ? this.markers : [];
+  }
 
   get transitionDuration() { if (this.level === 'wormhole') return WORMHOLE_SUPPLY_TIME; if (this.isFleet) return FLEET_APPROACH; if (this.isDen) return DEN_APPROACH; if(this.level==='biolume')return GROVE_APPROACH; if(this.level==='summer')return SUMMER_APPROACH;if(this.level==='heliostat')return HELIOSTAT_APPROACH;if(this.level==='boulevard')return BOULEVARD_APPROACH;return this.level === 'preserve' ? PRESERVE_APPROACH : this.level === 'vents' ? VENT_APPROACH : this.level === 'io' ? IO_APPROACH : this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
 
-  get bossMaxHealth() { return bossHealthByLevel[this.encounterLevel]; }
+  get bossMaxHealth() {
+    if (this.isBroodlockChallenge) return challengeGuardian.health;
+    if (this.isIoChallenge) return ioChallengeBoss.health;
+    if (this.isVentChallenge) return ventChallengeBoss.clawHealth * 2 + ventChallengeBoss.coreHealth;
+    if (this.isTitanChallenge) return titanChallengeBoss.health;
+    if (this.isHeliostatChallenge) return heliostatChallengeBoss.health;
+    if (this.isIceChallenge) return iceChallengeBoss.health;
+    if (this.isPreserveChallenge) return preserveChallengeBoss.health;
+    if (this.isSummerChallenge) return HYDRA_SIDES.length * this.summerHeadMaxHealth;
+    if (this.isBoulevardChallenge) return boulevardChallengeBoss.health;
+    if (this.isGroveChallenge) return groveChallengeBoss.health;
+    if (this.isFleetChallenge) return fleetChallengeBoss.health;
+    if (this.isDenChallenge) return denChallengeBoss.health;
+    const encounter = this.encounterLevel;
+    return encounter === 'wormhole' ? fonsHealth[this.fonsVariant] : bossHealthByLevel[encounter];
+  }
   get bossTargetRadius() { if(this.encounterLevel==='biolume')return RAY_ORGAN_RADIUS/RAY_PROJECTION;if(this.encounterLevel==='summer')return .48*HYDRA_BOSS_SIZE;if(this.encounterLevel==='boulevard'||this.encounterLevel==='heliostat')return 1.25;return this.encounterLevel === 'preserve' ? GROUNDSKEEPER_RADIUS : BOSS_CANNON_RADIUS; }
   get summerTargetHead(){return nearestHydraHead(this.summerHydra,this.player.x/BOSS_PROJECTION,true);}
   get summerHeadsAlive(){return this.summerHydra.hp.filter(hp=>hp>0).length;}
   get summerBossTime(){return this.bossTime;}
+  get summerHeadMaxHealth() { return this.isSummerChallenge ? LOTUS_CHALLENGE_HEAD_HP : HYDRA_BOSS_HEAD_HP; }
+  summerHeadCharge(side: HydraSide) {
+    const cycle = Math.floor(this.time / lotusChallengeBoss.interval);
+    if (this.phase !== 'boss' || !hydraAlive(this.summerHydra, side) ||
+      cycle === this.lotusCancelledCycle || this.bossPattern?.cycle !== cycle) return 0;
+    return lotusChallengeHeadCharge(this.time % lotusChallengeBoss.interval, cycle, side);
+  }
   get groundskeeperTime() {
     // Negative time is a quiet idle, continuous through the camera approach.
     if (this.phase === 'stage') return this.time - this.stageDuration - this.transitionDuration;
     if (this.phase === 'approach') return this.time - this.transitionDuration;
     return this.bossTime;
+  }
+  get groundskeeperFeatherCharge() {
+    const attack = groundskeeperAttack(this.time);
+    if (!this.isPreserveChallenge || this.phase !== 'boss' || this.bossPattern?.cycle !== attack.cycle ||
+      Math.floor(this.groundskeeperCancelledAt / GROUNDSKEEPER_CYCLE) === attack.cycle) return 0;
+    return bossPatternCharge(attack.age, preserveChallengeBoss, preserveChallengeBoss.rows);
   }
 
   get crabTargetX(){return crabTarget(this.crabClawHealth,this.volley);}
@@ -441,6 +529,14 @@ export class Flight {
 
   get ioLegBroken() { return this.ioCollapseAge >= 0; }
   get ioCollapse() { return this.ioLegBroken ? smooth01(this.ioCollapseAge / 1.2) : 0; }
+  private get challengeBossPattern(): BossPattern | undefined {
+    if (this.isBroodlockChallenge) return challengeGuardian;
+    if (this.isIoChallenge) return ioChallengeBoss;
+    if (this.isVentChallenge) return ventChallengeBoss;
+    if (this.isTitanChallenge) return titanChallengeBoss;
+    if (this.isIceChallenge) return iceChallengeBoss;
+    if (this.isBoulevardChallenge) return boulevardChallengeBoss;
+  }
   cicadaMuzzle(time = this.bossTime) {
     const vent = cicadaVent(time, this.volley % 2 === 0 ? -1 : 1);
     return { x: vent.x, y: BOSS_Y + vent.y, z: BOSS_DEPTH + vent.z };
@@ -457,7 +553,7 @@ export class Flight {
     if (this.isCicadaFight) return this.cicadaAim().y;
     if (this.isFleet) return fleetBossTarget(this.fleetBossTime).y;
     if (this.isDen) return denPose(this.denBossTime).y;
-    if(this.encounterLevel==='biolume')return rayOrgan(this.rayTime,raySignal(this.rayTime).side).y/RAY_PROJECTION;
+    if(this.encounterLevel==='biolume')return rayOrgan(this.rayTime,this.rayAttackSignal.side).y/RAY_PROJECTION;
     if(this.encounterLevel==='summer')return hydraBossHead(this.time,this.summerTargetHead).y;
     if (this.encounterLevel === 'preserve') { const p = groundskeeperContact(this.groundskeeperTime, this.groundskeeperAim, this.groundskeeperCancelledAt); return p.y * 34 / (22 - p.z); }
     return this.encounterLevel === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).y : BOSS_Y;
@@ -466,6 +562,24 @@ export class Flight {
   get rayTime() {
     if (this.level !== 'wormhole') return this.bossTime - RAY_ENTRANCE;
     return this.phase === 'approach' ? this.time - this.transitionDuration : this.bossTime;
+  }
+
+  get rayAttackSignal() {
+    if (!this.isGroveChallenge) return raySignal(this.rayTime);
+    const signal = groveChallengeRaySignal(this.rayTime);
+    if (signal.cycle === this.cancelledTorrentCycle) signal.fan = 0;
+    return signal;
+  }
+
+  private get interruptibleTorrentCycle() {
+    if (this.isBoulevardChallenge) return Math.floor(this.time / boulevardChallengeBoss.interval);
+    if (this.isGroveChallenge && this.rayTime >= 0) return Math.floor(this.rayTime / groveChallengeBoss.interval);
+    if (this.isFleetChallenge) return Math.floor(this.time / fleetChallengeBoss.interval);
+    if (this.isDenChallenge) return Math.floor(this.time / denChallengeBoss.interval);
+  }
+
+  get bossTorrentCancelled() {
+    return this.phase === 'boss' && this.interruptibleTorrentCycle === this.cancelledTorrentCycle;
   }
 
   get stageDuration() { return levels[this.level].duration; }
@@ -490,6 +604,7 @@ export class Flight {
         return this.closeCalls >= CLOSE_CALLS_REQUIRED
           ? 'Close Call · Pulse earned' : `Close Call · ${this.closeCalls}/${CLOSE_CALLS_REQUIRED} grazes`;
       case 'brass':
+        if (this.mode === 'hardcore') return 'Reinforcement · Clears hostile fire';
         return this.reinforcementUsed ? 'Reinforcement · Used' : 'Reinforcement · Ready';
       case 'glint':
         if (this.hotDockReady) return 'Hot Dock · Charged';
@@ -507,7 +622,7 @@ export class Flight {
     if (this.isCicadaFight) return this.cicadaAim().x;
     if (this.isFleet) return fleetBossTarget(this.fleetBossTime).x;
     if (this.isDen) return denPose(this.denBossTime).x;
-    if(this.encounterLevel==='biolume')return rayOrgan(this.rayTime,raySignal(this.rayTime).side).x/RAY_PROJECTION;
+    if(this.encounterLevel==='biolume')return rayOrgan(this.rayTime,this.rayAttackSignal.side).x/RAY_PROJECTION;
     if(this.encounterLevel==='summer')return hydraBossHead(this.time,this.summerTargetHead).x;
     if (this.encounterLevel === 'preserve'||this.encounterLevel==='boulevard'||this.encounterLevel==='heliostat') return 0;
     return this.encounterLevel==='vents'?this.crabTargetX+this.crabOffsetX:this.encounterLevel === 'io' ? calderaContact(this.ioCollapse,this.ioLegBroken).x : this.encounterLevel === 'ice' ? 0 : this.volley % 2 === 0 ? -BOSS_CANNON_X : BOSS_CANNON_X;
@@ -523,8 +638,21 @@ export class Flight {
   }
 
   get cannonWindup() {
-    if(this.encounterLevel==='biolume'){const s=raySignal(this.rayTime);return this.phase==='boss'?Math.max(s.fan,s.seeker):0;}
-    if(this.encounterLevel==='heliostat'){if(this.heliostatCancelledCycle===Math.floor(this.time/HELIOSTAT_INTERVAL))return 0;const t=this.time%HELIOSTAT_INTERVAL;return this.phase==='boss'&&t<HELIOSTAT_FIRE?clamp((t-HELIOSTAT_WINDUP)/(HELIOSTAT_FIRE-HELIOSTAT_WINDUP),0,1):0;}
+    if (this.encounterLevel === 'heliostat') {
+      const { cycle, elapsed, plasma } = this.heliostatAttack;
+      if (this.phase !== 'boss' || this.heliostatCancelledCycle === cycle) return 0;
+      if (plasma) return elapsed < HELIOSTAT_FIRE ? clamp((elapsed - HELIOSTAT_WINDUP) / (HELIOSTAT_FIRE - HELIOSTAT_WINDUP), 0, 1) : 0;
+      const burst = this.bossPattern;
+      return burst?.cycle === cycle ? bossPatternCharge(elapsed, heliostatChallengeBoss, burst.rows) : 0;
+    }
+    const pattern = this.challengeBossPattern;
+    if (pattern) {
+      const burst = this.bossPattern;
+      if (this.phase !== 'boss' || !burst || burst.cycle === this.cancelledTorrentCycle ||
+        burst.cycle !== Math.floor(this.time / pattern.interval)) return 0;
+      return bossPatternCharge(this.time % pattern.interval, pattern, burst.rows);
+    }
+    if(this.encounterLevel==='biolume'){const s=this.rayAttackSignal;return this.phase==='boss'?Math.max(s.fan,s.seeker):0;}
     if(this.encounterLevel==='boulevard'){const t=this.time%BOULEVARD_INTERVAL;return this.phase==='boss'&&t<BOULEVARD_FIRE?clamp((t-BOULEVARD_WINDUP)/(BOULEVARD_FIRE-BOULEVARD_WINDUP),0,1):0;}
     const interval = this.encounterLevel === 'io' ? IO_INTERVAL : this.isCicadaFight ? CICADA_INTERVAL : this.encounterLevel === 'ice' ? LEVIATHAN_INTERVAL : BOSS_VOLLEY_INTERVAL;
     if (this.phase !== 'boss' || this.volley !== Math.floor(this.time / interval)) return 0;
@@ -553,7 +681,7 @@ export class Flight {
 
   steer(x: number, y: number, dt: number) {
     this.prepareObstacles();
-    const maxStep = SHIP_SPEED * dt;
+    const maxStep = (this.mode === 'regular' ? SHIP_SPEED : CHALLENGE_SHIP_SPEED) * dt;
     const direction = Math.hypot(x, y);
     if (direction > 0) {
       this.clearAim();
@@ -583,9 +711,26 @@ export class Flight {
       }
       this.enemies = this.enemies.filter(enemy=>enemy.mine||enemy.ambusher?.defeatedAt!==undefined);
     } else {
-      if (this.encounterLevel === 'preserve') this.groundskeeperCancelledAt = this.time;
-      if(this.encounterLevel==='heliostat'){this.heliostatCancelledCycle=Math.floor(this.time/HELIOSTAT_INTERVAL);this.markers=[];}
-      if(this.encounterLevel==='summer'){for(const side of HYDRA_SIDES)this.damageBoss(6,false,side);}
+      if (this.encounterLevel === 'preserve') {
+        this.groundskeeperCancelledAt = this.time;
+        if (this.isPreserveChallenge) this.markers = [];
+      }
+      if (this.encounterLevel === 'heliostat') {
+        this.heliostatCancelledCycle = this.heliostatAttack.cycle;
+        this.markers = [];
+      }
+      const torrentCycle = this.interruptibleTorrentCycle;
+      if (torrentCycle !== undefined) {
+        this.cancelledTorrentCycle = torrentCycle;
+        this.markers = [];
+      }
+      if (this.encounterLevel === 'summer') {
+        if (this.isSummerChallenge) {
+          this.lotusCancelledCycle = Math.floor(this.time / lotusChallengeBoss.interval);
+          this.markers = [];
+        }
+        for (const side of HYDRA_SIDES) this.damageBoss(6, false, side);
+      }
       else this.damageBoss(6);
     }
   }
@@ -632,10 +777,11 @@ export class Flight {
       this.cooldown += 0.19;
       this.fire(this.player);
     }
-    const boss = this.phase === 'boss';
+    const phase = this.phase;
+    const boss = phase === 'boss';
     if (boss) this.stepBoss(dt);
-    else if (this.phase === 'stage') this.stepStage(dt);
-    if (boss && this.phase !== 'boss') return;
+    else if (phase === 'stage') this.stepStage(dt);
+    if (this.phase !== phase) return;
     this.stepDroneWeapon(dt);
     for (const wing of this.wings) this.stepWing(wing, boss, dt);
     if (boss && this.phase !== 'boss') return;
@@ -733,7 +879,7 @@ export class Flight {
         else if (near(shot, this.player, 1.05)) this.recordGraze();
         return false;
       }
-      if (near(shot, this.player, 0.44)) {
+      if (near(shot, this.player, shot.pattern ? PATTERN_HIT_RADIUS : .44)) {
         this.hit();
         return false;
       }
@@ -755,7 +901,7 @@ export class Flight {
     if (this.pilot !== 'vex' || this.closeCalls >= CLOSE_CALLS_REQUIRED || shot.graze === 'counted') return;
     if (this.invulnerable > 0) {
       shot.graze = undefined;
-    } else if (inField && near(shot, this.player, 0.9)) {
+    } else if (inField && near(shot, this.player, shot.pattern ? PATTERN_GRAZE_RADIUS : .9)) {
       shot.graze = 'near';
     } else if (shot.graze === 'near') {
       shot.graze = 'counted';
@@ -800,6 +946,7 @@ export class Flight {
       drop.y -= 3.35 * dt;
       if (!near(drop, this.player, 0.78)) return drop.y > -9;
       if (drop.kind === 'repair') {
+        if (this.mode === 'hardcore') return false;
         const canRepair = this.hull < STARTING_HULL + Number(this.reinforcementUsed);
         if (canRepair) this.hull++;
         this.pickupMessage = canRepair ? 'Hull repaired · +1' : 'Hull already full';
@@ -827,6 +974,14 @@ export class Flight {
       this.droneWeapon = 'towline';
       this.towlineCooldown = 0;
       message = 'Drone upgraded · Towline';
+    } else if (this.pilot === 'brass' && this.mode === 'hardcore') {
+      this.threats = this.threats.filter(shot => {
+        const point = shot.z === 0 ? shot : projectShot(shot);
+        return Math.abs(point.x) > WIDTH / 2 || Math.abs(point.y) > HEIGHT / 2;
+      });
+      this.pulseFlash = 0.3;
+      this.announcePerk('Reinforcement · Hostile fire cleared');
+      return;
     } else if (this.pilot === 'brass' && !this.reinforcementUsed) {
       this.reinforcementUsed = true;
       this.hull++;
@@ -1097,7 +1252,27 @@ export class Flight {
       const ambusher=createAmbusherState(site),pose=ambusherPose(ambusher,this.time);
       this.enemies.push({x:pose.head.x,y:pose.head.y,lane:home.x,age:0,fire:Infinity,hp:AMBUSHER_HP,ambusher,reward:formationReward(ambusherSites[site].drop as WingWeapon)});
     }
-    const wave: Wave | undefined = (this.level==='biolume'?groveWaves:this.level==='summer'?summerWaves:this.level==='heliostat'?heliostatWaves:this.level==='boulevard'?boulevardWaves:this.level === 'broodlock' ? hiveWaves : this.level === 'ice' ? iceWaves : this.level === 'vents' ? ventWaves : this.level === 'io' ? ioWaves : this.level === 'titan' ? titanWaves : stageWaves)[this.nextWave];
+    const hiveChallenge = this.isBroodlockChallenge;
+    const ioChallenge = this.isIoChallenge;
+    const ventChallenge = this.isVentChallenge;
+    const titanChallenge = this.isTitanChallenge;
+    const heliostatChallenge = this.isHeliostatChallenge;
+    const iceChallenge = this.isIceChallenge;
+    const preserveChallenge = this.isPreserveChallenge;
+    const summerChallenge = this.isSummerChallenge;
+    const boulevardChallenge = this.isBoulevardChallenge;
+    const groveChallenge = this.isGroveChallenge;
+    const waves: readonly Wave[] = this.level === 'biolume' ? (groveChallenge ? groveChallengeWaves : groveWaves)
+      : this.level === 'summer' ? (summerChallenge ? summerChallengeWaves : summerWaves)
+      : this.level === 'boulevard' ? (boulevardChallenge ? boulevardChallengeWaves : boulevardWaves)
+      : this.level === 'heliostat' ? (heliostatChallenge ? heliostatChallengeWaves : heliostatWaves)
+      : this.level === 'ice' ? (iceChallenge ? iceChallengeWaves : iceWaves)
+      : this.level === 'titan' ? (titanChallenge ? titanChallengeWaves : titanWaves)
+      : this.level === 'broodlock' ? (hiveChallenge ? challengeWaves : hiveWaves)
+      : this.level === 'io' ? (ioChallenge ? ioChallengeWaves : ioWaves)
+      : this.level === 'vents' ? (ventChallenge ? ventChallengeWaves : ventWaves)
+      : preserveChallenge ? preserveChallengeWaves : stageWaves;
+    const wave = waves[this.nextWave];
     if (wave && this.time >= wave.time-(wave.grove?GROVE_SPAWN_LEAD:wave.summer?3:wave.heliostat?HELIOSTAT_SPAWN_LEAD:wave.boulevard?BOULEVARD_SPAWN_LEAD:0)) {
       this.nextWave++;
       const reward = formationReward(wave.drop, wave.centipede ?? wave.lanes.length);
@@ -1122,25 +1297,33 @@ export class Flight {
         const start = grove?groveMotion(courseAge,lane,grove):summer?summerMotion(courseAge,lane,summer,this.time):heliostat?heliostatMotion(courseAge,lane,heliostat):boulevard?boulevardMotion(courseAge,lane,boulevard):flyer ? flyerMotion(0,lane,flyer) : shrimp ? shrimpMotion(0,lane,shrimp) : wave.ventAnchor!==undefined ? ventAnchorPoint(wave.ventAnchor,this.time) : wave.crucible ? crucibleMotion(0,lane) : wave.skipper ? skipperMotion(0,lane,index) : course ? cicadaMotion(0, lane, course) : wave.marine ? marineMotion(wave.marine, 0, lane, school) : {x: lane, y: 8.6};
         return {
           x: start.x, y: start.y, lane, hydra:summer?.kind==='hydra'?createHydraState():undefined, age: grove||boulevard||heliostat||summer?courseAge:wave.ventAnchor!==undefined?-VENT_SPAWN_LEAD:0, grove,frog:grove?.kind==='frog'?createFrogState(lane):undefined,summer,heliostat,boulevard,flyer, school, cicada: course, skipper: wave.skipper, crucible: wave.crucible, ventAnchor:wave.ventAnchor, ventWorm:wave.ventWorm, shrimp, slot: index,
-          fire: grove ? 2.15 + index * .3
-            : summer ? (summer.kind === 'vortex' ? VORTEX_FIRE : summer.kind === 'hydra' ? 2.7 : 1.8 + index * .25)
-            : heliostat ? (heliostat.kind === 'guard' ? HELIOSTAT_GUARD_FIRE + index * .35 : 2.2 + index * .25)
-            : boulevard ? 1.7 + index * .22
+          fire: grove ? (groveChallenge ? groveChallengeFirstShot(grove) : 2.15 + index * .3)
+            : summer ? (summerChallenge ? summerChallengeFirstShot(summer)
+              : summer.kind === 'vortex' ? VORTEX_FIRE : summer.kind === 'hydra' ? 2.7 : 1.8 + index * .25)
+            : heliostat ? (heliostatChallenge ? heliostatChallengeFirstShot(heliostat)
+              : heliostat.kind === 'guard' ? HELIOSTAT_GUARD_FIRE + index * .35 : 2.2 + index * .25)
+            : boulevard ? (boulevardChallenge ? boulevardChallengeFirstShot(boulevard) : 1.7 + index * .22)
+            : preserveChallenge && (flyer || index === wave.raptor) ? preserveChallengeFirstShot(flyer)
             : flyer ? Infinity
-            : shrimp ? SHRIMP_FIRST_FIRE + index * .25
+            : shrimp ? (ventChallenge ? ventChallengeShrimpFirstShot(index) : SHRIMP_FIRST_FIRE + index * .25)
             : wave.ventWorm ? WORM_FIRST_ATTACK
             : wave.ventAnchor !== undefined ? MORTAR_FIRST_FIRE
-            : wave.crucible ? CRUCIBLE_FIRST_POUR
+            : wave.crucible ? (ioChallenge ? ioChallengeCrucible.first : CRUCIBLE_FIRST_POUR)
+            : ioChallenge && wave.skipper ? ioChallengeSkipperFirstShot(index)
+            : hiveChallenge && wave.ant ? challengeAntFirstShot(wave.ant, index)
+            : titanChallenge && course ? titanChallengeFirstShot(course)
+            : iceChallenge && wave.marine ? iceChallengeFirstShot(wave.marine, index, school)
             : schoolDelay(school) + (wave.ant ? antFire[wave.ant].first : wave.marine === 'plesiosaur' ? 1.8 : wave.skipper ? 1.55 : 1.1) + index * .28,
           hp: grove ? (grove.kind === 'frog' ? FROG_HP : grove.kind === 'sentry' ? 9 : grove.kind === 'skimmer' ? 3 : 4)
             : summer ? (summer.kind === 'vortex' ? VORTEX_HP : summer.kind === 'hydra' ? HYDRA_HEAD_HP * 3 : summer.kind === 'drone' ? 5 : 3)
-            : heliostat ? (heliostat.kind === 'guard' ? 6 : 2)
+            : heliostat ? (heliostat.kind === 'guard' ? 6 + (heliostatChallenge ? 2 : 0) : 2)
             : boulevard ? (boulevard.formation === 'intercept' ? 7 : boulevard.heavy ? 8 : 4)
             : flyer ? FLYER_HP
+            : preserveChallenge && index === wave.raptor ? 6
             : shrimp ? SHRIMP_HP
             : wave.ventWorm ? WORM_HP
-            : wave.ventAnchor !== undefined ? MORTAR_HP
-            : wave.crucible ? CRUCIBLE_HP
+            : wave.ventAnchor !== undefined ? MORTAR_HP + (ventChallenge ? 2 : 0)
+            : wave.crucible ? (ioChallenge ? CRUCIBLE_HP + 3 : CRUCIBLE_HP)
             : wave.marine ? marineSpecs[wave.marine].hp
             : wave.ant === 'soldier' ? 4 : 2,
           ant: wave.ant, marine: wave.marine,
@@ -1151,7 +1334,11 @@ export class Flight {
     }
 
     const tuning = stageEnemyTuning[this.level];
-    stepCentipedes(this.enemies, dt * tuning.pace);
+    const routePace = titanChallenge ? TITAN_CHALLENGE_PACE : heliostatChallenge ? HELIOSTAT_CHALLENGE_PACE
+      : iceChallenge ? ICE_CHALLENGE_PACE : preserveChallenge ? PRESERVE_CHALLENGE_PACE
+      : summerChallenge ? SUMMER_CHALLENGE_PACE : boulevardChallenge ? BOULEVARD_CHALLENGE_PACE
+      : groveChallenge ? GROVE_CHALLENGE_PACE : tuning.pace;
+    stepCentipedes(this.enemies, dt * routePace);
     for (const enemy of this.enemies) {
       if (enemy.hp <= 0) continue;
       // Only mobile encounters use the faster clock. Anchored enemies,
@@ -1161,7 +1348,9 @@ export class Flight {
         || (enemy.grove && !enemy.frog) || enemy.summer?.kind === 'scout' || enemy.summer?.kind === 'drone');
       const previousAge = enemy.age;
       enemy.age += dt;
-      if (mobile && enemy.age > 0) enemy.age += Math.min(dt, enemy.age) * (tuning.pace - 1);
+      const pace = ventChallenge && enemy.shrimp ? ventChallengeShrimp.pace
+        : ioChallenge && enemy.skipper ? ioChallengeSkipper.pace : routePace;
+      if (mobile && enemy.age > 0) enemy.age += Math.min(dt, enemy.age) * (pace - 1);
       const motionStep = enemy.age - previousAge;
       const motion = enemy.raptor ? raptorFlight(enemy.age) : undefined;
       if(enemy.crawler){
@@ -1169,7 +1358,11 @@ export class Flight {
         if(crawlerHits(enemy.crawler,this.time,this.time-dt,this.player))this.hit();
       } else if(enemy.mine){
         const p=triggerMine(enemy.mine,this.time,this.player);enemy.x=p.x;enemy.y=p.y;
-        if(p.elapsed>=MINE_WINDUP+MINE_JUMP){enemy.mine.burstAt=this.time;enemy.hp=0;this.threats.push(...mineBurst(p.x,p.y));continue;}
+        if(p.elapsed>=MINE_WINDUP+MINE_JUMP){
+          enemy.mine.burstAt=this.time;enemy.hp=0;
+          this.threats.push(...(boulevardChallenge ? boulevardChallengeMineBurst(p.x,p.y) : mineBurst(p.x,p.y)));
+          continue;
+        }
       } else if (enemy.ambusher) {
         stepAmbusher(enemy.ambusher,this.time,this.player,dt);
         const p=ambusherPose(enemy.ambusher,this.time);enemy.x=p.head.x;enemy.y=p.head.y;
@@ -1180,11 +1373,20 @@ export class Flight {
         const p=heliostatMotion(enemy.age,enemy.lane,enemy.heliostat);enemy.x=p.x;enemy.y=p.y;enemy.heading=p.heading;
       } else if(enemy.summer){
         const p=summerMotion(enemy.age,enemy.lane,enemy.summer,this.time);enemy.x=p.x;enemy.y=p.y;enemy.heading=p.heading;
-        if(enemy.summer.kind==='vortex'&&enemy.y<6.5&&enemy.y>-5)while(enemy.age+1e-8>=enemy.fire){const emission=vortexEmission(enemy.fire,enemy.x,enemy.y,enemy.summer.mirror);this.threats.push(...emission.shots);enemy.fire=emission.next;}
+        if (enemy.summer.kind === 'vortex' && enemy.y < 6.5 && enemy.y > -5) {
+          while (enemy.age + 1e-8 >= enemy.fire) {
+            const emission = summerChallenge ? summerChallengeVortex(enemy.fire, { x: enemy.x, y: enemy.y }, enemy.summer.mirror)
+              : vortexEmission(enemy.fire, enemy.x, enemy.y, enemy.summer.mirror);
+            this.threats.push(...emission.shots);
+            enemy.fire = emission.next;
+          }
+        }
       } else if(enemy.boulevard){
         const p=boulevardMotion(enemy.age,enemy.lane,enemy.boulevard);enemy.x=p.x;enemy.y=p.y;enemy.heading=p.heading;
-        if(enemy.boulevard.formation==='intercept'&&enemy.y<8&&enemy.age>=enemy.fire-.65&&enemy.interceptorAim===undefined)enemy.interceptorAim=Math.atan2(this.player.x-enemy.x,this.player.y-enemy.y);
-        if(enemy.boulevard.formation==='intercept')enemy.interceptorHeading=turnBoulevardTurret(enemy.interceptorHeading??Math.PI-p.heading,enemy.interceptorAim??Math.atan2(this.player.x-enemy.x,this.player.y-enemy.y),dt);
+        if(!boulevardChallenge&&enemy.boulevard.formation==='intercept'){
+          if(enemy.y<8&&enemy.age>=enemy.fire-.65&&enemy.interceptorAim===undefined)enemy.interceptorAim=Math.atan2(this.player.x-enemy.x,this.player.y-enemy.y);
+          enemy.interceptorHeading=turnBoulevardTurret(enemy.interceptorHeading??Math.PI-p.heading,enemy.interceptorAim??Math.atan2(this.player.x-enemy.x,this.player.y-enemy.y),dt);
+        }
       } else if (enemy.flyer) {
         const p=flyerMotion(enemy.age,enemy.lane,enemy.flyer);enemy.x=p.x;enemy.y=p.y;enemy.heading=p.heading;
       } else if (enemy.ventAnchor!==undefined) {
@@ -1200,17 +1402,26 @@ export class Flight {
           }
           if(enemy.age>=enemy.fire)enemy.fire+=WORM_INTERVAL;
         }else{
-          enemy.mortarAngle=mortarAim(enemy,this.player);
-          if(enemy.age>=enemy.fire&&enemy.y<8){
-            const origin=mortarMuzzle(enemy,enemy.mortarAngle);
-            const speed = MORTAR_SHOT_SPEED * tuning.shotSpeed;
-            for(const spread of [-.18,0,.18])this.threats.push({...origin,z:0,vx:Math.sin(enemy.mortarAngle+spread)*speed,vy:-Math.cos(enemy.mortarAngle+spread)*speed,vz:0});
-            enemy.fire+=MORTAR_INTERVAL;
+          if (ventChallenge) {
+            const volley = stepVentChallengeMortar(enemy, this.player);
+            if (volley) this.threats.push(...volley);
+          } else {
+            enemy.mortarAngle = mortarAim(enemy, this.player);
+            if (enemy.age >= enemy.fire && enemy.y < 8) {
+              const origin = mortarMuzzle(enemy, enemy.mortarAngle);
+              const speed = MORTAR_SHOT_SPEED * tuning.shotSpeed;
+              for (const spread of [-.18, 0, .18]) this.threats.push({ ...origin, z: 0,
+                vx: Math.sin(enemy.mortarAngle + spread) * speed, vy: -Math.cos(enemy.mortarAngle + spread) * speed, vz: 0 });
+              enemy.fire += MORTAR_INTERVAL;
+            }
           }
         }
       } else if (enemy.shrimp) {
         const p=shrimpMotion(enemy.age,enemy.lane,enemy.shrimp);enemy.x=p.x;enemy.y=p.y;enemy.heading=p.heading;
-        if(enemy.age>=enemy.fire&&enemy.y<8){
+        if (ventChallenge) {
+          const volley = stepVentChallengeShrimp(enemy);
+          if (volley) this.threats.push(...volley);
+        } else if(enemy.age>=enemy.fire&&enemy.y<8){
           const origin=faunaMuzzle(enemy),angle=Math.atan2(this.player.x-origin.x,origin.y-this.player.y);
           const speed = 4 * tuning.shotSpeed;
           for(const spread of [-.065,.065])this.threats.push({...origin,z:0,vx:Math.sin(angle+spread)*speed,vy:-Math.cos(angle+spread)*speed,vz:0});
@@ -1218,8 +1429,11 @@ export class Flight {
         }
       } else if (enemy.crucible) {
         const p=crucibleMotion(enemy.age,enemy.lane);enemy.x=p.x;enemy.y=p.y;
-        if(enemy.age>=enemy.fire){
-          enemy.fire+=CRUCIBLE_POUR_INTERVAL;
+        if (ioChallenge) {
+          const drops = stepIoChallengeCrucible(enemy, this.player);
+          if (drops) for (const drop of drops) this.enemies.push({ ...drop, lane: 0, age: 0, fire: Infinity, hp: 1 });
+        } else if (enemy.age >= enemy.fire) {
+          enemy.fire += CRUCIBLE_POUR_INTERVAL;
           const y=enemy.y+CRUCIBLE_MUZZLE_Y,angle=Math.atan2(this.player.x-enemy.x,this.player.y-y);
           for(const spread of [-.28,0,.28])this.enemies.push({x:enemy.x,y,lane:0,age:0,fire:Infinity,hp:1,
             slag:{vx:Math.sin(angle+spread)*3.4,vy:Math.cos(angle+spread)*3.4}});
@@ -1237,7 +1451,9 @@ export class Flight {
         const swim = marineMotion(enemy.marine,enemy.age,enemy.lane,enemy.school);
         const previous = marineMotion(enemy.marine,enemy.age-motionStep,enemy.lane,enemy.school);
         enemy.x=swim.x; enemy.y+=swim.y-previous.y; enemy.heading=swim.heading;
-      } else if (enemy.ant && this.obstacles instanceof HiveCollision) steerHiveAnt(enemy, this.obstacles, this.stageDuration, dt);
+      } else if (enemy.ant && this.obstacles instanceof HiveCollision) {
+        steerHiveAnt(enemy, this.obstacles, this.stageDuration, dt, hiveChallenge ? CHALLENGE_ANT_PACE : 1);
+      }
       else {
         enemy.y -= (motion?.speed ?? 2.25) * motionStep;
         if (!motion || motion.pose === 'glide') enemy.x = enemy.lane + Math.sin(enemy.age * 1.55) * 0.46;
@@ -1246,7 +1462,34 @@ export class Flight {
         const hull = enemy.marine ? [{x:0,y:0,radius:marineSpecs[enemy.marine].radius}] : enemy.raptor ? [{ x: 0, y: 0, radius: 1.05 }] : DRONE_HULL;
         this.obstacles.move(enemy, 0, 0, hull, { minX: -2.4, maxX: 2.4, minY: -10, maxY: 10 });
       }
-      if (!enemy.frog && enemy.summer?.kind!=='vortex' && !enemy.mine && !enemy.flyer && !enemy.ambusher && !enemy.shrimp && enemy.ventAnchor===undefined && !enemy.crucible && !enemy.slag && !motion && (!enemy.centipede || (enemy.centipede.slot === 0 && !enemy.centipede.chain.escape)) && enemy.age >= enemy.fire && enemy.y < 8 && (!enemy.grove||groveCanAttack(enemy.age,enemy.lane,enemy.grove)) && (!enemy.heliostat||heliostatCanAttack(enemy.age,enemy.lane,enemy.heliostat))) {
+      if (hiveChallenge && enemy.ant) {
+        const volley = stepChallengeAnt(enemy, enemy.ant, enemy.slot ?? 0);
+        if (volley) this.threats.push(...volley);
+      } else if (ioChallenge && enemy.skipper) {
+        const volley = stepIoChallengeSkipper(enemy, enemy.slot ?? 0);
+        if (volley) this.threats.push(...volley);
+      } else if (titanChallenge && (enemy.cicada || enemy.centipede)) {
+        const volley = stepTitanChallengeInsect(enemy, this.player);
+        if (volley) this.threats.push(...volley);
+      } else if (heliostatChallenge && enemy.heliostat) {
+        const volley = stepHeliostatChallengeActor(enemy, enemy.heliostat, this.player, this.time);
+        if (volley) this.threats.push(...volley);
+      } else if (iceChallenge && enemy.marine) {
+        const volley = stepIceChallengeMarine(enemy, enemy.marine, this.player);
+        if (volley) this.threats.push(...volley);
+      } else if (preserveChallenge && (enemy.flyer || enemy.raptor)) {
+        const volley = stepPreserveChallengeFlyer(enemy, this.player);
+        if (volley) this.threats.push(...volley);
+      } else if (summerChallenge && enemy.summer && enemy.summer.kind !== 'vortex') {
+        const volley = stepSummerChallengeActor(enemy, enemy.summer, this.player, this.time);
+        if (volley) this.threats.push(...volley);
+      } else if (boulevardChallenge && enemy.boulevard) {
+        const volley = stepBoulevardChallengeDriver(enemy, enemy.boulevard, this.player, this.time, dt);
+        if (volley) this.threats.push(...volley);
+      } else if (groveChallenge && enemy.grove && !enemy.frog) {
+        const volley = stepGroveChallengeGlider(enemy, enemy.grove, this.player, this.time);
+        if (volley) this.threats.push(...volley);
+      } else if (!enemy.frog && enemy.summer?.kind!=='vortex' && !enemy.mine && !enemy.flyer && !enemy.ambusher && !enemy.shrimp && enemy.ventAnchor===undefined && !enemy.crucible && !enemy.slag && !motion && (!enemy.centipede || (enemy.centipede.slot === 0 && !enemy.centipede.chain.escape)) && enemy.age >= enemy.fire && enemy.y < 8 && (!enemy.grove||groveCanAttack(enemy.age,enemy.lane,enemy.grove)) && (!enemy.heliostat||heliostatCanAttack(enemy.age,enemy.lane,enemy.heliostat))) {
         const interval = enemy.grove ? (enemy.grove.kind === 'sentry' ? 2.7 : 2.8)
           : enemy.heliostat ? (enemy.heliostat.kind === 'guard' ? 3.8 : 3.1)
           : enemy.boulevard ? (enemy.boulevard.formation === 'intercept' ? 2.8 : 3.4)
@@ -1299,6 +1542,7 @@ export class Flight {
 
   private stepDenDefenses(dt: number) {
     const scroll = denScroll(this.time);
+    const challenge = this.isDenChallenge;
     while (this.nextDenTurret < denTurretSites.length) {
       const point = denDefensePoint(denTurretSites[this.nextDenTurret], scroll);
       if (point.y > 9.6) break;
@@ -1314,29 +1558,36 @@ export class Flight {
       enemy.x = point.x;
       enemy.y = point.y;
       enemy.age += dt;
+      const row = turret.shot;
       const muzzle = stepDenTurret(turret, point, this.player, this.time, dt);
       if (!muzzle) continue;
-      this.threats.push({ x: muzzle.x, y: muzzle.y, z: 0, vx: Math.sin(muzzle.heading) * 5.8,
-        vy: -Math.cos(muzzle.heading) * 5.8, vz: 0, planar: true });
+      if (challenge) this.threats.push(...denChallengeTurretRow(muzzle, row));
+      else this.threats.push({ x: muzzle.x, y: muzzle.y, z: 0, vx: Math.sin(muzzle.heading) * 5.8,
+          vy: -Math.cos(muzzle.heading) * 5.8, vz: 0, planar: true });
     }
     for (const [site, mine] of this.denMines.entries()) {
       const burst = stepDenMine(site, mine, scroll, this.time, this.player);
       if (!burst) continue;
-      for (const shot of mineBurst(burst.x, burst.y, 10, 4, (site % 2) * Math.PI / 10))
+      if (challenge) this.threats.push(...denChallengeMineBurst(burst, site));
+      else for (const shot of mineBurst(burst.x, burst.y, 10, 4, (site % 2) * Math.PI / 10))
         this.threats.push({ ...shot, planar: true });
     }
   }
 
   private stepFleet(dt: number) {
-    while (this.nextWave < fleetWaves.length && this.time >= fleetWaves[this.nextWave].at) {
-      const wave = fleetWaves[this.nextWave++];
+    const challenge = this.isFleetChallenge;
+    const waves = challenge ? fleetChallengeWaves : fleetWaves;
+    const pace = challenge ? FLEET_CHALLENGE_PACE : undefined;
+    while (this.nextWave < waves.length && this.time >= waves[this.nextWave].at) {
+      const wave = waves[this.nextWave++];
       if (this.time - wave.at > FLEET_SAUCER_LIFE) continue;
       const reward = formationReward(wave.drop, wave.lanes.length);
       for (const [slot, lane] of wave.lanes.entries()) {
         const fleet: FleetSaucer = { course: wave.course, side: wave.side, slot, heavy: slot === wave.guard };
         const age = this.time - wave.at - slot * FLEET_SAUCER_STAGGER - dt;
-        const pose = saucerPose(age, lane, fleet);
-        this.enemies.push({ x: pose.x, y: pose.y, lane, age, fleet, fire: Infinity,
+        const pose = saucerPose(age, lane, fleet, pace);
+        const fire = challenge ? Math.max(fleetChallengeFirstShot(fleet), age + dt + fleetChallengeTiming(fleet).windup) : Infinity;
+        this.enemies.push({ x: pose.x, y: pose.y, lane, age, fleet, fire,
           hp: fleet.heavy ? 10 : 4, reward });
       }
     }
@@ -1345,11 +1596,16 @@ export class Flight {
       const saucer = enemy.fleet;
       if (!saucer || enemy.hp <= 0) continue;
       enemy.age += dt;
-      const pose = saucerPose(enemy.age, enemy.lane, saucer);
+      const pose = saucerPose(enemy.age, enemy.lane, saucer, pace);
       enemy.x = pose.x;
       enemy.y = pose.y;
       if (near(enemy, this.player, enemyRadius(enemy) + .23)) this.hit();
       if (this.phase !== 'stage') return;
+      if (challenge) {
+        const shots = stepFleetChallengeSaucer(enemy, saucer, this.player, this.time);
+        if (shots) this.threats.push(...shots);
+        continue;
+      }
       if (!saucerCanFire(enemy, saucer)) {
         enemy.fire = Infinity;
         saucer.aim = undefined;
@@ -1367,7 +1623,8 @@ export class Flight {
       saucer.aim = undefined;
     }
 
-    this.threats.push(...broadsideShots(this.time - dt, this.time));
+    const broadside = broadsideShots(this.time - dt, this.time);
+    this.threats.push(...(challenge ? fleetChallengeBroadside(broadside) : broadside));
     for (const site of tractorSites) {
       const cargo = site.wreck && tractorPose(site, this.time);
       if (cargo && cargo.visibility > .6 && near(cargo, this.player, .68)) this.hit();
@@ -1375,15 +1632,18 @@ export class Flight {
   }
 
   private stepDenPatrols(dt: number) {
-    const wave = denWaves[this.nextWave];
+    const challenge = this.isDenChallenge;
+    const pace = challenge ? DEN_CHALLENGE_PACE : undefined;
+    const wave = (challenge ? denChallengeWaves : denWaves)[this.nextWave];
     if (wave && this.time >= wave.time) {
       this.nextWave++;
       const reward = formationReward(wave.drop, wave.lanes.length);
       for (const [slot, lane] of wave.lanes.entries()) {
         const den: DenPatrol = { course: wave.course, side: wave.side, slot, heavy: slot === wave.guard };
         const age = this.time - wave.time - slot * DEN_PATROL_STAGGER - dt;
-        const pose = denPatrolPose(age, lane, den);
-        this.enemies.push({ x: pose.x, y: pose.y, heading: pose.heading, lane, age, den, fire: Infinity,
+        const pose = denPatrolPose(age, lane, den, pace);
+        const fire = challenge ? denChallengeFirstShot(den) : Infinity;
+        this.enemies.push({ x: pose.x, y: pose.y, heading: pose.heading, lane, age, den, fire,
           hp: den.heavy ? 11 : 5, reward });
       }
     }
@@ -1391,13 +1651,18 @@ export class Flight {
     for (const enemy of this.enemies) {
       if (!enemy.den || enemy.hp <= 0) continue;
       enemy.age += dt;
-      const pose = denPatrolPose(enemy.age, enemy.lane, enemy.den);
+      const pose = denPatrolPose(enemy.age, enemy.lane, enemy.den, pace);
       enemy.x = pose.x;
       enemy.y = pose.y;
       enemy.heading = pose.heading;
       if (enemy.age < 0) continue;
       if (Number.isFinite(denPatrolEntry(this.player, this.player, enemy, enemy.den, .23))) this.hit();
       if (this.phase !== 'stage') return;
+      if (challenge) {
+        const shots = stepDenChallengeRider(enemy, enemy.den, pose, this.player, this.time);
+        if (shots) this.threats.push(...shots);
+        continue;
+      }
       const reach = .82 * denPatrolScale(enemy.den);
       const muzzle = { x: enemy.x + Math.sin(pose.heading) * reach, y: enemy.y - Math.cos(pose.heading) * reach };
       if (!denPatrolCanFire(pose, enemy.den) || muzzle.y < this.player.y + 1.25) { enemy.fire = Infinity; continue; }
@@ -1410,20 +1675,33 @@ export class Flight {
   }
 
   private stepBoss(dt: number) {
+    const pattern = this.challengeBossPattern;
+    if (pattern) {
+      this.stepChallengeBoss(pattern);
+      return;
+    }
     if (this.isFonsFight) {
       const time = this.fonsTime, rocks = fonsRocks(time);
-      if (fonsRockHits(rocks, this.player) || fonsBeamHits(time, this.player, this.fonsVariant) ||
-          (fonsPhase(time).rain && !fonsSheltered(rocks, this.player))) this.hit();
-      if (this.phase === 'boss') this.threats.push(...fonsVolleys(time, dt, this.player, this.fonsVariant));
+      const variant = this.fonsVariant, { age, cycle, rain } = fonsPhase(time);
+      if (fonsRockHits(rocks, this.player) || fonsBeamHits(time, this.player, variant) ||
+          (rain && !fonsSheltered(rocks, this.player))) this.hit();
+      if (this.phase !== 'boss') return;
+      if (variant !== 'normal' && age >= fonsCrownfireStart(variant) && this.fonsCrownfireAim?.cycle !== cycle)
+        this.fonsCrownfireAim = { cycle, point: { ...this.player } };
+      this.threats.push(...fonsVolleys(time, dt, this.player, variant, this.fonsCrownfireAim?.point));
       return;
     }
     if (this.isFleet) {
-      this.threats.push(...stepFleetBoss(this.fleetBossAttack, this.time, dt, this.player, this.bossHealth));
+      if (this.isFleetChallenge) this.stepChallengeBoss(fleetChallengeBoss);
+      else this.threats.push(...stepFleetBoss(this.fleetBossAttack, this.time, dt, this.player, this.bossHealth));
       if (Number.isFinite(this.planarBossEntry(this.player, this.player))) this.hit();
       return;
     }
     if (this.isDen) {
-      this.stepDenBoss(dt);
+      if (this.isDenChallenge) {
+        this.stepChallengeBoss(denChallengeBoss);
+        if (Number.isFinite(this.planarBossEntry(this.player, this.player))) this.hit();
+      } else this.stepDenBoss(dt);
       return;
     }
     if(this.encounterLevel==='biolume'){this.stepLanternRay(dt);return;}
@@ -1431,15 +1709,19 @@ export class Flight {
     if(this.encounterLevel==='heliostat'){this.stepHeliostat();return;}
     if (this.encounterLevel === 'preserve') {
       const attack = groundskeeperAttack(this.time);
+      const cancelled = Math.floor(this.groundskeeperCancelledAt / GROUNDSKEEPER_CYCLE) === attack.cycle;
       if (attack.warning && this.groundskeeperAimCycle !== attack.cycle) {
         this.groundskeeperAim = { x: clamp(this.player.x, -3.5, 3.5), y: clamp(this.player.y, -6.8, 5.5) };
         this.groundskeeperAimCycle = attack.cycle;
       }
-      if (groundskeeperHits(this.time, this.time - dt, this.groundskeeperAim, this.player, this.groundskeeperCancelledAt)) this.hit();
+      if (attack.active && !cancelled && groundskeeperHits(this.time, this.time - dt, this.groundskeeperAim, this.player, this.groundskeeperCancelledAt)) this.hit();
+      if (this.isPreserveChallenge && !cancelled && this.phase === 'boss') {
+        this.stepChallengeBoss(preserveChallengeBoss, attack.cycle, attack.age);
+      }
       return;
     }
     if(this.encounterLevel==='boulevard'){this.stepBoulevard();return;}
-    if(this.encounterLevel === 'io') { this.stepCaldera(); return; }
+    if (this.encounterLevel === 'io') { this.stepCaldera(); return; }
     if(this.isCicadaFight) { this.stepCicada(); return; }
     if(this.encounterLevel === 'ice') { this.stepLeviathan(); return; }
     const elapsed = this.time % BOSS_VOLLEY_INTERVAL;
@@ -1466,19 +1748,90 @@ export class Flight {
     if (elapsed >= BOSS_FIRE_AT + BOSS_IMPACT_TRAVEL + 0.02) this.markers = [];
   }
 
+  private stepChallengeBoss(pattern: BossPattern, cycle = Math.floor(this.time / pattern.interval),
+    elapsed = this.time - cycle * pattern.interval) {
+    if (cycle === this.cancelledTorrentCycle) return;
+    if (elapsed < pattern.lockAt) {
+      this.markers = [];
+      return;
+    }
+    if (this.bossPattern?.cycle !== cycle) {
+      const exposed = this.isIoChallenge ? this.ioLegBroken : this.isVentChallenge ? this.crabCoreOpen
+        : this.isHeliostatChallenge && cycle >= this.heliostatEscalationCycle;
+      const rows = exposed ? pattern.exposedRows ?? pattern.rows : pattern.rows;
+      this.bossPattern = { cycle, target: { ...this.player }, row: 0, rows };
+      this.markers = [this.bossPattern.target];
+    }
+    const burst = this.bossPattern;
+    while (burst.row < burst.rows && elapsed + 1e-8 >= pattern.first + burst.row * pattern.spacing) {
+      this.fireChallengeBossRow(burst.target, cycle, burst.row++, burst.rows > pattern.rows);
+      if (burst.row === burst.rows) this.volley++;
+    }
+    if (elapsed >= pattern.first + .3) this.markers = [];
+  }
+
+  private fireChallengeBossRow(target: Point, cycle: number, row: number, exposed: boolean) {
+    this.bossRecoil = BOSS_RECOIL_TIME;
+    if (this.isVentChallenge) {
+      this.firedCrabTarget = this.crabTargetX;
+      this.threats.push(...ventChallengeBossRow(this.time, this.firedCrabTarget, target, cycle, row, exposed));
+    } else if (this.isIoChallenge) {
+      const muzzle = calderaWheel(IO_DURATION + IO_APPROACH + this.time, this.ioCollapse);
+      this.firedCannonX = muzzle.x;
+      this.threats.push(...calderaChallengeRow(projectShot(muzzle), target, cycle, row));
+    } else if (this.isTitanChallenge) {
+      const muzzle = this.cicadaMuzzle();
+      this.firedCannonX = muzzle.x;
+      this.threats.push(...titanChallengeBossRow(projectShot(muzzle), target, cycle, row));
+    } else if (this.isHeliostatChallenge) {
+      const lenses = [-1, 1].map(side => projectShot(heliostatEmitter(side)));
+      this.threats.push(...heliostatChallengeBossRow(lenses, target, Math.floor(cycle / 2), row, exposed));
+    } else if (this.isIceChallenge) {
+      const muzzle = leviathanMuzzle(this.bossTime);
+      const origin = projectShot({ x: muzzle.x, y: BOSS_Y + muzzle.y, z: BOSS_DEPTH + muzzle.z });
+      this.threats.push(...iceChallengeBossRow(origin, target, cycle, row));
+    } else if (this.isPreserveChallenge) {
+      this.threats.push(...preserveChallengeBossRow(this.bossTime, this.groundskeeperAim, this.groundskeeperCancelledAt, target, cycle, row));
+    } else if (this.isSummerChallenge) {
+      this.threats.push(...lotusChallengeBossRow(this.summerHydra, this.bossTime, BOSS_DEPTH, target, cycle, row));
+    } else if (this.isBoulevardChallenge) {
+      const time = this.stageDuration + this.transitionDuration + this.bossTime;
+      const left = projectShot(boulevardCruiserMuzzle(time, -1, 1));
+      const right = projectShot(boulevardCruiserMuzzle(time, 1, 1));
+      this.threats.push(...boulevardChallengeBossRow([left, right], target, cycle, row));
+    } else if (this.isGroveChallenge) {
+      const origin = rayOrgan(this.rayTime, this.rayAttackSignal.side);
+      this.threats.push(...groveChallengeRayRow(origin, target, cycle, row));
+    } else if (this.isFleetChallenge) {
+      this.threats.push(...fleetChallengeBossRow(this.fleetBossTime, target, cycle, row));
+    } else if (this.isDenChallenge) {
+      this.threats.push(...denChallengeBossRow(this.denBossTime, target, cycle, row));
+    } else {
+      const x = this.exposedCannonX;
+      this.firedCannonX = x;
+      const origin = projectShot({ x, y: BOSS_Y, z: BOSS_DEPTH + BOSS_MUZZLE_Z });
+      this.threats.push(...challengeGuardianVolley(origin, target, cycle, row));
+    }
+  }
+
   private stepLanternRay(dt:number){
     const time = this.rayTime;
     if (time < 0) return;
-    const s=raySignal(time),origin=rayOrgan(time,s.side);
-    if(s.phase>=.65&&s.phase<RAY_FAN_AT&&this.rayFanCycle!==s.cycle&&!this.markers.length)this.markers=[{x:this.player.x,y:this.player.y}];
-    if(s.phase>=RAY_FAN_AT&&this.rayFanCycle!==s.cycle){
-      const target=this.markers[0]??this.player,angle=Math.atan2(target.x-origin.x,origin.y-target.y);
-      const fan = this.bossHealth < RAY_HP / 2 ? [-.45, -.30, -.15, 0, .15, .30, .45] : [-.36, -.18, 0, .18, .36];
-      for(const spread of fan)this.threats.push({...origin,z:0,vx:Math.sin(angle+spread)*5.4,vy:-Math.cos(angle+spread)*5.4,vz:0,planar:true});
-      this.rayFanCycle=s.cycle;this.volley=s.cycle+1;this.firedCannonX=this.exposedCannonX;this.bossRecoil=BOSS_RECOIL_TIME;this.markers=[];
+    const s = this.rayAttackSignal;
+    if (this.isGroveChallenge) {
+      this.stepChallengeBoss(groveChallengeBoss, s.cycle, s.phase);
+    } else {
+      if(s.phase>=.65&&s.phase<RAY_FAN_AT&&this.rayFanCycle!==s.cycle&&!this.markers.length)this.markers=[{x:this.player.x,y:this.player.y}];
+      if(s.phase>=RAY_FAN_AT&&this.rayFanCycle!==s.cycle){
+        const origin=rayOrgan(time,s.side),target=this.markers[0]??this.player,angle=Math.atan2(target.x-origin.x,origin.y-target.y);
+        const fan = this.bossHealth < RAY_HP / 2 ? [-.45, -.30, -.15, 0, .15, .30, .45] : [-.36, -.18, 0, .18, .36];
+        for(const spread of fan)this.threats.push({...origin,z:0,vx:Math.sin(angle+spread)*5.4,vy:-Math.cos(angle+spread)*5.4,vz:0,planar:true});
+        this.rayFanCycle=s.cycle;this.volley=s.cycle+1;this.firedCannonX=this.exposedCannonX;this.bossRecoil=BOSS_RECOIL_TIME;this.markers=[];
+      }
     }
-    if(s.phase>=RAY_SEEKER_AT&&this.raySeekerCycle!==s.cycle){
-      const sides=this.bossHealth<RAY_HP/2?[-s.side,s.side]:[-s.side];
+    const seekerAt = this.isGroveChallenge ? GROVE_CHALLENGE_SEEKER_AT : RAY_SEEKER_AT;
+    if(s.phase>=seekerAt&&this.raySeekerCycle!==s.cycle){
+      const sides=!this.isGroveChallenge&&this.bossHealth<RAY_HP/2?[-s.side,s.side]:[-s.side];
       for(const side of sides){if(this.enemies.filter(e=>e.rayOrb&&e.hp>0).length>=RAY_SEEKER_POOL)break;
         const p=rayOrgan(time,side);this.enemies.push({...p,lane:p.x,age:0,fire:Infinity,hp:RAY_SEEKER_HP,rayOrb:{heading:Math.atan2(this.player.x-p.x,p.y-this.player.y),previousX:p.x,previousY:p.y}});
       }
@@ -1492,25 +1845,43 @@ export class Flight {
   }
 
   private stepSummerHydra(){
+    if (this.isSummerChallenge) {
+      const cycle = Math.floor(this.time / lotusChallengeBoss.interval);
+      if (cycle !== this.lotusCancelledCycle) this.stepChallengeBoss(lotusChallengeBoss, cycle);
+      return;
+    }
     stepHydraAttack(this.summerAttack,this.time,this.player,this.summerHydra,BOSS_DEPTH,BOSS_IMPACT_TRAVEL);
     this.volley=this.summerAttack.volley;this.markers=this.summerAttack.markers;this.threats.push(...this.summerAttack.shots);
     if(this.summerAttack.fired)this.bossRecoil=BOSS_RECOIL_TIME;
   }
 
-  private stepHeliostat(){
-    const cycle=Math.floor(this.time/HELIOSTAT_INTERVAL),t=this.time%HELIOSTAT_INTERVAL;
-    if(!this.heliostatUnstable&&this.bossHealth<HELIOSTAT_HP/2){
-      this.heliostatEscalationAt=this.time;this.heliostatEscalationCycle=cycle+1;
-      this.pickupMessage='Magnetic lens unstable · Alternating channels';this.pickupTime=3;
+  private updateHeliostatInstability(cycle: number, attack: string) {
+    if (this.heliostatUnstable || this.bossHealth >= this.bossMaxHealth / 2) return;
+    this.heliostatEscalationAt = this.time;
+    this.heliostatEscalationCycle = cycle + 1;
+    this.pickupMessage = `Magnetic lens unstable · ${attack}`;
+    this.pickupTime = 3;
+  }
+
+  private stepHeliostat() {
+    const { cycle, elapsed, plasma, round } = this.heliostatAttack;
+    this.updateHeliostatInstability(cycle, this.isHeliostatChallenge ? 'Staggered fire' : 'Alternating channels');
+    if (this.heliostatCancelledCycle === cycle) return;
+    if (!plasma) {
+      this.stepChallengeBoss(heliostatChallengeBoss, cycle, elapsed);
+      return;
     }
-    if(this.heliostatCancelledCycle===cycle)return;
-    if(cycle!==this.heliostatAimCycle&&t>=HELIOSTAT_WINDUP&&t<HELIOSTAT_FIRE){
-      this.heliostatAimCycle=cycle;
-      this.heliostatLockedPattern=cycle>=this.heliostatEscalationCycle?(cycle%2?1:-1):0;
-      this.markers=heliostatLockTargets(this.player,this.heliostatPattern);
+    if (cycle !== this.heliostatAimCycle && elapsed >= HELIOSTAT_WINDUP && elapsed < HELIOSTAT_FIRE) {
+      const lead = round % 2 === 0 ? -1 : 1;
+      const staggered = cycle >= this.heliostatEscalationCycle;
+      this.heliostatAimCycle = cycle;
+      this.heliostatLockedPattern = staggered ? lead : 0;
+      this.markers = this.isHeliostatChallenge ? heliostatChallengePlasmaTargets(this.player, lead, staggered)
+        : heliostatLockTargets(this.player, this.heliostatPattern);
     }
-    if(heliostatPlasmaHits(this.time,this.heliostatTargets,this.player,this.heliostatPattern))this.hit();
-    if(t>HELIOSTAT_FIRE+HELIOSTAT_CHANNEL+HELIOSTAT_FADE+(this.heliostatPattern ? .55 : 0)+.02)this.markers=[];
+    if (heliostatPlasmaHits(elapsed, this.heliostatTargets, this.player, this.heliostatPattern)) this.hit();
+    const delay = this.heliostatPattern ? HELIOSTAT_LENS_DELAY : 0;
+    if (elapsed > HELIOSTAT_FIRE + HELIOSTAT_CHANNEL + HELIOSTAT_FADE + delay + .02) this.markers = [];
   }
 
   private stepBoulevard(){
@@ -1652,7 +2023,10 @@ export class Flight {
     else enemy.hp = Math.max(0, enemy.hp - damage);
     if (laser) enemy.laserDamage = (enemy.laserDamage ?? 0) + before - enemy.hp;
     if (enemy.hp === 0) {
-      if(enemy.rayOrb){this.threats.push(...raySeekerBurst(enemy,enemy.rayOrb.heading));this.score+=25;return;}
+      if(enemy.rayOrb){
+        const burst=this.isGroveChallenge?groveChallengeSeekerBurst:raySeekerBurst;
+        this.threats.push(...burst(enemy,enemy.rayOrb.heading));this.score+=25;return;
+      }
       if(enemy.ambusher)defeatAmbusher(enemy.ambusher,this.time);
       if(enemy.ventWorm&&enemy.ventAnchor!==undefined)this.defeatedVentWorms.add(enemy.ventAnchor);
       if (enemy.centipede) severCentipede(enemy);
@@ -1683,14 +2057,18 @@ export class Flight {
       }
     }else if(this.encounterLevel==='vents'&&!this.crabCoreOpen){
       const index=this.crabTargetX<0?0:1;this.crabClawHealth[index]=Math.max(0,this.crabClawHealth[index]-damage);
-      this.bossHealth=CRAB_CORE_HP+this.crabClawHealth[0]+this.crabClawHealth[1];
+      const coreHealth = this.isVentChallenge ? ventChallengeBoss.coreHealth : CRAB_CORE_HP;
+      this.bossHealth = coreHealth + this.crabClawHealth[0] + this.crabClawHealth[1];
       if(this.crabClawHealth[index]===0){this.crabBreakTimes[index]=this.time;this.pickupMessage=this.crabCoreOpen?'Claws disabled · Gill chamber exposed':index===0?'Crusher joint broken':'Cutter joint broken';this.pickupTime=2.4;for(const wing of this.wings){wing.laserHold=0;wing.laserTarget=undefined;}}
     }else this.bossHealth = Math.max(0, this.bossHealth - damage);
-    if (this.encounterLevel === 'io' && !this.ioLegBroken && this.bossHealth <= IO_HP-IO_LEG_HP) {
-      this.bossHealth = IO_HP-IO_LEG_HP;
-      this.ioCollapseAge = 0;
-      for(const wing of this.wings){wing.laserHold=0;wing.laserTarget=undefined;}
-      this.pickupMessage = 'Support broken · Machinery exposed'; this.pickupTime=2.4;
+    if (this.encounterLevel === 'io' && !this.ioLegBroken) {
+      const coreHealth = this.bossMaxHealth - (this.isIoChallenge ? ioChallengeBoss.supportHealth : IO_LEG_HP);
+      if (this.bossHealth <= coreHealth) {
+        this.bossHealth = coreHealth;
+        this.ioCollapseAge = 0;
+        for(const wing of this.wings){wing.laserHold=0;wing.laserTarget=undefined;}
+        this.pickupMessage = 'Support broken · Machinery exposed'; this.pickupTime=2.4;
+      }
     }
     if (laser) this.bossLaserDamage += before - this.bossHealth;
     if (this.bossHealth === 0) {

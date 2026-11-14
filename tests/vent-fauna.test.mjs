@@ -5,6 +5,7 @@ import {createServer} from 'vite';
 const server=await createServer({root:new URL('..',import.meta.url).pathname,configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true,entries:[]},appType:'custom'});after(()=>server.close());
 const m=await server.ssrLoadModule('/src/vent-fauna.ts'),v=await server.ssrLoadModule('/src/vent-layout.ts'),{Flight,STEP}=await server.ssrLoadModule('/src/game.ts');
 const {stageEnemyTuning}=await server.ssrLoadModule('/src/stage-enemy-tuning.ts');
+const {MORTAR_POOL}=await server.ssrLoadModule('/src/vent-mortar.ts');
 const {createFaunaAssets,createWormAssets,createVentShrimp,createVentWorm}=await server.ssrLoadModule('/src/vent-fauna-rig.ts');
 const {createLaserContactTrace}=await server.ssrLoadModule('/src/laser-contact.ts');
 const assets=createFaunaAssets(new T.DataTexture(new Uint8Array([255,255,255,255]),1,1));
@@ -91,6 +92,28 @@ test('the full non-shooting route fits prewarmed pools, spawns all fauna and cle
   for(const e of f.enemies){if(e.shrimp)forms.add(e.shrimp.formation);if(e.ventWorm)worms.add(e.ventAnchor);if (e.reward) drops.add(e.reward.weapon);}
  }
  assert.equal(forms.size,3);assert.equal(worms.size,4);assert.equal(drops.size,4);assert(maxShrimp<=m.SHRIMP_POOL);assert(maxWorm<=m.WORM_POOL);assert.equal(f.phase,'approach');assert.equal(f.enemies.length,0);
+});
+
+test('Bullet Hell patrols fit the prewarmed pools and keep the rooted encounters on their original route', () => {
+ const f = new Flight('sentry', [], 'vex', 'vents', undefined, 'bullet-hell');
+ f.fire = () => {};
+ f.stepDroneWeapon = () => {};
+ f.invulnerable = 200;
+ const seen = new Set(), anchors = new Set();
+ while (f.phase === 'stage') {
+  f.step(STEP);
+  const shrimp = f.enemies.filter(enemy => enemy.shrimp);
+  const mortars = f.enemies.filter(enemy => enemy.ventAnchor !== undefined && !enemy.ventWorm);
+  assert(shrimp.length <= m.SHRIMP_POOL);
+  assert(mortars.length <= MORTAR_POOL);
+  assert(f.enemies.filter(enemy => enemy.ventWorm).length <= m.WORM_POOL);
+  for (const enemy of shrimp) seen.add(enemy);
+  for (const enemy of f.enemies) if (enemy.ventAnchor !== undefined) anchors.add(enemy.ventAnchor);
+ }
+ assert(seen.size > 110);
+ assert.equal(anchors.size, v.ventAnchors.length);
+ assert.equal(f.transitionDuration, v.VENT_APPROACH);
+ assert.equal(f.enemies.length + f.threats.length, 0);
 });
 
 

@@ -1,5 +1,5 @@
 import * as T from 'three';
-import {boulevardHover} from './boulevard';
+import {boulevardHover,CRUISER_CANNON_X,CRUISER_CANNON_Y,CRUISER_CANNON_Z,CRUISER_ROTOR_Y,CRUISER_MUZZLE_Y,CRUISER_RECOIL} from './boulevard';
 import {part,pivot,plating} from './rig-geometry';
 import {mergeBoulevard} from './boulevard-geometry';
 import {hovercarVectors,cruiserWingVectors} from './boulevard-vectors';
@@ -54,14 +54,14 @@ export function createPursuitCruiser(m:BoulevardMaterials){
   return wing;
  });
  const guns=[-1,1].map(side=>{
-  const base=pivot(body,'cruiser-cannon-'+side,side*2.4,-1.15,-.19);
+  const base=pivot(body,'cruiser-cannon-'+side,side*CRUISER_CANNON_X,CRUISER_CANNON_Y,CRUISER_CANNON_Z);
   part(base,new T.CylinderGeometry(.48,.58,.8,12),m.chrome,0,0,0);
   for(let k=-1;k<=1;k++)part(base,new T.BoxGeometry(.9,.045,.08),m.shell,0,k*.2,.38);
-  const rotor=pivot(base,'rotary-barrels-'+side,0,-.7,0);
+  const rotor=pivot(base,'rotary-barrels-'+side,0,CRUISER_ROTOR_Y,0);
   for(let i=0;i<6;i++){const angle=i/6*Math.PI*2,x=Math.cos(angle)*.27,z=Math.sin(angle)*.27;
    part(rotor,new T.CylinderGeometry(.08,.08,.85,8),m.chrome,x,0,z);
    part(rotor,new T.CylinderGeometry(.085,.085,.03,10),m.shell,x,-.43,z);
-   part(rotor,new T.TorusGeometry(.078,.020,5,10).rotateX(Math.PI/2),m.chrome,x,-.45,z);
+   part(rotor,new T.TorusGeometry(.078,.020,5,10).rotateX(Math.PI/2),m.chrome,x,CRUISER_MUZZLE_Y,z);
   }
   return{base,rotor};
  });
@@ -72,5 +72,5 @@ export function createPursuitCruiser(m:BoulevardMaterials){
  }
  for(const name of['laser_contact_L','laser_contact_C','laser_contact_R'])pivot(body,name,0,-1.87,.20);
  mergeBoulevard(body);
- return{root,pose(time:number,charge:number,recoil:number){const h=boulevardHover(time);body.position.set(h.x,h.y,h.z);body.rotation.set(h.pitch,h.roll,h.yaw);guns.forEach(g=>{g.rotor.rotation.y=time*(2+charge*12);g.base.position.y=-1.15+recoil*.22;});wings.forEach((w,i)=>w.rotation.y=(i?1:-1)*(.035+.035*Math.sin(time*.7)));},guns,vents};
+ return{root,pose(time:number,charge:number,recoil:number){const h=boulevardHover(time);body.position.set(h.x,h.y,h.z);body.rotation.set(h.pitch,h.roll,h.yaw);guns.forEach(g=>{g.rotor.rotation.y=time*(2+charge*12);g.base.position.y=CRUISER_CANNON_Y+recoil*CRUISER_RECOIL;});wings.forEach((w,i)=>w.rotation.y=(i?1:-1)*(.035+.035*Math.sin(time*.7)));},guns,vents};
 }

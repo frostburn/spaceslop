@@ -6,7 +6,11 @@ Tap or click the playfield to send the drone to that point. It parks and fires a
 
 Boss tips in the HUD identify the current target and attack cues. Line up the ship or park the drone on a marked weak point, and move clear of amber aim warnings after they lock.
 
-In Vite dev mode, expand **Dev launch shortcuts** to skip to the selected mission’s boss approach, first Wormhole supply drop or another encounter offered in its briefing. Expand **Test loadout** to pre-equip a wing weapon or start with Towline. The test loadout is also available with `?testLoadout=1`.
+In the Bullet Hell variants, use the fighter's center ring to judge gaps in the colored projectile streams. The volleys commit to a direction during their windup. Follow the opening as it moves, then reposition in the pause between bursts.
+
+Completing the regular campaign unlocks **Bullet Hell**. Fly all thirteen missions with denser enemy fire and a faster fighter with orange exhaust. Defeat **Fons Inversus Rex** in the Return Channel to unlock **Bullet Hell Hardcore**. Hardcore uses red exhaust and ends with **Fons Inversus Invictus**. The first hit ends the run and sends you back to Broodlock. Each surplus weapon pickup with Brass clears the hostile bullets on screen. Both modes also accept their names as case-insensitive unlock codes under **Settings**.
+
+In Vite dev mode, **Free Flight** briefings let you select Regular, Bullet Hell or Bullet Hell Hardcore at any time. The choice applies to normal launches and **Dev launch shortcuts**. Practice wins and losses leave campaign and challenge progress intact. Sectors with authored Bullet Hell patterns use them in both challenge difficulties. Expand **Test loadout** to pre-equip a wing weapon or start with Towline. The test loadout is also available with `?testLoadout=1`.
 
 The drone starts with **Sentry** fire. **Towline** adds a pulsing arc between the ship and the parked drone. Drag the ship to sweep the arc through enemies or across a boss weak point. Each pulse deals 3 damage per target during a 0.3-second window.
 

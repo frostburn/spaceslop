@@ -78,8 +78,8 @@ function saucerX(age: number, lane: number, saucer: FleetSaucer) {
   return lane + saucer.side * 2.9 * (1 - easeFleet(t / 2.45)) + .66 * Math.sin(t * 1.47 + saucer.slot * .68);
 }
 
-export function saucerPose(age: number, lane: number, saucer: FleetSaucer) {
-  const travelAge = age * tuning.pace;
+export function saucerPose(age: number, lane: number, saucer: FleetSaucer, pace: number = tuning.pace) {
+  const travelAge = age * pace;
   const t = Math.max(0, travelAge);
   const phase = t * (saucer.heavy ? 2.3 : 3.1) + saucer.slot * 1.37 + saucer.side;
   const glide = saucer.course === 'hold' ? 2.8 * easeFleet((t - 2.2) / 2.7) : 0;

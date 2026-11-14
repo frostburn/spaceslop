@@ -57,9 +57,12 @@ export function setupPilotPicker(choices: HTMLElement, perkDescription: HTMLElem
   choices.replaceChildren();
 
   let selected = savedPilot();
+  let hardcore = false;
   function showPilot(pilot: Pilot) {
     selected = pilot;
-    perkDescription.textContent = `${pilot.perk} · ${pilot.description}`;
+    const description = hardcore && pilot.id === 'brass'
+      ? 'Each surplus weapon pickup clears hostile bullets on screen.' : pilot.description;
+    perkDescription.textContent = `${pilot.perk} · ${description}`;
   }
   showPilot(selected);
 
@@ -90,5 +93,9 @@ export function setupPilotPicker(choices: HTMLElement, perkDescription: HTMLElem
 
   return {
     get selectedId() { return selected.id; },
+    setHardcore(value: boolean) {
+      hardcore = value;
+      showPilot(selected);
+    },
   };
 }

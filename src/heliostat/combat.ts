@@ -5,6 +5,7 @@ import { levels } from '../levels';
 export const HELIOSTAT_DURATION = levels.heliostat.duration, HELIOSTAT_APPROACH = 8, HELIOSTAT_HP = 100;
 export const HELIOSTAT_SPEED = 2.8, HELIOSTAT_PITCH = 1.30, HELIOSTAT_DISTANCE = 36;
 export const HELIOSTAT_INTERVAL = 4.4, HELIOSTAT_WINDUP = .65, HELIOSTAT_FIRE = 1.9;
+export const HELIOSTAT_LENS_DELAY = .55;
 export const HELIOSTAT_CHANNEL = 1.35, HELIOSTAT_GROW = .25, HELIOSTAT_FADE = .35, HELIOSTAT_EMITTER_X = 3.5;
 export const HELIOSTAT_GUARD_FIRE = 6.4, HELIOSTAT_GUARD_CHARGE = .9;
 export const HELIOSTAT_SPAWN_LEAD = 3, HELIOSTAT_DRONE_POOL = 14, HELIOSTAT_GUARD_POOL = 4;
@@ -70,7 +71,7 @@ export function electricHits(site: number, time: number, previous: number, point
 }
 /** An asymmetric cycle delays the trailing lens; a locked cycle never changes. */
 export function heliostatPlasmaPhase(time:number,side=0,pattern=0) {
-  const delay=pattern!==0&&side!==0&&side!==pattern ? .55 : 0;
+  const delay=pattern!==0&&side!==0&&side!==pattern ? HELIOSTAT_LENS_DELAY : 0;
   const t=Math.max(0,time)%HELIOSTAT_INTERVAL,age=t-HELIOSTAT_FIRE-delay;
   return {growth:smooth(age/HELIOSTAT_GROW),strength:smooth(age/HELIOSTAT_GROW)*(1-smooth((age-HELIOSTAT_CHANNEL)/HELIOSTAT_FADE)),
     hot:age>=HELIOSTAT_GROW&&age<HELIOSTAT_CHANNEL};
@@ -80,8 +81,11 @@ export function heliostatLockTargets(player:{x:number;y:number},pattern=0){
   return [-1,1].map(side=>({x:x+side*(pattern===0 ? .75 : side===pattern ? .35 : 1.45),y:y+(pattern!==0&&side!==pattern ? .6 : 0)}));
 }
 export type PlasmaPoint={x:number;y:number;z:number};
+export function heliostatEmitter(side: number): PlasmaPoint {
+  return { x: side * HELIOSTAT_EMITTER_X, y: 4.2, z: -11.2 };
+}
 export function heliostatPlasmaControls(side:number,target:{x:number;y:number}):PlasmaPoint[] {
-  return [{x:side*HELIOSTAT_EMITTER_X,y:4.2,z:-11.2},{x:side*4.5,y:1.8,z:-8.6},
+  return [heliostatEmitter(side),{x:side*4.5,y:1.8,z:-8.6},
     {x:target.x+side*.6,y:target.y+1.9,z:-3.5},{...target,z:0}];
 }
 /** Curve and collision meet exactly at z=0; the tail continues toward camera. */

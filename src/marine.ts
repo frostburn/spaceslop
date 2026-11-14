@@ -81,11 +81,33 @@ export const LEVIATHAN_INTERVAL = 3.2;
 export const LEVIATHAN_WINDUP = .55;
 export const LEVIATHAN_FIRE = 1.45;
 export const LEVIATHAN_TRAVEL = .85;
+export const leviathanRig = {
+  headY: .5, mouthY: 1.8, mouthZ: -.03,
+  scale: 2.5, pitch: .5 - Math.PI / 2, y: .75, z: -4.2, patternRecoil: .18,
+};
+
 export function leviathanMotion(time: number) {
   const elapsed = Math.max(0,time) % LEVIATHAN_INTERVAL;
   const windup = Math.max(0,Math.min(1,(elapsed - LEVIATHAN_WINDUP) / (LEVIATHAN_FIRE - LEVIATHAN_WINDUP)));
   const recoil = elapsed < LEVIATHAN_FIRE ? 0 : Math.max(0,1-(elapsed-LEVIATHAN_FIRE)/.45);
   return { windup: elapsed < LEVIATHAN_FIRE ? windup : 0, recoil,
-    headYaw: Math.sin(time*.55)*.15, headPitch: Math.sin(time*.77)*.035, headRoll: Math.sin(time*.44)*.02,
+    headYaw: Math.sin(time*.55)*.15, headPitch: Math.sin(time*.77)*.035, headRoll: Math.sin(time*.44)*.02, swimYaw: Math.sin(time*.8)*.025,
     jaw: elapsed < LEVIATHAN_FIRE ? .02 + windup * .88 : .02 + recoil * .90 };
+}
+
+type Point3 = Point & { z: number };
+function rotateXYZ({ x, y, z }: Point3, pitch: number, yaw: number, roll: number) {
+  const rollX = x * Math.cos(roll) - y * Math.sin(roll);
+  const rollY = x * Math.sin(roll) + y * Math.cos(roll);
+  const yawX = rollX * Math.cos(yaw) + z * Math.sin(yaw);
+  const yawZ = -rollX * Math.sin(yaw) + z * Math.cos(yaw);
+  return { x: yawX, y: rollY * Math.cos(pitch) - yawZ * Math.sin(pitch), z: rollY * Math.sin(pitch) + yawZ * Math.cos(pitch) };
+}
+
+export function leviathanMuzzle(time: number) {
+  const rig = leviathanRig, motion = leviathanMotion(time);
+  // Match the head bone and its parent's pose at the moment the jaw fires.
+  const head = rotateXYZ({ x: 0, y: rig.mouthY - rig.headY, z: rig.mouthZ }, .5 + motion.headPitch, motion.headRoll, motion.headYaw);
+  const body = rotateXYZ({ ...head, y: head.y + rig.headY }, rig.pitch, motion.swimYaw, Math.PI);
+  return { x: body.x * rig.scale, y: body.y * rig.scale + rig.y, z: body.z * rig.scale + rig.z + rig.patternRecoil };
 }

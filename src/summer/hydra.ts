@@ -1,7 +1,7 @@
 import * as T from 'three';
 import {atlasRectangles,createRasterMaterial,rasterPart,type Crop} from './atlas';
 import {SUMMER_DISTANCE} from './layout';
-import {hydraHead,hydraEntryHead,HYDRA_BODY_Y,HYDRA_BODY_DEPTH,HYDRA_ROOT_Y,HYDRA_HEAD_Z,HYDRA_SIDES,HYDRA_HEAD_HP,HYDRA_BOSS_HEAD_HP,HYDRA_BOSS_SIZE,type HydraState} from './hydra-targets';
+import {hydraHead,hydraEntryHead,hydraCrown,HYDRA_BODY_Y,HYDRA_BODY_DEPTH,HYDRA_ROOT_Y,HYDRA_HEAD_Z,HYDRA_SIDES,HYDRA_HEAD_HP,HYDRA_BOSS_HEAD_HP,HYDRA_BOSS_SIZE,type HydraSide,type HydraState} from './hydra-targets';
 
 export function createHydraAssets(){
   // Measured whole-sheet bounds; preserve these UVs when resizing the entire atlas.
@@ -35,7 +35,7 @@ export function createRiverHydra(a:ReturnType<typeof createHydraAssets>,boss=fal
   });
   const origin=new T.Vector3(),eye=new T.Vector3(),top=new T.Vector3(),bottom=new T.Vector3();
   raster.visible=!!a.material.map;fallback.visible=!raster.visible;
-  return{root,necks,pose(time:number,charge=0,bodyX=0,state?:HydraState,stateTime=time,camera?:T.Object3D){
+  return{root,necks,pose(time:number,charge:number|((side:HydraSide)=>number)=0,bodyX=0,state?:HydraState,stateTime=time,camera?:T.Object3D,bossHeadMax=HYDRA_BOSS_HEAD_HP){
     torso.position.x=body.position.x=bodyX;
     root.getWorldPosition(origin);
     if(camera){camera.getWorldPosition(eye);root.worldToLocal(eye);}else eye.set(-origin.x,-origin.y,SUMMER_DISTANCE-origin.z);
@@ -60,10 +60,11 @@ export function createRiverHydra(a:ReturnType<typeof createHydraAssets>,boss=fal
       neck.head.visible=neck.fallbackHead.visible=visible;
       neck.head.position.set(headX,headY,headZ);neck.head.rotation.z=s*.07+Math.sin(phase)*.025+s*sink*.8;
       neck.fallbackHead.position.copy(neck.head.position);neck.fallbackHead.rotation.z=neck.head.rotation.z;
-      const front=headZ+.3*size+.12;
-      neck.anchor.position.set(headX,headY-.25*size,front);
-      neck.crown.visible=alive;neck.crown.position.set(headX,headY-.32*size,front);neck.crown.scale.setScalar(1+.12*charge);neck.crown.rotation.z=time*.18;
-      if(neck.bar){const ratio=(state?.hp[s+1]??HYDRA_BOSS_HEAD_HP)/HYDRA_BOSS_HEAD_HP;neck.bar.visible=alive;neck.bar.position.set(headX-(1-ratio)*.4*size,headY+.83*size,front);neck.bar.scale.set(.8*size*ratio,size,1);}
+      const crown=hydraCrown({x:headX,y:headY,z:headZ},size);
+      const growth=typeof charge==='number'?.12*charge:.45*charge(s);
+      neck.anchor.position.set(headX,headY-.25*size,crown.z);
+      neck.crown.visible=alive;neck.crown.position.set(crown.x,crown.y,crown.z);neck.crown.scale.setScalar(1+growth);neck.crown.rotation.z=time*.18;
+      if(neck.bar){const ratio=(state?.hp[s+1]??bossHeadMax)/bossHeadMax;neck.bar.visible=alive;neck.bar.position.set(headX-(1-ratio)*.4*size,headY+.83*size,crown.z);neck.bar.scale.set(.8*size*ratio,size,1);}
       neck.crown.material.opacity=boss?1:.45+.45*(state?.hp[s+1]??HYDRA_HEAD_HP)/HYDRA_HEAD_HP;
     }
   }};

@@ -104,6 +104,19 @@ const towlineTips: Partial<Record<LevelId, string>> = {
 function bossTip(flight: Flight) {
   const towline = flight.droneWeapon === 'towline';
   const encounter = flight.encounterLevel;
+  if (flight.isBroodlockChallenge) return towline ? 'Sweep the arc across the green cannon. Slip between the spore streams.'
+    : 'Tap the green cannon. Follow the gap in the spore bloom.';
+  if (flight.isIoChallenge) return flight.ioLegBroken ? 'Target the exposed machinery. Follow the gap through the longer sweep.'
+    : 'Break the cyan support. Follow the opening in the rows.';
+  if (flight.isTitanChallenge) return 'Target the glowing thorax vent. Move with the gap in the weather front.';
+  if (flight.isHeliostatChallenge) return 'Target the cyan core. Follow the gap in the arcs and dodge the plasma rings.';
+  if (flight.isIceChallenge) return 'Target the mouth marker. Thread the gap between the ice streams.';
+  if (flight.isPreserveChallenge) return 'Aim at the belly. Dodge the claws, then follow the gap in the feathers.';
+  if (flight.isSummerChallenge) return 'Follow the gap between the petals. Destroy heads to thin the streams.';
+  if (flight.isBoulevardChallenge) return 'Follow the gap in the neon lanes. Keep the cruiser ahead of you.';
+  if (flight.isGroveChallenge) return 'Slip between the fronds. Shoot seeking lanterns from a distance.';
+  if (flight.isFleetChallenge) return 'Follow the opening between the side guns. Watch the central lens for the pulse wheel.';
+  if (flight.isDenChallenge) return 'Follow the gap as the Chief crosses the gantry. Both guns fire when the bike straightens.';
   if (flight.isFonsFight) {
     const storm = fonsPhase(flight.fonsTime);
     if (storm.rain || storm.warning > 0) return 'Stay in the wake of a falling crystal';
@@ -114,6 +127,8 @@ function bossTip(flight: Flight) {
       (towline ? 'Sweep the arc across the mirror' : 'Fire into the mirror · Dodge the sweeps');
   }
   if (encounter === 'vents') {
+    if (flight.isVentChallenge) return flight.crabCoreOpen ? 'Target the exposed gills. Drift with the opening between the streams.'
+      : 'Break both glowing claw joints. Follow the gap in the pearl sweep.';
     if (towline) return flight.crabCoreOpen ? 'Sweep the arc across the exposed gills.' : 'Sweep the arc across a glowing claw joint.';
     return flight.crabCoreOpen ? 'Tap the gill chamber. Dodge amber rings.' : 'Tap the glowing joint. Break both claws.';
   }
