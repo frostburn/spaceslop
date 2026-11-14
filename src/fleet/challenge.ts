@@ -1,9 +1,10 @@
 import { bossPatternCharge, patternBullet, rippleRow, stepPatternBurst, type BossPattern } from '../challenge-patterns';
+import { FIELD_ROWS, fieldBullet, fieldRow } from '../bullet-field';
+import { WIDTH } from '../playfield';
 import { wingRewardForWave } from '../wing';
-import { depthBullet } from '../depth-barrage';
 import { FLEET_BOSS_MOUNTS, fleetBossPose, type FleetBossPort } from './boss';
 import { saucerCanFire, saucerSize, type broadsideShots, type FleetSaucer } from './combat';
-import { projectedSaucerMount, saucerMount } from './route';
+import { projectedSaucerMount } from './route';
 
 type Point = { x: number; y: number };
 type Patrol = readonly [at: number, course: FleetSaucer['course'], side: FleetSaucer['side'], lanes: readonly number[], guard?: number];
@@ -76,39 +77,33 @@ export const fleetChallengeBoss = { health: 268, interval: 6.4, lockAt: .5,
 const sideRows = 13;
 const wheelStart = fleetChallengeBoss.first + sideRows * fleetChallengeBoss.spacing;
 const wheelTiming = { ...fleetChallengeBoss, first: wheelStart, lockAt: wheelStart - .64 };
-const ringSpokes = 28;
-const fleetSpiralTiming = { interval: fleetChallengeBoss.interval, lockAt: .44,
-  first: 1.30, spacing: .046, rows: 2 * ringSpokes } satisfies BossPattern;
+const fleetFieldTiming = { interval: fleetChallengeBoss.interval, lockAt: .44,
+  first: 1.30, spacing: .058, rows: FIELD_ROWS } satisfies BossPattern;
+const pockets = [[-1.65, -5.2], [1.77, -2.78], [-.9, .12], [1.88, 3.2], [-1.4, 5.3]];
 
 export function fleetBossPattern(cycle: number) {
-  return cycle % 2 ? fleetSpiralTiming : fleetChallengeBoss;
+  return cycle % 2 ? fleetFieldTiming : fleetChallengeBoss;
 }
 
-export function fleetDepthBarrage(time: number, target: Point, cycle: number, row: number) {
+export function fleetBulletField(time: number, target: Point, cycle: number, row: number) {
   const sign = cycle % 4 === 1 ? 1 : -1;
-  const ring = Math.floor(row / ringSpokes), spoke = row % ringSpokes;
-  const step = 2 * Math.PI * spoke / ringSpokes;
-  const origin = saucerMount(fleetBossPose(time), FLEET_BOSS_MOUNTS[2]);
-  const center = { x: target.x * .27 - sign * .66, y: Math.max(-4.8, Math.min(-2.9, target.y + .82)) };
-  const angle = -sign * .38 + ring * .14;
-  return [1, 1.48].map((scale, band) => depthBullet({
-    origin, approach: 1.26 + .25 * Math.cos(step) + .13 * Math.sin(step * 2 + band * .7) + band * .16,
-    duration: 3.05, delay: spoke * fleetSpiralTiming.spacing,
-    localX: 1.06 * scale * Math.cos(step), localY: 1.19 * scale * Math.sin(step),
-    angle, spin: sign * (band ? .92 : 1.40), driftX: sign * 1.79,
-    driftY: ring === 0 ? 1.16 : .84, bend: -sign * (.83 + .25 * Math.cos(step)),
-    x: center.x, y: center.y + (ring === 0 ? -.28 : .18),
-  }, band ? 'accent' : 'primary'));
+  const origin = projectedSaucerMount(fleetBossPose(time), FLEET_BOSS_MOUNTS[2]);
+  const points = fieldRow(FIELD_ROWS - 1 - row);
+  return points.filter(point => pockets.every(([x, y]) =>
+    Math.hypot(point.x - sign * x - target.x * .13, (point.y - y) * .86) > 1.19))
+    .map(point => {
+      const wave = .5 + point.x * sign / WIDTH;
+      return fieldBullet(origin, point, row * fleetFieldTiming.spacing, wave, (point.column + row) % 4 ? 'primary' : 'accent');
+    });
 }
 
 export function fleetChallengeGunSignal(time: number, port: FleetBossPort) {
   if (time < 0) return { charge: 0, flash: 0 };
   const cycle = Math.floor(time / fleetChallengeBoss.interval), phase = time % fleetChallengeBoss.interval, wheel = port === 2;
-  const special = fleetBossPattern(cycle) === fleetSpiralTiming;
-  if (special) return wheel ? { charge: bossPatternCharge(phase, fleetSpiralTiming, fleetSpiralTiming.rows), flash: 0 }
-    : { charge: 0, flash: 0 };
-  const timing = wheel ? wheelTiming : fleetChallengeBoss;
-  const rows = wheel ? timing.rows - sideRows : sideRows;
+  const field = fleetBossPattern(cycle) === fleetFieldTiming;
+  if (field && !wheel) return { charge: 0, flash: 0 };
+  const timing = field ? fleetFieldTiming : wheel ? wheelTiming : fleetChallengeBoss;
+  const rows = field ? timing.rows : wheel ? timing.rows - sideRows : sideRows;
   const row = (phase - timing.first) / timing.spacing;
   const charge = bossPatternCharge(phase, timing, rows);
   const flash = row >= 0 && row < rows ? Math.max(0, 1 - (row % 1) * 2.4) : 0;

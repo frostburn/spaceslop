@@ -154,7 +154,7 @@ function royalFan(time: number, variant: Exclude<FonsVariant, 'normal'>, target:
       const x = gap + direction * (1.64 + stagger + lane * .43 + .13 * ripple);
       const aim = Math.atan2(x - origin.x, origin.y - height);
       const speed = 5.18 + .27 * ripple + (tusks === 'inner' ? -.15 : .15) + (invictus ? .12 : 0);
-      const primary = invictus ? (lane + row) % 2 === 0 : side === turn;
+      const primary = invictus ? (lane + row) % 3 !== 0 : side === turn || lane % 2 === 0;
       shots.push(patternBullet(origin, aim, speed, primary ? 'primary' : 'accent'));
     }
   }

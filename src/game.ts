@@ -8,7 +8,7 @@ import { CHALLENGE_ANT_PACE, challengeAntFirstShot, challengeGuardian, challenge
 import type { FlightMode } from './campaign/challenges';
 import { bossPatternCharge, PATTERN_GRAZE_RADIUS, PATTERN_HIT_RADIUS, type BossPattern, type PatternColor } from './challenge-patterns';
 import { DEN_BURSTS, DEN_CYCLE, DEN_GUNS, DEN_HP, denBodyEntry, denMount, denPose } from './den/combat';
-import { DEN_CHALLENGE_PACE, denBossPattern, denChallengeBoss, denChallengeBossRow, denDepthBarrage, denChallengeFirstShot, denChallengeMineBurst,
+import { DEN_CHALLENGE_PACE, denBossPattern, denBulletField, denChallengeBoss, denChallengeBossRow, denChallengeFirstShot, denChallengeMineBurst,
   denChallengeTurretRow, denChallengeWaves, stepDenChallengeRider } from './den/challenge';
 import { DEN_TURRET_HP, createDenTurret, denDefensePoint, denMineSites, denTurretEntry, denTurretSites,
   stepDenMine, stepDenTurret, type DenMine, type DenTurret } from './den/defense';
@@ -18,7 +18,7 @@ import { broadsideShots, fleetWaves, FLEET_SAUCER_LIFE, FLEET_SAUCER_STAGGER, FL
   saucerCanFire, saucerFireInterval, saucerPose, saucerSize, saucerVolley, type FleetSaucer } from './fleet/combat';
 import { FLEET_APPROACH, tractorPose, tractorSites } from './fleet/route';
 import { createFleetBossAttack, FLEET_BOSS_HP, fleetBossEntry, fleetBossTarget, stepFleetBoss } from './fleet/boss';
-import { FLEET_CHALLENGE_PACE, fleetBossPattern, fleetChallengeBoss, fleetChallengeBossRow, fleetChallengeBroadside, fleetDepthBarrage,
+import { FLEET_CHALLENGE_PACE, fleetBossPattern, fleetBulletField, fleetChallengeBoss, fleetChallengeBossRow, fleetChallengeBroadside,
   fleetChallengeFirstShot, fleetChallengeTiming, fleetChallengeWaves, stepFleetChallengeSaucer } from './fleet/challenge';
 import { HELIOSTAT_HP,HELIOSTAT_APPROACH,HELIOSTAT_INTERVAL,HELIOSTAT_WINDUP,HELIOSTAT_FIRE,HELIOSTAT_CHANNEL,HELIOSTAT_FADE,HELIOSTAT_LENS_DELAY,HELIOSTAT_GUARD_FIRE,HELIOSTAT_SPAWN_LEAD,heliostatWaves,heliostatMotion,heliostatCanAttack,heliostatPlasmaHits,electricSites,electricHits,type HeliostatCourse } from './heliostat/combat';
 import {SUMMER_APPROACH} from './summer/layout';
@@ -79,7 +79,7 @@ import { PRESERVE_APPROACH } from './preserve-layout';
 import { CLOSE_CALLS_REQUIRED, HOT_DOCK_COOLDOWN, HOT_DOCK_DISTANCE, type PilotId } from './pilot-data';
 import { WING_FLASH_TIME, WING_FORMATION, wingShots, wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
 import { WORMHOLE_SUPPLY_TIME, wormholeBosses } from './wormhole/route';
-import { depthArcPoint, type DepthBullet } from './depth-barrage';
+import { fieldBulletPhase, fieldBulletPoint, type BulletLanding } from './bullet-field';
 import { FONS_APPROACH, fonsBodyEntry, fonsHealth, fonsPhase, fonsPose, fonsRockHits, fonsRocks, fonsSheltered } from './wormhole/fons/combat';
 import { fonsBeamHits, fonsCrownfireStart, fonsVolleys } from './wormhole/fons/attacks';
 import type { FonsVariant } from './wormhole/fons/variants';
@@ -107,7 +107,7 @@ type Shot = Point & {
   planarBossHit?: boolean;
 };
 type Threat = Shot & { graze?: 'near' | 'counted';planar?:boolean; broadside?: true; pattern?: PatternColor;
-  arc?: DepthBullet['arc']; age?: number };
+  field?: BulletLanding; age?: number };
 type Enemy = Point & {
   fleet?: FleetSaucer;
   den?: DenPatrol;
@@ -331,7 +331,7 @@ export class Flight {
   fleetBossAttack = createFleetBossAttack();
   private wormholeIndex = 0;
   private wormholeEncounterAt = 0;
-  private fonsForm: FonsVariant;
+  private readonly fonsForm: FonsVariant;
   private fonsCrownfireAim?: { cycle: number; point: Point };
   private wormholeFinalTime = 0;
   private heliostatEscalationAt=Infinity;
@@ -415,9 +415,8 @@ export class Flight {
     return this.phase === 'approach' ? this.time - this.transitionDuration : this.bossTime;
   }
 
-  startFonsApproach(variant: FonsVariant = this.fonsForm) {
+  startFonsApproach() {
     if (this.level !== 'wormhole' || this.isFonsFight || this.phase === 'won' || this.phase === 'lost') return;
-    this.fonsForm = variant;
     this.startWormholeEncounter(wormholeBosses.length - 1);
   }
 
@@ -482,6 +481,12 @@ export class Flight {
     const attack = this.heliostatAttack;
     return attack.plasma && this.heliostatAimCycle === attack.cycle && this.heliostatCancelledCycle !== attack.cycle
       ? this.markers : [];
+  }
+
+  get bossWarnings() {
+    if (this.phase !== 'boss') return [];
+    if (this.mode === 'regular') return this.markers;
+    return this.isHeliostatChallenge ? this.heliostatTargets : [];
   }
 
   get transitionDuration() { if (this.level === 'wormhole') return WORMHOLE_SUPPLY_TIME; if (this.isFleet) return FLEET_APPROACH; if (this.isDen) return DEN_APPROACH; if(this.level==='biolume')return GROVE_APPROACH; if(this.level==='summer')return SUMMER_APPROACH;if(this.level==='heliostat')return HELIOSTAT_APPROACH;if(this.level==='boulevard')return BOULEVARD_APPROACH;return this.level === 'preserve' ? PRESERVE_APPROACH : this.level === 'vents' ? VENT_APPROACH : this.level === 'io' ? IO_APPROACH : this.level === 'titan' ? TITAN_ASCENT : TRANSITION_TIME; }
@@ -877,24 +882,18 @@ export class Flight {
     });
 
     this.threats = this.threats.filter((shot) => {
-      if (shot.arc) {
-        const before = shot.age ?? 0, age = before + dt;
-        const arc = shot.arc;
-        if (age > arc.approach + arc.duration) return false;
-        const previous = before < arc.approach && age >= arc.approach ? depthArcPoint(arc, arc.approach) : shot;
-        const point = depthArcPoint(arc, age);
-        if (age >= arc.approach && (near(point, this.player, PATTERN_HIT_RADIUS) ||
-          nearSegment(this.player, previous, point, PATTERN_HIT_RADIUS))) {
+      if (shot.field) {
+        shot.age = (shot.age ?? 0) + dt;
+        const { live, opacity } = fieldBulletPhase(shot.field, shot.age);
+        if (opacity === 0) return false;
+        const point = fieldBulletPoint(shot.field, shot.age);
+        shot.x = point.x;
+        shot.y = point.y;
+        if (live && near(shot, this.player, PATTERN_HIT_RADIUS)) {
           this.hit();
           return false;
         }
-        if (dt > 0) {
-          shot.vx = (point.x - shot.x) / dt;
-          shot.vy = (point.y - shot.y) / dt;
-          shot.vz = (point.z - shot.z) / dt;
-        }
-        Object.assign(shot, point, { age });
-        if (age >= arc.approach) this.trackGraze(shot, true);
+        this.trackGraze(shot, live);
         return true;
       }
       this.advance(shot, dt);
@@ -1832,10 +1831,10 @@ export class Flight {
       const origin = rayOrgan(this.rayTime, this.rayAttackSignal.side);
       this.threats.push(...groveChallengeRayRow(origin, target, cycle, row));
     } else if (this.isFleetChallenge) {
-      const volley = cycle % 2 ? fleetDepthBarrage : fleetChallengeBossRow;
+      const volley = cycle % 2 ? fleetBulletField : fleetChallengeBossRow;
       this.threats.push(...volley(this.fleetBossTime, target, cycle, row));
     } else if (this.isDenChallenge) {
-      const volley = cycle % 2 ? denDepthBarrage : denChallengeBossRow;
+      const volley = cycle % 2 ? denBulletField : denChallengeBossRow;
       this.threats.push(...volley(this.denBossTime, target, cycle, row));
     } else {
       const x = this.exposedCannonX;

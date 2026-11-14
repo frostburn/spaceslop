@@ -6,7 +6,7 @@ import type { LevelId } from './levels';
 import { wingWeapons } from './wing';
 import { createLaserAblation, createLaserShield } from './laser-ablation';
 import { PATTERN_BULLET_CAPACITY } from './challenge-patterns';
-import { BOSS_CAMERA_DISTANCE } from './playfield';
+import { fieldBulletPhase } from './bullet-field';
 
 type Shot = Flight['shots'][number];
 export const projectileKinds = ['ship', 'drone', 'homing', 'cannon', 'omega', 'hostile', 'spore', 'brine'] as const;
@@ -74,39 +74,51 @@ export function createPatternProjectileBatch(initial: PatternPalette) {
     transparent: true,
     depthTest: false,
     depthWrite: false,
-    vertexShader: `attribute float visibility; varying vec2 cell; varying vec3 ink; varying float alpha;
+    vertexShader: `attribute vec2 bulletPhase; varying vec2 cell, phase; varying vec3 ink;
       void main() {
         cell = uv * 2.0 - 1.0;
         ink = instanceColor;
-        alpha = visibility;
+        phase = bulletPhase;
         gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
       }`,
-    fragmentShader: `uniform int shape; varying vec2 cell; varying vec3 ink; varying float alpha;
+    fragmentShader: `uniform int shape; varying vec2 cell, phase; varying vec3 ink;
       void main() {
-        vec2 p = cell / vec2(0.56, 0.67);
-        float radius = length(p);
-        if (shape == 0) radius = length(vec2(p.x * (1.0 + 0.22 * p.y), p.y));
-        if (shape == 1) radius = max(abs(p.x), abs(p.y)) * 0.55 + (abs(p.x) + abs(p.y)) * 0.45;
-        if (shape == 2) radius = length(cell / vec2(0.63, 0.63));
-        if (shape == 3) radius = max(abs(p.x) * 0.86 + abs(p.y) * 0.67, abs(p.y));
-        if (shape == 4) radius = length(vec2((p.x - 0.17 * p.y * p.y) * (1.12 + 0.16 * p.y), p.y));
-        if (shape == 5) radius = length(vec2(p.x * (1.0 + 0.26 * p.y), p.y * 1.08));
-        float edge = max(0.06, fwidth(radius));
-        float body = 1.0 - smoothstep(1.0 - edge, 1.0 + edge, radius);
-        float glow = exp(-2.8 * radius * radius) * 0.45;
-        float lip = smoothstep(0.32, 0.59, radius) * (1.0 - smoothstep(0.78, 0.99, radius));
-        vec3 color = mix(ink * 0.18, ink, lip);
-        float light = 1.0 - smoothstep(0.12, 0.70, length(p - vec2(-0.10, 0.16)));
-        color = mix(color, vec3(1.0, 0.97, 0.89), light * 0.88);
-        color = mix(ink * 0.73, color, body);
-        gl_FragColor = vec4(color, max(body, glow) * alpha);
+        if (phase.x >= 0.0) {
+          float radius = length(cell) / 0.72;
+          float edge = max(0.045, fwidth(radius));
+          float outside = 1.0 - smoothstep(1.0 - edge, 1.0 + edge, radius);
+          float rim = smoothstep(0.72 - edge, 0.72 + edge, radius);
+          float opening = mix(0.72, -0.2, phase.x);
+          float fill = smoothstep(opening - edge, opening + edge, radius);
+          vec3 shell = mix(ink, vec3(1.0, 0.98, 0.91), 0.5);
+          vec3 core = mix(ink * 0.45, shell, 1.0 - smoothstep(0.06, 0.54, length(cell - vec2(-0.11, 0.15))));
+          gl_FragColor = vec4(mix(core, shell, rim), outside * max(fill, rim) * phase.y);
+        } else {
+          vec2 p = cell / vec2(0.56, 0.67);
+          float radius = length(p);
+          if (shape == 0) radius = length(vec2(p.x * (1.0 + 0.22 * p.y), p.y));
+          if (shape == 1) radius = max(abs(p.x), abs(p.y)) * 0.55 + (abs(p.x) + abs(p.y)) * 0.45;
+          if (shape == 2) radius = length(cell / vec2(0.63, 0.63));
+          if (shape == 3) radius = max(abs(p.x) * 0.86 + abs(p.y) * 0.67, abs(p.y));
+          if (shape == 4) radius = length(vec2((p.x - 0.17 * p.y * p.y) * (1.12 + 0.16 * p.y), p.y));
+          if (shape == 5) radius = length(vec2(p.x * (1.0 + 0.26 * p.y), p.y * 1.08));
+          float edge = max(0.06, fwidth(radius));
+          float body = 1.0 - smoothstep(1.0 - edge, 1.0 + edge, radius);
+          float glow = exp(-2.8 * radius * radius) * 0.45;
+          float lip = smoothstep(0.32, 0.59, radius) * (1.0 - smoothstep(0.78, 0.99, radius));
+          vec3 color = mix(ink * 0.18, ink, lip);
+          float light = 1.0 - smoothstep(0.12, 0.70, length(p - vec2(-0.10, 0.16)));
+          color = mix(color, vec3(1.0, 0.97, 0.89), light * 0.88);
+          color = mix(ink * 0.73, color, body);
+          gl_FragColor = vec4(color, max(body, glow));
+        }
         #include <colorspace_fragment>
       }`,
   });
   const primary = new T.Color(initial.primary), accent = new T.Color(initial.accent);
   const geometry = new T.PlaneGeometry(1, 1);
-  const visibility = new T.InstancedBufferAttribute(new Float32Array(PATTERN_BULLET_CAPACITY), 1).setUsage(T.DynamicDrawUsage);
-  geometry.setAttribute('visibility', visibility);
+  const bulletPhase = new T.InstancedBufferAttribute(new Float32Array(PATTERN_BULLET_CAPACITY * 2), 2).setUsage(T.DynamicDrawUsage);
+  geometry.setAttribute('bulletPhase', bulletPhase);
   const mesh = new T.InstancedMesh(geometry, material, PATTERN_BULLET_CAPACITY);
   mesh.frustumCulled = false;
   mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);
@@ -119,7 +131,7 @@ export function createPatternProjectileBatch(initial: PatternPalette) {
   const matrix = new T.Matrix4(), position = new T.Vector3(), rotation = new T.Quaternion();
   const axis = new T.Vector3(0, 0, 1);
   const heights = { seed: .57, ember: .63, pearl: .52, shard: .71, feather: .73, petal: .64 };
-  const size = new T.Vector3(.52, heights[initial.shape], 1), arcSize = new T.Vector3();
+  const size = new T.Vector3(.52, heights[initial.shape], 1);
   let palette = initial;
 
   function draw(shots: readonly Flight['threats'][number][], colors = initial) {
@@ -133,22 +145,17 @@ export function createPatternProjectileBatch(initial: PatternPalette) {
     let count = 0;
     for (const shot of shots) {
       if (!shot.pattern) continue;
-      let opacity = 1;
-      if (shot.arc) {
-        const z = shot.z, scale = 1 - z / BOSS_CAMERA_DISTANCE;
-        const approach = Math.min(1, (shot.age ?? 0) / shot.arc.approach);
-        // Distant pellets grow and brighten to match the other live shots.
-        const sizeFactor = scale * (.48 + .52 * approach ** 1.4);
-        opacity = .44 + .56 * approach;
-        position.set(shot.x * scale, shot.y * scale, z);
-        matrix.makeRotationZ(Math.atan2(-shot.vx, shot.vy)).scale(arcSize.copy(size).multiplyScalar(sizeFactor)).setPosition(position);
+      if (shot.field) {
+        const { fill, opacity } = fieldBulletPhase(shot.field, shot.age ?? 0);
+        matrix.makeScale(.61, .61, 1).setPosition(shot.x, shot.y, 0);
+        bulletPhase.setXY(count, fill, opacity);
       } else {
         position.set(shot.x, shot.y, 0);
         rotation.setFromAxisAngle(axis, Math.atan2(-shot.vx, shot.vy));
         matrix.compose(position, rotation, size);
+        bulletPhase.setXY(count, -1, 1);
       }
       mesh.setMatrixAt(count, matrix);
-      visibility.setX(count, opacity);
       mesh.setColorAt(count++, shot.pattern === 'accent' ? accent : primary);
     }
     root.visible = count > 0;
@@ -156,7 +163,7 @@ export function createPatternProjectileBatch(initial: PatternPalette) {
     if (count === 0) return;
     mesh.instanceMatrix.needsUpdate = true;
     mesh.instanceColor!.needsUpdate = true;
-    visibility.needsUpdate = true;
+    bulletPhase.needsUpdate = true;
   }
   return { root, draw, prime: () => draw([{ x: 0, y: 0, z: 0, vx: 0, vy: -5, vz: 0, pattern: 'primary' }]) };
 }

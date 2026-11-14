@@ -250,7 +250,8 @@ export function createWormholeBosses(plane: T.Group, signal: AbortSignal) {
       else portalFeeds.root.visible = false;
       groundskeeperEffects.root.visible = battle && flight.encounterLevel === 'preserve';
       if (groundskeeperEffects.root.visible)
-        groundskeeperEffects.update(flight.groundskeeperTime, flight.groundskeeperAim, flight.groundskeeperCancelledAt, true);
+        groundskeeperEffects.update(flight.groundskeeperTime, flight.groundskeeperAim, flight.groundskeeperCancelledAt, true,
+          !flight.isPreserveChallenge);
       models.length = flight.enemies.length;
       models.fill(undefined);
       for (const seeker of seekers) seeker.root.visible = false;

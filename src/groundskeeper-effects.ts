@@ -17,10 +17,10 @@ export function createGroundskeeperEffects() {
   chips.frustumCulled = false; chips.instanceMatrix.setUsage(T.DynamicDrawUsage); root.add(chips);
   const transform = new T.Object3D();
   return { root,
-    update(time: number, aim: GkAim, cancelledAt: number, active: boolean) {
+    update(time: number, aim: GkAim, cancelledAt: number, active: boolean, showTargetRings: boolean) {
       const a = groundskeeperAttack(time), cancelled = Math.floor(cancelledAt / GROUNDSKEEPER_CYCLE) === a.cycle;
       const warning = active && a.warning && !cancelled;
-      lines.visible = warning && a.kind.includes('rake'); rings.forEach(r => r.visible = warning && !a.kind.includes('rake'));
+      lines.visible = warning && a.kind.includes('rake'); rings.forEach(r => r.visible = showTargetRings && warning && !a.kind.includes('rake'));
       const side = a.kind === 'left rake' ? -1 : 1;
       material.opacity = .35 + .35 * Math.sin(a.age * 10) ** 2; ringMaterial.opacity = material.opacity;
       if (lines.visible) {

@@ -533,7 +533,7 @@ test('both challenge rushes run the standalone boss patterns and reset them betw
         flight.player = { x: -1, y: -5.8 };
       }
 
-      let peak = 0, plasma = false, seekers = false, depth = false;
+      let peak = 0, plasma = false, seekers = false, field = false;
       let slowest = Infinity, fastest = 0;
       for (let tick = 0; tick < 15 / STEP; tick++) {
         for (const flight of [solo, rush]) {
@@ -543,8 +543,8 @@ test('both challenge rushes run the standalone boss patterns and reset them betw
         peak = Math.max(peak, rush.threats.length);
         plasma ||= rush.heliostatTargets.length === 2 && level === 'heliostat';
         seekers ||= rush.enemies.some(e => e.rayOrb);
-        depth ||= rush.threats.some(s => s.arc);
-        for (const shot of rush.threats) if (shot.pattern && !shot.arc) {
+        field ||= rush.threats.some(s => s.field);
+        for (const shot of rush.threats) if (shot.pattern && !shot.field) {
           const speed = Math.hypot(shot.vx, shot.vy);
           slowest = Math.min(slowest, speed);
           fastest = Math.max(fastest, speed);
@@ -554,11 +554,13 @@ test('both challenge rushes run the standalone boss patterns and reset them betw
           for (const [i, shot] of rush.threats.entries()) {
             const other = solo.threats[i];
             assert.equal(shot.pattern, other.pattern, level);
-            assert.equal(Boolean(shot.arc), Boolean(other.arc), level);
+            assert.equal(Boolean(shot.field), Boolean(other.field), level);
             assert(Math.hypot(shot.x - other.x, shot.y - other.y, shot.z - other.z) < 1e-9, level);
             assert(Math.hypot(shot.vx - other.vx, shot.vy - other.vy, shot.vz - other.vz) < 1e-9, level);
           }
           assert.deepEqual(rush.markers, solo.markers, level);
+          assert.deepEqual(rush.bossWarnings, level === 'heliostat' ? rush.heliostatTargets : [], level);
+          assert.deepEqual(rush.bossWarnings, solo.bossWarnings, level);
         }
       }
       assert(peak > 40 && peak <= PATTERN_BULLET_CAPACITY, level);
@@ -566,7 +568,7 @@ test('both challenge rushes run the standalone boss patterns and reset them betw
       if (level === 'heliostat') assert(plasma);
       if (level === 'biolume') assert(seekers);
       if (level === 'fleet' || level === 'den') {
-        assert(depth, level);
+        assert(field, level);
         rush.pulse();
         assert(rush.bossTorrentCancelled);
         assert.equal(rush.threats.length, 0);
@@ -599,8 +601,15 @@ test('Invictus adds shards at the wall and both colored barrages fit the rendere
     assert(peak > 300);
     const sample = fonsVolleys(variant === 'rex' ? 1.128 : 1.048, STEP, { x: 0, y: -5.8 }, variant);
     effects.update(1.13, 22, sample, true, variant);
-    assert.equal(effects.root.getObjectByName('fons-' + variant + '-bullets').children[0].count, sample.length);
-    assert.equal(effects.root.getObjectByName('fons-black-plasma').count, 0);
+    const bullets = effects.root.getObjectByName('fons-black-plasma');
+    assert.equal(bullets.count, sample.length);
+    const rim = new Color();
+    for (const [index, shot] of sample.entries()) {
+      bullets.getColorAt(index, rim);
+      if (shot.pattern === 'primary') assert(rim.b > rim.r && rim.r > rim.g);
+      else if (variant === 'rex') assert(rim.g > rim.b && rim.b > rim.r);
+      else assert(rim.b > rim.g && rim.g > rim.r);
+    }
     const wallTime = 4.968, wall = fonsBeams(wallTime, 'invictus')[1].from;
     const shards = fonsVolleys(wallTime, STEP, { x: 0, y: -5.8 }, variant);
     assert.equal(shards.length, variant === 'invictus' ? 8 : 0);
@@ -633,9 +642,9 @@ test('only Invictus damages the reflected path after the False Horizon warning',
   assert(fonsBeamHits(time, hit, 'invictus'));
   assert(!fonsBeamHits(time, { x: 3.5, y: -5.5 }, 'invictus'));
   assert.equal(fonsBeams(FONS_CYCLE + time, 'invictus')[1].from.x, -from.x);
-  for (const variant of ['normal', 'rex', 'invictus']) {
-    const flight = new Flight('sentry', [], 'vex', 'wormhole');
-    flight.startFonsApproach(variant);
+  for (const [mode, variant] of [['regular', 'normal'], ['bullet-hell', 'rex'], ['hardcore', 'invictus']]) {
+    const flight = new Flight('sentry', [], 'vex', 'wormhole', () => .5, mode);
+    flight.startFonsApproach();
     while (flight.phase === 'approach') flight.step(STEP);
     assert.equal(flight.fonsVariant, variant);
     Object.assign(flight.player, hit);

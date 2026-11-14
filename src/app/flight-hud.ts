@@ -110,13 +110,13 @@ function bossTip(flight: Flight) {
     : 'Break the cyan support. Watch for embers overtaking the first rows.';
   if (flight.isTitanChallenge) return 'Target the glowing thorax vent. Watch the wingbeats split into rings.';
   if (flight.isHeliostatChallenge) return 'Target the cyan core. The lenses alternate volleys and aimed plasma.';
-  if (flight.isIceChallenge) return 'Target the mouth marker. Watch the fast strands overtake the slow ones.';
+  if (flight.isIceChallenge) return 'Aim at the mouth. Watch the fast strands overtake the slow ones.';
   if (flight.isPreserveChallenge) return 'Aim at the belly. Move after the claws lock. Watch for the feather barbs.';
   if (flight.isSummerChallenge) return 'Destroy heads to thin the overlapping petals.';
   if (flight.isBoulevardChallenge) return 'Watch the crossed neon lanes. Keep the cruiser ahead of you.';
   if (flight.isGroveChallenge) return 'Slip between the fronds. Shoot seeking lanterns from a distance.';
-  if (flight.isFleetChallenge) return 'Watch the central lens. Its rings curl toward you and sweep sideways.';
-  if (flight.isDenChallenge) return 'Watch both guns. Their loops curl toward you, split and climb.';
+  if (flight.isFleetChallenge) return 'When the central lens fills the screen, find an empty pocket before the pellets fill.';
+  if (flight.isDenChallenge) return 'When both guns seed the screen, move into a clear lane before the pellets fill.';
   if (flight.isFonsFight) {
     const storm = fonsPhase(flight.fonsTime);
     if (storm.rain || storm.warning > 0) return 'Stay in the wake of a falling crystal';

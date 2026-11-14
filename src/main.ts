@@ -10,7 +10,6 @@ import { ranks } from './campaign/ranks';
 import { levels, readLevel, type LevelId } from './levels';
 import { setupPilotPicker } from './pilots';
 import { readWingWeapon, wingWeapons } from './wing';
-import { fonsNames, fonsVariants } from './wormhole/fons/variants';
 import './style.css';
 import './spaceslop-logo.css';
 
@@ -383,7 +382,7 @@ function updateShortcuts(id: LevelId) {
   const hasTransition: LevelId[] = ['den', 'titan', 'summer', 'heliostat', 'boulevard', 'preserve', 'vents', 'io'];
   boss.textContent = id === 'fleet' ? 'Launch at breach' : id === 'wormhole' ? 'Launch at first supply drop' : hasTransition.includes(id) ? 'Launch at transition' : 'Launch at boss';
   document.querySelector<HTMLElement>('#dev-trench')!.hidden = id !== 'fleet';
-  for (const button of briefing.querySelectorAll<HTMLElement>('[data-fons-start]')) button.hidden = id !== 'wormhole';
+  document.querySelector<HTMLElement>('#dev-fons')!.hidden = id !== 'wormhole';
 }
 
 document.querySelector('#clear-offline')!.addEventListener('click', async () => {
@@ -423,14 +422,10 @@ if (import.meta.env.DEV) {
     button.textContent = label;
     button.addEventListener('click', () => void launchFlight(shortcut));
     actions.append(button);
-    return button;
   }
   addShortcut('dev-boss', 'Launch at boss', 'boss');
   addShortcut('dev-trench', 'Launch at trench', 'trench');
-  for (const variant of fonsVariants) {
-    const id = variant === 'normal' ? 'dev-fons' : 'dev-fons-' + variant;
-    addShortcut(id, 'Launch at ' + fonsNames[variant], variant).dataset.fonsStart = '';
-  }
+  addShortcut('dev-fons', 'Launch at Fons', 'fons');
   shortcuts.append(summary, actions);
   briefing.querySelector('.brief-actions')!.before(shortcuts);
 }

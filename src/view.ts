@@ -545,7 +545,7 @@ export class FlightView {
       },
     };
     this.level.update(levelFrame);
-    this.cannonMarker.visible = flight.phase === 'boss' && !flight.planarBoss;
+    this.cannonMarker.visible = flight.phase === 'boss' && flight.mode === 'regular' && !flight.planarBoss;
     if (this.cannonMarker.visible) {
       const p = this.level.contact(flight.exposedCannonX, distance, flight);
       this.cannonMarker.position.set(p.x, p.y, 0);
@@ -567,9 +567,10 @@ export class FlightView {
     this.drawFeedback(flight, elapsed);
     if (victoryTime !== undefined && this.defeat.pose(victoryTime, (point, tint) => this.combat.emit('defeat', point, tint)))
       this.combat.update(0);
+    const warnings = flight.bossWarnings;
     for (const [index, ring] of this.markers.entries()) {
-      const marker = flight.markers[index];
-      ring.visible = Boolean(marker) && flight.phase === 'boss';
+      const marker = warnings[index];
+      ring.visible = Boolean(marker);
       if (marker) {
         ring.position.set(marker.x, marker.y, 0.08);
         ring.material.opacity = 0.7 + 0.3 * Math.sin(flight.time * 18);

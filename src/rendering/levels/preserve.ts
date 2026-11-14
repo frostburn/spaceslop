@@ -67,7 +67,8 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
       const featherCharge = flight.groundskeeperFeatherCharge;
       const activeShoulders = groundskeeperFeatherShoulders(pose.kind);
       for (const [i, glow] of shoulders.entries()) glow(activeShoulders.includes(i) ? featherCharge * 2.5 : 0, pose.arms[i].shoulder);
-      effects.update(flight.groundskeeperTime, flight.groundskeeperAim, flight.groundskeeperCancelledAt, flight.phase === 'boss');
+      effects.update(flight.groundskeeperTime, flight.groundskeeperAim, flight.groundskeeperCancelledAt,
+        flight.phase === 'boss', !flight.isPreserveChallenge);
       models.length = flight.enemies.length;
       models.fill(undefined);
       const hunters=flight.enemies.filter(enemy=>enemy.ambusher);

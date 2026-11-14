@@ -1,6 +1,7 @@
 import { bossPatternCharge, patternBullet, rippleRow, stepPatternBurst, type BossPattern } from '../challenge-patterns';
+import { FIELD_ROWS, fieldBullet, fieldRow } from '../bullet-field';
+import { BOSS_CAMERA_DISTANCE, HEIGHT } from '../playfield';
 import { wingRewardForWave } from '../wing';
-import { depthBullet } from '../depth-barrage';
 import { DEN_CYCLE, DEN_GUNS, DEN_MUZZLE_DEPTH, denMount, denPose } from './combat';
 import { denPatrolCanFire, denPatrolScale, type DenPatrol } from './patrol';
 
@@ -86,46 +87,40 @@ export function denChallengeMineBurst(origin: Point, site: number) {
 export const denChallengeBoss = { health: 282, interval: DEN_CYCLE, lockAt: .51,
   first: 1.24, spacing: .16, rows: 18 } satisfies BossPattern & { health: number };
 const sweepRows = 9;
-const loopSpokes = 26;
-const denArcTiming = { interval: DEN_CYCLE, lockAt: .47, first: 1.24,
-  spacing: .043, rows: 2 * loopSpokes } satisfies BossPattern;
+const denFieldTiming = { interval: DEN_CYCLE, lockAt: .47, first: 1.24,
+  spacing: .058, rows: FIELD_ROWS } satisfies BossPattern;
 
 export function denBossPattern(cycle: number) {
-  return cycle % 2 ? denArcTiming : denChallengeBoss;
+  return cycle % 2 ? denFieldTiming : denChallengeBoss;
 }
 
-export function denDepthBarrage(time: number, target: Point, cycle: number, row: number) {
+export function denBulletField(time: number, target: Point, cycle: number, row: number) {
   const sign = cycle % 4 === 1 ? 1 : -1;
-  const returnPass = row >= loopSpokes, spoke = row % loopSpokes;
-  const angle = Math.PI * spoke * 2 / loopSpokes + (returnPass ? .34 : 0);
-  const center = { x: target.x * .24 + sign * .35, y: Math.max(-6.3, Math.min(-3.55, .68 * target.y - 1.95)) };
   const pose = denPose(time);
-  return DEN_GUNS.map((gun, index) => {
-    const side = index === 0 ? -1 : 1;
-    const x = Math.cos(angle), y = Math.sin(angle);
-    const radius = 1 + .15 * Math.cos(angle * 4);
-    return depthBullet({
-      origin: { ...denMount(pose, gun), z: DEN_MUZZLE_DEPTH },
-      approach: 1.07 + .29 * side * Math.sin(angle + .45) + .1 * Math.cos(angle * 3),
-      duration: 2.95, delay: spoke * denArcTiming.spacing,
-      localX: x * radius * 1.19, localY: y * radius * 1.29,
-      angle: -.48 * side, spin: -sign * side * 1.24, driftX: side * (returnPass ? -1.24 : 1.12),
-      driftY: side === sign ? 1.03 : 2.5, bend: -side * (.86 + .28 * x),
-      x: center.x + side * (returnPass ? 2.06 : 1.04),
-      y: center.y + (side === sign ? 0 : .4) + (returnPass ? -1.1 : 0),
-    }, index === 0 ? 'primary' : 'accent');
+  const projection = BOSS_CAMERA_DISTANCE / (BOSS_CAMERA_DISTANCE - DEN_MUZZLE_DEPTH);
+  const origins = DEN_GUNS.map(gun => {
+    const { x, y } = denMount(pose, gun);
+    return { x: x * projection, y: y * projection };
   });
+  return fieldRow(FIELD_ROWS - 1 - row)
+    .filter(({ x, y }) => {
+      const offset = sign * 1.33 * Math.sin(y * .45 + .25) + target.x * .12;
+      return Math.abs(x - offset) > .84 && Math.abs(x + offset + sign * 1.96) > .61;
+    })
+    .map(point => {
+      const gun = point.column < 6 ? 0 : 1;
+      return fieldBullet(origins[gun], point, row * denFieldTiming.spacing, .5 - point.y / HEIGHT, gun ? 'accent' : 'primary');
+    });
 }
 
 export function denChallengeGunSignal(time: number, gun: number) {
   if (time < 0) return { charge: 0, flash: 0 };
   const cycle = Math.floor(time / DEN_CYCLE), phase = time % DEN_CYCLE;
-  if (denBossPattern(cycle) === denArcTiming)
-    return { charge: bossPatternCharge(phase, denArcTiming, denArcTiming.rows), flash: 0 };
-  const charge = bossPatternCharge(phase, denChallengeBoss, denChallengeBoss.rows);
-  const row = (phase - denChallengeBoss.first) / denChallengeBoss.spacing;
-  const strength = row >= sweepRows || gun === cycle % 2 ? 1 : .55;
-  const flash = row >= 0 && row < denChallengeBoss.rows ? Math.max(0, 1 - (row % 1) * 2.6) : 0;
+  const timing = denBossPattern(cycle);
+  const charge = bossPatternCharge(phase, timing, timing.rows);
+  const row = (phase - timing.first) / timing.spacing;
+  const strength = timing === denFieldTiming || row >= sweepRows || gun === cycle % 2 ? 1 : .55;
+  const flash = row >= 0 && row < timing.rows ? Math.max(0, 1 - (row % 1) * 2.6) : 0;
   return { charge: charge * strength, flash: flash * strength };
 }
 

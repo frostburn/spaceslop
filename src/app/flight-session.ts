@@ -8,14 +8,13 @@ import type { PilotId } from '../pilot-data';
 import { showSelectedPilot } from '../pilots';
 import { createFlightView, type FlightView } from '../view';
 import type { WingWeapon } from '../wing';
-import type { FonsVariant } from '../wormhole/fons/variants';
 import { createRankDisplays } from './briefing';
 import { endingMessage, endingMessages, mountEndingCredits } from './ending-credits';
 import { flightReadout } from './flight-hud';
 import { bindFlightInput } from './input';
 
 export type FlightLoadout = { pilot: PilotId; drone: DroneWeapon; wings: (WingWeapon | undefined)[]; mode: FlightMode };
-export type FlightShortcut = 'boss' | 'trench' | FonsVariant;
+export type FlightShortcut = 'boss' | 'trench' | 'fons';
 
 type CampaignRun = {
   onClear(): { next?: LevelId; promoted?: Rank; unlockedBulletHell: boolean };
@@ -258,7 +257,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
         if (shortcut === 'boss' || shortcut === 'trench') {
           flight.time = shortcut === 'trench' ? FLEET_TRENCH_AT : flight.stageDuration;
           flight.step(0);
-        } else flight.startFonsApproach(shortcut);
+        } else flight.startFonsApproach();
       }
     }
     screen = 'active';

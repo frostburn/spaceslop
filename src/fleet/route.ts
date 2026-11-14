@@ -85,7 +85,7 @@ export function carrierPose(carrier: Carrier, time: number) {
 
 type SaucerPose = Point & { pitch: number; bank: number; yaw: number; radius: number; depth: number };
 
-export function saucerMount(pose: SaucerPose, [x, y, z]: readonly [number, number, number]) {
+function saucerMount(pose: SaucerPose, [x, y, z]: readonly [number, number, number]) {
   // The saucer uses ZXY Euler angles.
   const bx = x * Math.cos(pose.bank) + z * Math.sin(pose.bank);
   const bz = z * Math.cos(pose.bank) - x * Math.sin(pose.bank);
