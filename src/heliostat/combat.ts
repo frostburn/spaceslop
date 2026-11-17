@@ -76,6 +76,12 @@ export function heliostatPlasmaPhase(time:number,side=0,pattern=0) {
   return {growth:smooth(age/HELIOSTAT_GROW),strength:smooth(age/HELIOSTAT_GROW)*(1-smooth((age-HELIOSTAT_CHANNEL)/HELIOSTAT_FADE)),
     hot:age>=HELIOSTAT_GROW&&age<HELIOSTAT_CHANNEL};
 }
+export type RegulatorState = { unstable: number; pattern: number; attackTime: number; active?: boolean };
+
+export function regulatorLensPower(side: number, windup: number, state?: RegulatorState) {
+  if (!state || state.active === false) return windup;
+  return Math.max(windup, heliostatPlasmaPhase(state.attackTime, side, state.pattern).strength);
+}
 export function heliostatLockTargets(player:{x:number;y:number},pattern=0){
   const x=Math.max(-2.5,Math.min(2.5,player.x)),y=Math.max(-5.9,Math.min(5.1,player.y));
   return [-1,1].map(side=>({x:x+side*(pattern===0 ? .75 : side===pattern ? .35 : 1.45),y:y+(pattern!==0&&side!==pattern ? .6 : 0)}));

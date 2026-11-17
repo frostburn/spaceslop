@@ -57,9 +57,9 @@ export const createLevel:LevelFactory=({plane,scene,signal})=>{
       }finally{foreground.background=background;renderer.autoClear=clear;}
     },
     contact:(x,d)=>contact(x,d),
-    update({flight,time,reveal,animationTime}){
+    update({flight,time,reveal,animationTime,victory}){
       progress=reveal;
-      scenery.update(time,reveal,animationTime,flight.cannonWindup,flight.bossRecoil/BOSS_RECOIL_TIME,flight.bossHealth>0,{unstable:flight.heliostatUnstableAge,pattern:flight.heliostatPattern,attackTime:flight.heliostatAttackTime,active:flight.heliostatTargets.length===2});
+      scenery.update(time,reveal,animationTime,flight.cannonWindup,flight.bossRecoil/BOSS_RECOIL_TIME,flight.bossHealth>0,{unstable:flight.heliostatUnstableAge,pattern:flight.heliostatPattern,attackTime:flight.heliostatAttackTime,active:flight.heliostatTargets.length===2},victory?.time);
       plasma.update(flight.heliostatAttackTime,animationTime,flight.heliostatTargets,(flight.phase==='boss'||flight.phase==='lost')&&flight.bossHealth>0,flight.heliostatPattern);
       for(const r of actors)r.root.visible=false;models.length=flight.enemies.length;models.fill(undefined);
       for(const r of crawlers)r.root.visible=false;

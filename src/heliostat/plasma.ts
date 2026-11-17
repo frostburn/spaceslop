@@ -1,5 +1,5 @@
 import * as T from 'three';
-import {heliostatPlasmaControls,heliostatPlasmaPhase,type PlasmaPoint} from './combat';
+import { heliostatFeedPoint, heliostatPlasmaControls, heliostatPlasmaPhase, regulatorLensPower, type PlasmaPoint, type RegulatorState } from './combat';
 
 /** One preallocated parametric tube is shared by every feed, core and halo. */
 export function createPlasmaResources(){
@@ -25,11 +25,12 @@ export function createPlasmaResources(){
           facing=abs(dot(normalize(mat3(modelMatrix)*radial),normalize(cameraPosition-world.xyz)));
           v=vec2(q,uv.y);gl_Position=projectionMatrix*viewMatrix*world;
           }`,
-        fragmentShader:`uniform float clock,strength,opacity,core;varying vec2 v;varying float facing;
+        fragmentShader:`uniform float clock,strength,opacity,core,growth;uniform bool extend;varying vec2 v;varying float facing;
           void main(){float flow=.55+.25*sin(v.x*87.-clock*19.+v.y*13.)+.2*sin(v.x*147.-clock*31.-v.y*23.);
           vec3 col=mix(vec3(2.1,.14,.008),vec3(2.8,.55,.03),clamp(flow,0.,1.));
           col=mix(col,vec3(3.8,2.4,.9),core);
-          float edge=mix(pow(clamp(facing,0.,1.),1.3),1.,core),tip=1.-smoothstep(.94,1.,v.x);
+          float edge=mix(pow(clamp(facing,0.,1.),1.3),1.,core);
+          float tip=1.-smoothstep(.94,1.,extend?v.x:v.x/max(growth,.0001));
           gl_FragColor=vec4(col,strength*opacity*edge*tip*(.55+.45*flow));
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
@@ -43,6 +44,41 @@ export function createPlasmaResources(){
   return{geometry,tube};
 }
 export type PlasmaResources=ReturnType<typeof createPlasmaResources>;
+
+// Brightness decays linearly. Squaring it for length makes the broken tip snap back first.
+export function remainingFeedPower(releaseTime = 0) {
+  return 1 - T.MathUtils.clamp(releaseTime / .68, 0, 1);
+}
+
+export function createSunspotFeeds(resources: PlasmaResources, intakes: readonly T.Object3D[]) {
+  const root = new T.Group();
+  root.name = 'sunspot-feed-ducts';
+  const feeds = ([-1, 1] as const).map((side, index) => {
+    const intake = intakes[index];
+    const tube = resources.tube([
+      heliostatFeedPoint(side),
+      { x: side * 2.5, y: 29, z: 6 },
+      { x: side * 3.7, y: 6, z: 2 },
+      intake.getWorldPosition(new T.Vector3()),
+    ], false, 3);
+    root.add(tube.root);
+    return { side, intake, tube };
+  });
+  return {
+    root,
+    update(clock: number, windup: number, state?: RegulatorState, releaseTime?: number) {
+      const remaining = remainingFeedPower(releaseTime);
+      root.visible = remaining > 0;
+      if (!root.visible) return;
+      for (const { side, intake, tube } of feeds) {
+        if (releaseTime === undefined) root.worldToLocal(intake.getWorldPosition(tube.uniforms.d.value));
+        const power = regulatorLensPower(side, windup, state);
+        const fault = side > 0 ? Math.min(1, (state?.unstable ?? 0) / .9) * (.08 + .05 * Math.sin(clock * 6.7)) : 0;
+        tube.pose(clock, (.65 + .35 * power) * (1 - fault) * remaining, remaining * remaining);
+      }
+    },
+  };
+}
 
 export function createAttackPlasma(resources:PlasmaResources){
   const root=new T.Group();root.name='regulator-channeled-plasma';

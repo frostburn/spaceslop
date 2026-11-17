@@ -13,10 +13,15 @@ export function boulevardScroll(time:number){
  return BOULEVARD_SPEED*(stage+coast-coast*coast/(2*BOULEVARD_APPROACH)+Math.max(0,time-BOULEVARD_DURATION-BOULEVARD_APPROACH)*.45);
 }
 export function boulevardFrame(reveal:number){return{pitch:BOULEVARD_PITCH*reveal,viewPitch:BOULEVARD_VIEW*(1-reveal),bank:0};}
+// Road-space distance to the cruiser, shared by the hull and its wake in the water.
+const pursuitStart = boulevardScroll(BOULEVARD_DURATION + BOULEVARD_APPROACH);
+const pursuitLead = 4.2 * Math.cos(BOULEVARD_PITCH) + 12 * Math.sin(BOULEVARD_PITCH);
+export function boulevardCruiserLead(scroll: number) {
+ return pursuitLead + Math.max(0, pursuitStart - scroll);
+}
 export function boulevardBossPoint(time:number,reveal:number){
- const pitch=BOULEVARD_PITCH*reveal,relative=4.2*Math.cos(BOULEVARD_PITCH)+12*Math.sin(BOULEVARD_PITCH),height=4.2*Math.sin(BOULEVARD_PITCH)-12*Math.cos(BOULEVARD_PITCH)+BOULEVARD_RISE;
- const final=BOULEVARD_SPEED*(BOULEVARD_DURATION+BOULEVARD_APPROACH/2),travel=Math.max(0,boulevardScroll(time)-final);
- const y=final+relative+travel-boulevardScroll(time);
+ const pitch=BOULEVARD_PITCH*reveal,height=4.2*Math.sin(BOULEVARD_PITCH)-12*Math.cos(BOULEVARD_PITCH)+BOULEVARD_RISE;
+ const y=boulevardCruiserLead(boulevardScroll(time));
  return{x:0,y:y*Math.cos(pitch)+(height-BOULEVARD_RISE*reveal)*Math.sin(pitch),z:-y*Math.sin(pitch)+(height-BOULEVARD_RISE*reveal)*Math.cos(pitch)};
 }
 export function boulevardSection(time:number){return time<30?'Palm approach':time<43?'Fountain court':time<65?'Entertainment district':time<100?'Skyline express':time<107?'Sunset plaza approach':'Pursuit cruiser';}

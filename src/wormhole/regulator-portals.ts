@@ -1,7 +1,6 @@
 import * as T from 'three';
-import type { RegulatorState } from '../heliostat/boss';
-import { heliostatPlasmaPhase } from '../heliostat/combat';
-import type { PlasmaResources } from '../heliostat/plasma';
+import { regulatorLensPower, type RegulatorState } from '../heliostat/combat';
+import { remainingFeedPower, type PlasmaResources } from '../heliostat/plasma';
 import { HEIGHT } from '../playfield';
 
 const wallDepth = -134;
@@ -70,8 +69,9 @@ export function createRegulatorPortalFeeds(resources: PlasmaResources, intakes: 
   root.visible = false;
   return {
     root,
-    update(clock: number, distance: number, opening: number, windup: number, state: RegulatorState) {
-      root.visible = opening > .002;
+    update(clock: number, distance: number, opening: number, windup: number, state: RegulatorState, releaseTime?: number) {
+      const remaining = remainingFeedPower(releaseTime);
+      root.visible = opening > .002 && remaining > 0;
       if (!root.visible) return;
       root.updateWorldMatrix(true, false);
       const scale = (1 - wallDepth / distance) * halfHeight;
@@ -80,13 +80,13 @@ export function createRegulatorPortalFeeds(resources: PlasmaResources, intakes: 
         const portal = regulatorPortal(side, clock);
         // Unproject the opening so the stream stays attached as it moves.
         source.set(portal.x * scale, portal.y * scale, wallDepth);
-        root.worldToLocal(intake.getWorldPosition(destination));
+        if (releaseTime === undefined) root.worldToLocal(intake.getWorldPosition(destination));
         bend.set(source.x + side * .9, source.y - 6.2, T.MathUtils.lerp(source.z, destination.z, .28));
         approach.set(destination.x + side * 3.1, destination.y + 4.3, T.MathUtils.lerp(source.z, destination.z, .79));
         tube.setPath(path);
-        const channel = state.active ? heliostatPlasmaPhase(state.attackTime, side, state.pattern).strength : 0;
+        const power = regulatorLensPower(side, windup, state);
         const fault = side > 0 ? Math.min(1, state.unstable / .9) * (.14 + .10 * Math.sin(clock * 6.7)) : 0;
-        tube.pose(clock, opening * (.56 + .32 * Math.max(channel, windup)) * (1 - fault));
+        tube.pose(clock, opening * (.56 + .32 * power) * (1 - fault) * remaining, remaining * remaining);
       }
     },
   };

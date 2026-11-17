@@ -2,14 +2,59 @@ import assert from 'node:assert/strict';import{test,after}from'node:test';import
 const server=await createServer({root:new URL('..',import.meta.url).pathname,configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true,entries:[]},appType:'custom'});after(()=>server.close());
 const{createBoulevardScenery}=await server.ssrLoadModule('/src/boulevard-scenery.ts'),weather=await server.ssrLoadModule('/src/boulevard-weather.ts'),{BOULEVARD_DECK}=await server.ssrLoadModule('/src/boulevard.ts');
 
-test('road depressions hold level water below actual drainage points and remain continuous through pursuit recycling',()=>{
+test('road depressions hold level water below actual drainage points before the flooded pursuit',()=>{
  const scene=createBoulevardScenery(),{road}=scene;assert(road.sites.length>=10&&road.sites.length<32);let wet=0,dry=0;
- for(let y=0;y<84;y+=.4)for(let x=-3.5;x<3.5;x+=.3){const h=road.field.sample(x,y);assert(h>=-.04&&h<.06);if(h<weather.ROAD_WATER)wet++;else dry++;assert(Math.abs(h-road.field.sample(x,y+84))<1e-12);}
+ for(let y=0;y<84;y+=.4)for(let x=-3.5;x<3.5;x+=.3){const h=road.field.sample(x,y);assert(h>=-.04&&h<.06);if(h<weather.ROAD_WATER)wet++;else dry++;assert(Math.abs(h-road.field.sample(x,y-weather.ROAD_PERIOD))<1e-12);}
  assert(wet/(wet+dry)>.35&&wet/(wet+dry)<.55,'puddles should cover a substantial, broken part of the road');for(const site of road.sites){assert(road.field.sample(site.x,site.y)<weather.ROAD_WATER-.015);assert(site.z>BOULEVARD_DECK+.4);}
  assert.equal(road.water.position.z,0);assert.equal(road.root.position.z,BOULEVARD_DECK+weather.ROAD_WATER);assert(road.ground.geometry.attributes.position.count>5000);
  // Reflector clones shader uniforms: moving ripples must retain the live source array.
  assert.equal(road.water.material.uniforms.impacts.value,road.rain.impacts);assert.equal(road.water.material.uniforms.relief.value,road.field.texture);
  scene.dispose();
+});
+
+test('the road descends continuously into curb-to-curb water that lasts throughout the pursuit', async () => {
+ const { boulevardScroll, BOULEVARD_DURATION } = await server.ssrLoadModule('/src/boulevard.ts');
+ const road = weather.roadRelief([]);
+ try {
+  const end = boulevardScroll(BOULEVARD_DURATION);
+  // Compare the same relief texel a few blocks apart to measure just the grade.
+  const grade = y => road.sample(0,y-weather.ROAD_PERIOD)-road.sample(0,y);
+  let previous = 0;
+  for(let y=end-28; y<=end; y+=.25){
+   const drop=grade(y);
+   assert(drop>=previous-1e-9 && drop-previous<.003, 'a ledge appeared on the approach');
+   previous=drop;
+  }
+  assert(previous>.06);
+  for(let y=end; y<end+4*weather.ROAD_PERIOD; y+=.6){
+   for(let x=-3.6; x<=3.6; x+=.18){
+    assert(road.sample(x,y)<weather.ROAD_WATER-.018, 'dry patch in a recycled boss block');
+   }
+  }
+ } finally { road.texture.dispose(); }
+});
+
+test('the wake stays under the cruiser as the street recycles and settles after victory', async () => {
+ const { boulevardBossPoint } = await server.ssrLoadModule('/src/boulevard.ts');
+ const scene = createBoulevardScenery();
+ const uniforms = scene.road.water.material.uniforms;
+ try {
+  for (const [time, reveal] of [[28,0], [104,.6], [107,1], [240,1], [510,1]]) {
+   scene.update(time,reveal,time);
+   const hull = boulevardBossPoint(time,reveal);
+   const street = scene.world.worldToLocal(new T.Vector3(hull.x,hull.y,hull.z));
+   assert(Math.abs(uniforms.wake.value.x-street.y)<1e-8);
+   assert.equal(uniforms.wake.value.y,reveal);
+  }
+  scene.update(510,1,510.6,.6);
+  const paused = uniforms.wake.value.clone();
+  assert(paused.y>0 && paused.y<1);
+  scene.update(510,1,510.6,.6);
+  assert(uniforms.wake.value.equals(paused));
+  assert.equal(uniforms.clock.value,510.6);
+  scene.update(510,1,512,2);
+  assert.equal(uniforms.wake.value.y,0);
+ } finally { scene.dispose(); }
 });
 
 test('drips hit their puddles under gravity, share the paused clock and reuse warmed instance storage',()=>{
