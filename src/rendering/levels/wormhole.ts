@@ -184,9 +184,9 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
           );
         }
       }
-      const feed = theme === 'heliostat' ? incomingPortal * fonsEase(.02, .44, frame.arrival)
-        : retreating?.model === bosses.roster.heliostat.model ? outgoingPortal * (1 - fonsEase(0, .76, age)) : 0;
-      bosses.updateEffects(levelFrame, feed);
+      const releasingFeeds = retreating === bosses.roster.heliostat;
+      const feed = releasingFeeds ? outgoingPortal : incomingPortal * fonsEase(.02, .44, frame.arrival);
+      bosses.updateEffects(levelFrame, feed, releasingFeeds ? age : undefined);
     },
   };
 };

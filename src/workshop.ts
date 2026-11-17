@@ -215,9 +215,9 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const studyMine=createBoulevardMine(boulevard.materials),studyInterceptor=createBoulevardInterceptor(boulevard.materials);
   const studyWaterfall=boulevard.waterfalls.create(2,1);studyWaterfall.position.set(0,0,0);studyWaterfall.rotation.x=-Math.PI/2;
   const helioMaterials=createHeliostatMaterials(),helioGuardAssets=createGuardAssets(helioMaterials),helioGuard=createHeliostatGuard(helioGuardAssets),helioGuardPose=actorPose(helioGuard);
-  const helioDrone=createHeliostatDrone(helioMaterials),helioBoss=createHeliostatRegulator(helioMaterials);helioBoss.root.rotation.x=-HELIOSTAT_PITCH;helioBoss.ducts.visible=false;
+  const helioDrone=createHeliostatDrone(helioMaterials),helioBoss=createHeliostatRegulator(helioMaterials);helioBoss.root.rotation.x=-HELIOSTAT_PITCH;
   const helioCrawler=createCrawlerRig(createCrawlerAssets(helioMaterials));
-  const helioUnstableBoss=createHeliostatRegulator(helioMaterials);helioUnstableBoss.root.rotation.x=-HELIOSTAT_PITCH;helioUnstableBoss.ducts.visible=false;
+  const helioUnstableBoss=createHeliostatRegulator(helioMaterials);helioUnstableBoss.root.rotation.x=-HELIOSTAT_PITCH;
   window.addEventListener('pagehide',()=>helioMaterials.releaseTextures(),{once:true});
   void loadEncounterTexture('heliostatGuard',helioGuardAssets.setAtlas);
   const helioArt:{heliostatMetal?:T.Texture;heliostatCeramic?:T.Texture}={};

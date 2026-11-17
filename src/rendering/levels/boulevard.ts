@@ -30,8 +30,8 @@ export const createLevel:LevelFactory=({plane,signal})=>{
   prepare(){scenery.prime(true);carCharges[0](1);haulerCharges[0](1);cruiserCharges.forEach(charge=>charge(1));for(const m of mines)m.prime(true);for(const r of actors)r.traverse(o=>{if(o instanceof T.Mesh)o.frustumCulled=false;});},
   afterWarmup(){scenery.prime(false);carCharges[0](0);haulerCharges[0](0);cruiserCharges.forEach(charge=>charge(0));for(const m of mines)m.prime(false);for(const r of actors)r.traverse(o=>{if(o instanceof T.Mesh)o.frustumCulled=true;});},
   present:glow.present,dispose(){glow.dispose();scenery.dispose();},contact:(x,d)=>contact(x,d),
-  update({flight,time,reveal,animationTime}){
-   scenery.update(time,reveal,animationTime);
+  update({flight,time,reveal,animationTime,victory}){
+   scenery.update(time,reveal,animationTime,victory?.time);
    const p=boulevardBossPoint(time,reveal);boss.root.position.set(p.x,p.y,p.z);boss.root.rotation.x=-boulevardFrame(reveal).pitch;
    const challenge=flight.isBoulevardChallenge,windup=flight.cannonWindup;
    boss.root.visible=flight.bossHealth>0;boss.pose(challenge?time:animationTime,windup,flight.bossRecoil/BOSS_RECOIL_TIME);

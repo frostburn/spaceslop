@@ -1,14 +1,10 @@
 import * as T from 'three';
 import { heliostatBatch } from './geometry';
 import type { HeliostatMaterials } from './materials';
-import { HELIOSTAT_PITCH,HELIOSTAT_EMITTER_X,heliostatFeedPoint,heliostatPlasmaPhase } from './combat';
-import {createPlasmaResources,type PlasmaResources} from './plasma';
+import { HELIOSTAT_PITCH, HELIOSTAT_EMITTER_X, regulatorLensPower, type RegulatorState } from './combat';
 import {starConduit} from './thermal';
 import {createStellarDebris} from './stellar-debris';
-export type RegulatorState={unstable:number;pattern:number;attackTime:number;active?:boolean};
-
-/** The regulator hangs in front of the star; two curved magnetic ducts feed it. */
-export function createHeliostatRegulator(m:HeliostatMaterials,resources:PlasmaResources=createPlasmaResources(),feedFromStar=true) {
+export function createHeliostatRegulator(m:HeliostatMaterials) {
   const root=new T.Group();root.name='sunspot-regulator';const b=heliostatBatch(root);
   const origin=[0,-.8*Math.sin(HELIOSTAT_PITCH),.8*Math.cos(HELIOSTAT_PITCH)] as const;
   b.box([6.1,1.1,1.15],[0,0,0],m.dark,.22);
@@ -59,19 +55,14 @@ export function createHeliostatRegulator(m:HeliostatMaterials,resources:PlasmaRe
   rotor.children.forEach(child=>{if(child instanceof T.Mesh)child.geometry.translate(0,0,-origin[2]);});
   // The visible emitter and laser anchor share the simulation's muzzle depth.
   for(const label of['L','C','R']) { const a=new T.Object3D();a.name='laser_contact_'+label;a.position.set(...origin);root.add(a); }
-  const ducts=new T.Group();ducts.name='sunspot-feed-ducts';root.add(ducts);
-  const feeds=feedFromStar?[-1,1].map(side=>resources.tube([heliostatFeedPoint(side),{x:side*2.5,y:29,z:6},{x:side*3.7,y:6,z:2},{x:side*HELIOSTAT_EMITTER_X,y:origin[1],z:origin[2]}],false,3)):[];
-  feeds.forEach(feed=>ducts.add(feed.root));
   const glowLights=[-1,1].map(side=>{const light=new T.PointLight(0xff8c29,12,14,2);light.position.set(side*HELIOSTAT_EMITTER_X,origin[1]-.35,origin[2]+.15);root.add(light);return light;});
   const charge=new T.MeshBasicMaterial({color:new T.Color(2.8,1,.18)}),lights=new T.Group();const l=heliostatBatch(lights);
   for(const side of[-1,1])l.rod([side*HELIOSTAT_EMITTER_X,origin[1]-.025,origin[2]],[side*HELIOSTAT_EMITTER_X,origin[1]+.025,origin[2]],.24,charge,16);
   l.finish();root.add(lights);
-  return {root,ducts,rotor,gyros,debris,intakes,pose(time:number,windup:number,recoil:number,state?:RegulatorState) {
+  return {root,rotor,gyros,debris,intakes,pose(time:number,windup:number,recoil:number,state?:RegulatorState) {
     const instability=Math.min(1,(state?.unstable??0)/.9);
     rotor.rotation.y=time*.23;glowLights.forEach((light,i)=>{
-      const channel=state&&state.active!==false?heliostatPlasmaPhase(state.attackTime,i?1:-1,state.pattern).strength:0;
-      feeds[i]?.pose(time,(.65+Math.max(windup,channel)*.35)*(i?1-instability*(.08+.05*Math.sin(time*6.7)):1));
-      light.intensity=12+Math.max(windup,channel)*45;
+      light.intensity=12+regulatorLensPower(i?1:-1,windup,state)*45;
     });
     gyros.forEach((g,i)=>{g.rotation.y=time*(i?.22:-.19);g.rotation.x=i?instability*(.1*Math.sin(time*5.3)+.045*Math.sin(time*8.1)):0;g.rotation.z=i?instability*.07*Math.sin(time*4.1+.6):0;});
     fault.visible=instability>0;fault.material.opacity=instability*(.58+.15*Math.sin(time*4.7));

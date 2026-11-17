@@ -1,8 +1,11 @@
 import * as T from 'three';
-import {BOULEVARD_DECK} from './boulevard';
+import {BOULEVARD_DECK, BOULEVARD_DURATION, boulevardScroll} from './boulevard';
 import {FOUNTAIN_Y,CROSSING_WIDTH,CROSSING_REACH,LAMP_OFFSETS,LAMP_REACH} from './boulevard-layout';
 export const ROAD_PERIOD=84,ROAD_WATER=.003,ROAD_LOW=-.04,ROAD_RANGE=.10;
 const W=128,H=512,SPAN=7.2,GRAVITY=10;
+// The last block slopes below the waterline before the camera turns toward the cruiser.
+const floodEnd = boulevardScroll(BOULEVARD_DURATION), floodStart = floodEnd - 18;
+const floodDepth = .078;
 export type DrainSite={x:number;y:number;z:number;bay:number;period:number;phase:number};
 export function drainSite(x:number,y:number,z:number,bay:number,seed:number):DrainSite{return{x,y,z,bay,period:5.2+(seed%7)*.39,phase:(seed*.873)%5.1};}
 export function drainOffset(site:DrainSite,scroll:number){return site.bay>=16?Math.max(0,Math.floor((scroll-(site.bay*14-14)+25)/84))*84:0;}
@@ -35,7 +38,8 @@ export function roadRelief(sites:readonly DrainSite[]){
  function sample(x:number,y:number){
   const sx=T.MathUtils.clamp((x/SPAN+.5)*W-.5,0,W-1),sy=y/ROAD_PERIOD*H-.5,ix=Math.floor(sx),iy=Math.floor(sy),fx=sx-ix,fy=sy-iy;
   const at=(a:number,b:number)=>ROAD_LOW+data[(((b%H+H)%H)*W+Math.min(W-1,a))*4]/255*ROAD_RANGE;
-  return T.MathUtils.lerp(T.MathUtils.lerp(at(ix,iy),at(ix+1,iy),fx),T.MathUtils.lerp(at(ix,iy+1),at(ix+1,iy+1),fx),fy);
+  const pavement = T.MathUtils.lerp(T.MathUtils.lerp(at(ix,iy),at(ix+1,iy),fx),T.MathUtils.lerp(at(ix,iy+1),at(ix+1,iy+1),fx),fy);
+  return pavement - floodDepth * T.MathUtils.smoothstep(y, floodStart, floodEnd);
  }
  return{texture,sample};
 }
@@ -52,7 +56,8 @@ export function createBoulevardDrips(sites:readonly DrainSite[]){
  }};
 }
 export const roadHeightGLSL=`uniform sampler2D relief;const float WATER_LEVEL=${ROAD_WATER.toFixed(4)};
- float roadHeight(vec2 p){return ${ROAD_LOW.toFixed(3)}+texture2D(relief,vec2(p.x/7.2+.5,p.y/${ROAD_PERIOD.toFixed(1)})).r*${ROAD_RANGE.toFixed(3)};}
+ float roadFlood(float y){return smoothstep(${floodStart.toFixed(2)},${floodEnd.toFixed(2)},y);}
+ float roadHeight(vec2 p){return ${ROAD_LOW.toFixed(3)}+texture2D(relief,vec2(p.x/7.2+.5,p.y/${ROAD_PERIOD.toFixed(1)})).r*${ROAD_RANGE.toFixed(3)}-${floodDepth.toFixed(3)}*roadFlood(p.y);}
  float roadFootprint(vec2 p){return max(1.-step(3.6,abs(p.x)),(1.-step(${(CROSSING_WIDTH/2).toFixed(2)},abs(p.y-${FOUNTAIN_Y.toFixed(1)})))*(1.-step(${CROSSING_REACH.toFixed(1)},abs(p.x))));}
  vec3 roadPaint(vec2 p){float tick=1.-step(.24,mod(p.y,3.));float center=(1.-smoothstep(.012,.028,abs(p.x)))*tick;float edge=(1.-smoothstep(.025,.045,abs(abs(p.x)-3.35)))*tick;float crossing=1.-smoothstep(3.2,3.6,abs(p.y-${FOUNTAIN_Y.toFixed(1)}));
  float zebraY=(1.-step(.34,abs(abs(p.y-${FOUNTAIN_Y.toFixed(1)})-3.7)))*(1.-step(3.1,abs(p.x)))*step(.25,mod(p.x+.1,.55));

@@ -90,7 +90,7 @@ export function createWormholeBosses(plane: T.Group, signal: AbortSignal) {
   const heliostatMaterials = createHeliostatMaterials();
   const heliostatArt: HeliostatArt = {};
   const plasmaResources = createPlasmaResources();
-  const regulator = createHeliostatRegulator(heliostatMaterials, plasmaResources, false);
+  const regulator = createHeliostatRegulator(heliostatMaterials);
   const portalFeeds = createRegulatorPortalFeeds(plasmaResources, regulator.intakes);
   const plasma = createAttackPlasma(plasmaResources);
   regulator.root.position.set(0, BOSS_Y, BOSS_DEPTH);
@@ -242,11 +242,11 @@ export function createWormholeBosses(plane: T.Group, signal: AbortSignal) {
       heliostatArt.heliostatMetal = metal;
       heliostatMaterials.setArt(heliostatArt, true);
     },
-    updateEffects({ flight, time, animationTime, distance }: LevelFrame, portalFeed: number) {
+    updateEffects({ flight, time, animationTime, distance }: LevelFrame, portalFeed: number, releaseTime?: number) {
       const battle = flight.phase === 'boss' || flight.phase === 'lost';
       plasma.update(flight.heliostatAttackTime, animationTime, flight.heliostatTargets, battle && flight.encounterLevel === 'heliostat', flight.heliostatPattern);
       if (portalFeed > .002)
-        portalFeeds.update(time, distance, portalFeed, flight.cannonWindup, regulatorState(flight));
+        portalFeeds.update(time, distance, portalFeed, flight.cannonWindup, regulatorState(flight), releaseTime);
       else portalFeeds.root.visible = false;
       groundskeeperEffects.root.visible = battle && flight.encounterLevel === 'preserve';
       if (groundskeeperEffects.root.visible)

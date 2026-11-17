@@ -106,7 +106,7 @@ for(const weapon of['homing','cannon','laser','omega','sentry','towline','pulse'
   assert(f.bossHealth<before,weapon+' missed the boss');
 });
 
-test('the physical boss, its laser contact and star-feed ducts remain continuous through the swing',async()=>{
+test('the physical boss and its laser contact remain continuous through the swing',async()=>{
   const plane=new T.Group(),scene=new T.Scene();scene.add(plane);const level=createLevel({plane,scene,signal:new AbortController().signal});plane.add(level.root);await level.ready;
   const f=new Flight('sentry',[],'vex','heliostat');let previous;
   for(let i=0;i<=100;i++){
@@ -120,8 +120,59 @@ test('the physical boss, its laser contact and star-feed ducts remain continuous
   const ray=new T.Raycaster(new T.Vector3(anchor.x,anchor.y-3,anchor.z).applyMatrix4(level.boss.matrixWorld),new T.Vector3(0,1,0).transformDirection(level.boss.matrixWorld));
   const hit=ray.intersectObject(level.boss,true).find(h=>!h.object.material.transparent);
   assert(hit&&Math.abs(hit.distance-3)<1e-6,'laser anchor floats off the visible aperture');
-  assert(level.boss.getObjectByName('sunspot-feed-ducts'));
   level.dispose();
+});
+
+test('sunspot feeds stay on the star as the wreck falls, then reconnect on the next flight', async () => {
+  const { createBossDefeat } = await server.ssrLoadModule('/src/rendering/victory.ts');
+  const scene = new T.Scene(), plane = new T.Group();
+  scene.add(plane);
+  const level = createLevel({ plane, scene, signal: new AbortController().signal });
+  plane.add(level.root);
+  try {
+    await level.ready;
+    const defeat = createBossDefeat(level.boss, plane, 'heliostat');
+    const ducts = level.root.getObjectByName('sunspot-feed-ducts');
+    const spots = level.root.getObjectsByProperty('name', 'plasma-source-sunspot');
+    const feeds = ducts.children.map((tube, i) => ({
+      mesh: tube.children[0], source: spots[i],
+      intake: level.boss.getObjectByName(i ? 'right-plasma-intake' : 'left-plasma-intake'),
+    }));
+    assert.equal(feeds.length, 2);
+    const flight = new Flight('sentry', [], 'vex', 'heliostat');
+    flight.phase = 'boss';
+    flight.time = 2.4;
+    const frame = { flight, time: 110.4, reveal: 1, animationTime: 110.4 };
+    level.update(frame);
+    function checkSourcesAndIntakes(attached) {
+      for (const { mesh, source, intake } of feeds) {
+        const u = mesh.material.uniforms;
+        assert(mesh.localToWorld(u.a.value.clone()).distanceTo(source.getWorldPosition(new T.Vector3())) < 1e-8);
+        const curve = new T.CubicBezierCurve3(u.a.value, u.b.value, u.c.value, u.d.value);
+        const tip = mesh.localToWorld(curve.getPoint(u.growth.value));
+        const gap = tip.distanceTo(intake.getWorldPosition(new T.Vector3()));
+        assert(attached ? gap < 1e-8 : gap > 1, 'released tip must clear the falling lens');
+      }
+    }
+    checkSourcesAndIntakes(true);
+    flight.damageBoss(flight.bossHealth);
+    assert.equal(flight.phase, 'won');
+    let previous = 1;
+    for (const age of [.12, .3, .52]) {
+      level.update({ ...frame, animationTime: frame.time + age, victory: { time: age } });
+      defeat.pose(age, () => {});
+      checkSourcesAndIntakes(false);
+      const length = feeds[0].mesh.material.uniforms.growth.value;
+      assert(ducts.visible && length > 0 && length < previous);
+      previous = length;
+    }
+    level.update({ ...frame, victory: { time: .9 } });
+    assert(!ducts.visible);
+    defeat.reset();
+    level.update({ ...frame, flight: new Flight('sentry', [], 'vex', 'heliostat'), time: 0, reveal: 0, animationTime: 0 });
+    assert(ducts.visible);
+    checkSourcesAndIntakes(true);
+  } finally { level.dispose(); }
 });
 
 test('the procedural regulator draws plasma only during the challenge channel', async () => {
@@ -199,7 +250,7 @@ test('sunspot feed cores stay visible through the actual distant plant geometry'
   const f=new Flight('sentry',[],'vex','heliostat');f.phase='boss';f.time=2.8;f.markers=[{x:-.75,y:-5.3},{x:.75,y:-5.3}];
   level.update({flight:f,time:110.8,reveal:1,animationTime:110.8});scene.updateMatrixWorld(true);
   const opaque=[];level.root.traverseVisible(o=>{if(o.isMesh&&!o.material.transparent)opaque.push(o);});
-  for(const feed of level.boss.getObjectByName('sunspot-feed-ducts').children){
+  for(const feed of level.root.getObjectByName('sunspot-feed-ducts').children){
     const mesh=feed.children[0],u=mesh.material.uniforms,curve=new T.CubicBezierCurve3(u.a.value,u.b.value,u.c.value,u.d.value);
     for(const t of[.2,.4,.6,.8]){
       const p=curve.getPoint(t).applyMatrix4(mesh.matrixWorld),camera=new T.Vector3(0,0,22),delta=p.clone().sub(camera),distance=delta.length();

@@ -58,6 +58,19 @@ test('the far-wall feeds stay registered to the portal and its matching moving i
         assert(end.distanceTo(intakes[index].getWorldPosition(new Vector3())) < 1e-9);
       }
     }
+    const channels = feeds.root.children.map(feed => feed.children[0].material.uniforms);
+    const tips = channels.map(u => u.d.value.clone());
+    regulator.position.z -= 60;
+    feeds.update(7.35, BOSS_CAMERA_DISTANCE, .9, 0, state, .25);
+    for (const [i, u] of channels.entries()) {
+      assert(feeds.root.visible && u.growth.value > 0 && u.growth.value < 1);
+      assert(u.d.value.equals(tips[i]), 'the released stream followed the retreating hull');
+    }
+    feeds.update(8.1, BOSS_CAMERA_DISTANCE, .3, 0, state, 1);
+    assert(!feeds.root.visible, 'the streams should be gone while the portals are still open');
+    feeds.update(9, BOSS_CAMERA_DISTANCE, 1, 0, state);
+    assert(feeds.root.visible);
+    assert(channels.every((u, i) => u.growth.value === 1 && u.d.value.equals(intakes[i].getWorldPosition(new Vector3()))));
   } finally {
     resources.geometry.dispose();
     feeds.root.traverse(object => object.material?.dispose());
