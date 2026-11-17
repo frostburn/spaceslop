@@ -124,6 +124,36 @@ test('the physical boss, its laser contact and star-feed ducts remain continuous
   level.dispose();
 });
 
+test('the procedural regulator draws plasma only during the challenge channel', async () => {
+  const level = createLevel({ plane: new T.Group(), scene: new T.Scene(), signal: new AbortController().signal });
+  try {
+    await level.ready;
+    const flight = new Flight('sentry', [], 'vex', 'heliostat', () => .5, 'bullet-hell');
+    flight.phase = 'boss';
+    flight.invulnerable = flight.cooldown = flight.droneCooldown = 1e5;
+    const plasma = level.root.getObjectByName('regulator-channeled-plasma');
+    function update(at) {
+      while (flight.time < at) flight.step(STEP);
+      const time = flight.stageDuration + flight.transitionDuration + flight.bossTime;
+      level.update({ flight, time, reveal: 1, animationTime: time });
+    }
+    update(3);
+    assert(flight.threats.some(shot => shot.pattern));
+    assert(!plasma.visible);
+    update(6.4);
+    assert.equal(flight.heliostatTargets.length, 2);
+    assert(!plasma.visible);
+    update(7.7);
+    assert(plasma.visible);
+    assert(plasma.children.every(channel => channel.visible));
+    flight.pulse();
+    update(7.8);
+    assert(!plasma.visible);
+  } finally {
+    level.dispose();
+  }
+});
+
 test('fallback level composes background safely after a failed foreground render',async()=>{
   const scene=new T.Scene(),level=createLevel({plane:new T.Group(),scene,signal:new AbortController().signal});await level.ready;
   const background=new T.Color(0x123456);scene.background=background;let calls=0;

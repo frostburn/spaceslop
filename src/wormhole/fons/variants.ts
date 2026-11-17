@@ -1,5 +1,4 @@
-export const fonsVariants = ['normal', 'rex', 'invictus'] as const;
-export type FonsVariant = typeof fonsVariants[number];
+export type FonsVariant = 'normal' | 'rex' | 'invictus';
 
 export const fonsNames: Record<FonsVariant, string> = {
   normal: 'Fons Inversus',

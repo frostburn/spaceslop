@@ -3,6 +3,8 @@ import { addRoots, genericBoss, type LevelFactory } from '../level';
 import { createBossLaserContact } from '../../laser-contact';
 import { loadEncounterTexture } from '../../encounter-texture';
 import { BOSS_RECOIL_TIME } from '../../encounters';
+import { CHALLENGE_ANT_PACE, CHALLENGE_ANT_WINDUP } from '../../broodlock/challenge';
+import { patternBurstCharge } from '../../challenge-patterns';
 import { createHiveScenery } from '../../hive-scenery';
 import { createAntRig, createHiveGuardian } from '../../ant-rigs';
 import { setAntChitinTexture, setFungusTexture } from '../../hive-materials';
@@ -36,6 +38,7 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
       hive.update(flight.hiveProgress, distance);
       models.length = flight.enemies.length;
       models.fill(undefined);
+      const pace = flight.isBroodlockChallenge ? CHALLENGE_ANT_PACE : 1;
       for (const [index, ant] of ants.entries()) {
         const enemy = flight.enemies[index];
         ant.root.visible = Boolean(enemy?.ant);
@@ -45,8 +48,9 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
         ant.root.scale.setScalar(antScales[enemy.ant ?? 'worker']);
         ant.root.rotation.z = Math.PI + (enemy.heading ?? 0.05 * Math.cos(enemy.age * 1.55));
         ant.setKind(enemy.ant === 'soldier' ? 'soldier' : 'worker');
-        const windup = enemy.ant === 'soldier' ? T.MathUtils.clamp((enemy.age - enemy.fire + 0.55) / 0.55, 0, 1) : 0;
-        ant.pose(enemy.age, windup);
+        const windup = flight.isBroodlockChallenge ? patternBurstCharge(enemy, CHALLENGE_ANT_WINDUP)
+          : enemy.ant === 'soldier' ? T.MathUtils.clamp(1 + (enemy.age - enemy.fire) / .55, 0, 1) : 0;
+        ant.pose(enemy.age * pace, windup);
         models[index] = ant.root;
       }
     }

@@ -224,3 +224,15 @@ test('banking rolls a hunter around its course without tipping its nose off the 
     assert(forward.distanceTo(new T.Vector3(Math.sin(heading),-Math.cos(heading),0))<1e-6);
   }
 });
+
+test('Bullet Hell ice shards leave the posed Leviathan mouth', async () => {
+  const { leviathanMuzzle } = await server.ssrLoadModule('/src/marine.ts');
+  const rig = createLeviathan();
+  const glow = rig.root.getObjectByName('mouth-charge');
+  const jaw = rig.root.getObjectByName('lower-jaw');
+  for (const time of [1.22, 2.3, 3.96, 6.42, 11.62]) {
+    rig.pose(1, 1, 0, 0, 1, time, true);
+    assert(glow.getWorldPosition(new T.Vector3()).distanceTo(leviathanMuzzle(time)) < 1e-8);
+    assert(jaw.rotation.x < -.4);
+  }
+});

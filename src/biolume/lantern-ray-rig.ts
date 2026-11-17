@@ -35,8 +35,8 @@ export function createLanternRay(){
  const mesh=new T.Mesh(geometry,material);mesh.name='lantern-ray-raster';root.add(mesh);
  const anchors=[-1,1].map(side=>{const a=new T.Object3D();a.name=side<0?'laser_contact_L':'laser_contact_R';root.add(a);return a;});
  let last=NaN,lastDead=false;const point={x:0,y:0,z:0};
- function pose(time:number,dead=false){
-  const arrival=rayArrival(time),r=rayRoot(time,arrival),signal=raySignal(time);root.position.set(r.x,r.y,dead?-.25:0);root.rotation.z=r.angle;root.scale.set(r.sx,r.sy,1);
+ function pose(time:number,dead=false,signal=raySignal(time)){
+  const arrival=rayArrival(time),r=rayRoot(time,arrival);root.position.set(r.x,r.y,dead?-.25:0);root.rotation.z=r.angle;root.scale.set(r.sx,r.sy,1);
   glow.clock.value=time;glow.fan.value=signal.fan;glow.seeker.value=signal.seeker;glow.side.value=signal.side;glow.life.value=dead?.12:1;
   if(time===last&&dead===lastDead)return;last=time;lastDead=dead;
   const wingSpread=dead?arrival*.784:arrival;

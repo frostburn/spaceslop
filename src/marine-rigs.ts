@@ -5,7 +5,7 @@ import { sealMarineTube } from './marine-geometry';
 import { marineJawGeometry, marineEyeFrame, JAW_HINGE_Y, JAW_HINGE_Z } from './marine-jaw';
 import { part, pivot } from './rig-geometry';
 import { iceEnvironment } from './ice-surfaces';
-import { leviathanMotion, type MarineKind } from './marine';
+import { leviathanMotion, leviathanRig, type MarineKind } from './marine';
 
 type Animal = MarineKind | 'mosasaur';
 type SkinPattern = 'plain' | 'stripes' | 'spots';
@@ -143,7 +143,7 @@ function animal(kind:Animal) {
   const mouth=large?createMarineMouth():undefined;
   const bones=Array.from({length:large?7:6},()=>new T.Bone());
   bones[0].add(bones[1],bones[3]);bones[1].position.y=-.7;bones[1].add(bones[2]);bones[2].position.y=-.9;
-  bones[3].position.y=.5;bones[3].add(bones[4]);bones[4].position.y=.65;bones[4].add(bones[5]);bones[5].position.y=.65;
+  bones[3].position.y=leviathanRig.headY;bones[3].add(bones[4]);bones[4].position.y=.65;bones[4].add(bones[5]);bones[5].position.y=.65;
   if(large){bones[6].name='lower-jaw';bones[6].position.set(0,JAW_HINGE_Y-.5,JAW_HINGE_Z);bones[3].add(bones[6]);}
   const pattern: SkinPattern = kind==='plesiosaur'?'stripes':kind==='mosasaur'?'spots':'plain';
   const body=new T.SkinnedMesh(kind==='mosasaur'?jawParts!.exterior:bodyGeometry(kind),skin(kind==='mosasaur'?1:0,pattern));body.name=`${kind}-body`;body.add(bones[0]);body.bind(new T.Skeleton(bones));body.frustumCulled=false;root.add(body);
@@ -184,7 +184,7 @@ function animal(kind:Animal) {
     else nostril.scale.set(large?.028:.012,large?.055:.022,.008);
   }
   const glowMaterial=new T.MeshBasicMaterial({color:0xffb65f,transparent:true,opacity:0,depthWrite:false,blending:T.AdditiveBlending});
-  const glow=part(headParent,orb,glowMaterial,0,end-.12-offset,-.03);glow.scale.setScalar(large?.10:.065);glow.name='mouth-charge';
+  const glow=part(headParent,orb,glowMaterial,0,(large?leviathanRig.mouthY:end-.12)-offset,leviathanRig.mouthZ);glow.scale.setScalar(large?.10:.065);glow.name='mouth-charge';
   const jaw=large?bones[6]:undefined;
   if(jaw && jawParts && mouth) {
     jawParts.ridges.forEach((geometry,index)=>{part(headParent,geometry,skin(1,'spots'),0,-offset,0).name=`cranial-ridge-${index}`;});
@@ -238,11 +238,12 @@ export function createMarineRig(kind:MarineKind) {
 }
 export function createLeviathan() {
   const root=new T.Group();root.name='leviathan';const rig=animal('mosasaur');
-  rig.root.rotation.set(-Math.PI/2+.5,0,Math.PI);rig.root.scale.setScalar(2.5);rig.root.position.set(0,.75,-4.2);root.add(rig.root);
+  rig.root.rotation.set(leviathanRig.pitch,0,Math.PI);rig.root.scale.setScalar(leviathanRig.scale);rig.root.position.set(0,leviathanRig.y,leviathanRig.z);root.add(rig.root);
   for(const side of ['L','R'])pivot(rig.head,`laser_contact_${side}`,0,1.65-rig.headOffset,-.10);
-  return {root,pose(reveal:number,_windup:number,_exposed:number,_fired:number,_recoil:number,time=0){
-    const motion=leviathanMotion(time);rig.pose(time,motion.windup,motion.jaw);
-    rig.root.position.z=-4.2+motion.recoil*.40;rig.root.rotation.y=Math.sin(time*.8)*.025;
+  return {root,pose(reveal:number,windup:number,_exposed:number,_fired:number,recoil:number,time=0,pattern=false){
+    const motion=leviathanMotion(time);rig.pose(time,pattern ? windup : motion.windup,pattern ? .02 + .88 * Math.max(windup, recoil) : motion.jaw);
+    rig.root.position.z=leviathanRig.z+(pattern ? recoil*leviathanRig.patternRecoil : motion.recoil*.40);
+    rig.root.rotation.y=motion.swimYaw;
     root.scale.setScalar(.7+.3*reveal);
   }};
 }

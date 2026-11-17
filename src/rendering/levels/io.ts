@@ -6,6 +6,8 @@ import { createIoScenery } from '../../io-scenery';
 import { createSkipper } from '../../io-rigs';
 import { createCrucible, createSlag } from '../../io-crucible-rig';
 import { CRUCIBLE_POOL, SLAG_POOL, crucibleValve } from '../../io-crucible';
+import { ioChallengeCrucible, ioChallengeSkipper } from '../../io-challenge';
+import { patternBurstCharge } from '../../challenge-patterns';
 import { setIoRockTexture, setIoCeramicTexture } from '../../io-materials';
 import { IO_SKIPPER_POOL, IO_CAMERA_DISTANCE, IO_DURATION, IO_APPROACH, ioFrame, skipperMotion } from '../../io-layout';
 export const createLevel: LevelFactory = ({ plane, signal }) => {
@@ -51,7 +53,9 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
       const ioBank = orientation.bank;
       io.update(ioTime, eased);
       boss.root.visible = flight.bossHealth > 0;
-      boss.pose(ioTime, flight.ioCollapse, flight.ioLegBroken, flight.cannonWindup);
+      const windup = flight.cannonWindup;
+      const challenge = flight.isIoChallenge;
+      boss.pose(ioTime, flight.ioCollapse, flight.ioLegBroken, windup, challenge ? windup : 0);
       skipperModels.length = flight.enemies.length;
       for (const rig of skippers)
         rig.root.visible = false;
@@ -67,7 +71,8 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
         rig.root.visible = true;
         rig.root.position.set(enemy.x, enemy.y, 0);
         rig.root.rotation.z = -motion.heading;
-        rig.pose(enemy.age, motion.bank, motion.jet);
+        const charge = challenge ? patternBurstCharge(enemy, ioChallengeSkipper.windup) : 0;
+        rig.pose(enemy.age, motion.bank, motion.jet, charge);
         skipperModels[index] = rig.root;
         rig.root.rotation.x -= ioPitch;
         rig.root.rotation.y += ioBank;
@@ -90,7 +95,8 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
         rig.root.position.set(enemy.x, enemy.y, 0);
         if (enemy.crucible) {
           rig.root.rotation.set(-ioPitch, ioBank, 0);
-          (rig as typeof crucibles[number]).pose(enemy.age, crucibleValve(enemy.age, enemy.fire));
+          const interval = challenge ? ioChallengeCrucible.interval : undefined;
+          (rig as typeof crucibles[number]).pose(enemy.age, crucibleValve(enemy.age, enemy.fire, interval));
         }
         else
           (rig as typeof slags[number]).pose(enemy.age, enemy.slag?.vx ?? 0);

@@ -1,9 +1,11 @@
 import { ellipseEntry } from '../../planar-contact';
 import { WIDTH } from '../../playfield';
+import type { FonsVariant } from './variants';
 
 type Point = { x: number; y: number };
 type Side = -1 | 1;
 export const FONS_HP = 144;
+export const fonsHealth: Record<FonsVariant, number> = { normal: FONS_HP, rex: 228, invictus: 252 };
 export const FONS_APPROACH = 3.25;
 export const FONS_CYCLE = 18.6;
 export const FONS_RAIN_AT = 11.65;

@@ -51,15 +51,15 @@ function stripe(sections: [y: number, width: number, z: number][], x = 0) {
   return geometry;
 }
 
-export function createFighterRig(livery?: PilotLivery) {
+export function createFighterRig(livery?: PilotLivery, exhaust?: { core: number; flame: number }) {
   const root = new T.Group();
   const paint = alloy(livery?.paint ?? 0x319eaf);
   const trim = alloy(livery?.trim ?? 0xa1a9ab);
   const frame = alloy(livery?.frame ?? 0x273745);
   const canopy = new T.MeshStandardMaterial({ color: 0x21435c, metalness: 0.24, roughness: 0.27 });
   const ice = light(0x82d8e5);
-  const core = light(0xaffbff);
-  const jet = burnerMaterial(0x28b6ff);
+  const core = light(exhaust?.core ?? 0xaffbff);
+  const jet = burnerMaterial(exhaust?.flame ?? 0x28b6ff);
 
   part(root, fuselage([[-0.7, 0.23, 0.13, -0.11], [-0.19, 0.3, 0.19, -0.13],
     [0.38, 0.23, 0.15, -0.1], [0.78, 0.052, 0.071, -0.025], [0.88, 0.01, 0.033, -0.01]]),

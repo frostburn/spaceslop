@@ -1,6 +1,7 @@
 import * as T from 'three';
 import type { Flight } from '../../game';
 import { HEIGHT, WIDTH } from '../../playfield';
+import { PATTERN_BULLET_CAPACITY } from '../../challenge-patterns';
 import { fonsBeams, fonsCrownfireFlash, fonsTuskTip } from './attacks';
 import { bismuthCoating, bismuthGeometry, bismuthVaryings } from './bismuth';
 import { fonsPose, fonsRocks, fonsPhase } from './combat';
@@ -142,8 +143,11 @@ export function createFonsEffects() {
   root.name = 'fons-attacks';
   const plane = new T.PlaneGeometry(1, 1);
   const beams = [streak(plane), streak(plane)];
-  const tuskFlashes = [-1, 1].map(() => flare(plane, false));
-  tuskFlashes.forEach((flash, i) => { flash.name = 'crownfire-tusk-' + i; });
+  const tuskFlashes = (['outer', 'inner'] as const).flatMap(tusks => ([-1, 1] as const).map(side => {
+    const flash = flare(plane, false);
+    flash.name = `crownfire-${tusks}-${side < 0 ? 'left' : 'right'}`;
+    return { flash, tusks, side };
+  }));
   const wallFlare = flare(plane, true);
   wallFlare.name = 'false-horizon-wall-strike';
   const sky = { value: null as T.Texture | null };
@@ -170,27 +174,32 @@ export function createFonsEffects() {
   const bulletGeometry = new T.SphereGeometry(1, 12, 10);
   const bullets = new T.InstancedMesh(bulletGeometry, new T.ShaderMaterial({
     vertexShader: /* glsl */ `
-      varying vec3 n, eye;
+      varying vec3 n, eye, edgeColor;
       void main(){
         vec4 p=modelViewMatrix*instanceMatrix*vec4(position,1.0);
-        n=normalMatrix*normal; eye=-p.xyz;gl_Position=projectionMatrix*p;
+        n=normalMatrix*normal; eye=-p.xyz;edgeColor=instanceColor;gl_Position=projectionMatrix*p;
       }`,
     fragmentShader: /* glsl */ `
-      varying vec3 n,eye;
+      varying vec3 n,eye,edgeColor;
       void main(){
         float facing=max(0.0,dot(normalize(n),normalize(eye)));
         float rim=pow(1.0-facing,2.1);
-        vec3 color=vec3(.009,.002,.017)+vec3(.77,.08,1.48)*rim;
+        vec3 color=edgeColor*(.012+1.5*rim);
         gl_FragColor=vec4(color,1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
-  }), 80);
+  }), PATTERN_BULLET_CAPACITY);
   bullets.name = 'fons-black-plasma';
   bullets.frustumCulled = false;
   bullets.instanceMatrix.setUsage(T.DynamicDrawUsage);
+  const purple = new T.Color(.51, .054, .99);
+  const green = new T.Color(.11, .83, .31);
+  const blue = new T.Color(.12, .41, 1.05);
+  bullets.setColorAt(0, purple);
+  bullets.instanceColor!.setUsage(T.DynamicDrawUsage);
   const matrix = new T.Matrix4();
-  root.add(...rocks, ...beams, ...impacts, bullets, ...tuskFlashes, wallFlare);
+  root.add(...rocks, ...beams, ...impacts, bullets, ...tuskFlashes.map(entry => entry.flash), wallFlare);
 
   function update(time: number, distance: number, threats: readonly Flight['threats'][number][], active: boolean, variant: FonsVariant) {
     const pose = fonsPose(time), state = fonsPhase(time);
@@ -217,26 +226,35 @@ export function createFonsEffects() {
         !active ? 0 : shot.active ? 1 : shot.warning, time, shot.active, variant === 'invictus');
     }
     const crownfire = active ? fonsCrownfireFlash(state.age, variant) : undefined;
-    for (const [index, flash] of tuskFlashes.entries()) {
-      flash.visible = Boolean(crownfire);
-      if (!crownfire) continue;
-      const tip = fonsTuskTip(pose, index === 0 ? -1 : 1, crownfire.tusks);
-      const size = .65 + .68 * crownfire.power;
-      placeFlare(flash, tip.x, tip.y, size, size, crownfire.power, time);
+    for (const { flash, tusks, side } of tuskFlashes) {
+      const power = crownfire?.[tusks] ?? 0;
+      if (power === 0) {
+        flash.visible = false;
+        continue;
+      }
+      const tip = fonsTuskTip(pose, side, tusks);
+      const size = .65 + .68 * power;
+      placeFlare(flash, tip.x, tip.y, size, size, power, time);
     }
     const reflected = pattern[1];
     placeFlare(wallFlare, reflected.from.x, reflected.from.y, 1.35, 2.35, active ? reflected.impact ?? 0 : 0, time);
+    const radius = variant === 'normal' ? .15 : .19;
+    const accent = variant === 'invictus' ? blue : green;
     bullets.count = active ? Math.min(threats.length, bullets.instanceMatrix.count) : 0;
     for (let i = 0; i < bullets.count; i++) {
       const shot = threats[i];
-      matrix.makeScale(.15, .15, .15).setPosition(shot.x, shot.y, .18);
+      matrix.makeScale(radius, radius, radius).setPosition(shot.x, shot.y, .18);
       bullets.setMatrixAt(i, matrix);
+      bullets.setColorAt(i, shot.pattern === 'accent' ? accent : purple);
     }
-    bullets.instanceMatrix.needsUpdate = true;
+    if (bullets.count) {
+      bullets.instanceMatrix.needsUpdate = true;
+      bullets.instanceColor!.needsUpdate = true;
+    }
     return placed;
   }
   return {
-    root, rocks, update, royalFlashes: [...tuskFlashes, wallFlare],
+    root, rocks, update, royalFlashes: [...tuskFlashes.map(entry => entry.flash), wallFlare],
     setCrystalEnvironment(texture: T.Texture | null) { sky.value = texture; },
     prime() {
       update(12.3, 22, [{ x: 0, y: 0, z: 0, vx: 0, vy: -1, vz: 0 }], true, 'normal');

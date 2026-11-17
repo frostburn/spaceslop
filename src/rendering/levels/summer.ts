@@ -17,6 +17,10 @@ import {createLowWisps} from '../../summer/wisps';
 import {createVortexDrone} from '../../summer/vortex-rig';
 import {VORTEX_POOL} from '../../summer/vortex';
 import {createJellyDonuts} from '../../summer/jelly-donut';
+import {patternBurstCharge} from '../../challenge-patterns';
+import {summerChallengeWindup} from '../../summer/challenge';
+import type {HydraSide} from '../../summer/hydra-targets';
+import {createPatternCharge} from '../pattern-charge';
 
 
 export const createLevel:LevelFactory=({plane,signal})=>{
@@ -27,6 +31,9 @@ export const createLevel:LevelFactory=({plane,signal})=>{
   const scout=weatherAircraft(batchAircraft(createScoutRig()));
   const scouts=Array.from({length:SUMMER_AIR_POOL/2},()=>{const root=scout.clone(true);return{root,burners:shipBurners(root)};});
   const donuts=createJellyDonuts(SUMMER_AIR_POOL/2);
+  const charge=createPatternCharge(0xe198ff);
+  const scoutCharges = scouts.map(rig => charge.attach(rig.root, 0, .45, .22));
+  const donutCharges = donuts.map(rig => charge.attach(rig.root, 0, -.16, .16));
   const hydras=Array.from({length:SUMMER_HYDRA_POOL},()=>createRiverHydra(hydraAssets));
   const vortices=Array.from({length:VORTEX_POOL},()=>createVortexDrone());
   const enemyRoots=[...scouts,...donuts,...hydras,...vortices].map(r=>r.root);
@@ -40,25 +47,42 @@ export const createLevel:LevelFactory=({plane,signal})=>{
     orientation:()=>({pitch:0,bank:0,viewPitch:0}),
     contacts:[boss.root,...enemyRoots],
     warmup:[[world,...enemyRoots]],
-    prepare(){restores=[terrain.prime(),ice.prime(),wisps.prime()];root.traverse(o=>{if(o instanceof T.Mesh){flags.set(o,o.frustumCulled);o.frustumCulled=false;}});const states=herd.map(h=>[h.rig.root.position.y,h.rig.root.visible] as const);herd.forEach(h=>{h.rig.root.position.y=0;h.rig.root.visible=true;});restores.push(()=>herd.forEach((h,i)=>{h.rig.root.position.y=states[i][0];h.rig.root.visible=states[i][1];}));},
+    prepare(){
+      restores=[terrain.prime(),ice.prime(),wisps.prime()];
+      scoutCharges[0](1);restores.push(()=>scoutCharges[0](0));
+      root.traverse(o=>{if(o instanceof T.Mesh){flags.set(o,o.frustumCulled);o.frustumCulled=false;}});
+      const states=herd.map(h=>[h.rig.root.position.y,h.rig.root.visible] as const);
+      herd.forEach(h=>{h.rig.root.position.y=0;h.rig.root.visible=true;});
+      restores.push(()=>herd.forEach((h,i)=>{h.rig.root.position.y=states[i][0];h.rig.root.visible=states[i][1];}));
+    },
     afterWarmup(){restores.forEach(restore=>restore());restores=[];for(const[m,cull]of flags)m.frustumCulled=cull;flags.clear();},
     contact:(x,d)=>contact(x,d),
     update({flight,time,animationTime,victory}){
       const scroll=summerScroll(time);world.position.y=-scroll;clouds.update(scroll,animationTime);wisps.update(scroll,animationTime);terrain.update(scroll,animationTime);ice.update(scroll,animationTime);palace.update(animationTime);
       for(const {rig,site}of herd){rig.root.visible=Math.abs(site.y-scroll)<29;rig.pose(animationTime,site.y*.13);}
-      boss.root.visible=flight.bossHealth>0;boss.pose(time,flight.cannonWindup,0,flight.summerHydra,flight.summerBossTime+(victory?.time??0));
+      boss.root.visible=flight.bossHealth>0;
+      const bossCharge = flight.isSummerChallenge ? (side: HydraSide) => flight.summerHeadCharge(side) : flight.cannonWindup;
+      boss.pose(time,bossCharge,0,flight.summerHydra,flight.summerBossTime+(victory?.time??0),undefined,flight.summerHeadMaxHealth);
       for(const enemy of enemyRoots)enemy.visible=false;models.length=flight.enemies.length;models.fill(undefined);
       let scoutIndex=0,donutIndex=0,hi=0,vi=0;
       for(const[i,enemy]of flight.enemies.entries()){
         if(!enemy.summer)continue;
-        if(enemy.summer.kind==='hydra'){const rig=hydras[hi++];if(!rig)continue;rig.root.visible=enemy.hp>0;rig.root.position.set(enemy.x,enemy.y,0);rig.pose(time,Math.max(0,1-(enemy.fire-enemy.age)/.7),summerRiver(enemy.y+scroll+HYDRA_BODY_Y)-enemy.x,enemy.hydra,time);models[i]=rig.root;continue;}
+        if(enemy.summer.kind==='hydra'){
+          const rig=hydras[hi++];if(!rig)continue;
+          rig.root.visible=enemy.hp>0;rig.root.position.set(enemy.x,enemy.y,0);
+          const charge=flight.isSummerChallenge ? patternBurstCharge(enemy,summerChallengeWindup.hydra) : Math.max(0,1-(enemy.fire-enemy.age)/.7);
+          rig.pose(time,charge,summerRiver(enemy.y+scroll+HYDRA_BODY_Y)-enemy.x,enemy.hydra,time);
+          models[i]=rig.root;continue;
+        }
         if(enemy.summer.kind==='vortex'){const rig=vortices[vi++];if(!rig)continue;rig.root.visible=enemy.hp>0;rig.root.position.set(enemy.x,enemy.y,0);rig.pose(enemy.age,enemy.summer.mirror);models[i]=rig.root;continue;}
-        const rig=enemy.summer.kind==='drone'?donuts[donutIndex++]:scouts[scoutIndex++];if(!rig)continue;
+        const drone=enemy.summer.kind==='drone',slot=drone?donutIndex++:scoutIndex++;
+        const rig=drone?donuts[slot]:scouts[slot];if(!rig)continue;
         rig.root.visible=enemy.hp>0;rig.root.position.set(enemy.x,enemy.y,0);
         const {bank}=summerMotion(enemy.age,enemy.lane,enemy.summer,time);
         rig.root.rotation.set(0,bank,'pose' in rig?0:Math.PI);
         if('pose' in rig)rig.pose(animationTime,enemy.summer.mirror,.55*enemy.summer.slot);
         else poseBurners(rig.burners,animationTime,.6);
+        (drone?donutCharges:scoutCharges)[slot](patternBurstCharge(enemy,summerChallengeWindup[enemy.summer.kind]));
         models[i]=rig.root;
       }
     },

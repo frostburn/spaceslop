@@ -1,6 +1,8 @@
 import * as T from 'three';
 import { loadEncounterTexture } from '../../encounter-texture';
 import { createFleetBossRig } from '../../fleet/boss-rig';
+import { FLEET_CHALLENGE_PACE, fleetChallengeGunSignal, fleetChallengeTiming } from '../../fleet/challenge';
+import { patternBurstCharge } from '../../challenge-patterns';
 import { FLEET_SAUCER_POOL, FLEET_SAUCER_WINDUP, saucerFireInterval, saucerPose, saucerSize } from '../../fleet/combat';
 import { createDistantSaucers } from '../../fleet/distant';
 import { createPleiadianCraft } from '../../fleet/pleiadian-craft';
@@ -68,9 +70,13 @@ export const createLevel: LevelFactory = ({ signal }) => {
       scenery.update(time, animationTime, distance);
       distant.update(time, distance);
       pursuit.update(time, distance);
-      const alive = flight.bossHealth > 0;
+      const alive = flight.bossHealth > 0, challenge = flight.isFleetChallenge;
       boss.root.visible = time >= FLEET_DURATION && (alive || flight.phase === 'won');
-      if (boss.root.visible) boss.pose(flight.fleetBossTime, flight.fleetBossAttack.rapid, distance, alive);
+      if (boss.root.visible) {
+        const attackTime = flight.bossTorrentCancelled ? -1 : flight.fleetBossTime;
+        boss.pose(flight.fleetBossTime, flight.fleetBossAttack.rapid, distance, alive,
+          challenge ? port => fleetChallengeGunSignal(attackTime, port) : undefined);
+      }
       for (const [part, depth] of [[guns.root, -1.42], [traffic.root, -.59]] as const) {
         const factor = 1 - depth / distance;
         part.position.z = depth;
@@ -97,9 +103,13 @@ export const createLevel: LevelFactory = ({ signal }) => {
         if (!saucer || enemy.age < 0 || enemy.hp <= 0 || Math.abs(enemy.y) > HEIGHT / 2 + 1.2) continue;
         const rig = patrols[active++];
         if (!rig) break;
-        const pose = saucerPose(enemy.age, enemy.lane, saucer);
-        const charge = saucer.aim ? T.MathUtils.clamp(1 - (enemy.fire - enemy.age) / FLEET_SAUCER_WINDUP, 0, 1) : 0;
-        const sinceFire = enemy.age + saucerFireInterval(saucer) - enemy.fire;
+        const pose = saucerPose(enemy.age, enemy.lane, saucer, challenge ? FLEET_CHALLENGE_PACE : undefined);
+        const timing = fleetChallengeTiming(saucer);
+        const charge = challenge ? patternBurstCharge(enemy, timing.windup)
+          : saucer.aim ? T.MathUtils.clamp(1 - (enemy.fire - enemy.age) / FLEET_SAUCER_WINDUP, 0, 1) : 0;
+        const sinceFire = challenge
+          ? enemy.burst?.row ? enemy.age + timing.spacing - enemy.fire : Infinity
+          : enemy.age + saucerFireInterval(saucer) - enemy.fire;
         const flash = sinceFire >= 0 && sinceFire < .15 ? 1 - sinceFire / .15 : 0;
         rig.root.visible = true;
         rig.root.position.set(enemy.x, enemy.y, -.08);

@@ -36,13 +36,20 @@ function skipperModel(){
   }
   const seams=mergeGeometries([-1,1].map(side=>new T.BoxGeometry(.028,.7,.025).rotateZ(side*.40).translate(side*.18,.03,.245)));
   part(root,seams,ioDark,0,0,0);
+  const charge = part(root, orb, ioHot, 0, .56, .30, .17, .19, .075);
+  charge.name = 'skipper-charge';
+  charge.visible = false;
   root.traverse(o=>{if(o instanceof T.Mesh&&!o.name.includes('jet')){o.castShadow=o.receiveShadow=true;}});return root;
 }
 export function createSkipper(){
   const root=(skipperTemplate??=skipperModel()).clone();const jets:T.Mesh[]=[];
+  const charge = root.getObjectByName('skipper-charge')!;
   root.traverse(o=>{if(o.name==='skipper-jet')jets.push(o as T.Mesh);});
-  return {root,pose(time:number,bank=0,jet=0){root.rotation.y=bank;root.rotation.x=Math.sin(time*3)*.06;
+  return {root,pose(time:number,bank=0,jet=0,windup=0){root.rotation.y=bank;root.rotation.x=Math.sin(time*3)*.06;
     jets.forEach((p,i)=>p.scale.y=.35+jet*.9+Math.sin(time*38+i)*.10);
+    charge.visible = windup > 0;
+    const swell = .55 + .75 * windup;
+    charge.scale.set(.17 * swell, .19 * swell, .075 * swell);
   }};
 }
 
@@ -153,10 +160,11 @@ export function createCaldera(){
     mesh.position.copy(start).add(end).multiplyScalar(.5);mesh.quaternion.setFromUnitVectors(up,q.copy(end).sub(start).normalize());
     mesh.scale.set(1,start.distanceTo(end)/original,1);
   }
-  function pose(time:number,collapse=0,broken=false,windup=0){
+  function pose(time:number,collapse=0,broken=false,windup=0,wheelCharge=0){
     chassis.rotation.z=-.14*collapse;chassis.position.y=-.45*collapse;
     wheel.rotation.z=time*.55+collapse*.7;shield.visible=!broken;legTarget.visible=!broken;
-    heatGlow.scale.setScalar(3.1+Math.sin(time*2.3)*.12);
+    heatGlow.scale.setScalar(3.1+Math.sin(time*2.3)*.12+.85*wheelCharge);
+    furnaceLight.intensity = 14 + 12 * wheelCharge;
     (legTarget.material as T.MeshStandardMaterial).emissiveIntensity=broken?0:1.0+windup;
     for(const leg of legs){
       const h=calderaLocal(leg.hip.x,leg.hip.y,leg.hip.z,collapse);a.set(h.x,h.y,h.z);

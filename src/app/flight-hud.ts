@@ -104,6 +104,19 @@ const towlineTips: Partial<Record<LevelId, string>> = {
 function bossTip(flight: Flight) {
   const towline = flight.droneWeapon === 'towline';
   const encounter = flight.encounterLevel;
+  if (flight.isBroodlockChallenge) return towline ? 'Sweep the arc across the green cannon. Watch the spores spread.'
+    : 'Tap the green cannon. Watch the spores spread.';
+  if (flight.isIoChallenge) return flight.ioLegBroken ? 'Target the exposed machinery. The sweeps come faster now.'
+    : 'Break the cyan support. Watch for embers overtaking the first rows.';
+  if (flight.isTitanChallenge) return 'Target the glowing thorax vent. Watch the wingbeats split into rings.';
+  if (flight.isHeliostatChallenge) return 'Target the cyan core. The lenses alternate volleys and aimed plasma.';
+  if (flight.isIceChallenge) return 'Aim at the mouth. Watch the fast strands overtake the slow ones.';
+  if (flight.isPreserveChallenge) return 'Aim at the belly. Move after the claws lock. Watch for the feather barbs.';
+  if (flight.isSummerChallenge) return 'Destroy heads to thin the overlapping petals.';
+  if (flight.isBoulevardChallenge) return 'Watch the crossed neon lanes. Keep the cruiser ahead of you.';
+  if (flight.isGroveChallenge) return 'Slip between the fronds. Shoot seeking lanterns from a distance.';
+  if (flight.isFleetChallenge) return 'When the central lens fills the screen, find an empty pocket before the pellets fill.';
+  if (flight.isDenChallenge) return 'When both guns seed the screen, move into a clear lane before the pellets fill.';
   if (flight.isFonsFight) {
     const storm = fonsPhase(flight.fonsTime);
     if (storm.rain || storm.warning > 0) return 'Stay in the wake of a falling crystal';
@@ -114,6 +127,8 @@ function bossTip(flight: Flight) {
       (towline ? 'Sweep the arc across the mirror' : 'Fire into the mirror · Dodge the sweeps');
   }
   if (encounter === 'vents') {
+    if (flight.isVentChallenge) return flight.crabCoreOpen ? 'Target the exposed gills. Watch for the longer pearl volleys.'
+      : 'Break both glowing claw joints. Watch the pearl rings expand.';
     if (towline) return flight.crabCoreOpen ? 'Sweep the arc across the exposed gills.' : 'Sweep the arc across a glowing claw joint.';
     return flight.crabCoreOpen ? 'Tap the gill chamber. Dodge amber rings.' : 'Tap the glowing joint. Break both claws.';
   }

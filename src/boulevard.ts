@@ -46,3 +46,23 @@ export const boulevardWaves=Array.from({length:20},(_,i)=>{
 
 // Small, deterministic trim corrections stay inside the fixed combat proxy.
 export function boulevardHover(time:number){return{x:.06*Math.sin(time*.73)+.02*Math.sin(time*1.19),y:.045*Math.sin(time*.47),z:.075*Math.sin(time*.91),pitch:.012*Math.sin(time*.61),roll:.014*Math.sin(time*.83),yaw:.010*Math.sin(time*.39)};}
+
+export const CRUISER_CANNON_X = 2.4, CRUISER_CANNON_Y = -1.15, CRUISER_CANNON_Z = -.19;
+export const CRUISER_ROTOR_Y = -.7, CRUISER_MUZZLE_Y = -.45, CRUISER_RECOIL = .22;
+
+export function boulevardCruiserMuzzle(time: number, side: number, recoil: number) {
+  const hull = boulevardBossPoint(time, 1);
+  const hover = boulevardHover(time);
+  const x = side * CRUISER_CANNON_X, y = CRUISER_CANNON_Y + CRUISER_ROTOR_Y + CRUISER_MUZZLE_Y + recoil * CRUISER_RECOIL;
+  const yawX = x * Math.cos(hover.yaw) - y * Math.sin(hover.yaw);
+  const yawY = x * Math.sin(hover.yaw) + y * Math.cos(hover.yaw);
+  const rollX = yawX * Math.cos(hover.roll) + CRUISER_CANNON_Z * Math.sin(hover.roll);
+  const rollZ = CRUISER_CANNON_Z * Math.cos(hover.roll) - yawX * Math.sin(hover.roll);
+  const pitch = hover.pitch - BOULEVARD_PITCH;
+  const c = Math.cos(BOULEVARD_PITCH), s = Math.sin(BOULEVARD_PITCH);
+  return {
+    x: hull.x + hover.x + rollX,
+    y: hull.y + hover.y * c + hover.z * s + yawY * Math.cos(pitch) - rollZ * Math.sin(pitch),
+    z: hull.z - hover.y * s + hover.z * c + yawY * Math.sin(pitch) + rollZ * Math.cos(pitch),
+  };
+}

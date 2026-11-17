@@ -15,13 +15,14 @@ const { wormholeFrame, WORMHOLE_SUPPLY_TIME, wormholeBosses } = await server.ssr
 const { CICADA_FIRE, CICADA_HP, CICADA_WINDUP } = await server.ssrLoadModule('/src/cicada.ts');
 const { wormholeReflectionPose, createWormholeReflection } = await server.ssrLoadModule('/src/wormhole/reflection.ts');
 const { createFighterRig } = await server.ssrLoadModule('/src/ship-rigs.ts');
-const { FONS_APPROACH, FONS_HP, FONS_CYCLE, FONS_RAIN_AT, FONS_RAIN_END, fonsPhase, fonsPose, fonsRocks, fonsSheltered, fonsTuskPaths } =
+const { FONS_APPROACH, FONS_HP, FONS_CYCLE, FONS_RAIN_AT, FONS_RAIN_END, fonsHealth, fonsPhase, fonsPose, fonsRocks, fonsSheltered, fonsTuskPaths } =
   await server.ssrLoadModule('/src/wormhole/fons/combat.ts');
 const { fonsBeams, fonsBeamHits, fonsCrownfireFlash, fonsTuskTip, fonsVolleys } =
   await server.ssrLoadModule('/src/wormhole/fons/attacks.ts');
 const { createFonsMantle } = await server.ssrLoadModule('/src/wormhole/fons/mantle.ts');
 const { createFonsLightning } = await server.ssrLoadModule('/src/wormhole/fons/lightning.ts');
 const { createFonsBackdrop } = await server.ssrLoadModule('/src/wormhole/fons/backdrop.ts');
+const { PATTERN_BULLET_CAPACITY } = await server.ssrLoadModule('/src/challenge-patterns.ts');
 const { regulatorPortal, createRegulatorPortalFeeds } = await server.ssrLoadModule('/src/wormhole/regulator-portals.ts');
 const { createPlasmaResources } = await server.ssrLoadModule('/src/heliostat/plasma.ts');
 
@@ -457,22 +458,25 @@ test('Fons blocks pulse and direct fire as the cloak closes before the rain', ()
   assert.equal(flight.bossHealth, FONS_HP - 1);
 });
 
-test('both royal variants fire Crownfire in two interleaved fans from their tusk tips', () => {
+test('Crownfire alternates its warned tusk pairs and keeps a gap through the fans', () => {
   const player = { x: 0, y: -5.35 };
-  const outside = 1.38, inside = 1.98;
+  const outside = 1.12, inside = outside + .126;
   const volley = (time, variant) => fonsVolleys(time + STEP / 2, STEP, player, variant);
-  assert.equal(fonsCrownfireFlash(outside - .1, 'rex').tusks, 'outer');
-  assert.equal(fonsCrownfireFlash(inside - .1, 'invictus').tusks, 'inner');
-  assert.equal(fonsCrownfireFlash(outside - .1, 'normal'), undefined);
+  assert(fonsCrownfireFlash(outside - .1, 'rex').outer > .5);
+  assert(fonsCrownfireFlash(inside, 'rex').inner > .9);
+  assert.deepEqual(fonsCrownfireFlash(outside - .1, 'normal'), { outer: 0, inner: 0 });
   assert.deepEqual(volley(outside, 'normal'), []);
   const first = volley(outside, 'rex'), second = volley(inside, 'rex');
-  assert.equal(first.length, 6);
-  assert.equal(second.length, 5);
-  assert.deepEqual(first, volley(outside, 'invictus'));
-  assert.deepEqual(second, volley(inside, 'invictus'));
-  const atLane = shot => shot.x + shot.vx * (player.y - shot.y) / shot.vy;
-  for (const [index, shot] of second.entries()) {
-    assert(Math.abs(atLane(shot) - (atLane(first[index]) + atLane(first[index + 1])) / 2) < 1e-10);
+  for (const [row, time, tusks] of [[first, outside, 'outer'], [second, inside, 'inner']]) {
+    assert.equal(row.length, 22);
+    const pose = fonsPose(time), endpoints = [];
+    for (const [i, side] of [-1, 1].entries()) {
+      const origin = fonsTuskTip(pose, side, tusks);
+      const half = row.slice(i * 11, i * 11 + 11);
+      assert(half.every(shot => Math.hypot(shot.x - origin.x, shot.y - origin.y) < 1e-9));
+      endpoints.push(half[0].x + half[0].vx * (-6.1 - half[0].y) / half[0].vy);
+    }
+    assert(endpoints[1] - endpoints[0] > 3);
   }
   const pose = fonsPose(outside);
   const [x, y, z] = fonsTuskPaths.outer[4];
@@ -482,6 +486,136 @@ test('both royal variants fire Crownfire in two interleaved fans from their tusk
   tip.multiplyScalar(1 / (1 - tip.z / BOSS_CAMERA_DISTANCE));
   assert(Math.hypot(first[0].x - tip.x, first[0].y - tip.y) < 1e-10);
   assert.deepEqual(fonsTuskTip(pose, -1, 'outer'), { x: first[0].x, y: first[0].y });
+});
+
+test('the campaign rush selects Rex or Invictus and Hardcore skips the hull repairs', () => {
+  for (const [mode, variant] of [['bullet-hell', 'rex'], ['hardcore', 'invictus']]) {
+    const flight = new Flight('sentry', [], 'vex', 'wormhole', () => .5, mode);
+    flight.time = flight.stageDuration;
+    flight.step(0);
+    for (const [index, level] of wormholeBosses.entries()) {
+      assert.equal(flight.encounterLevel, level);
+      assert.equal(flight.drops.filter(drop => drop.kind === 'repair').length,
+        mode === 'bullet-hell' && index > 0 && index % 3 === 0 ? 1 : 0);
+      finishApproach(flight);
+      if (level === 'wormhole') {
+        assert.equal(flight.fonsVariant, variant);
+        assert.equal(flight.bossMaxHealth, fonsHealth[variant]);
+      }
+      defeatEncounter(flight);
+    }
+    assert.equal(flight.phase, 'won');
+    assert.equal(flight.hull, mode === 'hardcore' ? 1 : 4);
+  }
+});
+
+test('both challenge rushes run the standalone boss patterns and reset them between rematches', () => {
+  for (const mode of ['bullet-hell', 'hardcore']) {
+    const rush = new Flight('sentry', [], 'vex', 'wormhole', () => .5, mode);
+    rush.time = rush.stageDuration;
+    rush.step(0);
+    for (const level of wormholeBosses.slice(0, -1)) {
+      assert.equal(rush.encounterLevel, level);
+      const solo = new Flight('sentry', [], 'vex', level, () => .5, mode);
+      solo.time = solo.stageDuration;
+      solo.step(0);
+      if (solo.phase === 'approach') finishApproach(solo);
+      if (level === 'biolume') solo.time -= solo.rayTime;
+      finishApproach(rush);
+      assert.equal(rush.bossHealth, solo.bossHealth);
+      assert.equal(rush.bossHealth, solo.bossMaxHealth);
+      if (level === 'summer') assert.deepEqual(rush.summerHydra.hp, solo.summerHydra.hp);
+      if (level === 'vents') assert.deepEqual(rush.crabClawHealth, solo.crabClawHealth);
+      assert.equal(rush.bossPattern, undefined);
+      assert.equal(rush.bossTorrentCancelled, false);
+      for (const flight of [solo, rush]) {
+        flight.invulnerable = flight.cooldown = flight.droneCooldown = Infinity;
+        flight.player = { x: -1, y: -5.8 };
+      }
+
+      let peak = 0, plasma = false, seekers = false, field = false;
+      let slowest = Infinity, fastest = 0;
+      for (let tick = 0; tick < 15 / STEP; tick++) {
+        for (const flight of [solo, rush]) {
+          flight.player.x = 2.6 * Math.sin(tick * STEP * 1.6);
+          flight.step(STEP);
+        }
+        peak = Math.max(peak, rush.threats.length);
+        plasma ||= rush.heliostatTargets.length === 2 && level === 'heliostat';
+        seekers ||= rush.enemies.some(e => e.rayOrb);
+        field ||= rush.threats.some(s => s.field);
+        for (const shot of rush.threats) if (shot.pattern && !shot.field) {
+          const speed = Math.hypot(shot.vx, shot.vy);
+          slowest = Math.min(slowest, speed);
+          fastest = Math.max(fastest, speed);
+        }
+        if (tick % 15 === 0) {
+          assert.equal(rush.threats.length, solo.threats.length, level);
+          for (const [i, shot] of rush.threats.entries()) {
+            const other = solo.threats[i];
+            assert.equal(shot.pattern, other.pattern, level);
+            assert.equal(Boolean(shot.field), Boolean(other.field), level);
+            assert(Math.hypot(shot.x - other.x, shot.y - other.y, shot.z - other.z) < 1e-9, level);
+            assert(Math.hypot(shot.vx - other.vx, shot.vy - other.vy, shot.vz - other.vz) < 1e-9, level);
+          }
+          assert.deepEqual(rush.markers, solo.markers, level);
+          assert.deepEqual(rush.bossWarnings, level === 'heliostat' ? rush.heliostatTargets : [], level);
+          assert.deepEqual(rush.bossWarnings, solo.bossWarnings, level);
+        }
+      }
+      assert(peak > 40 && peak <= PATTERN_BULLET_CAPACITY, level);
+      assert(fastest - slowest > 1, level);
+      if (level === 'heliostat') assert(plasma);
+      if (level === 'biolume') assert(seekers);
+      if (level === 'fleet' || level === 'den') {
+        assert(field, level);
+        rush.pulse();
+        assert(rush.bossTorrentCancelled);
+        assert.equal(rush.threats.length, 0);
+      }
+      defeatEncounter(rush);
+    }
+    assert.equal(rush.encounterLevel, 'wormhole');
+    assert.equal(rush.threats.length, 0);
+  }
+});
+
+test('Invictus adds shards at the wall and both colored barrages fit the renderer across cycles', async () => {
+  const { createFonsEffects } = await server.ssrLoadModule('/src/wormhole/fons/effects.ts');
+  const { disposeScene } = await server.ssrLoadModule('/src/rendering/dispose.ts');
+  const effects = createFonsEffects();
+  effects.prime();
+  for (const [mode, variant] of [['bullet-hell', 'rex'], ['hardcore', 'invictus']]) {
+    const f = new Flight('sentry', [], 'vex', 'wormhole', () => .5, mode);
+    f.startFonsApproach();
+    finishApproach(f);
+    f.invulnerable = f.cooldown = f.droneCooldown = Infinity;
+    let peak = 0;
+    for (let tick = 0; tick < 4 * FONS_CYCLE / STEP; tick++) {
+      f.player.x = 2 * Math.cos(f.time * .83);
+      f.step(STEP);
+      peak = Math.max(peak, f.threats.length);
+      assert(f.threats.length <= PATTERN_BULLET_CAPACITY);
+      if (fonsPhase(f.fonsTime).rain) assert.equal(f.threats.length, 0);
+    }
+    assert(peak > 300);
+    const sample = fonsVolleys(variant === 'rex' ? 1.128 : 1.048, STEP, { x: 0, y: -5.8 }, variant);
+    effects.update(1.13, 22, sample, true, variant);
+    const bullets = effects.root.getObjectByName('fons-black-plasma');
+    assert.equal(bullets.count, sample.length);
+    const rim = new Color();
+    for (const [index, shot] of sample.entries()) {
+      bullets.getColorAt(index, rim);
+      if (shot.pattern === 'primary') assert(rim.b > rim.r && rim.r > rim.g);
+      else if (variant === 'rex') assert(rim.g > rim.b && rim.b > rim.r);
+      else assert(rim.b > rim.g && rim.g > rim.r);
+    }
+    const wallTime = 4.968, wall = fonsBeams(wallTime, 'invictus')[1].from;
+    const shards = fonsVolleys(wallTime, STEP, { x: 0, y: -5.8 }, variant);
+    assert.equal(shards.length, variant === 'invictus' ? 8 : 0);
+    assert(shards.every(shot => shot.x === wall.x && shot.y === wall.y && shot.vx > 0));
+  }
+  disposeScene(effects.root);
 });
 
 test('Fons fires four seven-shot fans before the wall breaches open', () => {
@@ -508,9 +642,9 @@ test('only Invictus damages the reflected path after the False Horizon warning',
   assert(fonsBeamHits(time, hit, 'invictus'));
   assert(!fonsBeamHits(time, { x: 3.5, y: -5.5 }, 'invictus'));
   assert.equal(fonsBeams(FONS_CYCLE + time, 'invictus')[1].from.x, -from.x);
-  for (const variant of ['normal', 'rex', 'invictus']) {
-    const flight = new Flight('sentry', [], 'vex', 'wormhole');
-    flight.startFonsApproach(variant);
+  for (const [mode, variant] of [['regular', 'normal'], ['bullet-hell', 'rex'], ['hardcore', 'invictus']]) {
+    const flight = new Flight('sentry', [], 'vex', 'wormhole', () => .5, mode);
+    flight.startFonsApproach();
     while (flight.phase === 'approach') flight.step(STEP);
     assert.equal(flight.fonsVariant, variant);
     Object.assign(flight.player, hit);

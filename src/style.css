@@ -365,7 +365,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .mission-list { display: grid; gap: 1.4rem; }
 .menu-heading .spaceslop-logo { touch-action: pan-y pinch-zoom; }
 .menu-controls {display:grid;gap:.6rem;}
-.menu-modes {display:flex;gap:.45rem;}
+.menu-modes {display:flex;flex-wrap:wrap;gap:.45rem;}
 .menu-modes button[aria-pressed=true] {border-color:var(--accent);background:#19313c;color:#eef8ff;}
 .mission-action {display:flex;justify-content:space-between;align-items:center;gap:.75rem;padding:.5rem .65rem;border:1px solid var(--line);border-radius:4px;background:#101a29;}
 .level-cards {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem;}
@@ -383,10 +383,15 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .mission-action {align-items:start;}
   #prepare-flight {font-size:.73rem;}
 }
-.offline-settings {font-size:.75rem;color:var(--muted);max-width:42ch;}
-.offline-settings summary {padding:.7rem 0;cursor:pointer;}
-.offline-settings p {line-height:1.5;}
-.offline-settings button {font-size:.7rem;}
+.menu-settings {font-size:.75rem;color:var(--muted);max-width:42ch;}
+.menu-settings summary {padding:.7rem 0;cursor:pointer;}
+.menu-settings p {line-height:1.5;}
+.menu-settings button {font-size:.7rem;}
+.challenge-form {display:grid;gap:.4rem;}
+.challenge-form div {display:flex;gap:.45rem;}
+.challenge-form input {min-width:0;width:100%;padding:.45rem;border:1px solid var(--line);border-radius:4px;background:#101a29;color:inherit;font:inherit;}
+#challenge-status {margin:.25rem 0 0;}
+#challenge-status:empty {margin:0;}
 .level-card.saved-offline span {color:var(--accent);}
 
 .dev-links {display:grid;gap:.65rem;justify-items:start;margin-top:.65rem;}

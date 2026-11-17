@@ -85,18 +85,23 @@ export function carrierPose(carrier: Carrier, time: number) {
 
 type SaucerPose = Point & { pitch: number; bank: number; yaw: number; radius: number; depth: number };
 
-export function projectedSaucerMount(pose: SaucerPose, [x, y, z]: readonly [number, number, number]) {
-  // The saucer uses ZXY Euler angles. Project its actual emitter into the flight plane.
+function saucerMount(pose: SaucerPose, [x, y, z]: readonly [number, number, number]) {
+  // The saucer uses ZXY Euler angles.
   const bx = x * Math.cos(pose.bank) + z * Math.sin(pose.bank);
   const bz = z * Math.cos(pose.bank) - x * Math.sin(pose.bank);
   const py = y * Math.cos(pose.pitch) - bz * Math.sin(pose.pitch);
   const pz = y * Math.sin(pose.pitch) + bz * Math.cos(pose.pitch);
   const rx = bx * Math.cos(pose.yaw) - py * Math.sin(pose.yaw);
   const ry = bx * Math.sin(pose.yaw) + py * Math.cos(pose.yaw);
-  const distance = FLEET_CAMERA_DISTANCE;
-  const scale = 1 - pose.depth / distance;
-  const factor = scale * distance / (distance - pose.depth - pz * scale * pose.radius);
-  return { x: (pose.x + rx * pose.radius) * factor, y: (pose.y + ry * pose.radius) * factor };
+  const scale = 1 - pose.depth / FLEET_CAMERA_DISTANCE;
+  return { x: (pose.x + rx * pose.radius) * scale, y: (pose.y + ry * pose.radius) * scale,
+    z: pose.depth + pz * scale * pose.radius };
+}
+
+export function projectedSaucerMount(pose: SaucerPose, mount: readonly [number, number, number]) {
+  const p = saucerMount(pose, mount);
+  const factor = FLEET_CAMERA_DISTANCE / (FLEET_CAMERA_DISTANCE - p.z);
+  return { x: p.x * factor, y: p.y * factor };
 }
 
 export const tractorSites = [

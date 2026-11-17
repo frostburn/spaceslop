@@ -8,6 +8,8 @@ import { createVentBoss } from '../../vent-boss';
 import { createMortarAssets, createVentMortar } from '../../vent-mortar-rig';
 import { createFaunaAssets, createWormAssets, createVentShrimp, createVentWorm } from '../../vent-fauna-rig';
 import { MORTAR_POOL } from '../../vent-mortar';
+import { ventChallengeMortar, ventChallengeShrimp } from '../../vent-challenge';
+import { patternBurstCharge } from '../../challenge-patterns';
 import { SHRIMP_POOL, WORM_POOL } from '../../vent-fauna';
 import { createBurnerBubbles } from '../../vent-effects';
 import { ventCameraRise, ventBossReveal, ventBossPose, ventWorld, ventFrame, VENT_CAMERA_DISTANCE, VENT_PITCH, VENT_DURATION, VENT_APPROACH, ventAnchors, ventAnchorPoint, VENT_SPAWN_LEAD } from '../../vent-layout';
@@ -60,6 +62,7 @@ export const createLevel: LevelFactory = ({ plane, scene, signal }) => {
       bubbles.update(plane, sources, frame.newFlight ? 0 : frame.elapsed, frame.animationTime, renderer);
     },
     update({ flight, reveal: eased, time: ventTime }) {
+      const challenge = flight.isVentChallenge;
       const pose = ventBossPose(ventBossReveal(ventTime), Math.max(0, ventTime - VENT_DURATION - VENT_APPROACH));
       const point = ventWorld(pose.x, pose.y, pose.z, ventTime, eased);
       ventBoss.root.visible = flight.bossHealth > 0;
@@ -81,7 +84,8 @@ export const createLevel: LevelFactory = ({ plane, scene, signal }) => {
         rig.root.visible = true;
         rig.root.position.set(enemy.x, enemy.y, 0);
         rig.root.scale.setScalar(enemy.ventScale ?? 1);
-        rig.pose(enemy.age, enemy.fire, enemy.mortarAngle ?? 0);
+        const charge = challenge ? patternBurstCharge(enemy, ventChallengeMortar.windup) : undefined;
+        rig.pose(enemy.age, enemy.fire, enemy.mortarAngle ?? 0, charge);
         mortarModels[index] = rig.combat;
       }
       faunaModels.length = flight.enemies.length;
@@ -99,7 +103,8 @@ export const createLevel: LevelFactory = ({ plane, scene, signal }) => {
         rig.root.position.set(enemy.x, enemy.y, 0);
         rig.root.scale.setScalar(enemy.ventScale ?? 1);
         rig.root.rotation.z = enemy.heading ?? 0;
-        rig.pose(enemy.age, enemy.fire);
+        const charge = challenge ? patternBurstCharge(enemy, ventChallengeShrimp.windup) : undefined;
+        rig.pose(enemy.age, enemy.fire, charge);
         faunaModels[index] = rig.combat;
       }
       let wormSlot = 0;
