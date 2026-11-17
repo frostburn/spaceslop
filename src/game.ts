@@ -77,6 +77,7 @@ import { PRESERVE_CHALLENGE_PACE, preserveChallengeBoss, preserveChallengeBossRo
   preserveChallengeWaves, stepPreserveChallengeFlyer } from './preserve-challenge';
 import { PRESERVE_APPROACH } from './preserve-layout';
 import { CLOSE_CALLS_REQUIRED, HOT_DOCK_COOLDOWN, HOT_DOCK_DISTANCE, type PilotId } from './pilot-data';
+import { GrazeBank } from './graze';
 import { WING_FLASH_TIME, WING_FORMATION, wingShots, wingWeapons, type WingProjectile, type WingSide, type WingWeapon } from './wing';
 import { WORMHOLE_SUPPLY_TIME, wormholeBosses } from './wormhole/route';
 import { fieldBulletPhase, fieldBulletPoint, type BulletLanding } from './bullet-field';
@@ -273,6 +274,7 @@ export class Flight {
   invulnerable = 0;
   charges = 2;
   score = 0;
+  readonly graze = new GrazeBank();
   bossHealth: number;
   summerHydra: HydraState;
   summerLastHit?:Point&{z:number};
@@ -306,7 +308,6 @@ export class Flight {
   pickupMessage = '';
   perkTime = 0;
   perkMessage = '';
-  private closeCalls = 0;
   private reinforcementUsed = false;
   private droneLaunch?: Point;
   private stageProgress = 0;
@@ -328,6 +329,7 @@ export class Flight {
   private nextCrawler=0;
   private rayFanCycle=-1;
   private raySeekerCycle=-1;
+  private scoredSeekers = 0;
   fleetBossAttack = createFleetBossAttack();
   private wormholeIndex = 0;
   private wormholeEncounterAt = 0;
@@ -451,6 +453,7 @@ export class Flight {
     this.heliostatEscalationAt = this.heliostatEscalationCycle = Infinity;
     this.heliostatLockedPattern = 0;
     this.rayFanCycle = this.raySeekerCycle = -1;
+    this.scoredSeekers = 0;
     this.fleetBossAttack = createFleetBossAttack();
     this.markers = [];
     this.drops = [-1.7, 1.7].map((x, lane) => ({
@@ -611,8 +614,8 @@ export class Flight {
   get perkReadout() {
     switch (this.pilot) {
       case 'vex':
-        return this.closeCalls >= CLOSE_CALLS_REQUIRED
-          ? 'Close Call · Pulse earned' : `Close Call · ${this.closeCalls}/${CLOSE_CALLS_REQUIRED} grazes`;
+        return this.graze.count >= CLOSE_CALLS_REQUIRED
+          ? 'Close Call · Pulse earned' : `Close Call · ${this.graze.count}/${CLOSE_CALLS_REQUIRED} grazes`;
       case 'brass':
         if (this.mode === 'hardcore') return 'Reinforcement · Clears hostile fire';
         return this.reinforcementUsed ? 'Reinforcement · Used' : 'Reinforcement · Ready';
@@ -755,6 +758,7 @@ export class Flight {
     this.obstacles?.move(this.drone, 0, 0, DRONE_HULL);
     this.invulnerable = Math.max(0, this.invulnerable - dt);
     this.pulseFlash = Math.max(0, this.pulseFlash - dt);
+    this.graze.payoutTime = Math.max(0, this.graze.payoutTime - dt);
     this.pickupTime = Math.max(0, this.pickupTime - dt);
     this.bossRecoil = Math.max(0, this.bossRecoil - dt);
     this.perkTime = Math.max(0, this.perkTime - dt);
@@ -900,7 +904,7 @@ export class Flight {
       if (boss && !this.planarBoss && !shot.planar) {
         if (shot.z < 0) return true;
         if (near(shot, this.player, 0.58)) this.hit();
-        else if (near(shot, this.player, 1.05)) this.recordGraze();
+        else if (near(shot, this.player, 1.05)) this.recordGraze(shot);
         return false;
       }
       if (near(shot, this.player, shot.pattern ? PATTERN_HIT_RADIUS : .44)) {
@@ -922,21 +926,21 @@ export class Flight {
   }
 
   private trackGraze(shot: Threat, inField: boolean) {
-    if (this.pilot !== 'vex' || this.closeCalls >= CLOSE_CALLS_REQUIRED || shot.graze === 'counted') return;
+    if (shot.graze === 'counted') return;
     if (this.invulnerable > 0) {
       shot.graze = undefined;
     } else if (inField && near(shot, this.player, shot.pattern ? PATTERN_GRAZE_RADIUS : .9)) {
       shot.graze = 'near';
     } else if (shot.graze === 'near') {
       shot.graze = 'counted';
-      this.recordGraze();
+      this.recordGraze(shot);
     }
   }
 
-  private recordGraze() {
-    if (this.pilot !== 'vex' || this.invulnerable > 0 || this.closeCalls >= CLOSE_CALLS_REQUIRED) return;
-    this.closeCalls++;
-    if (this.closeCalls === CLOSE_CALLS_REQUIRED) {
+  private recordGraze(shot: Point) {
+    if (this.invulnerable > 0) return;
+    this.graze.pass(this.player, shot);
+    if (this.pilot === 'vex' && this.graze.count === CLOSE_CALLS_REQUIRED) {
       this.charges++;
       this.announcePerk('Close Call · +1 Pulse');
     }
@@ -1551,7 +1555,10 @@ export class Flight {
       if(enemy.mine)continue;
       if(enemy.summer?.kind==='hydra'){
         const head=hydraContact(enemy,this.time,this.player,this.player,.16);
-        if(head){this.damageEnemy(enemy,(enemy.hydra?.hp[head.side+1]??enemy.hp/3),false,head.side);this.hit();}
+        if (head) {
+          this.hit();
+          this.damageEnemy(enemy, enemy.hydra?.hp[head.side + 1] ?? enemy.hp / 3, false, head.side);
+        }
         continue;
       }
       if(enemy.ambusher){
@@ -2053,14 +2060,21 @@ export class Flight {
     else enemy.hp = Math.max(0, enemy.hp - damage);
     if (laser) enemy.laserDamage = (enemy.laserDamage ?? 0) + before - enemy.hp;
     if (enemy.hp === 0) {
-      if(enemy.rayOrb){
-        const burst=this.isGroveChallenge?groveChallengeSeekerBurst:raySeekerBurst;
-        this.threats.push(...burst(enemy,enemy.rayOrb.heading));this.score+=25;return;
+      if (enemy.rayOrb) {
+        const burst = this.isGroveChallenge ? groveChallengeSeekerBurst : raySeekerBurst;
+        this.threats.push(...burst(enemy, enemy.rayOrb.heading));
+        // The ray can launch seekers indefinitely. The next health quarter opens a fresh pair of bounties.
+        if (this.scoredSeekers < 2) {
+          this.scoredSeekers++;
+          this.score += 25;
+        }
+        return;
       }
       if(enemy.ambusher)defeatAmbusher(enemy.ambusher,this.time);
       if(enemy.ventWorm&&enemy.ventAnchor!==undefined)this.defeatedVentWorms.add(enemy.ventAnchor);
       if (enemy.centipede) severCentipede(enemy);
       this.score += enemy.ambusher?200:enemy.crucible?300:enemy.slag?10:enemy.ventWorm?250:enemy.denTurret||enemy.ventAnchor!==undefined?150:enemy.shrimp?125:100;
+      if (this.phase === 'stage') this.score += this.graze.bank();
       const reward = enemy.reward;
       enemy.reward = undefined;
       if (reward && !reward.forfeited && --reward.remaining === 0 && this.phase === 'stage') {
@@ -2101,6 +2115,11 @@ export class Flight {
       }
     }
     if (laser) this.bossLaserDamage += before - this.bossHealth;
+    const quarter = this.bossMaxHealth / 4;
+    if (Math.ceil(this.bossHealth / quarter) < Math.ceil(before / quarter)) {
+      this.score += this.graze.bank();
+      this.scoredSeekers = 0;
+    }
     if (this.bossHealth === 0) {
       this.score += this.isFonsFight ? 2500 : 1000;
       if (this.level === 'wormhole' && !this.isFonsFight) {
@@ -2113,6 +2132,7 @@ export class Flight {
   private hit() {
     if (this.invulnerable > 0 || (this.phase !== 'stage' && this.phase !== 'boss')) return;
     this.invulnerable = 1.05;
+    this.graze.hit();
     this.hull--;
     if (this.hull === 0) this.enter('lost');
   }

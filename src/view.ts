@@ -136,6 +136,7 @@ export class FlightView {
   private playerMuzzle = createMuzzleFlash(teal);
   private droneMuzzle = createMuzzleFlash(mint);
   private combat = createCombatEffects();
+  private previousGrazeSpark?: { x: number; y: number };
   private wingPods: ({ weapon: WingWeapon } & ReturnType<typeof createWingPod>)[][];
   private wingLasers = Array.from({ length: 2 }, createContinuousLaser);
   private laserContact = createLaserContactTrace(this.plane);
@@ -423,6 +424,7 @@ export class FlightView {
       this.previousDrops = [];
       this.enemyVitals.clear();
       this.combat.clear();
+      this.previousGrazeSpark = flight.graze.spark;
       this.playerMuzzle.clear();
       this.droneMuzzle.clear();
       this.previousBossHealth = flight.bossHealth;
@@ -699,6 +701,13 @@ export class FlightView {
     let shipFired = false;
     let droneFired = false;
     let emitted = false;
+    if (flight.graze.spark !== this.previousGrazeSpark) {
+      this.previousGrazeSpark = flight.graze.spark;
+      if (flight.graze.spark) {
+        this.combat.emit('graze', flight.graze.spark, 0xffdf96);
+        emitted = true;
+      }
+    }
     for (const shot of flight.shots) {
       if (this.seenShots.has(shot))
         continue;

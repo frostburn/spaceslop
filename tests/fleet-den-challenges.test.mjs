@@ -235,7 +235,7 @@ test('stationary field bullets can only hit when fully materialized and fade in 
     while (!fieldBulletPhase(shot.field, shot.age + STEP).live) {
       f.step(STEP);
       assert.equal(f.hull, hull, level);
-      assert.equal(f.closeCalls, 0, level);
+      assert.equal(f.graze.count, 0, level);
     }
     f.step(STEP);
     assert.equal(f.hull, hull - 1, level);

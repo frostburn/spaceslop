@@ -6,6 +6,12 @@ Tap or click the playfield to send the drone to that point. It parks and fires a
 
 Boss tips in the HUD identify the current target and attack cues. Line up the ship or park the drone on a marked weak point, and move clear of amber aim warnings after they lock.
 
+Every pilot can graze live enemy shots. Let one pass just outside the fighter and a brass lamp lights beside the score. Each of the four lamps holds 25 points. Destroy a stage enemy or take a boss through a quarter of its health to bank the lit lamps. A hull hit discharges them. Each shot can count once, and Vex earns one extra Pulse on the fourth graze of the sortie.
+
+The Lantern Ray also pays 25 points for each of the first two seekers shot down per quarter of its health.
+
+The results screen shows your total score, grazes and banked bonus. A full clear with the standard starting equipment can set a personal best on this device. Campaign and Free Flight share a sector record for the same difficulty. Regular, Bullet Hell and Hardcore each have their own records. The briefing shows the target for your next run. Dev shortcuts and pre-equipped weapons give practice scores.
+
 In the Bullet Hell variants, use the fighter's center ring to judge gaps in the projectile streams. Boss targeting circles appear for the Sunspot Regulator's aimed plasma. When the Command Saucer and Gantry Chief seed the screen with hollow pellets, move into an open pocket or lane. Pellets stay where they land and can hit once fully filled, until they start to fade.
 
 Completing the regular campaign unlocks **Bullet Hell**. Fly all thirteen missions with denser enemy fire and a faster fighter with orange exhaust. Defeat **Fons Inversus Rex** in the Return Channel to unlock **Bullet Hell Hardcore**. Hardcore uses red exhaust and ends with **Fons Inversus Invictus**. The first hit ends the run and sends you back to Broodlock. Each surplus weapon pickup with Brass clears the hostile bullets on screen. Both modes also accept their names as case-insensitive unlock codes under **Settings**.

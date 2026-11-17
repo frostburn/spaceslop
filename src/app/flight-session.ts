@@ -1,6 +1,7 @@
 import { missionFor } from '../campaign/missions';
 import { challengeNames, type FlightMode } from '../campaign/challenges';
 import { ranks, type Rank } from '../campaign/ranks';
+import { formatScore, recordSectorClear, sectorBest } from '../campaign/sector-records';
 import { FLEET_TRENCH_AT } from '../fleet/route';
 import { Flight, STEP, type DroneWeapon } from '../game';
 import { levels, type LevelId } from '../levels';
@@ -59,6 +60,10 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
   const sector = element('sector');
   const hull = element('hull');
   const score = element('score');
+  const grazeMeter = element('graze-meter');
+  const grazeLabel = element('graze-label');
+  const scorecard = element('scorecard');
+  const resultBest = element('sortie-best');
   const charges = element('charges');
   const bossHud = element('boss-hud');
   const bossName = element('boss-name');
@@ -86,6 +91,8 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
   let unlockedHardcore = false;
   let victoryTime: number | undefined;
   const recordProgress = !shortcut;
+  const recordEligible = !shortcut && loadout.drone === 'sentry' && !loadout.wings.some(Boolean);
+  let previousRecord: Promise<number | undefined> | undefined;
   let offlineReady = false;
   let view: FlightView | undefined;
   let preparing: AbortController | undefined;
@@ -97,7 +104,14 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     const readout = flightReadout(flight, active, preparingGraphics, offlineReady);
     sector.textContent = readout.sector.label;
     sector.title = readout.sector.title;
-    score.textContent = String(flight.score).padStart(6, '0');
+    const digits = formatScore(flight.score);
+    if (score.textContent !== digits) score.textContent = digits;
+    grazeMeter.hidden = !(active || screen === 'paused') || flight.phase === 'won';
+    const charge = String(flight.graze.charge);
+    if (grazeMeter.getAttribute('aria-valuenow') !== charge) grazeMeter.setAttribute('aria-valuenow', charge);
+    const grazeText = flight.graze.payoutTime > 0 ? `+${flight.graze.lastPayout}` : 'Graze';
+    if (grazeLabel.textContent !== grazeText) grazeLabel.textContent = grazeText;
+    scorecard.hidden = screen !== 'results';
     hull.textContent = String(flight.hull).padStart(2, '0');
     charges.textContent = String(flight.charges).padStart(2, '0');
     bossHud.hidden = !readout.showBoss;
@@ -161,6 +175,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     if (flight.phase !== 'won' || victoryTime !== undefined) return;
     victoryTime = 0;
     input.reset();
+    if (recordEligible) previousRecord = recordSectorClear(selectedLevel, mode, flight.score);
     if (recordProgress && campaignRun) {
       const result = campaignRun.onClear();
       nextLevel = result.next;
@@ -172,6 +187,27 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
       victoryTime = view.victoryDuration;
     }
   }
+  async function showScorecard() {
+    element('sortie-total').textContent = formatScore(flight.score);
+    element('sortie-grazes').textContent = `${flight.graze.count} ${flight.graze.count === 1 ? 'graze' : 'grazes'}`;
+    element('sortie-bonus').textContent = `+${flight.graze.banked} banked`;
+    resultBest.classList.remove('record-set');
+    if (previousRecord) {
+      const completed = flight;
+      resultBest.textContent = '';
+      const previous = await previousRecord;
+      if (signal.aborted || screen !== 'results' || flight !== completed) return;
+      const total = completed.score;
+      resultBest.classList.toggle('record-set', previous === undefined || total > previous);
+      if (previous === undefined) resultBest.textContent = 'Sector best set';
+      else if (total > previous) resultBest.textContent = `New sector best · +${total - previous}`;
+      else if (total === previous) resultBest.textContent = 'Matched sector best';
+      else resultBest.textContent = `Sector best ${formatScore(previous)}`;
+    } else if (recordEligible) {
+      const best = sectorBest(selectedLevel, mode);
+      resultBest.textContent = best === undefined ? 'Clear the sector to set a best' : `Sector best ${formatScore(best)}`;
+    } else resultBest.textContent = 'Practice score';
+  }
   function showResults() {
     if (screen !== 'active' && screen !== 'credits') return;
     const fromCredits = screen === 'credits';
@@ -179,8 +215,8 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     credits.hidden = true;
     input.reset();
     heading.textContent = flight.phase === 'won' ? 'Mission Complete' : 'Ship lost';
-    const report = [levels[selectedLevel].name, `Score ${flight.score}`];
-    if (mode !== 'regular') report.splice(1, 0, challengeNames[mode]);
+    const report: string[] = [levels[selectedLevel].name];
+    if (mode !== 'regular') report.push(challengeNames[mode]);
     if (flight.phase === 'won' && recordProgress && campaignRun) {
       if (promotion) setPilotRank(promotion);
       if (!nextLevel) report.push('Campaign complete');
@@ -193,6 +229,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     nextMission.textContent = nextLevel ? `Next briefing · ${levels[nextLevel].name}` : 'Next briefing';
     promotionSubtitle.textContent = promotion ? `Promoted to ${ranks[promotion].name}` : '';
     message.textContent = report.join(' · ');
+    void showScorecard();
     start.textContent = restartHardcoreCampaign && flight.phase === 'lost' && selectedLevel !== 'broodlock'
       ? 'Restart at Broodlock' : 'Fly again';
     panel.scrollTop = 0;
@@ -252,6 +289,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
       unlockedBulletHell = false;
       unlockedHardcore = false;
       victoryTime = undefined;
+      previousRecord = undefined;
       setPilotRank(mission.pilotRank);
       if (import.meta.env.DEV && shortcut) {
         if (shortcut === 'boss' || shortcut === 'trench') {
@@ -358,6 +396,8 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     preparing?.abort();
     input.reset();
     panel.classList.remove('victory-results');
+    scorecard.hidden = true;
+    grazeMeter.hidden = true;
     credits.remove();
     promotionSubtitle.hidden = true;
     observer.disconnect();
