@@ -65,6 +65,10 @@ Rebuild after owner art uploads. Test changed media at the same filename to catc
 
 `npm test` covers simulation, geometry, contacts and effects. `npm run build` also checks unused locals/parameters. `npm run test:build` checks delivery boundaries. Browser checks cover actual WebGL, lifecycle and service-worker behavior; a successful TypeScript build alone cannot establish those.
 
+## Europa marine models
+
+`marine-fins.ts` builds closed hydrofoil paddles, dorsal fins and tail flukes. A fin's embedded root holds steady as its distal sections bend and twist. The ichthyosaur and Leviathan carry their rear paddles on the hip bones. The plesiosaur drives its front and rear pairs out of phase, and both tail-driven swimmers send a delayed bend into the fluke. The actor pool shares fin geometry and stores each model's pose on its meshes. Skin markings use bind-pose coordinates through the stroke. Leviathan teeth are rooted in the jaw arcades and share the mouth's aperture-driven shading.
+
 ## Titan creatures
 
 `titan-wings.ts` builds cambered membranes and branching veins for the Cicada and its scouts. The surface and vein geometry share a flex shape, with each wing's flex driven by its beat. Scouts share those buffers across the actor pool. The boss folds its six femurs, tibiae and tarsi as the vents charge. The cicadas’ inset eyes share mip-filtered compound facets, and overlapping plates form one continuous abdomen. Centipede sections carry keeled armor over legs solved to planted terrain contacts. The gait samples the same scroll as the ground tiles and retains both contacts when a section changes chains.
