@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {test,after} from 'node:test';
 import {createServer} from 'vite';
 const server=await createServer({root:new URL('..',import.meta.url).pathname,configFile:false,server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true,entries:[]},appType:'custom'});after(()=>server.close());
+const { campaign } = await server.ssrLoadModule('/src/campaign/missions.ts');
 const {Flight,BOSS_CAMERA_DISTANCE,BOSS_DEPTH,BOSS_PROJECTION,STEP}=await server.ssrLoadModule('/src/game.ts');
 for(const level of ['summer','heliostat','boulevard','vents','io','titan','ice','preserve','broodlock'])test(`${level}: drone rounds advance on screen, preserve lateral aim and hit at boss depth`,()=>{
  const f=new Flight('sentry',[],'vex',level);f.phase='boss';f.stepBoss=()=>{};f.cooldown=f.droneCooldown=1e6;f.invulnerable=100;
@@ -95,4 +96,57 @@ test('Fons accepts a receding shot that crosses the projected mirror', () => {
   assert(shot.z < 0);
   assert.equal(flight.bossHealth, health - 1);
   assert(!flight.shots.includes(shot));
+});
+
+for (const route of ['vents', 'wormhole']) {
+  for (const mode of ['regular', 'bullet-hell', 'hardcore']) {
+    test(`${route} ${mode}: a laser tracks walking Sovereign claws and exposed gills`, () => {
+      const flight = new Flight('sentry', ['laser'], 'vex', route, () => .5, mode);
+      if (route === 'wormhole') {
+        const index = campaign.findIndex(mission => mission.level === 'vents');
+        flight.startWormholeEncounter(index);
+      }
+      flight.phase = 'boss';
+      const wing = flight.wings[0];
+      const track = () => flight.stepLaser(wing, { x: flight.exposedCannonX * BOSS_PROJECTION, y: -6 }, true, STEP);
+      for (const side of [-1, 1, 0]) {
+        assert.equal(flight.bossContactSide, side);
+        for (let frame = 0; frame < 120; frame++) {
+          flight.time = 1 + frame * STEP;
+          track();
+          if (frame === 0) assert.equal(wing.laserHold, 0);
+        }
+        assert(wing.laserHold > .85);
+        const hp = flight.bossHealth;
+        track();
+        assert(Math.abs(hp - flight.bossHealth - 3.5 * STEP) < 1e-8);
+        if (side < 0) flight.volley++;
+        if (side > 0) {
+          flight.damageBoss(100);
+          flight.damageBoss(100);
+        }
+      }
+      flight.stepLaser(wing, { x: 20, y: -6 }, true, STEP);
+      track();
+      assert.equal(wing.laserHold, 0);
+    });
+  }
+}
+
+for (const mode of ['regular', 'bullet-hell', 'hardcore']) test(`${mode}: tracking one target builds charge in every boss encounter`, () => {
+  for (const { level } of campaign) {
+    const flight = new Flight('sentry', ['laser'], 'vex', level, () => .5, mode);
+    flight.phase = 'boss';
+    if (level === 'wormhole') {
+      flight.startFonsApproach();
+      flight.phase = 'boss';
+    }
+    const wing = flight.wings[0];
+    for (let frame = 0; frame < 65; frame++) {
+      flight.time = 3 + frame * STEP;
+      const x = flight.exposedCannonX * (flight.planarBoss ? 1 : BOSS_PROJECTION);
+      flight.stepLaser(wing, { x, y: -7 }, true, STEP);
+    }
+    assert(wing.laserHold >= .85, level);
+  }
 });

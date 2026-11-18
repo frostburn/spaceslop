@@ -547,7 +547,7 @@ export class FlightView {
     this.level.update(levelFrame);
     this.cannonMarker.visible = flight.phase === 'boss' && flight.mode === 'regular' && !flight.planarBoss;
     if (this.cannonMarker.visible) {
-      const p = this.level.contact(flight.exposedCannonX, distance, flight);
+      const p = this.level.contact(flight.bossContactSide, distance, flight);
       this.cannonMarker.position.set(p.x, p.y, 0);
       this.cannonMarker.scale.setScalar(Math.min(1.25, flight.bossTargetRadius / BOSS_CANNON_RADIUS));
     }

@@ -55,7 +55,7 @@ export const createLevel: LevelFactory = ({ plane, scene, signal }) => {
     },
     capture: (renderer, camera) => vents.capture(renderer, scene, camera),
     dispose: () => vents.dispose(),
-    contact: (x, d, f) => contact(f.crabCoreOpen ? 0 : x, d),
+    contact,
     effects(plane, sources, frame, renderer) {
       if (frame.newFlight)
         bubbles.reset();
