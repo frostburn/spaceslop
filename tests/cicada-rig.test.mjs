@@ -72,17 +72,31 @@ test('Titan world keeps ground/cloud separation and ends at the combat hit plane
  const start=titanBossPoint(0),end=titanBossPoint(1);assert(start.y>12);assert(Math.abs(end.y-4.2)<1e-10);assert(Math.abs(end.z+12)<1e-10);
 });
 
-test('wing vein triangles fit within membranes and every leg has tibial spines',async()=>{
- const {Triangle,Vector3}=await import('three'),rig=createCicada(),p=new Vector3(),a=new Vector3(),b=new Vector3(),c=new Vector3(),triangle=new Triangle();
- for(const wing of rig.root.children.filter(n=>/^(fore|hind)wing-/.test(n.name))){
-  const membrane=wing.children[0].geometry,veins=wing.children[1].geometry,triangles=[];
-  for(let i=0;i<membrane.index.count;i+=3){triangles.push(new Triangle(new Vector3().fromBufferAttribute(membrane.attributes.position,membrane.index.getX(i)),new Vector3().fromBufferAttribute(membrane.attributes.position,membrane.index.getX(i+1)),new Vector3().fromBufferAttribute(membrane.attributes.position,membrane.index.getX(i+2))));}
-  const used=new Set(veins.index.array);assert(used.size>100);
-  for(const i of used){p.fromBufferAttribute(veins.attributes.position,i).setZ(0);assert(triangles.some(t=>t.containsPoint(p)),'vein outside membrane');}
+test('wing veins ride the cambered membrane through the beat and spines follow each tibia', async () => {
+ const {Raycaster, Vector3}=await import('three'),rig=createCicada();
+ const wings=rig.root.children.filter(n=>/^(fore|hind)wing-/.test(n.name));
+ const ray=new Raycaster(),down=new Vector3(0,0,-1),point=new Vector3(),target=new Vector3();
+ for(const time of [.1,.17,.25]) {
+  rig.pose(1,.9,-2.4,0,0,time);
+  for(const wing of wings){
+   const membrane=wing.getObjectByName('wing-membrane'),veins=wing.getObjectByName('wing-veins');
+   assert.equal(membrane.morphTargetInfluences[0],veins.morphTargetInfluences[0]);
+   const vertices=veins.geometry.attributes.position,morph=veins.geometry.morphAttributes.position[0];
+   // Use the actual deformed surface in local wing space.
+   for(let i=0;i<vertices.count;i+=7){
+    point.fromBufferAttribute(vertices,i).lerp(target.fromBufferAttribute(morph,i),veins.morphTargetInfluences[0]);
+    ray.set(target.copy(point).addScaledVector(down,-1),down);
+    const hit=ray.intersectObject(membrane,false)[0];
+    assert(hit&&point.z-hit.point.z>0&&point.z-hit.point.z<.075,'vein leaves the wing surface');
+   }
+  }
  }
- for(const leg of rig.root.children.filter(n=>n.name.startsWith('leg-')))assert.equal(leg.children.filter(n=>n.name==='tibial-spine').length,5);
+ for(const leg of rig.root.children.filter(n=>n.name.startsWith('leg-'))){
+  const tibia=leg.getObjectByName('tibia'),foot=tibia.getObjectByName('tarsus');
+  assert.equal(tibia.children.filter(n=>n.name==='tibial-spine').length,5);
+  assert.equal(foot.parent,tibia);
+ }
 });
-
 
 test('mirrored strip extensions share borders and mountains leave the flight corridor clear',async()=>{
  const {titanGroundTile}=await server.ssrLoadModule('/src/titan-layout.ts');

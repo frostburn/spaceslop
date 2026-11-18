@@ -2,7 +2,7 @@ import {createTitanMountains} from './titan-mountains';
 import {titanFrame,titanWorld} from './titan-frame';
 import * as T from 'three';
 import { encounterTextureUrl, loadEncounterTexture } from './encounter-texture';
-import {TITAN_DURATION,TITAN_SCREENS,titanTileY,titanGroundTile,TITAN_TRAVEL} from './titan-layout';
+import {TITAN_DURATION,TITAN_SCREENS,titanTileY,titanGroundTile,TITAN_TRAVEL,TITAN_GROUND_Z} from './titan-layout';
 import {titanMask} from './titan-mask';
 import {createTitanClouds} from './titan-clouds';
 import {createTitanAmbient} from './titan-ambient';
@@ -84,7 +84,7 @@ export function createTitanScenery(signal?:AbortSignal){
  });
  const ready=Promise.all([backdropReady,loadEncounterTexture('titanRobot',ambient.setRobotTexture, undefined, signal).then(texture=>texture?[texture]:[])]).then(parts=>parts.flat());
  return{root,ready,get hasArt(){return hasArt;},update(progress:number,time=progress*TITAN_DURATION,ascent=0,distance=95){clock.value=time;ambient.update(progress,time);ambient.root.visible=true;clouds.update(time,ascent,distance);
-  const frame=titanFrame(ascent),point=titanWorld(0,-4,ascent);terrain.rotation.x=-frame.pitch;terrain.position.set(0,point.y,point.z);
+  const frame=titanFrame(ascent),point=titanWorld(0,TITAN_GROUND_Z,ascent);terrain.rotation.x=-frame.pitch;terrain.position.set(0,point.y,point.z);
   mountains.position.y=-progress*TITAN_TRAVEL;
   copies.forEach(({mesh,index,column,repeat})=>{const tile=titanGroundTile(index,column,repeat,progress);mesh.position.set(tile.x,tile.y,0);mesh.visible=true;});
   tiles.forEach((mesh,i)=>{mesh.position.y=titanTileY(i,progress);mesh.visible=true;});

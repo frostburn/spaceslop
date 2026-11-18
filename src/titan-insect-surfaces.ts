@@ -76,3 +76,44 @@ export function addTitanSetae(parent:T.Object3D,x:number,y:number,z:number,width
   const patch=new T.Mesh(stubbleGeometry[kind],stubbleMaterials[kind]);patch.name='coarse-setae-patch';
   patch.position.set(x,y,z);patch.scale.set(width,height,Math.min(width,height));parent.add(patch);return patch;
 }
+
+function compoundSurface() {
+  const size = 96, data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const u = x / 6, v = y / 6;
+    const base = Math.floor(v);
+    let distance = 1;
+    for (let row = base - 1; row <= base + 1; row++) {
+      const s = u - (row & 1) * .5;
+      distance = Math.min(distance, Math.hypot(s - Math.round(s), (v - row) * .866));
+    }
+    const tone = 222 - 44 * T.MathUtils.smoothstep(distance, .32, .59);
+    data.set([tone, tone, tone, 255], (y * size + x) * 4);
+  }
+  const texture = filteredTexture(data, size, size);
+  texture.wrapS = texture.wrapT = T.RepeatWrapping;
+  return texture;
+}
+
+const facets = compoundSurface();
+export function cicadaEye(color: number, relief: number) {
+  return new T.MeshPhysicalMaterial({
+    color, roughness: .49, clearcoat: .22, clearcoatRoughness: .44,
+    map: facets, bumpMap: facets, bumpScale: relief,
+  });
+}
+
+// A sequence of lapped plates on one closed abdomen. The shallow grooves
+// separate adjacent plates while the overall profile tapers toward the tip.
+export function cicadaAbdomen(length: number, width: number, depth: number, plates: number) {
+  const outline = [new T.Vector2(0, -length)];
+  for (let plate = 0; plate < plates; plate++) {
+    for (const [offset, ridge] of [[.03, .88], [.22, 1], [.66, 1], [.87, .98], [.99, .86]]) {
+      const t = (plate + offset) / plates;
+      const taper = Math.sin(t * Math.PI * .48) ** .65;
+      outline.push(new T.Vector2(width * taper * ridge, (t - 1) * length));
+    }
+  }
+  outline.push(new T.Vector2(width * .88, 0), new T.Vector2(0, .016 * length));
+  return new T.LatheGeometry(outline, 32).scale(1, 1, depth / width);
+}
