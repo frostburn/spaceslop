@@ -65,10 +65,12 @@ export const antShell = new T.MeshStandardMaterial({
   color: 0xd4b2a0, map: chitin.color, bumpMap: chitin.height, bumpScale: 0.026,
   roughnessMap: chitin.height, roughness: 0.64, metalness: 0.14,
 });
+export const antPlate = antShell.clone();
+antPlate.vertexColors = true;
+antPlate.bumpScale = 0.012;
 export const antJoint = new T.MeshStandardMaterial({
   color: 0x62514b, map: chitin.color, bumpMap: chitin.height, bumpScale: 0.016, roughness: 0.72,
 });
-export const antSeam = new T.MeshStandardMaterial({ color: 0x3d2420, roughness: 0.66 });
 export const antEye = new T.MeshStandardMaterial({ color: 0xe0e5d7, map: cloudedEye(), roughness: 0.68 });
 export const sporeGlow = new T.MeshBasicMaterial({ color: 0xffb05b });
 
@@ -78,13 +80,15 @@ export const fungusCap = new T.MeshStandardMaterial({
 export const fungusStem = new T.MeshStandardMaterial({
   color: 0xf3e2c1, map: fungal.color, bumpMap: fungal.height, bumpScale: 0.025, roughness: 0.92,
 });
+export const sporeCup = fungusStem.clone();
+sporeCup.vertexColors = true;
 export const fungusGills = new T.MeshStandardMaterial({ color: 0x89653e, roughness: 0.96, side: T.DoubleSide });
 export const mycelium = new T.MeshStandardMaterial({ color: 0xc4ae89, map: fungal.color, roughness: 0.96 });
 
 export function setAntChitinTexture(texture: T.Texture) {
-  applySurfaceMap(texture, [antShell, antJoint]);
+  applySurfaceMap(texture, [antShell, antPlate, antJoint]);
 }
 
 export function setFungusTexture(texture: T.Texture) {
-  applySurfaceMap(texture, [fungusCap, fungusStem, mycelium]);
+  applySurfaceMap(texture, [fungusCap, fungusStem, sporeCup, mycelium]);
 }

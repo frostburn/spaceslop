@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { fungusCap, fungusStem } from './hive-materials';
+import { antGaster } from './ant-shell';
+import { fungusCap, fungusStem, mycelium } from './hive-materials';
 import { part } from './rig-geometry';
 
 const sphere = new T.SphereGeometry(1, 12, 8);
@@ -27,42 +28,51 @@ for (let i = 0; i < 4; i++) {
 const stalks = mergeGeometries(stems);
 const tips = mergeGeometries(clubs);
 const headCurve = new T.CatmullRomCurve3([
-  new T.Vector3(), new T.Vector3(-0.08, 0.08, 0.24), new T.Vector3(-0.25, 0.27, 0.58),
-  new T.Vector3(-0.18, 0.47, 0.92), new T.Vector3(-0.1, 0.57, 1.03),
+  new T.Vector3(0, 0, -0.024), new T.Vector3(0.012, -0.03, 0.14), new T.Vector3(-0.082, 0.012, 0.32),
+  new T.Vector3(-0.174, 0.144, 0.55), new T.Vector3(-0.16, 0.23, 0.63),
 ]);
-const headStalk = new T.TubeGeometry(headCurve, 18, 0.031, 8, false);
-const headClub = sphere.clone().scale(0.095, 0.095, 0.2);
+const headStalk = new T.TubeGeometry(headCurve, 18, 0.034, 8, false);
+const headClub = sphere.clone().scale(0.074, 0.071, 0.135);
 headClub.applyQuaternion(new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 0, 1), headCurve.getTangent(1)));
 const headEnd = headCurve.getPoint(1);
 headClub.translate(headEnd.x, headEnd.y, headEnd.z);
 
-const crustParts: T.BufferGeometry[] = [];
-for (const side of [-1, 1]) for (let i = 0; i < 4; i++) {
-  const x = side * (0.24 + Math.sin(i * 1.8) * 0.045), y = -0.28 + i * 0.14;
-  crustParts.push(sphere.clone().scale(0.07, 0.095, 0.045).translate(x, y, 0.18));
-  crustParts.push(new T.TubeGeometry(new T.CatmullRomCurve3([
-    new T.Vector3(side * 0.05, -0.34, 0.26), new T.Vector3(side * 0.1, y - 0.04, 0.26),
-    new T.Vector3(x, y, 0.19),
-  ]), 6, 0.013, 5, false));
+const holdfast = mergeGeometries([
+  sphere.clone().scale(0.103, 0.084, 0.06).translate(0, 0, -0.022),
+  sphere.clone().scale(0.057, 0.069, 0.043).translate(0.067, 0.025, -0.026),
+  sphere.clone().scale(0.060, 0.045, 0.033).translate(-0.067, -0.036, -0.028),
+]);
+
+const web: T.BufferGeometry[] = [];
+for (const side of [-1, 1]) for (let branch = 0; branch < 4; branch++) {
+  const y = -0.235 + branch * 0.147;
+  const startY = side < 0 ? -0.30 : -0.25;
+  const points = Array.from({ length: 11 }, (_, i) => {
+    const t = i / 10;
+    const angle = side * (0.98 - 0.54 * Math.sin(t * 1.65) + t * (branch % 2) * 0.26);
+    return antGaster.point(T.MathUtils.lerp(startY, y, t), angle, 0.0035);
+  });
+  web.push(new T.TubeGeometry(new T.CatmullRomCurve3(points), 16, 0.0048 + (branch % 2) * 0.0015, 5, false));
 }
-const crust = mergeGeometries(crustParts);
+const parasiteWeb = mergeGeometries(web);
 
 export function createParasiteColony() {
   const root = new T.Group();
   root.name = 'parasite-colony';
+  part(root, holdfast, mycelium, 0, 0, 0);
   part(root, stalks, fungusStem, 0, 0, 0);
   part(root, tips, fungusCap, 0, 0, 0);
   return root;
 }
 
-export function addParasiteCrust(parent: T.Group) {
-  part(parent, crust, fungusStem, 0, 0, 0);
+export function addParasiteWeb(parent: T.Group) {
+  part(parent, parasiteWeb, mycelium, 0, 0, 0);
 }
 
 export function createHeadStem() {
   const root = new T.Group();
   root.name = 'head-fruiting-stem';
-  part(root, sphere, fungusStem, 0, 0, 0.015).scale.set(0.083, 0.095, 0.055);
+  part(root, holdfast, mycelium, 0, 0, 0);
   part(root, headStalk, fungusStem, 0, 0, 0);
   part(root, headClub, fungusCap, 0, 0, 0);
   return root;

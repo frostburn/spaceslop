@@ -131,8 +131,9 @@ export function createWormholeBosses(plane: T.Group, signal: AbortSignal) {
   const command = createFleetBossRig(saucers);
   const chief = createDenBiker();
   const roster: Record<Exclude<LevelId, 'wormhole'>, WormholeBoss> = {
-    broodlock: boss(guardian.root, ({ flight }) => {
-      guardian.pose(1, flight.cannonWindup, flight.exposedCannonX, flight.firedCannonX, flight.bossRecoil / BOSS_RECOIL_TIME);
+    broodlock: boss(guardian.root, ({ flight, animationTime }) => {
+      guardian.pose(1, flight.cannonWindup, flight.exposedCannonX, flight.firedCannonX,
+        flight.bossRecoil / BOSS_RECOIL_TIME, animationTime);
     }),
     io: boss(caldera.root, ({ flight }, time) => {
       caldera.pose(IO_DURATION + IO_APPROACH + time, flight.ioCollapse, flight.ioLegBroken, flight.cannonWindup);
