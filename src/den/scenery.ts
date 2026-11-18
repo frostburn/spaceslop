@@ -93,7 +93,9 @@ export function createDenScenery() {
   lensUniforms.skyGain.value = .98;
   lensUniforms.diskGain.value = .78;
   lensUniforms.skyOffset.value.set(-.012, .085);
-  lensUniforms.skyRoll.value = -.7;
+  // Turn the panorama a quarter turn from its original Den framing.
+  lensUniforms.skyRoll.value = -.7 + Math.PI / 2;
+  lensUniforms.skyFocalLength.value = 12;
   const sky = new T.Mesh(new T.PlaneGeometry(2, 2), lens.material);
   sky.name = 'lensed-galactic-center';
   sky.frustumCulled = false;
