@@ -93,8 +93,6 @@ export const createLevel: LevelFactory = ({ plane, fighter, signal }) => {
     },
     contact(x, distance, flight) {
       if (active?.contact) {
-        if (flight.encounterLevel === 'io') x = flight.ioLegBroken ? 1 : -1;
-        if (flight.encounterLevel === 'vents') x = flight.crabCoreOpen ? 0 : flight.crabTargetX;
         return active.contact(x, distance);
       }
       return { x: flight.exposedCannonX, y: flight.bossAimY };

@@ -46,7 +46,7 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
       io.prime(true);
     },
     afterWarmup: () => io.prime(false),
-    contact: (x, d) => contact(x < -1 ? -1 : 1, d),
+    contact,
     update({ flight, reveal: eased, time: ioTime }) {
       const orientation = ioFrame(ioTime, eased);
       const ioPitch = orientation.pitch;

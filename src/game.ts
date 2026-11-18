@@ -627,6 +627,18 @@ export class Flight {
       (this.phase === 'stage' || this.phase === 'boss') && !near(this.player, this.drone, 0.5);
   }
 
+  // Select the model attachment independently of its animated screen position.
+  get bossContactSide(): -1 | 0 | 1 {
+    switch (this.encounterLevel) {
+      case 'vents': return this.crabTargetX < 0 ? -1 : this.crabCoreOpen ? 0 : 1;
+      case 'io': return this.ioLegBroken ? 1 : -1;
+      case 'broodlock':
+      case 'titan': return this.volley % 2 === 0 ? -1 : 1;
+      case 'summer': return this.summerTargetHead;
+      default: return 0;
+    }
+  }
+
   get exposedCannonX() {
     if (this.isFonsFight) return fonsPose(this.fonsTime).x;
     if (this.isCicadaFight) return this.cicadaAim().x;
@@ -1077,7 +1089,7 @@ export class Flight {
       if (!this.keepDepthShotsForward || aimY > origin.y) {
         endY = aimY;
         if (Math.abs(origin.x - aim.x * BOSS_PROJECTION) < this.bossTargetRadius * BOSS_PROJECTION) {
-          target = this.isCicadaFight ? Math.sign(aim.x) : aim.x;
+          target = this.bossContactSide;
         }
       }
     } else if (this.level === 'fleet') {
