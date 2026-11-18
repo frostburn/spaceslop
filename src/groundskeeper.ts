@@ -87,7 +87,7 @@ function clawArm(shoulder: GkPoint, goal: GkPoint, pole: GkPoint, wristFlex: num
   const elbow = twoBone(shoulder, axis, distance, bend, upper, reach);
   const line = norm(sub(tip, elbow));
   const wrist = twoBone(elbow, line, reach, cross(hinge, line), forearm, middleClaw);
-  return { shoulder, elbow, wrist, hinge, across: hinge, direction: norm(sub(tip, wrist)) };
+  return { shoulder, elbow, wrist, hinge, direction: norm(sub(tip, wrist)) };
 }
 
 function leg(hip: GkPoint, foot: GkPoint, side: number) {
@@ -178,11 +178,15 @@ export function groundskeeperPose(time: number, aim: GkAim = { x: 0, y: -5.3 }, 
     const cutting = rake && striking ? gkSmooth((attack.age - GROUNDSKEEPER_STRIKE + .16) / .48) * strength : 0;
     const wristFlex = .58 + .20 * guard - .48 * cutting;
     const solved = clawArm(shoulder, tip, pole, wristFlex);
-    const { across, direction } = solved;
+    const { hinge, direction } = solved;
+    // Turn the hand over on the way to the strike. Roll about its long axis
+    // so the wrist and the middle talon's contact path stay in place.
+    const roll = handSide * Math.PI * guard;
+    const across = add(mul(hinge, Math.cos(roll)), mul(cross(direction, hinge), Math.sin(roll)));
     const palmNormal = cross(across, direction);
     const claws = clawShapes[handSide < 0 ? 0 : 1].map(curve => curve.map(p =>
       add(solved.wrist, add(mul(across, p.x), add(mul(direction, p.y), mul(palmNormal, p.z))))));
-    return { ...solved, claws, side: handSide };
+    return { ...solved, across, claws, side: handSide };
   });
   const feet = [-1, 1].map(s => point(s * 2.15, -.35 - (s === side ? moving * (kind === 'lunge' ? 3.5 : 1.2) : 0),
     s === side ? Math.sin(moving * Math.PI) * (kind === 'lunge' ? .45 : .22) : 0));

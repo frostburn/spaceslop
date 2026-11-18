@@ -52,7 +52,7 @@ test('the marked rake, slam and bite targets remain within reach across the flig
   }
 });
 
-test('both rakes lead with talon points aimed into the flight lane around contact', () => {
+test('both rakes aim the hooked points toward the marked ship at contact', () => {
   const toFlight = p => new T.Vector3().copy(g.groundskeeperFlight(p));
   const duration = g.GROUNDSKEEPER_END - g.GROUNDSKEEPER_STRIKE;
   for (const x of [-3.5, -2, 0, 2, 3.5]) for (const y of [-6.8, -3, 0, 3, 5.5]) {
@@ -62,14 +62,13 @@ test('both rakes lead with talon points aimed into the flight lane around contac
       const time = arm * g.GROUNDSKEEPER_CYCLE + g.GROUNDSKEEPER_STRIKE + duration * progress;
       const hand = g.groundskeeperPose(time, aim).arms[arm];
       const next = g.groundskeeperPose(time + STEP, aim).arms[arm];
-      for (const [finger, curve] of hand.claws.entries()) {
+      for (const curve of hand.claws) {
         const [base, bow, tip] = curve.map(toFlight);
         const pointDirection = tip.clone().sub(bow).normalize();
         const toShip = ship.clone().sub(base).normalize();
-        const travel = toFlight(next.claws[finger][2]).sub(tip).normalize();
         assert(pointDirection.dot(toShip) > .5, 'talon point faces away from the marked ship');
-        assert(pointDirection.z > 0 && pointDirection.dot(travel) > 0, 'talon point trails the cut');
       }
+      assert(toFlight(next.claws[1][2]).z > toFlight(hand.claws[1][2]).z, 'middle talon sweeps back through the flight plane');
     }
   }
 });
@@ -196,7 +195,7 @@ test('wrists and weight-bearing legs stay articulated through attacks, recovery 
  }
 });
 
-test('resting elbows fold back and down, and both arm sections preserve the elbow hinge axis',()=>{
+test('striking hands turn over 180 degrees while both arm sections keep their hinge axis',()=>{
  const rig=createGroundskeeper(),v=p=>new T.Vector3(p.x,p.y,p.z),xAxis=new T.Vector3(1,0,0),yAxis=new T.Vector3(0,1,0);
  const rest=rig.pose(0);
  for(const arm of rest.arms){
@@ -205,7 +204,7 @@ test('resting elbows fold back and down, and both arm sections preserve the elbo
   assert(bend>60&&bend<115,'resting elbow has an open flexion angle');
   assert(arm.elbow.z<arm.shoulder.z-1.2&&arm.elbow.y>arm.shoulder.y+.3,'humerus descends back toward the elbow');
  }
- for(const x of[-3.5,0,3.5])for(const y of[-6.8,0,5.5])for(const t of[0,1.8,2.5,2.85,3.25,3.85,8.5,8.85,14.1,19.4]){
+ for(const x of[-3.5,0,3.5])for(const y of[-6.8,0,5.5])for(const t of[0,1.8,2.5,2.85,3.25,3.85,7.9,8.5,8.85,12.95,14.1,18,19.4]){
   const p=rig.pose(t,{x,y});
   for(const arm of p.arms){
    const upper=rig.root.getObjectByName(`upper-arm-${arm.side}`),lower=rig.root.getObjectByName(`forearm-${arm.side}`);
@@ -213,8 +212,13 @@ test('resting elbows fold back and down, and both arm sections preserve the elbo
    const ux=xAxis.clone().applyQuaternion(upper.quaternion),lx=xAxis.clone().applyQuaternion(lower.quaternion);
    assert(Math.abs(ux.dot(hinge))>1-1e-6&&ux.dot(lx)>1-1e-6,'a bone rolls away from the shared hinge plane');
    assert(yAxis.clone().applyQuaternion(upper.quaternion).dot(u)>1-1e-6&&yAxis.clone().applyQuaternion(lower.quaternion).dot(l)>1-1e-6);
-   const palm=rig.root.getObjectByName(`palm-${arm.side}`),direction=v(arm.direction),across=ux.clone().addScaledVector(direction,-ux.dot(direction)).normalize();
-   assert(xAxis.clone().applyQuaternion(palm.quaternion).dot(across)>1-1e-6,'hand acquires independent forearm twist');
+   const palm=rig.root.getObjectByName(`palm-${arm.side}`),across=xAxis.clone().applyQuaternion(palm.quaternion);
+   assert(across.dot(v(arm.across))>1-1e-6,'rendered hand disagrees with the posed talons');
+   assert(yAxis.clone().applyQuaternion(palm.quaternion).dot(v(arm.direction))>1-1e-6,'hand turns away from its contact path');
+   if(t===0||p.active){
+    const striking=p.active&&(p.kind==='double slam'||p.kind===(arm.side<0?'left rake':'right rake'));
+    assert(Math.abs(across.dot(ux)-(striking?-1:1))<1e-6,'only striking hands should turn over');
+   }
    const claw=rig.root.getObjectByName(`claw-${arm.side}-1`),positions=claw.geometry.attributes.position,curve=new T.CatmullRomCurve3(arm.claws[1].map(v)),tangent=curve.getTangent(0);
    const expected=across.clone().addScaledVector(tangent,-across.dot(tangent)).normalize(),actual=new T.Vector3().fromBufferAttribute(positions,0).sub(new T.Vector3().fromBufferAttribute(positions,6)).applyQuaternion(palm.quaternion).normalize();
    assert(actual.dot(expected)>1-1e-6,'flattened claw cross-section rolls independently of its hand');
