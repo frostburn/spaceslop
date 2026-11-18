@@ -7,7 +7,7 @@ after(() => server.close());
 const { Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
 const { campaign } = await server.ssrLoadModule('/src/campaign/missions.ts');
 const { PATTERN_HIT_RADIUS, PATTERN_BULLET_CAPACITY } = await server.ssrLoadModule('/src/challenge-patterns.ts');
-const { challengeAvailable, challengeRoutes, decodeChallengeProgress, nextChallengeLevel, readChallengeCode, recordChallengeClear, resetHardcoreProgress, unlockChallenge } =
+const { challengeAvailable, challengeRoutes, decodeChallengeProgress, nextChallengeLevel, readChallengeCode, recordChallengeClear, resetHardcoreProgress, selectableChallengeLevel, unlockChallenge } =
   await server.ssrLoadModule('/src/campaign/challenges.ts');
 const { endingMessage } = await server.ssrLoadModule('/src/app/ending-credits.ts');
 
@@ -15,6 +15,15 @@ const { heliostatChallengeBoss } = await server.ssrLoadModule('/src/heliostat/ch
 const { HELIOSTAT_FIRE, HELIOSTAT_GROW, HELIOSTAT_INTERVAL } = await server.ssrLoadModule('/src/heliostat/combat.ts');
 
 const launch = (mode, pilot = 'vex', level = 'broodlock') => new Flight('sentry', [], pilot, level, () => .5, mode);
+
+test('a Hardcore reset redirects a stale mission selection while cleared sectors remain replayable before loss', () => {
+  const progress = decodeChallengeProgress(null);
+  recordChallengeClear(progress, 'hardcore', 'broodlock');
+  assert.equal(selectableChallengeLevel(progress, 'hardcore', 'broodlock'), 'broodlock');
+  assert.equal(selectableChallengeLevel(progress, 'hardcore', 'io'), 'io');
+  resetHardcoreProgress(progress);
+  assert.equal(selectableChallengeLevel(progress, 'hardcore', 'io'), 'broodlock');
+});
 
 test('challenge unlocks are case-insensitive and Hardcore loss resets only Hardcore clears', () => {
   const progress = decodeChallengeProgress('invalid');

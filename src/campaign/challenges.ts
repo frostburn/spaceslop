@@ -58,6 +58,10 @@ export function nextChallengeLevel(progress: ChallengeProgress, mode: ChallengeM
   return challengeRoutes[mode].find(level => !progress.cleared[mode].includes(level));
 }
 
+export function selectableChallengeLevel(progress: ChallengeProgress, mode: ChallengeMode, level: LevelId) {
+  return progress.cleared[mode].includes(level) ? level : nextChallengeLevel(progress, mode) ?? challengeRoutes[mode].at(-1)!;
+}
+
 export function recordChallengeClear(progress: ChallengeProgress, mode: ChallengeMode, level: LevelId) {
   const frontier = nextChallengeLevel(progress, mode);
   const cleared = progress.cleared[mode];
