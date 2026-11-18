@@ -92,8 +92,8 @@ export function createDenScenery() {
   lensUniforms.lensExtent.value = 11.7;
   lensUniforms.skyGain.value = .98;
   lensUniforms.diskGain.value = .78;
-  lensUniforms.skyOffset.value.set(-.012, .085);
-  lensUniforms.skyRoll.value = -.7;
+  lensUniforms.skyOffset.value.set(-.012, 0);
+  lens.material.defines.DEN_PORTRAIT_SKY = 1;
   const sky = new T.Mesh(new T.PlaneGeometry(2, 2), lens.material);
   sky.name = 'lensed-galactic-center';
   sky.frustumCulled = false;
