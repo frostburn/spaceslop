@@ -5,7 +5,7 @@ import {createBoulevardScenery} from '../../boulevard-scenery';
 import {createBoulevardMine,createBoulevardInterceptor} from '../../boulevard-enemies';
 import {MINE_POOL} from '../../boulevard-mines';
 import {createHovercar,cloneHovercar,createPursuitCruiser} from '../../boulevard-rigs';
-import {boulevardFrame,boulevardBossPoint,boulevardMotion,BOULEVARD_POOL,CRUISER_MUZZLE_Y} from '../../boulevard';
+import {boulevardFrame,boulevardBossPoint,boulevardMotion,BOULEVARD_POOL,HOVERCAR_EXHAUST_Y} from '../../boulevard';
 import {boulevardChallengeTiming} from '../../boulevard-challenge';
 import {patternBurstCharge} from '../../challenge-patterns';
 import {createPatternCharge} from '../pattern-charge';
@@ -19,23 +19,23 @@ export const createLevel:LevelFactory=({plane,signal})=>{
  const cars=Array.from({length:BOULEVARD_POOL},()=>cloneHovercar(light.root)),haulers=Array.from({length:3},()=>cloneHovercar(heavy.root));
  const mines=Array.from({length:MINE_POOL},()=>createBoulevardMine(scenery.materials)),interceptors=Array.from({length:4},()=>createBoulevardInterceptor(scenery.materials));
  const neon=createPatternCharge(0xff72cb),teal=createPatternCharge(0x70f4ff);
- const carCharges=cars.map(r=>neon.attach(r.root,0,-.75,.22)),haulerCharges=haulers.map(r=>teal.attach(r.root,0,-.75,.22));
- const cruiserCharges=boss.guns.map(({rotor},i)=>(i===0?neon:teal).attach(rotor,0,CRUISER_MUZZLE_Y,0));
+ const carCharges=cars.map(r=>neon.attach(r.root,0,-.75,.22)),haulerCharges=haulers.map(r=>teal.attach(r.root,0,HOVERCAR_EXHAUST_Y,.10));
  const models:(T.Object3D|undefined)[]=[];addRoots(root,scenery,boss,...cars,...haulers,...mines,...interceptors);
  const actors=[...cars,...haulers,...mines,...interceptors].map(r=>r.root),contact=createBossLaserContact(plane,boss.root);
  return{root,boss:boss.root,models,stageDistance:36,farDistance:520,background:0x0d071d,key:0xe7b8e8,sky:0x7d92cd,ground:0x321746,keyIntensity:2.3,skyIntensity:1.8,friendlyGlow:2.5,
   ready:Promise.all([loadEncounterTexture('boulevardRoad',scenery.road.setMap,1,signal)]),surfaces:[root],
   orientation:(_time,reveal)=>boulevardFrame(reveal),
   contacts:[boss.root,...actors],warmup:[[scenery.root,boss.root,...actors]],
-  prepare(){scenery.prime(true);carCharges[0](1);haulerCharges[0](1);cruiserCharges.forEach(charge=>charge(1));for(const m of mines)m.prime(true);for(const r of actors)r.traverse(o=>{if(o instanceof T.Mesh)o.frustumCulled=false;});},
-  afterWarmup(){scenery.prime(false);carCharges[0](0);haulerCharges[0](0);cruiserCharges.forEach(charge=>charge(0));for(const m of mines)m.prime(false);for(const r of actors)r.traverse(o=>{if(o instanceof T.Mesh)o.frustumCulled=true;});},
+  prepare(){scenery.prime(true);carCharges[0](1);haulerCharges[0](1);boss.chargePorts(1,1);for(const m of mines)m.prime(true);for(const r of actors)r.traverse(o=>{if(o instanceof T.Mesh)o.frustumCulled=false;});},
+  afterWarmup(){scenery.prime(false);carCharges[0](0);haulerCharges[0](0);boss.chargePorts(0,0);for(const m of mines)m.prime(false);for(const r of actors)r.traverse(o=>{if(o instanceof T.Mesh)o.frustumCulled=true;});},
   present:glow.present,dispose(){glow.dispose();scenery.dispose();},contact:(x,d)=>contact(x,d),
   update({flight,time,reveal,animationTime,victory}){
    scenery.update(time,reveal,animationTime,victory?.time);
    const p=boulevardBossPoint(time,reveal);boss.root.position.set(p.x,p.y,p.z);boss.root.rotation.x=-boulevardFrame(reveal).pitch;
    const challenge=flight.isBoulevardChallenge,windup=flight.cannonWindup;
-   boss.root.visible=flight.bossHealth>0;boss.pose(challenge?time:animationTime,windup,flight.bossRecoil/BOSS_RECOIL_TIME);
-   for(const charge of cruiserCharges)charge(challenge?windup:0);
+   const vents=flight.cruiserVentVolley;
+   boss.root.visible=flight.bossHealth>0;boss.pose(challenge?time:animationTime,vents?0:windup,vents?0:flight.bossRecoil/BOSS_RECOIL_TIME);
+   boss.chargePorts(challenge&&!vents?windup:0,vents?windup:0);
    models.length=flight.enemies.length;models.fill(undefined);let lights=0,heavies=0,mineCount=0,interceptorCount=0;for(const r of[...cars,...haulers,...mines,...interceptors])r.root.visible=false;
    for(const[i,enemy]of flight.enemies.entries()){
     if(enemy.mine){const rig=mines[mineCount++];if(rig){rig.root.visible=true;rig.pose(enemy.mine,time,enemy.hp>0);}continue;}

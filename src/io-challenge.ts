@@ -1,5 +1,6 @@
 import { CRUCIBLE_MUZZLE_Y, CRUCIBLE_WINDUP } from './io-crucible';
 import { patternBearing, patternBullet, stepPatternBurst, type BossPattern } from './challenge-patterns';
+import { hookBullet } from './hook-bullet';
 import type { IoWave } from './io-layout';
 import { wingRewardForWave } from './wing';
 
@@ -68,8 +69,20 @@ export const ioChallengeBoss = { health: 132, supportHealth: 32, interval: 4.3, 
   first: 1.05, spacing: .20, rows: 9, exposedRows: 13 } satisfies BossPattern & { health: number; supportHealth: number };
 
 const curtainY = -4.8;
+export function calderaStackRow(left: Point, right: Point, target: Point, row: number) {
+  const shots = [];
+  for (const side of [-1, 1]) {
+    const stack = side < 0 ? left : right;
+    // Orange exhaust rolls outside the stacks. Every other beat sends a
+    // slower ember across the top of the furnace before it joins the chase.
+    shots.push(hookBullet(stack, target, side * 3.1, 2.2, 4.85, 'primary'));
+    if (row % 2 === 0) shots.push(hookBullet(stack, target, -side * 1.85, 2.55, 3.75, 'accent'));
+  }
+  return shots;
+}
+
 export function calderaChallengeRow(origin: Point, target: Point, cycle: number, row: number) {
-  const mirror = cycle % 2 === 0 ? 1 : -1;
+  const mirror = cycle % 4 === 1 ? 1 : -1;
   const gap = target.x * .24 + mirror * 1.55 * Math.sin(row * .41 - .8);
   const shift = row % 2 === 0 ? -.16 : .16;
   const shots = [];

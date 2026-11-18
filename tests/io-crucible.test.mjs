@@ -129,12 +129,13 @@ test('Bullet Hell Io keeps the same route length and its overlapping patrols fit
   assert([...slag].every(drop => Math.abs(Math.hypot(drop.slag.vx, drop.slag.vy) - ioChallengeCrucible.speed) < 1e-10));
 });
 
-test('the challenge Caldera fires staggered embers and lengthens the curtain at the next lock', () => {
+test('the Caldera wheel fires staggered embers and a broken support extends the next exhaust volley', () => {
   const flight = quietChallenge();
   flight.phase = 'boss';
+  flight.time = ioChallengeBoss.interval;
   const advanceTo = (time, inspect = () => {}) => {
     let rows = 0;
-    while (flight.time < time) {
+    while (flight.time < ioChallengeBoss.interval + time) {
       flight.threats = [];
       flight.step(STEP);
       if (flight.threats.length) {

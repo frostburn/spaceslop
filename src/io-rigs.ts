@@ -3,7 +3,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { IoDetail } from './io-detail';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ioCeramic,ioBand,ioSafety,ioSteel,ioChrome,ioDark,ioRust,ioHot,ioFurnace,ioHeatGlow,ioTarget,ioWeather } from './io-materials';
-import { calderaLocal, IO_FOOT_DROP, IO_WHEEL_SCALE, IO_WHEEL_Y } from './io-layout';
+import { CALDERA_RELIEF, calderaLocal, IO_FOOT_DROP, IO_WHEEL_SCALE, IO_WHEEL_Y } from './io-layout';
 
 const box=ioWeather(new RoundedBoxGeometry(1,1,1,2,.08)),orb=ioWeather(new T.SphereGeometry(1,16,10));
 const up=new T.Vector3(0,1,0);
@@ -68,6 +68,7 @@ export function createCaldera(){
     for(let j=0;j<4;j++)part(chassis,box,ioDark,side*1.9,-.7+j*.6,.8,.22,.08,.22);
   }
   const detail=new IoDetail();
+  const stackGlows: T.Mesh[] = [];
   for(const side of [-1,1]){
     detail.box(side*2.65,.4,-.15,1.2,3.4,1.65,ioCeramic);
     detail.box(side*2.65,-.20,.825,1.21,.28,.045,ioBand);
@@ -86,6 +87,10 @@ export function createCaldera(){
     for(let j=0;j<8;j++)detail.box(side*2.5,1.55+j*.24,-.7,1.05,.055,.08,ioChrome);
     detail.rod([side*2.55,2.5,-1.6],[side*2.55,5.35,-1.6],.16,ioRust);
     for(let j=0;j<4;j++)detail.rod([side*2.55,3+j*.65,-1.6],[side*2.55,3.06+j*.65,-1.6],.22,ioSteel);
+    const x = side * CALDERA_RELIEF.x, { y, z } = CALDERA_RELIEF;
+    detail.pipe([[side*2.55,2.5,-1.6],[side*3.05,2.38,-1.2],[x,y-.43,z-.16],[x,y,z]],.14,ioRust);
+    detail.rod([x,y-.1,z],[x,y,z],.19,ioSteel);
+    stackGlows.push(part(chassis,orb,ioHot,x,y,z));
   }
   detail.finish(chassis,'caldera-machinery-detail');
   const wheel=new T.Group();wheel.name='dredging-wheel';wheel.position.set(0,IO_WHEEL_Y,.50);wheel.scale.setScalar(IO_WHEEL_SCALE);chassis.add(wheel);
@@ -160,11 +165,18 @@ export function createCaldera(){
     mesh.position.copy(start).add(end).multiplyScalar(.5);mesh.quaternion.setFromUnitVectors(up,q.copy(end).sub(start).normalize());
     mesh.scale.set(1,start.distanceTo(end)/original,1);
   }
-  function pose(time:number,collapse=0,broken=false,windup=0,wheelCharge=0){
+  function chargeStacks(charge: number) {
+    for (const glow of stackGlows) {
+      glow.visible = charge > .02;
+      glow.scale.set(.15 + .16 * charge, .08 + .45 * charge, .15 + .16 * charge);
+    }
+  }
+  function pose(time:number,collapse=0,broken=false,windup=0,wheelCharge=0,stackCharge=0){
     chassis.rotation.z=-.14*collapse;chassis.position.y=-.45*collapse;
     wheel.rotation.z=time*.55+collapse*.7;shield.visible=!broken;legTarget.visible=!broken;
     heatGlow.scale.setScalar(3.1+Math.sin(time*2.3)*.12+.85*wheelCharge);
     furnaceLight.intensity = 14 + 12 * wheelCharge;
+    chargeStacks(stackCharge);
     (legTarget.material as T.MeshStandardMaterial).emissiveIntensity=broken?0:1.0+windup;
     for(const leg of legs){
       const h=calderaLocal(leg.hip.x,leg.hip.y,leg.hip.z,collapse);a.set(h.x,h.y,h.z);
@@ -177,6 +189,6 @@ export function createCaldera(){
   }
   root.traverse(o=>{if(o instanceof T.Mesh){o.castShadow=true;o.receiveShadow=true;}});
   pose(0);
-  return {root,pose};
+  return {root,pose,chargeStacks};
 }
 // Ground height at the load-bearing anchor shelves, relative to the chassis.

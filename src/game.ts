@@ -7,6 +7,7 @@ import {RAY_HP,RAY_ENTRANCE,RAY_FAN_AT,RAY_SEEKER_AT,RAY_PROJECTION,RAY_ORGAN_RA
 import { CHALLENGE_ANT_PACE, challengeAntFirstShot, challengeGuardian, challengeGuardianVolley, challengeWaves, stepChallengeAnt } from './broodlock/challenge';
 import type { FlightMode } from './campaign/challenges';
 import { bossPatternCharge, PATTERN_GRAZE_RADIUS, PATTERN_HIT_RADIUS, type BossPattern, type PatternColor } from './challenge-patterns';
+import { advanceHook, type HookTurn } from './hook-bullet';
 import { DEN_BURSTS, DEN_CYCLE, DEN_GUNS, DEN_HP, denBodyEntry, denMount, denPose } from './den/combat';
 import { DEN_CHALLENGE_PACE, denBossPattern, denBulletField, denChallengeBoss, denChallengeBossRow, denChallengeFirstShot, denChallengeMineBurst,
   denChallengeTurretRow, denChallengeWaves, stepDenChallengeRider } from './den/challenge';
@@ -23,7 +24,7 @@ import { FLEET_CHALLENGE_PACE, fleetBossPattern, fleetBulletField, fleetChalleng
 import { HELIOSTAT_HP,HELIOSTAT_APPROACH,HELIOSTAT_INTERVAL,HELIOSTAT_WINDUP,HELIOSTAT_FIRE,HELIOSTAT_CHANNEL,HELIOSTAT_FADE,HELIOSTAT_LENS_DELAY,HELIOSTAT_GUARD_FIRE,HELIOSTAT_SPAWN_LEAD,heliostatWaves,heliostatMotion,heliostatCanAttack,heliostatPlasmaHits,electricSites,electricHits,type HeliostatCourse } from './heliostat/combat';
 import {SUMMER_APPROACH} from './summer/layout';
 import {createHydraAttack,stepHydraAttack} from './summer/hydra-attack';
-import { LOTUS_CHALLENGE_HEAD_HP, SUMMER_CHALLENGE_PACE, lotusChallengeBoss, lotusChallengeBossRow, lotusChallengeHeadCharge,
+import { LOTUS_CHALLENGE_HEAD_HP, SUMMER_CHALLENGE_PACE, lotusBossPattern, lotusChallengeBoss, lotusChallengeBossRow, lotusChallengeHeadCharge,
   stepSummerChallengeActor, summerChallengeFirstShot, summerChallengeVortex, summerChallengeWaves } from './summer/challenge';
 import {VORTEX_HP,VORTEX_RADIUS,VORTEX_FIRE,vortexEmission} from './summer/vortex';
 import {summerWaves,summerMotion,hydraBeamEntry,type SummerCourse} from './summer/combat';
@@ -31,9 +32,9 @@ import {SUMMER_HP,HYDRA_SIDES,HYDRA_HEAD_HP,HYDRA_BOSS_HEAD_HP,HYDRA_BOSS_SIZE,c
 import {heliostatLockTargets} from './heliostat/combat';
 import {crawlerSites,crawlerPose,stepCrawler,crawlerHits,CRAWLER_HP,type CrawlerState} from './heliostat/crawler';
 import {mineSites,minePose,triggerMine,mineBurst,MINE_WINDUP,MINE_JUMP,MINE_BURST_TIME,type BoulevardMine} from './boulevard-mines';
-import {BOULEVARD_HP,BOULEVARD_DURATION,BOULEVARD_APPROACH,BOULEVARD_INTERVAL,BOULEVARD_WINDUP,BOULEVARD_FIRE,BOULEVARD_TRAVEL,BOULEVARD_SPAWN_LEAD,boulevardWaves,boulevardMotion,boulevardCruiserMuzzle,turnBoulevardTurret,type BoulevardCourse} from './boulevard';
-import { BOULEVARD_CHALLENGE_PACE, boulevardChallengeBoss, boulevardChallengeBossRow, boulevardChallengeFirstShot,
-  boulevardChallengeMineBurst, boulevardChallengeWaves, stepBoulevardChallengeDriver } from './boulevard-challenge';
+import {BOULEVARD_HP,BOULEVARD_DURATION,BOULEVARD_APPROACH,BOULEVARD_INTERVAL,BOULEVARD_WINDUP,BOULEVARD_FIRE,BOULEVARD_TRAVEL,BOULEVARD_SPAWN_LEAD,boulevardWaves,boulevardMotion,boulevardCruiserMuzzle,boulevardCruiserVent,turnBoulevardTurret,type BoulevardCourse} from './boulevard';
+import { BOULEVARD_CHALLENGE_PACE, boulevardBossPattern, boulevardChallengeBoss, boulevardChallengeBossRow, boulevardChallengeFirstShot,
+  boulevardChallengeMineBurst, boulevardChallengeWaves, boulevardUsesVents, boulevardVentCharge, boulevardVentRow, stepBoulevardChallengeDriver } from './boulevard-challenge';
 import { AMBUSHER_HP, AMBUSHER_SPAWN_LEAD, AMBUSHER_CORPSE_TIME, ambusherSites, ambusherHome, createAmbusherState, stepAmbusher, ambusherPose, ambusherHulls, ambusherBodyHit, ambusherBeamEntry, ambusherHits, defeatAmbusher, type AmbusherState } from './preserve-ambusher';
 import { preserveWaves } from './preserve-waves';
 import { FLYER_HP, flyerMotion, flyerBodyHit, flyerBeamEntry, type FlyerCourse } from './preserve-flyer';
@@ -45,8 +46,8 @@ import {ventOrbit,VENT_APPROACH,VENT_SPAWN_LEAD,ventWaves,ventAnchorPoint} from 
 import { stepVentChallengeMortar, stepVentChallengeShrimp, ventChallengeBoss, ventChallengeBossRow,
   ventChallengeShrimp, ventChallengeShrimpFirstShot, ventChallengeWaves } from './vent-challenge';
 import { CRUCIBLE_HP, CRUCIBLE_RADIUS, CRUCIBLE_FIRST_POUR, CRUCIBLE_POUR_INTERVAL, CRUCIBLE_MUZZLE_Y, SLAG_RADIUS, crucibleMotion, slagSpeed } from './io-crucible';
-import { IO_DURATION, IO_HP, IO_LEG_HP, IO_APPROACH, IO_INTERVAL, IO_WINDUP, IO_FIRE, IO_TRAVEL, calderaContact, calderaWheel, skipperMotion, ioWaves, smooth01 } from './io-layout';
-import { calderaChallengeRow, ioChallengeBoss, ioChallengeCrucible,
+import { CALDERA_RELIEF, IO_DURATION, IO_HP, IO_LEG_HP, IO_APPROACH, IO_INTERVAL, IO_WINDUP, IO_FIRE, IO_TRAVEL, calderaContact, calderaPoint, calderaWheel, skipperMotion, ioWaves, smooth01 } from './io-layout';
+import { calderaChallengeRow, calderaStackRow, ioChallengeBoss, ioChallengeCrucible,
   ioChallengeSkipper, ioChallengeSkipperFirstShot, ioChallengeWaves, stepIoChallengeCrucible, stepIoChallengeSkipper } from './io-challenge';
 import { bindCentipede, severCentipede, stepCentipedes, CENTIPEDE_SPACING, type CentipedeLink } from './centipede';
 import { cicadaMotion, titanInsectWaves, type CicadaCourse } from './titan-insects';
@@ -107,7 +108,7 @@ type Shot = Point & {
   planarBossHit?: boolean;
 };
 type Threat = Shot & { graze?: 'near' | 'counted';planar?:boolean; broadside?: true; pattern?: PatternColor;
-  field?: BulletLanding; age?: number };
+  field?: BulletLanding; age?: number; hook?: HookTurn };
 type Enemy = Point & {
   fleet?: FleetSaucer;
   den?: DenPatrol;
@@ -538,6 +539,12 @@ export class Flight {
   get crabOpening(){return this.crabCoreOpen?crabSmooth((this.bossTime-Math.max(...this.crabBreakTimes))/.8):0;}
 
   get ioLegBroken() { return this.ioCollapseAge >= 0; }
+  get calderaStackVolley() {
+    return this.isIoChallenge && Math.floor(this.bossTime / ioChallengeBoss.interval) % 2 === 0;
+  }
+  get cruiserVentVolley() {
+    return this.isBoulevardChallenge && boulevardUsesVents(Math.floor(this.bossTime / boulevardChallengeBoss.interval));
+  }
   get ioCollapse() { return this.ioLegBroken ? smooth01(this.ioCollapseAge / 1.2) : 0; }
   private get challengeBossPattern(): BossPattern | undefined {
     if (this.isBroodlockChallenge) return challengeGuardian;
@@ -545,7 +552,7 @@ export class Flight {
     if (this.isVentChallenge) return ventChallengeBoss;
     if (this.isTitanChallenge) return titanChallengeBoss;
     if (this.isIceChallenge) return iceChallengeBoss;
-    if (this.isBoulevardChallenge) return boulevardChallengeBoss;
+    if (this.isBoulevardChallenge) return boulevardBossPattern(Math.floor(this.bossTime / boulevardChallengeBoss.interval));
   }
   cicadaMuzzle(time = this.bossTime) {
     const vent = cicadaVent(time, this.volley % 2 === 0 ? -1 : 1);
@@ -672,7 +679,8 @@ export class Flight {
       const burst = this.bossPattern;
       if (this.phase !== 'boss' || !burst || burst.cycle === this.cancelledTorrentCycle ||
         burst.cycle !== Math.floor(this.time / pattern.interval)) return 0;
-      return bossPatternCharge(this.time % pattern.interval, pattern, burst.rows);
+      const elapsed = this.time % pattern.interval;
+      return this.cruiserVentVolley ? boulevardVentCharge(elapsed) : bossPatternCharge(elapsed, pattern, burst.rows);
     }
     if(this.encounterLevel==='biolume'){const s=this.rayAttackSignal;return this.phase==='boss'?Math.max(s.fan,s.seeker):0;}
     if(this.encounterLevel==='boulevard'){const t=this.time%BOULEVARD_INTERVAL;return this.phase==='boss'&&t<BOULEVARD_FIRE?clamp((t-BOULEVARD_WINDUP)/(BOULEVARD_FIRE-BOULEVARD_WINDUP),0,1):0;}
@@ -908,7 +916,8 @@ export class Flight {
         this.trackGraze(shot, live);
         return true;
       }
-      this.advance(shot, dt);
+      if (shot.hook) advanceHook(shot, shot.hook, dt);
+      else this.advance(shot, dt);
       if (boss && !this.planarBoss && !shot.planar) {
         if (shot.z < 0) return true;
         if (near(shot, this.player, 0.58)) this.hit();
@@ -1499,7 +1508,7 @@ export class Flight {
         this.obstacles.move(enemy, 0, 0, hull, { minX: -2.4, maxX: 2.4, minY: -10, maxY: 10 });
       }
       if (hiveChallenge && enemy.ant) {
-        const volley = stepChallengeAnt(enemy, enemy.ant, enemy.slot ?? 0);
+        const volley = stepChallengeAnt(enemy, enemy.ant, enemy.slot ?? 0, this.player);
         if (volley) this.threats.push(...volley);
       } else if (ioChallenge && enemy.skipper) {
         const volley = stepIoChallengeSkipper(enemy, enemy.slot ?? 0);
@@ -1804,6 +1813,7 @@ export class Flight {
     }
     const burst = this.bossPattern;
     while (burst.row < burst.rows && elapsed + 1e-8 >= pattern.first + burst.row * pattern.spacing) {
+      if (pattern.relockRows?.includes(burst.row)) burst.target = { ...this.player };
       this.fireChallengeBossRow(burst.target, cycle, burst.row++, burst.rows > pattern.rows);
       if (burst.row === burst.rows) this.volley++;
     }
@@ -1816,9 +1826,16 @@ export class Flight {
       this.firedCrabTarget = this.crabTargetX;
       this.threats.push(...ventChallengeBossRow(this.time, this.firedCrabTarget, target, cycle, row, exposed));
     } else if (this.isIoChallenge) {
-      const muzzle = calderaWheel(IO_DURATION + IO_APPROACH + this.time, this.ioCollapse);
-      this.firedCannonX = muzzle.x;
-      this.threats.push(...calderaChallengeRow(projectShot(muzzle), target, cycle, row));
+      if (this.calderaStackVolley) {
+        const { x, y, z } = CALDERA_RELIEF;
+        const left = projectShot(calderaPoint(-x, y, z, this.ioCollapse));
+        const right = projectShot(calderaPoint(x, y, z, this.ioCollapse));
+        this.threats.push(...calderaStackRow(left, right, target, row));
+      } else {
+        const muzzle = calderaWheel(IO_DURATION + IO_APPROACH + this.time, this.ioCollapse);
+        this.firedCannonX = muzzle.x;
+        this.threats.push(...calderaChallengeRow(projectShot(muzzle), target, cycle, row));
+      }
     } else if (this.isTitanChallenge) {
       const muzzle = this.cicadaMuzzle();
       this.firedCannonX = muzzle.x;
@@ -1836,9 +1853,15 @@ export class Flight {
       this.threats.push(...lotusChallengeBossRow(this.summerHydra, this.bossTime, BOSS_DEPTH, target, cycle, row));
     } else if (this.isBoulevardChallenge) {
       const time = BOULEVARD_DURATION + BOULEVARD_APPROACH + this.bossTime;
-      const left = projectShot(boulevardCruiserMuzzle(time, -1, 1));
-      const right = projectShot(boulevardCruiserMuzzle(time, 1, 1));
-      this.threats.push(...boulevardChallengeBossRow([left, right], target, cycle, row));
+      if (this.cruiserVentVolley) {
+        const left = projectShot(boulevardCruiserVent(time, -1));
+        const right = projectShot(boulevardCruiserVent(time, 1));
+        this.threats.push(...boulevardVentRow(left, right, target, row));
+      } else {
+        const left = projectShot(boulevardCruiserMuzzle(time, -1, 1));
+        const right = projectShot(boulevardCruiserMuzzle(time, 1, 1));
+        this.threats.push(...boulevardChallengeBossRow([left, right], target, cycle, row));
+      }
     } else if (this.isGroveChallenge) {
       const origin = rayOrgan(this.rayTime, this.rayAttackSignal.side);
       this.threats.push(...groveChallengeRayRow(origin, target, cycle, row));
@@ -1889,7 +1912,7 @@ export class Flight {
   private stepSummerHydra(){
     if (this.isSummerChallenge) {
       const cycle = Math.floor(this.time / lotusChallengeBoss.interval);
-      if (cycle !== this.lotusCancelledCycle) this.stepChallengeBoss(lotusChallengeBoss, cycle);
+      if (cycle !== this.lotusCancelledCycle) this.stepChallengeBoss(lotusBossPattern(cycle), cycle);
       return;
     }
     stepHydraAttack(this.summerAttack,this.time,this.player,this.summerHydra,BOSS_DEPTH,BOSS_IMPACT_TRAVEL);

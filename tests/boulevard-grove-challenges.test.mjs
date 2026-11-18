@@ -80,7 +80,7 @@ test('the new patrols ramp up from Lotus Thaw within their warmed actor and shot
   }
 });
 
-test('the cruiser warns, fires from both modeled cannons, then crosses the two streams', async () => {
+test('the cruiser switches from its cannons to the aft vents before the crossing barrage', async () => {
   const { createPursuitCruiser } = await server.ssrLoadModule('/src/boulevard-rigs.ts');
   const { createBoulevardMaterials } = await server.ssrLoadModule('/src/boulevard-materials.ts');
   const { CRUISER_MUZZLE_Y } = await server.ssrLoadModule('/src/boulevard.ts');
@@ -104,7 +104,6 @@ test('the cruiser warns, fires from both modeled cannons, then crosses the two s
     assert.equal(row.length, 11);
     assert(row.every(s => Math.hypot(s.x - s.vx * STEP - origin.x * scale, s.y - s.vy * STEP - origin.y * scale) < 1e-8));
   }
-  disposeScene(rig.root);
   const landingX = (shot, y) => shot.x + (y - shot.y) * shot.vx / shot.vy;
   assert(Math.max(...shots.filter(s => s.pattern === 'primary').map(s => landingX(s, -5.55))) <
     Math.min(...shots.filter(s => s.pattern === 'accent').map(s => landingX(s, -5.55))));
@@ -113,6 +112,28 @@ test('the cruiser warns, fires from both modeled cannons, then crosses the two s
   advance(f, pattern.interval - .05);
   assert.equal(f.threats.length, 0);
   advance(f, pattern.interval + pattern.first);
+  assert(f.cruiserVentVolley && f.cannonWindup > 0);
+  const ventTime = f.stageDuration + f.transitionDuration + f.time;
+  rig.pose(ventTime, 0, 0);
+  rig.chargePorts(0, f.cannonWindup);
+  const lights = rig.root.getObjectsByProperty('name', 'pattern-charge').filter(light => light.visible);
+  assert.equal(lights.length, 2);
+  for (const light of lights) {
+    const point = light.getWorldPosition(new T.Vector3());
+    const scale = BOSS_CAMERA_DISTANCE / (BOSS_CAMERA_DISTANCE - point.z);
+    const stream = f.threats.filter(shot => Math.sign(shot.x) === Math.sign(point.x));
+    assert.equal(stream.length, 2);
+    for (const shot of stream) {
+      assert(shot.hook && shot.vy > 0);
+      const originX = shot.x - shot.vx * STEP + .5 * shot.hook.ax * STEP ** 2;
+      const originY = shot.y - shot.vy * STEP + .5 * shot.hook.ay * STEP ** 2;
+      assert(Math.hypot(originX - point.x * scale, originY - point.y * scale) < 1e-8);
+    }
+  }
+  disposeScene(rig.root);
+  f.pulse();
+  advance(f, 2 * pattern.interval + pattern.first);
+  assert(f.threats.every(shot => !shot.hook));
   assert(Math.min(...f.threats.filter(s => s.pattern === 'primary').map(s => landingX(s, -5.55))) >
     Math.max(...f.threats.filter(s => s.pattern === 'accent').map(s => landingX(s, -5.55))));
 });

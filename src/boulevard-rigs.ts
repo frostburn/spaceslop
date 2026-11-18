@@ -1,5 +1,6 @@
 import * as T from 'three';
-import {boulevardHover,CRUISER_CANNON_X,CRUISER_CANNON_Y,CRUISER_CANNON_Z,CRUISER_ROTOR_Y,CRUISER_MUZZLE_Y,CRUISER_RECOIL} from './boulevard';
+import {boulevardHover,CRUISER_CANNON_X,CRUISER_CANNON_Y,CRUISER_CANNON_Z,CRUISER_ROTOR_Y,CRUISER_MUZZLE_Y,CRUISER_RECOIL,CRUISER_VENT,HAULER_LENGTH_SCALE,HOVERCAR_EXHAUST_Y} from './boulevard';
+import {createPatternCharge} from './rendering/pattern-charge';
 import {part,pivot,plating} from './rig-geometry';
 import {mergeBoulevard} from './boulevard-geometry';
 import {hovercarVectors,cruiserWingVectors} from './boulevard-vectors';
@@ -15,8 +16,8 @@ export function createHovercar(m:BoulevardMaterials,heavy=false){
   part(root,new T.BoxGeometry(.055,.83,.035),m.pink,side*.54,.1,.20);
   part(root,new T.BoxGeometry(.22,.045,.045),m.amber,side*.23,-.74,.12);
  }
- const jet=part(root,new T.ConeGeometry(.13,.45,8).translate(0,.225,0),m.cyan,0,.75,.02);jet.name='hovercar-exhaust';
- if(heavy){root.scale.set(1.15,1.3,1.25);for(const side of[-1,1])part(root,new T.BoxGeometry(.3,1.0,.23),m.chrome,side*.52,.12,.02);}
+ const jet=part(root,new T.ConeGeometry(.13,.45,8).translate(0,.225,0),m.cyan,0,HOVERCAR_EXHAUST_Y,.02);jet.name='hovercar-exhaust';
+ if(heavy){root.scale.set(1.15,HAULER_LENGTH_SCALE,1.25);for(const side of[-1,1])part(root,new T.BoxGeometry(.3,1.0,.23),m.chrome,side*.52,.12,.02);}
  mergeBoulevard(root);return{root};
 }
 export function cloneHovercar(template:T.Group){const root=template.clone(true);return{root,pose(time:number,bank:number){root.rotation.y=bank;const body=root.getObjectByName('hovercar-exhaust');if(body)body.scale.y=.75+.22*Math.sin(time*13);}};}
@@ -67,10 +68,18 @@ export function createPursuitCruiser(m:BoulevardMaterials){
  });
  const vents:T.Mesh[]=[];
  for(const side of[-1,1]){
-  part(body,new T.BoxGeometry(.9,.65,.4),m.shell,side*1.9,1.1,1.0);
-  for(let i=0;i<4;i++)vents.push(part(body,new T.BoxGeometry(.7,.045,.04),m.pink,side*1.9,.89+i*.13,1.21));
+  part(body,new T.BoxGeometry(.9,.65,.4),m.shell,side*CRUISER_VENT.x,CRUISER_VENT.y,1.0);
+  for(let i=0;i<4;i++)vents.push(part(body,new T.BoxGeometry(.7,.045,.04),m.pink,side*CRUISER_VENT.x,.89+i*.13,1.21));
  }
  for(const name of['laser_contact_L','laser_contact_C','laser_contact_R'])pivot(body,name,0,-1.87,.20);
  mergeBoulevard(body);
- return{root,pose(time:number,charge:number,recoil:number){const h=boulevardHover(time);body.position.set(h.x,h.y,h.z);body.rotation.set(h.pitch,h.roll,h.yaw);guns.forEach(g=>{g.rotor.rotation.y=time*(2+charge*12);g.base.position.y=CRUISER_CANNON_Y+recoil*CRUISER_RECOIL;});wings.forEach((w,i)=>w.rotation.y=(i?1:-1)*(.035+.035*Math.sin(time*.7)));},guns,vents};
+ const portLights = guns.map(({rotor}, i) => {
+  const charge = createPatternCharge(i === 0 ? 0xff72cb : 0x70f4ff);
+  return { gun: charge.attach(rotor,0,CRUISER_MUZZLE_Y,0),
+   vent: charge.attach(body,(i === 0 ? -1 : 1)*CRUISER_VENT.x,CRUISER_VENT.y,CRUISER_VENT.z) };
+ });
+ function chargePorts(gun: number, vent: number) {
+  for (const light of portLights) { light.gun(gun); light.vent(vent); }
+ }
+ return{root,pose(time:number,charge:number,recoil:number){const h=boulevardHover(time);body.position.set(h.x,h.y,h.z);body.rotation.set(h.pitch,h.roll,h.yaw);guns.forEach(g=>{g.rotor.rotation.y=time*(2+charge*12);g.base.position.y=CRUISER_CANNON_Y+recoil*CRUISER_RECOIL;});wings.forEach((w,i)=>w.rotation.y=(i?1:-1)*(.035+.035*Math.sin(time*.7)));},guns,vents,chargePorts};
 }

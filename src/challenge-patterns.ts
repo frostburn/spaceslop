@@ -67,6 +67,8 @@ export type BossPattern = {
   spacing: number;
   rows: number;
   exposedRows?: number;
+  /** A new windup can lock the ship again after the previous salvo is away. */
+  relockRows?: readonly number[];
 };
 
 export function bossPatternCharge(elapsed: number, timing: BossPattern, rows: number) {

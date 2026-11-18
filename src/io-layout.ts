@@ -18,6 +18,7 @@ export const IO_SKIPPER_POOL = 12;
 export const IO_FOOT_DROP = 6.85;
 export const IO_WHEEL_SCALE = 1.35;
 export const IO_WHEEL_Y = 3.25;
+export const CALDERA_RELIEF = { x: 3.26, y: 2.95, z: -.43 };
 export const IO_FINAL_SCROLL = IO_SPEED * (IO_DURATION + IO_APPROACH / 2);
 export const IO_BOSS_Y = IO_FINAL_SCROLL + 4.8 * Math.cos(IO_PITCH) + 12 * Math.sin(IO_PITCH);
 export const IO_CALDERA_Y = IO_FINAL_SCROLL + 17.6;
