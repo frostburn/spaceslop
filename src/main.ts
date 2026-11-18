@@ -3,7 +3,7 @@ import { setupBriefing } from './app/briefing';
 import type { FlightLoadout, FlightShortcut } from './app/flight-session';
 import { saveLevelOffline, savedLevels, clearSavedLevels } from './app/offline';
 import { CHALLENGE_SAVE_KEY, challengeAvailable, challengeModes, challengeNames, challengeRoutes, decodeChallengeProgress,
-  nextChallengeLevel, readChallengeCode, recordChallengeClear, resetHardcoreProgress, unlockChallenge, type ChallengeMode, type FlightMode } from './campaign/challenges';
+  nextChallengeLevel, readChallengeCode, recordChallengeClear, resetHardcoreProgress, selectableChallengeLevel, unlockChallenge, type ChallengeMode, type FlightMode } from './campaign/challenges';
 import { campaign } from './campaign/missions';
 import { CAMPAIGN_SAVE_KEY, campaignStatus, decodeCampaignClears, recordCampaignClear } from './campaign/progress';
 import { ranks } from './campaign/ranks';
@@ -237,8 +237,18 @@ function selectedFlightMode(): FlightMode {
   return 'regular';
 }
 
+function refreshChallengeSelection() {
+  if (mode !== 'hardcore' && mode !== 'bullet-hell') return false;
+  refreshChallenges();
+  const eligible = selectableChallengeLevel(challengeProgress, mode, selected);
+  if (eligible === selected) return false;
+  select(eligible);
+  return true;
+}
+
 function openBriefing() {
   if (reloadBeforePreparation) { location.reload(); return; }
+  refreshChallengeSelection();
   briefController = new AbortController();
   const { signal } = briefController;
   briefTitle.textContent = levels[selected].name;
@@ -301,6 +311,11 @@ function completeMission(id: LevelId) {
 
 async function launchFlight(shortcut?: FlightShortcut) {
   if (session || !pilotPicker) return;
+  if (refreshChallengeSelection()) {
+    closeBriefing();
+    openBriefing();
+    return;
+  }
   const id = selected;
   const campaignFlight = mode === 'campaign';
   const challengeFlight = mode === 'bullet-hell' || mode === 'hardcore' ? mode : undefined;
@@ -357,7 +372,7 @@ async function launchFlight(shortcut?: FlightShortcut) {
         refreshChallenges();
         resetHardcoreProgress(challengeProgress);
         saveChallenges();
-        updateCards();
+        select(challengeSelection(challengeFlight));
       },
     } : undefined);
     if (handle && !controller.signal.aborted)
