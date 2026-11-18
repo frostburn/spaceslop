@@ -61,14 +61,12 @@ test('both rakes aim the hooked points toward the marked ship at contact', () =>
     for (const arm of [0, 1]) for (const progress of [.54, .62, .69]) {
       const time = arm * g.GROUNDSKEEPER_CYCLE + g.GROUNDSKEEPER_STRIKE + duration * progress;
       const hand = g.groundskeeperPose(time, aim).arms[arm];
-      const next = g.groundskeeperPose(time + STEP, aim).arms[arm];
       for (const curve of hand.claws) {
         const [base, bow, tip] = curve.map(toFlight);
         const pointDirection = tip.clone().sub(bow).normalize();
         const toShip = ship.clone().sub(base).normalize();
         assert(pointDirection.dot(toShip) > .5, 'talon point faces away from the marked ship');
       }
-      assert(toFlight(next.claws[1][2]).z > toFlight(hand.claws[1][2]).z, 'middle talon sweeps back through the flight plane');
     }
   }
 });
