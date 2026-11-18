@@ -37,7 +37,7 @@ The initial mission list has no WebGL context, game loop, portrait or level medi
 
 A session's abort signal owns controls, focus/media listeners, resize observation, preparation and the animation loop. Returning to the menu cancels them. Each session gets a fresh canvas; disposing an older context cannot accidentally destroy a new renderer on the same canvas. Cancellation stops pending texture application and Titan slicing. Graphics warm-up cancels its pending frame and restores temporary level state. Disposal waits for texture preparation to settle, releases the scene and level-owned GPU resources, and restores procedural maps on shared materials before releasing the context. JavaScript modules remain in the browser's module cache between visits.
 
-If a module download fails, the menu offers **Reload menu** before retrying; native module-map failures can survive a reconnect in the same page.
+If a sector fails to prepare, selecting it offers **Reload menu** because a failed module download can survive a reconnect in the same page. Other sectors still open their briefings, including sectors saved for offline play.
 
 Simulation is fixed-step. Presentation time freezes on pause/results. Preserve that distinction when adding animation. `FlightView` rejects a flight from a different level: switching sectors requires a new session rather than mutating a live renderer.
 
