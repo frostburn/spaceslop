@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { part, pivot } from './rig-geometry';
-import { groundskeeperPose, GROUNDSKEEPER_UPPER_ARM, GROUNDSKEEPER_FOREARM, type GkPoint } from './groundskeeper';
+import { groundskeeperClaw, groundskeeperPose, GROUNDSKEEPER_UPPER_ARM, GROUNDSKEEPER_FOREARM, GROUNDSKEEPER_THIGH, GROUNDSKEEPER_SHIN, GROUNDSKEEPER_TARSUS, type GkPoint } from './groundskeeper';
 import { gkFeatherGeometry, gkPlumage, gkTorsoSurface, gkTube, mergeGkFixed } from './groundskeeper-geometry';
 import { createGroundskeeperMaterials } from './groundskeeper-materials';
 import { createGroundskeeperFace } from './groundskeeper-face';
@@ -19,10 +19,11 @@ export function createGroundskeeper() {
     sample.fromBufferAttribute(tp, i); normal.fromBufferAttribute(tn, i); gkTorsoSurface(sample, normal); tp.setXYZ(i, sample.x, sample.y, sample.z);
   }
   torso.computeVertexNormals();
-  part(body, torso, m.down, 0, -.1, 6.9);
+  part(body, torso, m.down, 0, -.1, 6.9).name = 'breast';
   body.add(gkPlumage(feather, m.feathers, new T.Vector3(0, -.1, 6.9), new T.Vector3(3.14, 2.67, 3.07), 4200, 80, .43, false, new T.Vector3(0, 0, -1), gkTorsoSurface));
-  part(body, sphere, m.down, 0, 3.65, 6.6).scale.set(1.2, 3.5, .85);
-  body.add(gkPlumage(feather, m.feathers, new T.Vector3(0, 3.7, 6.6), new T.Vector3(1.2, 3.5, .85), 300, 93, .48, true, new T.Vector3(0, 1, -.1)));
+  const tail = pivot(body, 'tail-base', 0, 1.55, 6.6);
+  part(tail, sphere, m.down, 0, 2.1, 0).scale.set(1.2, 3.5, .85);
+  tail.add(gkPlumage(feather, m.feathers, new T.Vector3(0, 2.15, 0), new T.Vector3(1.2, 3.5, .85), 300, 93, .48, true, new T.Vector3(0, 1, -.1)));
   for (const side of [-1, 1]) {
     part(body, sphere, m.darkDown, side * 2.2, -1.5, 8.5).scale.set(.8, 1.0, .9);
     body.add(gkPlumage(feather, m.feathers, new T.Vector3(side * 2.2, -1.5, 8.5), new T.Vector3(.82, 1.02, .92), 240, 110 + side, .48, true));
@@ -50,23 +51,37 @@ export function createGroundskeeper() {
   }
   const arms = [-1, 1].map(side => {
     const upper = segment(`upper-arm-${side}`, .78, GROUNDSKEEPER_UPPER_ARM, true), lower = segment(`forearm-${side}`, .49, GROUNDSKEEPER_FOREARM, true);
-    const palm = part(root, sphere, m.hand, 0, 0, 0); palm.name = `palm-${side}`; palm.scale.set(.83, .62, .42);
-    const claws = Array.from({ length: 3 }, (_, i) => {
+    // The wrist, knuckles and keratin move as one hand. Build the blades in
+    // hand space so a turn cannot roll a claw independently of its socket.
+    const palm = pivot(root, `palm-${side}`, 0, 0, 0);
+    const pads = pivot(palm, 'knuckles', 0, 0, 0);
+    part(pads, sphere, m.hand, 0, .32, .01).scale.set(.63, .66, .32);
+    part(lower, sphere, m.darkDown, 0, .08, 0).scale.set(.43, .51, .38);
+    for (const finger of [-1, 0, 1]) {
+      const curve = groundskeeperClaw(side, finger).map(vec), socket = curve[0];
+      const base = new T.Vector3(finger * .37, .39, .01);
+      const bone = part(pads, sphere, m.hand, 0, 0, 0);
+      bone.position.lerpVectors(base, socket, .5);
+      bone.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), socket.clone().sub(base).normalize());
+      bone.scale.set(.245, base.distanceTo(socket) * .5 + .21, .25);
+      part(pads, sphere, m.ochre, socket.x, socket.y - .08, socket.z).scale.set(.235, .29, .20);
       const tube = gkTube(22, 12), color = [], p = tube.geometry.attributes.position;
+      tube.pose(new T.CatmullRomCurve3(curve), .31, .01, true, new T.Vector3(1, 0, 0));
       for (let j = 0; j < p.count; j++) {
         const t = Math.floor(j / 13) / 22, tip = T.MathUtils.smoothstep(t, .76, 1), base = 1 - T.MathUtils.smoothstep(t, .02, .23);
         const tone = 1 - base * .48 - tip * .68; color.push(tone, tone, tone);
       }
       tube.geometry.setAttribute('color', new T.Float32BufferAttribute(color, 3));
-      const material = m.claw.clone(); material.vertexColors = true;
-      const mesh = part(root, tube.geometry, material, 0, 0, 0); mesh.name = `claw-${side}-${i}`;
-      return { ...tube, mesh };
-    });
-    const digits = Array.from({length:3},()=>{const mesh=part(root,sphere,m.hand,0,0,0);mesh.scale.set(.25,.37,.20);return mesh;});
-    return { upper, lower, palm, claws, digits };
+      part(palm, tube.geometry, m.talon, 0, 0, 0).name = `claw-${side}-${finger + 1}`;
+    }
+    mergeGkFixed(pads);
+    return { upper, lower, palm };
   });
   const legs = [-1, 1].map(side => {
-    const thigh = segment(`haunch-${side}`, 1.1, 3.4, true), shin = segment(`shin-${side}`, .51, 2.6, false), tarsus = segment(`ankle-${side}`, .34, 1.7, false);
+    const thigh = segment(`haunch-${side}`, 1.1, GROUNDSKEEPER_THIGH, true), shin = segment(`shin-${side}`, .51, GROUNDSKEEPER_SHIN, false), tarsus = segment(`ankle-${side}`, .34, GROUNDSKEEPER_TARSUS, false);
+    part(shin, sphere, m.skin, 0, .09, 0).scale.set(.46, .56, .42);
+    part(tarsus, sphere, m.skin, 0, .06, 0).scale.set(.31, .37, .28);
+    mergeGkFixed(shin); mergeGkFixed(tarsus);
     const foot = pivot(root, `foot-${side}`, 0, 0, 0);
     part(foot, sphere, m.skin, 0, -.1, .38).scale.set(.58, .73, .43);
     part(foot, sphere, m.skin, 0, .18, .78).scale.set(.37, .44, .66);
@@ -104,37 +119,35 @@ export function createGroundskeeper() {
   const n = new T.Vector3(), across = new T.Vector3(), shaft = new T.Vector3(), transform = new T.Object3D();
   const center = new T.Vector3(), before = new T.Vector3(), after = new T.Vector3(), outward = new T.Vector3();
   const axis = new T.Vector3(0, 1, 0), tint = new T.Color();
-  function span(group: T.Group, a: GkPoint, b: GkPoint, nominal: number) {
-    group.position.copy(vec(a)); direction.copy(vec(b)).sub(group.position);
-    group.quaternion.setFromUnitVectors(axis, direction.clone().normalize()); group.scale.y = direction.length() / nominal;
+  function span(group: T.Group, a: GkPoint, b: GkPoint) {
+    group.position.copy(a); direction.copy(b).sub(a).normalize();
+    group.quaternion.setFromUnitVectors(axis, direction);
   }
-  function armSpan(group: T.Group, a: GkPoint, b: GkPoint, hinge: GkPoint, nominal: number) {
-    group.position.copy(vec(a)); direction.copy(vec(b)).sub(group.position); const length = direction.length(); direction.divideScalar(length);
-    across.copy(vec(hinge)); n.crossVectors(across, direction).normalize();
-    group.quaternion.setFromRotationMatrix(basis.makeBasis(across, direction, n)); group.scale.y = length / nominal;
+  function armSpan(group: T.Group, a: GkPoint, b: GkPoint, hinge: GkPoint) {
+    group.position.copy(a); direction.copy(b).sub(a).normalize();
+    across.copy(hinge); n.crossVectors(across, direction);
+    group.quaternion.setFromRotationMatrix(basis.makeBasis(across, direction, n));
   }
   function pose(time: number, aim = { x: 0, y: -5.3 }, cancelledAt = -100) {
     const p = groundskeeperPose(time, aim, cancelledAt);
     body.scale.copy(vec(p.torsoScale));
-    body.position.copy(vec(p.torso)).add(new T.Vector3(0, -.1 * (1 - p.torsoScale.y), 6.9 * (1 - p.torsoScale.z)));
+    body.rotation.set(p.torsoPitch, 0, p.torsoYaw, 'ZYX');
+    const chestCenter = center.set(0, -.1, 6.9);
+    body.position.copy(p.torso).add(chestCenter);
+    body.position.sub(chestCenter.multiply(body.scale).applyQuaternion(body.quaternion));
+    tail.rotation.set(-p.torsoPitch * .78, 0, -p.torsoYaw * .55, 'ZYX');
     m.puff.value = p.feathers;
     head.position.copy(vec(p.head)); head.rotation.set(p.headPitch,0,p.headYaw,'ZYX');
     face.pose(p.jaw);
     for (const [i, a] of p.arms.entries()) {
-      const rig = arms[i]; armSpan(rig.upper, a.shoulder, a.elbow, a.hinge, GROUNDSKEEPER_UPPER_ARM); armSpan(rig.lower, a.elbow, a.wrist, a.hinge, GROUNDSKEEPER_FOREARM);
-      rig.palm.position.copy(vec(a.wrist)).addScaledVector(vec(a.direction), .28);
-      across.copy(vec(a.across)); direction.copy(vec(a.direction)); n.crossVectors(across, direction).normalize();
-      rig.palm.quaternion.setFromRotationMatrix(basis.makeBasis(across, direction, n)); rig.palm.scale.set(.6, .62, .28);
-      for (const [j, claw] of rig.claws.entries()) {
-        claw.pose(new T.CatmullRomCurve3(a.claws[j].map(vec)), .34, .01, true, vec(a.across));
-        rig.digits[j].position.copy(vec(a.claws[j][0])).addScaledVector(vec(a.direction),.12);
-        rig.digits[j].quaternion.copy(rig.palm.quaternion);
-      }
+      const rig = arms[i]; armSpan(rig.upper, a.shoulder, a.elbow, a.hinge); armSpan(rig.lower, a.elbow, a.wrist, a.hinge);
+      rig.palm.position.copy(a.wrist);
+      across.copy(a.across); direction.copy(a.direction); n.crossVectors(across, direction);
+      rig.palm.quaternion.setFromRotationMatrix(basis.makeBasis(across, direction, n));
     }
     for (const [i, f] of p.feet.entries()) {
-      const hip = p.hips[i];
-      const knee = { x: f.x * 1.06, y: f.y - 1.0, z: 3.4 }, hock = { x: f.x, y: f.y + .55, z: 1.65 + f.z * .5 };
-      span(legs[i].thigh, hip, knee, 3.4); span(legs[i].shin, knee, hock, 2.6); span(legs[i].tarsus, hock, { ...f, z: .6 + f.z }, 1.7);
+      const { hip, knee, hock, ankle } = p.legs[i];
+      span(legs[i].thigh, hip, knee); span(legs[i].shin, knee, hock); span(legs[i].tarsus, hock, ankle);
       legs[i].foot.position.copy(vec(f)); legs[i].shadow.position.z=.01-f.z; legs[i].shadow.material.opacity=1-f.z*.6;
     }
     start.copy(vec(p.neckBase)); finish.copy(vec(p.head)).add(new T.Vector3(0, .35, -.12));

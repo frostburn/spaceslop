@@ -65,6 +65,7 @@ export function createGroundskeeperMaterials() {
   const darkDown = neutralGrain(down.clone(), 1.2); darkDown.color.setHex(0x62513f);
   const claw = neutralGrain(new T.MeshStandardMaterial({ color: 0xb3a58b, map: hornMap, bumpMap: hornMap, bumpScale: .012, roughness: .49 }), .6);
   const toeClaw = neutralGrain(claw.clone(), .6); toeClaw.color.setHex(0x6a6255);
+  const talon = neutralGrain(claw.clone(), .6); talon.vertexColors = true;
   const dark = new T.MeshStandardMaterial({ color: 0x1d1913, roughness: .96 });
   const flesh = new T.MeshStandardMaterial({ color: 0x573c34, roughness: .82, side: T.DoubleSide });
   const tongue = new T.MeshStandardMaterial({ color: 0x78574b, roughness: .64 });
