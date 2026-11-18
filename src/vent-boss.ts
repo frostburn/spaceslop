@@ -1,174 +1,244 @@
 import * as T from 'three';
-import {VENT_CRAB_SCALE} from './vent-layout';
-import {BOSS_MUZZLE_Z} from './encounters';
-import {crabFeet,CRAB_LEGS} from './vent-crab';
+import { BOSS_MUZZLE_Z } from './encounters';
+import { applySurfaceMap } from './encounter-surfaces';
+import { part, pivot } from './rig-geometry';
+import { crabFeet, CRAB_LEGS, CRAB_TARGET_X } from './vent-crab';
+import { VENT_APPROACH, VENT_CRAB_SCALE, VENT_DURATION } from './vent-layout';
+import { crabApron, crabArm, crabBarnacles, crabCarapace, crabCup, crabFemur, crabHook,
+  crabPalm, crabTibia, crabToe, paintCrabTile } from './vent-crab-geometry';
 
-type AtlasBounds = readonly [left: number, bottom: number, right: number, top: number];
-type Point3 = { x: number; y: number; z: number };
-
-// Front to rear along the shell. The wall anchors are indexed inner to outer.
+// Match the inner-to-outer order of the wall contacts. The last two values
+// are the rigid femur and tibia lengths for that socket.
 const legMounts = [
- [2.03, .04, -.20],
- [1.76, -.24, -.14],
- [1.46, -.51, -.07],
- [1.12, -.78, 0],
+  [1.12, -0.78, 0, 2.13, 2.52],
+  [1.46, -0.51, -0.07, 2.09, 2.46],
+  [1.76, -0.24, -0.14, 2.13, 2.43],
+  [2.03, 0.04, -0.20, 2.22, 2.45],
 ] as const;
+const muzzle = CRAB_TARGET_X / VENT_CRAB_SCALE, contactZ = BOSS_MUZZLE_Z + 0.015;
+const ball = new T.SphereGeometry(1, 18, 12);
+const tooth = new T.ConeGeometry(1, 1, 8);
+const chargeRing = new T.RingGeometry(0.29, 0.355, 36);
 
-// The source parts include open sockets at their ends. Sample the armor up
-// to each socket lip, then bury that edge in the adjoining posed part.
-const socketCrops: Partial<Record<number, AtlasBounds>> = {
- 3: [0, .21, 1, .78], // upper leg, both ends
- 4: [0, 0, 1, .77],   // lower leg
- 5: [0, 0, 1, .72],   // hooked toe
- 6: [0, .21, 1, .78], // claw arm, both ends
- 8: [0, .18, 1, 1],   // moving finger
- 9: [0, .19, 1, 1],   // eye stalk
- 11: [0, .16, 1, 1],  // exposed claw organ
-};
-
-function atlasGeometry(geometry: T.BufferGeometry, cell: number, [left, bottom, right, top]: AtlasBounds = [0, 0, 1, 1]) {
- const uv = geometry.attributes.uv, pad = .012;
- for (let i = 0; i < uv.count; i++) {
-  const u = T.MathUtils.lerp(left, right, uv.getX(i));
-  const v = T.MathUtils.lerp(bottom, top, uv.getY(i));
-  uv.setXY(i, (cell % 4 + pad + u * (1 - 2 * pad)) / 4, 1 - (Math.floor(cell / 4) + 1 - pad - v * (1 - 2 * pad)) / 3);
- }
- return geometry;
+function createCrabMaterial() {
+  const m = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.67, metalness: 0.10 });
+  m.onBeforeCompile = shader => {
+    shader.vertexShader = `varying float crabFace;\n${shader.vertexShader}`.replace('#include <begin_vertex>',
+      '#include <begin_vertex>\ncrabFace = normal.z;');
+    shader.fragmentShader = `varying float crabFace;\n${shader.fragmentShader}`.replace('#include <map_fragment>',
+      T.ShaderChunk.map_fragment.replace('diffuseColor *= sampledDiffuseColor;', `
+        float paintCoverage = smoothstep(0.04, 0.67, crabFace) * sampledDiffuseColor.a;
+        diffuseColor.rgb = mix(diffuseColor.rgb, sampledDiffuseColor.rgb, paintCoverage);
+      `)).replace('#include <opaque_fragment>', `
+        #ifdef USE_MAP
+          // Keep some of the baked light from the atlas on the raised armor.
+          outgoingLight = mix(outgoingLight, outgoingLight * 0.38 + sampledDiffuseColor.rgb * 0.80, paintCoverage);
+        #endif
+        #include <opaque_fragment>
+      `);
+  };
+  m.customProgramCacheKey = () => 'crab-projected-paint';
+  return m;
 }
 
-function clawPalmGeometry() {
- const geometry = new T.PlaneGeometry(1, 1, 16);
- const { position, uv } = geometry.attributes;
- for (let i = 0; i < uv.count; i++) {
-  if (uv.getY(i) !== 0) continue;
-  const across = Math.abs(uv.getX(i) - .51);
-  // Trim up around the central mounting socket and keep the scalloped sides.
-  const bottom = .08 + .14 * (1 - T.MathUtils.smoothstep(across, .10, .33));
-  position.setY(i, bottom - .5);
-  uv.setY(i, bottom);
- }
- return atlasGeometry(geometry, 7);
+const calcareous = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.86 });
+const membrane = new T.MeshStandardMaterial({ color: 0x2c3335, roughness: 0.74 });
+const ivory = new T.MeshStandardMaterial({ color: 0xbca888, roughness: 0.58 });
+const lens = new T.MeshStandardMaterial({ color: 0x172933, roughness: 0.22, metalness: 0.28 });
+const stem = paintCrabTile(crabHook([[0, -0.09, 0], [0.04, 0.16, 0.06], [0.095, 0.40, 0.14], [0.12, 0.55, 0.18]],
+  [0.16, 0.125, 0.098, 0.14], 0.89, false), 9, [-0.24, -0.11, 0.28, 0.75]);
+const eyeHousing = crabCup([[0, -0.18], [0.62, -0.16], [0.97, -0.09], [1, 0.02], [0.85, 0.095],
+  [0.65, 0.065], [0.51, -0.032], [0, -0.054]], 0.205, 0.195, 9);
+const fingerGeometry = paintCrabTile(crabHook([[0, -0.10, 0], [0.24, 0.20, 0.018], [0.30, 0.58, 0.028],
+  [0.17, 0.85, 0.008], [-0.13, 1.09, -0.016]], [0.22, 0.225, 0.175, 0.095, 0], 0.92, true),
+  8, [-0.28, -0.19, 0.56, 1.13], [0.08, 0.10, 0.96, 1]);
+const fixedFinger = paintCrabTile(crabHook([[0.48, 1.15, 0.23], [0.27, 1.46, 0.26], [0.26, 1.76, 0.25],
+  [0.45, 2.04, 0.21], [0.72, 2.17, 0.17]], [0.29, 0.25, 0.183, 0.092, 0], 0.95, true),
+  7, [0.04, 0.76, 0.98, 2.27], [0.01, 0.43, 0.46, 1]);
+const clawSocket = crabCup([[0, -0.44], [0.63, -0.38], [0.97, -0.24], [1.04, -0.07], [1, 0.041],
+  [0.82, 0.073], [0.72, 0.009], [0.63, -0.112], [0.37, -0.21], [0, -0.22]], 0.495, 0.445, 11);
+const chamber = crabCup([[0, -0.51], [0.58, -0.49], [0.89, -0.34], [1, -0.11], [0.986, 0.045],
+  [0.89, 0.072], [0.81, -0.025], [0.68, -0.122], [0.42, -0.24], [0, -0.30]], 1.02, 0.77, 2);
+
+const fin = new T.Shape();
+fin.moveTo(0, -0.048);
+fin.bezierCurveTo(0.20, -0.15, 0.39, -0.20, 0.60, -0.25);
+fin.bezierCurveTo(0.48, -0.10, 0.25, 0.078, 0, 0.079);
+fin.closePath();
+const gillFin = new T.ExtrudeGeometry(fin, { depth: 0.049, bevelEnabled: true, bevelThickness: 0.020,
+  bevelSize: 0.014, bevelSegments: 2, curveSegments: 8 });
+const gillTissue = new T.MeshStandardMaterial({ color: 0x789b90, roughness: 0.64, emissive: 0x246451, emissiveIntensity: 0.21 });
+
+const bodyGrowth = crabBarnacles(crabCarapace, [[-1.92, 0.46, 0.21], [-1.22, 1.04, 0.22], [-0.42, 1.2, 0.137],
+  [1.01, 1.03, 0.205], [1.76, 0.67, 0.24], [2.06, -0.24, 0.18], [-1.64, -0.43, 0.13],
+  [-1.55, 0.53, 0.195, true], [0.25, 0.96, 0.18, true], [1.47, -0.42, 0.17, true]]);
+const clawGrowth = crabBarnacles(crabPalm, [[0.44, -0.11, 0.235], [-0.20, -0.22, 0.17], [0.18, 0.40, 0.13],
+  [0.20, 0.19, 0.15, true], [-0.45, -0.05, 0.12, true]]);
+const legGrowth = crabBarnacles(crabFemur, [[0.10, -0.11, 0.14], [-0.14, 0.14, 0.105]]);
+
+function createBiolight() {
+  return new T.MeshStandardMaterial({ color: 0x437f73, roughness: 0.37, emissive: 0x51dcb1, emissiveIntensity: 0.2 });
 }
 
-// Source-drawn parts keep the full rig playable without uploaded media.
-function fallbackAtlas(){
- const n=128,w=n*4,h=n*3,data=new Uint8Array(w*h*4);
- for(let cell=0;cell<12;cell++)for(let y=0;y<n;y++)for(let x=0;x<n;x++){
-  const u=(x+.5)/n*2-1,v=(y+.5)/n*2-1,thin=[3,4,5,6,8,9].includes(cell),rx=thin?.42:.88,ry=cell<2?.66:.88;
-  if(Math.hypot(u/rx,v/ry)>1)continue;
-  const noise=((x*17+y*37+cell*23)%19)/19,light=.55+.45*Math.max(0,1-Math.hypot(u+.25,v+.3));
-  let r=51*light+noise*19,g=70*light+noise*16,b=77*light+noise*12;
-  if(cell===2||cell===11){const ring=Math.hypot(u,v);r=20;g=ring<.55?100+70*Math.sin(Math.atan2(v,u)*16)**2:52;b=ring<.55?85:53;if(ring<.2){r=5;g=20;b=21;}}
-  else if(cell===9&&v<-.1){r=8;g=17;b=20;}
-  else if(cell===10){const ring=Math.hypot(((u+.9)*3)%1-.5,((v+.9)*3)%1-.5);r=ring<.24?35:160;g=ring<.24?42:151;b=ring<.24?43:121;}
-  else {const bx=((x+cell*17)%37-18)/15,by=((y+cell*13)%43-21)/16,ring=Math.hypot(bx,by);if(ring<.48){r=ring<.25?22:155;g=ring<.25?31:146;b=ring<.25?33:116;}}
-  const at=((Math.floor(cell/4)*n+y)*w+cell%4*n+x)*4;data.set([r,g,b,255],at);
- }
- const texture=new T.DataTexture(data,w,h);texture.flipY=true;texture.colorSpace=T.SRGBColorSpace;texture.generateMipmaps=true;texture.minFilter=T.LinearMipmapLinearFilter;texture.anisotropy=4;texture.needsUpdate=true;return texture;
-}
-export function createVentBoss(fallback?:T.Texture){
- const root=new T.Group();root.name='barnacled-rim-crab';root.scale.setScalar(VENT_CRAB_SCALE);
- let map=fallback??fallbackAtlas();const materials=new Map<string,T.MeshBasicMaterial>();
- function material(layer:number,color=0xffffff){const key=layer+':'+color;let m=materials.get(key);if(!m){m=new T.MeshBasicMaterial({map,alphaTest:.45,side:T.DoubleSide,color,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-layer*2});materials.set(key,m);}return m;}
- const geometries = Array.from({length:12}, (_, cell) => {
-  if (cell === 7) return clawPalmGeometry();
-  const crop = socketCrops[cell];
-  return atlasGeometry(crop ? new T.PlaneGeometry() : new T.CircleGeometry(.5, 28), cell, crop);
- });
- function part(parent:T.Object3D,cell:number,x:number,y:number,z:number,w:number,h:number,layer:number,color=0xffffff){const m=new T.Mesh(geometries[cell],material(layer,color));m.position.set(x,y,z);m.scale.set(w,h,1);parent.add(m);return m;}
- function barnacle(parent:T.Object3D,x:number,y:number,z:number,size:number,angle:number,layer:number){const p=part(parent,10,x,y,z,size,size,layer);p.rotation.z=angle;p.name='crab-barnacle-colony';return p;}
- const a=new T.Vector3(),b=new T.Vector3(),direction=new T.Vector3(),unit=new T.Vector3(),right=new T.Vector3(),normal=new T.Vector3(),basis=new T.Matrix4();
- function span(mesh: T.Mesh, from: Point3, to: Point3, width: number, overlap = .38) {
-  a.set(from.x, from.y, from.z);
-  b.set(to.x, to.y, to.z);
-  direction.copy(a).sub(b);
-  mesh.position.copy(a).add(b).multiplyScalar(.5);
-  unit.copy(direction).normalize();
-  right.set(unit.y, -unit.x, 0);
-  if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
-  right.normalize();
-  normal.crossVectors(right, unit).normalize();
-  basis.makeBasis(right, unit, normal);
-  mesh.quaternion.setFromRotationMatrix(basis);
-  mesh.scale.set(width, direction.length() + overlap, 1);
- }
- const kneeArmor = atlasGeometry(new T.CircleGeometry(.5, 16), 6, [.32, .36, .68, .64]);
- const legs=Array.from({length:CRAB_LEGS},(_,i)=>{
-  const layer = 2 + (legMounts.length - 1 - Math.floor(i / 2)) * 4;
-  const upper=part(root,3,0,0,0,.8,1,layer),lower=part(root,4,0,0,0,.55,1,layer+1),toe=part(root,5,0,0,0,.95,1.1,layer+2);
-  upper.name='crab-leg-upper-'+i;lower.name='crab-leg-lower-'+i;toe.name='crab-foot-'+i;
-  const knee = new T.Mesh(kneeArmor, material(layer + 3, 0xc9c7bd));
-  knee.name = 'crab-knee-' + i;
-  knee.scale.set(.55, .43, 1);
-  root.add(knee);
-  barnacle(upper,0,.15,.05,.55,.32,layer+3);
-  return {upper, lower, toe, knee};
- });
- part(root,0,0,.3,.1,5.4,3.1,25).name='crab-carapace';
- for(const[x,y,size,angle]of[[-1.9,.45,.6,-.4],[-1.3,1,.7,.2],[-.5,1.05,.5,-.2],[.5,1,.65,.1],[1.4,.8,.75,-.5],[2,.1,.5,.5],[-1.8,-.3,.5,.7]])barnacle(root,x,y,.23,size,angle,27);
- const eyes=[-1,1].map(side=>{const pivot=new T.Group();pivot.position.set(side*.85,.75,.35);root.add(pivot);part(pivot,9,0,.28,0,.40,.69,35).name='crab-eye-'+side;return{pivot,side};});
- const core=part(root,2,0,-.05,.76,1.85,1.7,41);core.name='crab-gill-chamber';
- const center=new T.Object3D();center.name='laser_contact_C';center.position.set(0,0,BOSS_MUZZLE_Z+.015);root.add(center);
- const plates=[-1,1].map((side,i)=>{
-  const hinge=new T.Group();hinge.name='crab-apron-'+side;hinge.position.set(side*1.35,-.35,.92);root.add(hinge);
-  const mesh=new T.Mesh(atlasGeometry(new T.PlaneGeometry(.5,1),1,[i/2,0,(i+1)/2,1]),material(44+i));mesh.position.x=-side*.7;mesh.scale.set(2.8,1.6,1);hinge.add(mesh);return{side,hinge};
- });
- const glowGeometry=new T.RingGeometry(.24,.33,24);
- const coreGlow=new T.Mesh(glowGeometry,new T.MeshBasicMaterial({color:0x70ffd3,transparent:true,opacity:.15,blending:T.AdditiveBlending,depthWrite:false}));coreGlow.position.set(0,0,.84);coreGlow.scale.setScalar(2);root.add(coreGlow);
- const claws=[-1,1].map((side,index)=>{
-  const shoulder = {x:side*1.55,y:.08,z:.24};
-  const upper=part(root,6,0,0,0,.85,1,31);upper.name='crab-claw-arm-'+index;
-  const hinge=new T.Group();hinge.name=side<0?'crab-crusher':'crab-cutter';hinge.position.set(side*2.4,0,.45);root.add(hinge);
-  const fore=part(hinge,6,0,0,0,.78,1,33);
-  span(fore, {x:0,y:0,z:0}, {x:side*.88,y:.36,z:.13}, .82, .32);
-  part(hinge,7,side*.85,.85,.13,2.15*side,2.55,35).name='crab-palm-'+index;
-  const finger=new T.Group();finger.name='crab-finger-'+index;finger.position.set(side*1.28,1.41,.22);hinge.add(finger);
-  part(finger,8,0,.49,0,.80*side,1.11,37).name='crab-finger-blade-'+index;
-  for(const[x,y,size]of[[.75,.8,.55],[1.25,.45,.45],[.55,1.3,.4]])barnacle(hinge,side*x,y,.25,size,side*.4,39);
-  const joint=part(root,11,side*2.4,.07,.78,.95,.80,40);joint.name='crab-claw-joint-'+index;
-  const glow=new T.Mesh(glowGeometry,new T.MeshBasicMaterial({color:0x70ffd3,transparent:true,opacity:.15,blending:T.AdditiveBlending,depthWrite:false}));glow.position.set(side*2.4,0,.84);root.add(glow);
-  const anchor=new T.Object3D();anchor.name=side<0?'laser_contact_L':'laser_contact_R';anchor.position.set(side*2.4,0,BOSS_MUZZLE_Z+.015);root.add(anchor);
-  return{side,index,shoulder,upper,hinge,finger,joint,anchor,glow};
- });
- const hip = new T.Vector3(), knee = new T.Vector3(), ankle = new T.Vector3(), foot = new T.Vector3();
- function pose(reveal:number,windup:number,targetX:number,firedX:number,recoil:number,time=0,broken:readonly number[]=[0,0],opening=0){
-  const feet=crabFeet(reveal,Math.max(0,time-108));
-  legs.forEach((leg,i)=>{
-   const side = i % 2 ? 1 : -1, row = Math.floor(i / 2);
-   const [x, y, z] = legMounts[legMounts.length - 1 - row];
-   foot.copy(feet[i]).divideScalar(VENT_CRAB_SCALE);
-   hip.set(side * x, y, z);
-   ankle.set(foot.x - side * .17, foot.y + .58, foot.z + .11);
-   // Keep the bend between the moving endpoints so a step can't drag
-   // a shin back across an elbow fixed at the edge of the screen.
-   knee.lerpVectors(hip, ankle, .47);
-   knee.x += side * .24;
-   knee.y += .50;
-   knee.z += .18;
-   span(leg.upper, hip, knee, 1.05 + row * .06);
-   span(leg.lower, knee, ankle, .85 + row * .05, .40);
-   span(leg.toe, ankle, foot, .92 * side, .16);
-   leg.knee.position.copy(knee);
-   leg.knee.position.z += .11;
-   leg.knee.rotation.z = side * .29;
-  });
-  for(const{pivot,side}of eyes)pivot.rotation.z=side*(.08+Math.sin(time*.7)*.035);
-  for(const{side,hinge}of plates)hinge.rotation.y=side*opening*1.3;
-  core.scale.set(1.85*(1+Math.sin(time*3)*.025+opening*windup*.05),1.7,1);core.position.z=.76-(targetX===0?recoil*.06:0);coreGlow.visible=targetX===0&&opening>0;coreGlow.material.opacity=.12+windup*.3;
-  for(const c of claws){
-   const sag=broken[c.index]??0,active=Math.sign(targetX)===c.side&&sag===0;
-   const kick = Math.sign(firedX) === c.side ? recoil : 0;
-   c.hinge.rotation.z=-c.side*(sag*.95+.04*Math.sin(time*.9+c.index));c.hinge.position.z=.45-kick*.1;
-   span(c.upper, c.shoulder, c.hinge.position, .9, .44);
-   c.finger.rotation.z=-c.side*(.08+(active?windup*.65:0)+kick*.15);
-   c.joint.material=material(40,sag>0?0x596b6b:active?0xffffff:0x6a8885);
-   c.glow.visible=active;c.glow.material.opacity=.12+windup*.5;c.glow.scale.setScalar(1+windup*.25);
-   c.joint.position.z=.78-kick*.06;c.glow.position.z=c.joint.position.z+.06;
-   c.anchor.position.z=BOSS_MUZZLE_Z+.015-kick*.06;
+export function createVentBoss() {
+  const root = new T.Group();
+  root.name = 'barnacled-rim-crab';
+  root.scale.setScalar(VENT_CRAB_SCALE);
+  const shell = createCrabMaterial();
+
+  const along = new T.Vector3(), across = new T.Vector3(), front = new T.Vector3(), axes = new T.Matrix4();
+  function span(mesh: T.Mesh, from: T.Vector3, to: T.Vector3, length = from.distanceTo(to)) {
+    mesh.position.copy(from).lerp(to, 0.5);
+    along.subVectors(from, to).normalize();
+    across.set(along.y, -along.x, 0);
+    if (across.lengthSq() < 1e-8) across.set(along.z, 0, -along.x);
+    across.normalize();
+    front.crossVectors(across, along);
+    mesh.quaternion.setFromRotationMatrix(axes.makeBasis(across, along, front));
+    mesh.scale.y = length;
   }
-  center.position.z=BOSS_MUZZLE_Z+.015-(targetX===0?recoil*.06:0);
- }
- for(const color of[0x596b6b,0x6a8885])material(40,color);
- pose(1,0,-2.4,0,0);
- return{root,pose,setAtlas(texture:T.Texture){map=texture;texture.anisotropy=4;for(const m of materials.values()){m.map=texture;m.needsUpdate=true;}}};
+
+  part(root, crabCarapace, shell, 0, 0, 0).name = 'crab-carapace';
+  part(root, bodyGrowth, calcareous, 0, 0, 0).name = 'crab-barnacle-colony';
+  const legs = Array.from({ length: CRAB_LEGS }, (_, i) => {
+    const side = i % 2 ? 1 : -1, row = Math.floor(i / 2);
+    const [x, y, z, upperLength, lowerLength] = legMounts[row];
+    const hip = new T.Vector3(side * x, y, z);
+    const upper = part(root, crabFemur, shell, 0, 0, 0), lower = part(root, crabTibia, shell, 0, 0, 0);
+    const toe = part(root, crabToe, shell, 0, 0, 0), knee = part(root, ball, membrane, 0, 0, 0);
+    const socket = part(root, ball, membrane, hip.x, hip.y, hip.z);
+    socket.scale.set(0.294, 0.268, 0.30);
+    knee.scale.set(0.24, 0.225, 0.23);
+    upper.name = `crab-leg-upper-${i}`;
+    lower.name = `crab-leg-lower-${i}`;
+    toe.name = `crab-foot-${i}`;
+    knee.name = `crab-knee-${i}`;
+    upper.scale.set(side * (0.80 + 0.047 * row), 1, 0.84);
+    lower.scale.set(side * (0.79 + 0.039 * row), 1, 0.84);
+    toe.scale.x = side;
+    part(upper, legGrowth, calcareous, 0, 0, 0).name = 'crab-barnacle-colony';
+    return { side, hip, upper, lower, toe, knee, upperLength, lowerLength };
+  });
+
+  const eyes = [-1, 1].map(side => {
+    const eye = pivot(root, `crab-eye-${side}`, side * 0.86, 0.68, 0.36);
+    eye.scale.x = side;
+    part(eye, stem, shell, 0, 0, 0);
+    part(eye, eyeHousing, shell, 0.12, 0.58, 0.21);
+    part(eye, ball, lens, 0.12, 0.58, 0.239).scale.set(0.128, 0.122, 0.103);
+    return { side, eye };
+  });
+
+  const gills = pivot(root, 'crab-gill-chamber', 0, 0, 0.82);
+  part(gills, chamber, shell, 0, 0, 0);
+  const fins = [-1, 1].flatMap(side => Array.from({ length: 4 }, (_, i) => {
+    const y = 0.46 - i * 0.244;
+    const lamella = part(gills, gillFin, gillTissue, side * (0.84 - Math.abs(y) * 0.39), y, -0.18);
+    lamella.scale.set(-side * (1 - Math.abs(y) * 0.28), 0.84, 1);
+    return { side, i, lamella };
+  }));
+  const centerLight = part(root, ball, createBiolight(), 0, 0, 0.70);
+  centerLight.name = 'crab-gill-vent';
+  centerLight.scale.set(0.20, 0.24, 0.10);
+  const center = pivot(root, 'laser_contact_C', 0, 0, contactZ);
+  const apron = [-1, 1].map(side => {
+    const hinge = pivot(root, `crab-apron-${side}`, side * 1.245, -0.16, side < 0 ? 0.956 : 0.970);
+    hinge.scale.x = side;
+    part(hinge, crabApron(side), shell, 0, 0, 0);
+    part(hinge, ball, membrane, 0, 0, -0.09).scale.set(0.31, 0.42, 0.21);
+    return { side, hinge };
+  });
+
+  function teeth(parent: T.Group, sites: readonly (readonly [number, number, number])[], direction: number) {
+    for (const [x, y, size] of sites) {
+      const prong = part(parent, tooth, ivory, x, y, 0.2);
+      prong.rotation.z = -direction * 1.26;
+      prong.scale.set(size * 0.48, size, size * 0.50);
+    }
+  }
+
+  const foreStart = new T.Vector3(), foreEnd = new T.Vector3(0.91, 0.65, 0.18);
+  const claws = [-1, 1].map((side, i) => {
+    const crusher = side < 0, shoulder = new T.Vector3(side * 1.51, 0.075, -0.025);
+    const upper = part(root, crabArm, shell, 0, 0, 0);
+    upper.name = `crab-claw-arm-${i}`;
+    const hinge = pivot(root, crusher ? 'crab-crusher' : 'crab-cutter', side * muzzle, 0, 0.45);
+    hinge.scale.x = side;
+    part(hinge, ball, membrane, 0, 0, -0.014).scale.set(0.345, 0.312, 0.352);
+    span(part(hinge, crabArm, shell, 0, 0, 0), foreStart, foreEnd);
+    const palm = pivot(hinge, `crab-palm-${i}`, 0.91, 0.79, 0.21);
+    palm.scale.set(crusher ? 1.15 : 0.91, crusher ? 1.04 : 0.96, crusher ? 1.19 : 0.92);
+    part(palm, crabPalm, shell, 0, 0, 0);
+    part(palm, clawGrowth, calcareous, 0, 0, 0).name = 'crab-barnacle-colony';
+    part(hinge, fixedFinger, shell, 0, 0, 0).scale.z = crusher ? 1.22 : 0.93;
+    teeth(hinge, [[0.50, 1.48, 0.25], [0.48, 1.72, 0.22], [0.56, 1.93, 0.18]], 1);
+    const finger = pivot(hinge, `crab-finger-${i}`, 1.32, 1.23, 0.22);
+    finger.scale.set(crusher ? 1.11 : 0.97, crusher ? 0.84 : 1.015, crusher ? 1.18 : 0.88);
+    part(finger, ball, membrane, 0, 0, -0.032).scale.set(0.245, 0.23, 0.21);
+    part(finger, fingerGeometry, shell, 0, 0, 0).name = `crab-finger-blade-${i}`;
+    teeth(finger, [[0.10, 0.31, 0.26], [0.12, 0.52, 0.21], [0.10, 0.72, 0.16]], -1);
+
+    const joint = pivot(root, `crab-claw-joint-${i}`, side * muzzle, 0, 0.78);
+    part(joint, clawSocket, shell, 0, 0, 0);
+    const light = part(joint, ball, createBiolight(), 0, 0, -0.029);
+    light.scale.set(0.246, 0.207, 0.075);
+    const glow = part(joint, chargeRing, new T.MeshBasicMaterial({ color: 0x70ffd3, transparent: true,
+      blending: T.AdditiveBlending, depthWrite: false, opacity: 0.18 }), 0, 0, 0.091);
+    const anchor = pivot(root, side < 0 ? 'laser_contact_L' : 'laser_contact_R', side * muzzle, 0, contactZ);
+    return { side, i, shoulder, upper, hinge, finger, joint, light, glow, anchor };
+  });
+
+  const foot = new T.Vector3(), ankle = new T.Vector3(), knee = new T.Vector3();
+  const reach = new T.Vector3(), bend = new T.Vector3();
+  function pose(reveal: number, windup: number, targetX: number, firedX: number, recoil: number,
+    time = 0, broken: readonly number[] = [0, 0], opening = 0) {
+    const feet = crabFeet(reveal, Math.max(0, time - VENT_DURATION - VENT_APPROACH));
+    for (const [i, leg] of legs.entries()) {
+      const { side, hip, upperLength, lowerLength } = leg;
+      foot.copy(feet[i]).divideScalar(VENT_CRAB_SCALE);
+      ankle.set(foot.x - side * 0.16, foot.y + 0.50, foot.z + 0.13);
+      reach.subVectors(ankle, hip);
+      const distance = reach.length();
+      reach.divideScalar(distance);
+      bend.set(side * 0.33, 1, -0.13).addScaledVector(reach, -bend.dot(reach)).normalize();
+      const down = (upperLength ** 2 - lowerLength ** 2 + distance ** 2) / (2 * distance);
+      const up = Math.sqrt(Math.max(0, upperLength ** 2 - down ** 2));
+      knee.copy(hip).addScaledVector(reach, down).addScaledVector(bend, up);
+      span(leg.upper, hip, knee, upperLength);
+      span(leg.lower, knee, ankle, lowerLength);
+      span(leg.toe, ankle, foot);
+      leg.knee.position.copy(knee);
+    }
+    for (const { side, eye } of eyes) eye.rotation.set(windup * 0.14, 0, side * (0.08 + Math.sin(time * 0.72) * 0.062));
+    for (const { side, hinge } of apron) hinge.rotation.y = side * opening * 1.30;
+    for (const { side, i, lamella } of fins) {
+      lamella.rotation.y = side * (0.20 + opening * (0.28 * windup + 0.115 * Math.sin(time * 5.7 - i * 0.83)));
+    }
+    const coreKick = targetX === 0 ? recoil * 0.06 : 0;
+    gills.position.z = 0.82 - coreKick;
+    center.position.z = contactZ - coreKick;
+    centerLight.position.z = 0.70 - coreKick;
+    centerLight.material.emissiveIntensity = 0.08 + (0.48 + 1.25 * windup) * opening;
+    centerLight.scale.set(0.20 + opening * windup * 0.10, 0.24 + opening * windup * 0.08, 0.10);
+    for (const c of claws) {
+      const sag = broken[c.i] ?? 0, active = Math.sign(targetX) === c.side && sag === 0;
+      const charge = active ? windup : 0, kick = Math.sign(firedX) === c.side ? recoil : 0;
+      c.hinge.rotation.z = -c.side * (sag * 0.99 + 0.038 * Math.sin(time * 0.9 + c.i) + 0.10 * kick);
+      c.hinge.rotation.x = sag * 0.26 - kick * 0.14 + charge * 0.07;
+      c.hinge.position.z = 0.45 - kick * 0.10;
+      span(c.upper, c.shoulder, c.hinge.position);
+      c.finger.rotation.z = 0.35 - 0.65 * charge + 0.19 * kick - 0.44 * sag;
+      c.joint.position.z = 0.78 - kick * 0.06;
+      c.anchor.position.z = contactZ - kick * 0.06;
+      c.light.material.emissiveIntensity = (0.14 + (active ? 0.47 + 1.15 * charge : 0)) * (1 - sag);
+      c.light.scale.z = 0.073 + 0.025 * charge;
+      c.glow.visible = active;
+      c.glow.material.opacity = 0.13 + charge * 0.61;
+    }
+  }
+  pose(1, 0, -CRAB_TARGET_X, 0, 0);
+  return { root, pose, setAtlas(texture: T.Texture) {
+    texture.anisotropy = 4;
+    applySurfaceMap(texture, [shell]);
+  } };
 }

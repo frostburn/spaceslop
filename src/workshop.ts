@@ -25,7 +25,8 @@ import { createPreserveUv, preserveLighting } from './preserve-lighting';
 import { createFlyerAssets, createPreserveFlyer } from './preserve-flyer-rig';
 import { flyerMotion, type FlyerCourse } from './preserve-flyer';
 import {createVentBoss} from './vent-boss';
-import {crabSmooth} from './vent-crab';
+import {crabSmooth, CRAB_TARGET_X} from './vent-crab';
+import {VENT_APPROACH, VENT_DURATION} from './vent-layout';
 import {createFaunaAssets,createWormAssets,createVentShrimp,createVentWorm} from './vent-fauna-rig';
 import {SHRIMP_FIRST_FIRE,SHRIMP_INTERVAL,WORM_FIRST_ATTACK,WORM_INTERVAL} from './vent-fauna';
 import {createMortarAssets,createVentMortar} from './vent-mortar-rig';
@@ -193,7 +194,8 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const faunaAssets=createFaunaAssets(),shrimp=createVentShrimp(faunaAssets),wormAssets=createWormAssets(),worm=createVentWorm(wormAssets);
   void loadEncounterTexture('ventFauna',faunaAssets.setAtlas);
   void loadEncounterTexture('ventWorm',wormAssets.setAtlas);
-  const crab=createVentBoss();void loadEncounterTexture('ventCrab',crab.setAtlas);
+  const crab = createVentBoss();
+  let crabPaint: Promise<T.Texture | undefined> | undefined;
   const ambusherMaterials=createAmbusherMaterials(),ambusher=createPoolAmbusher(ambusherMaterials),fallenAmbusher=createPoolAmbusher(ambusherMaterials);
   void loadEncounterTexture('scales',ambusherMaterials.setScales);
   const preserve = createPreserveScenery();
@@ -304,7 +306,19 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     preserve_section: { root: preserve.root, duration: levels.preserve.duration + PRESERVE_APPROACH + GROUNDSKEEPER_CYCLE * 4,
       bounds: new T.Box3(new T.Vector3(-5, -8, -6), new T.Vector3(5, 8, 1)),
       pose(time: number) { const rise=T.MathUtils.smoothstep(time, levels.preserve.duration, levels.preserve.duration+PRESERVE_APPROACH); preserve.update(time, rise); const fight=time-levels.preserve.duration-PRESERVE_APPROACH; preserve.boss.pose(fight); return time<levels.preserve.duration?[...preserveSections].reverse().find(section=>section.y<=time*PRESERVE_SPEED)!.name:rise<1?'observation rotunda approach':groundskeeperAttack(fight).kind; } },
-    vent_crab:{root:crab.root,duration:12,bounds:new T.Box3(new T.Vector3(-6,-5,-5),new T.Vector3(6,3.5,1.5)),pose(time:number){const left=crabSmooth((time-3)/.8),right=crabSmooth((time-6)/.8),opening=crabSmooth((time-6)/.8),target=time<3?-2.4:time<6?2.4:0;crab.pose(1,Math.max(0,Math.sin(time*3)),target,target,Math.max(0,Math.sin(time*3+1))*.2,108+time,[left,right],opening);return time<3?'crusher charge / barnacle colonies':time<6?'crusher disabled / cutter charge':'both claws disabled / gill chamber';}},
+    vent_crab: { root: crab.root, duration: 12,
+      bounds: new T.Box3(new T.Vector3(-6.8, -3.4, -5.1), new T.Vector3(6.8, 3.3, 2.8)),
+      pose(time: number) {
+        const broken = [crabSmooth((time - 3) / 0.8), crabSmooth((time - 6) / 0.8)];
+        const target = time < 3 ? -CRAB_TARGET_X : time < 6 ? CRAB_TARGET_X : 0;
+        const elapsed = (time % 3) % BOSS_VOLLEY_INTERVAL;
+        const fired = elapsed >= BOSS_FIRE_AT;
+        const charge = fired ? 0 : T.MathUtils.clamp((elapsed - BOSS_WINDUP_AT) / (BOSS_FIRE_AT - BOSS_WINDUP_AT), 0, 1);
+        const recoil = fired ? Math.max(0, 1 - (elapsed - BOSS_FIRE_AT) / BOSS_RECOIL_TIME) : 0;
+        crab.pose(1, charge, target, fired ? target : 0, recoil, VENT_DURATION + VENT_APPROACH + time, broken, broken[1]);
+        const phase = time < 3 ? 'Crusher' : time < 6 ? 'Cutter' : 'Gills';
+        return `${phase} · ${recoil > 0 ? 'recoil' : charge > 0 ? 'charge' : 'braced'}`;
+      } },
     vent_shrimp:{root:shrimp.root,duration:6,pose(time:number){const next=SHRIMP_FIRST_FIRE+Math.max(0,Math.floor((time-SHRIMP_FIRST_FIRE)/SHRIMP_INTERVAL)+1)*SHRIMP_INTERVAL;shrimp.pose(time,next);return 'swimmerets / abdomen / paired pincers';}},
     vent_worm:{root:worm.root,duration:WORM_INTERVAL+WORM_FIRST_ATTACK,bounds:new T.Box3(new T.Vector3(-2,-10,-.1),new T.Vector3(2,1.5,.6)),pose(time:number){const next=WORM_FIRST_ATTACK+Math.max(0,Math.floor((time-WORM_FIRST_ATTACK)/WORM_INTERVAL)+1)*WORM_INTERVAL;const p=worm.pose(time,next,.12,8.5,.8);return p.phase==='hidden'?'concealed in hole':p.phase==='windup'?'locked aim / warning':p.phase==='retreat'?'withdrawing into hole':'body lunge / bite';}},
     vent_mortar:{root:mortar.root,duration:6,pose(time:number){const next=MORTAR_FIRST_FIRE+Math.max(0,Math.floor((time-MORTAR_FIRST_FIRE)/MORTAR_INTERVAL)+1)*MORTAR_INTERVAL;const p=mortar.pose(time,next,Math.sin(time*.5)*.6);return p.recoil>0?'pearl volley / recoil':p.charge>0?'shell opening / charge':'tracking / folded shell';}},
@@ -494,6 +508,12 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
 
   function selectAsset() {
     const key = assetSelect.value;
+    if (key === 'vent_crab') {
+      crabPaint ??= loadEncounterTexture('ventCrab', crab.setAtlas).then(texture => {
+        if (!texture) crabPaint = undefined;
+        return texture;
+      });
+    }
     selected = Object.hasOwn(assets, key) ? assets[key as keyof typeof assets] : assets.raptor;
     lastAssets.set(sector.value, key);
     const habitat = sector.value === 'preserve', scenery = key === 'preserve_section', summer=sector.value==='summer';
