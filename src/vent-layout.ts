@@ -15,7 +15,7 @@ export const VENT_END_SCROLL=VENT_SHAFT_Y+VENT_CRAB_RADIUS-4.2*Math.cos(VENT_PIT
 export const VENT_END_HEIGHT=VENT_CRAB_Z-4.2*Math.sin(VENT_PITCH)+12*Math.cos(VENT_PITCH);
 export const VENT_CLIFF_Y=153;
 export const ventSmooth=(t:number)=>{const v=Math.max(0,Math.min(1,t));return v*v*(3-2*v);};
-// Finish moving the view before revealing the flat articulated boss.
+// Finish moving the view before the boss descends into the frame.
 export const ventCameraRise=(time:number)=>ventSmooth((time-VENT_DURATION)/VENT_CAMERA_SWING);
 export const ventBossReveal=(time:number)=>ventSmooth((time-VENT_DURATION-VENT_CAMERA_SWING)/(VENT_APPROACH-VENT_CAMERA_SWING-1));
 export function ventScroll(time:number){

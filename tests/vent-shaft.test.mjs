@@ -83,7 +83,7 @@ test('normal ship fire keeps damaging a moving claw without relaxing phase locks
  const f=new Flight('sentry',[],'vex','vents');f.phase='boss';f.time=2;f.stepBoss=()=>{};f.cooldown=f.droneCooldown=1000;f.fire(f.player);assert.equal(f.shots[0].crabTarget,f.crabTargetX);const before=f.bossHealth;f.step(.4);assert(f.bossHealth<before);
 });
 
-test('the camera settles before the raster crab descends from above into combat framing',async()=>{
+test('the camera settles before the crab descends from above into combat framing',async()=>{
  const {createVentBoss}=await server.ssrLoadModule('/src/vent-boss.ts'),rig=createVentBoss();
  for(let time=100;time<=105;time+=.25){
   const rise=v.ventCameraRise(time),reveal=v.ventBossReveal(time),boss=v.ventBossPose(reveal),p=v.ventWorld(boss.x,boss.y,boss.z,time,rise),distance=40-18*rise;

@@ -6,6 +6,7 @@ const server=await createServer({root:new URL('..',import.meta.url).pathname,con
 const c=await server.ssrLoadModule('/src/vent-crab.ts'),v=await server.ssrLoadModule('/src/vent-layout.ts'),{createVentBoss}=await server.ssrLoadModule('/src/vent-boss.ts'),{Flight,STEP,BOSS_PROJECTION}=await server.ssrLoadModule('/src/game.ts');
 const {createBossLaserContact}=await server.ssrLoadModule('/src/laser-contact.ts');
 const {ventChallengeBoss}=await server.ssrLoadModule('/src/vent-challenge.ts');
+const {disposeScene}=await server.ssrLoadModule('/src/rendering/dispose.ts');
 
 test('the crab has two individually breakable claws and a protected core, with capped phase damage',()=>{
  const f=new Flight('sentry',[],'vex','vents');f.phase='boss';assert.equal(f.bossHealth,c.CRAB_HP);assert.equal(f.bossMaxHealth,c.CRAB_HP);
@@ -98,30 +99,65 @@ test('eight articulated feet brace on the visible inner wall throughout the came
  for(let reveal=0;reveal<=1;reveal+=.02){const a=c.crabFeet(reveal),b=c.crabFeet(reveal+1e-5);for(let i=0;i<8;i++)assert(Math.hypot(a[i].x-b[i].x,a[i].y-b[i].y,a[i].z-b[i].z)<.005);}
 });
 
-test('raster rig has independent claws/apron, continuous limbs, extra barnacles and deterministic scrubbing',()=>{
- const r=createVentBoss();r.pose(1,.8,-2.4,-2.4,.2,1,[0,0],0);const finger=r.root.getObjectByName('crab-finger-0').rotation.z;r.pose(.5,0,0,0,0,4,[1,1],1);assert(r.root.getObjectByName('crab-apron-1').rotation.y>1);assert(r.root.getObjectByName('crab-crusher').rotation.z>.8);
- r.pose(1,.8,-2.4,-2.4,.2,1,[0,0],0);assert.equal(r.root.getObjectByName('crab-finger-0').rotation.z,finger);
- for(let i=0;i<8;i++){const upper=r.root.getObjectByName('crab-leg-upper-'+i),lower=r.root.getObjectByName('crab-leg-lower-'+i);assert(upper.scale.y>1);assert(lower.scale.y>1);for(const n of [...upper.quaternion.toArray(),...lower.position.toArray()])assert(Number.isFinite(n));}
- const meshes=[];r.root.traverse(o=>{if(o.isMesh)meshes.push(o);});assert(meshes.filter(m=>m.name==='crab-barnacle-colony').length>=20);const texture=new T.Texture();r.setAtlas(texture);for(const mesh of meshes)if(mesh.material.map)assert.equal(mesh.material.map,texture);
+test('the solid armor takes painted tiles and keeps its volume when the atlas is released', () => {
+ const rig = createVentBoss(), scene = new T.Scene();
+ scene.add(rig.root);
+ const shell = rig.root.getObjectByName('crab-carapace');
+ const sections = [shell, rig.root.getObjectByName('crab-leg-upper-0'), rig.root.getObjectByName('crab-apron-1').children[0],
+  rig.root.getObjectByName('crab-palm-0').children[0], rig.root.getObjectByName('crab-barnacle-colony')];
+ for (const mesh of sections) {
+  mesh.geometry.computeBoundingBox();
+  assert(mesh.geometry.boundingBox.getSize(new T.Vector3()).z > .2);
+ }
+ const texture = new T.Texture();
+ const geometry = shell.geometry;
+ rig.setAtlas(texture);
+ assert.equal(shell.material.map, texture);
+ assert.equal(rig.root.getObjectByName('crab-finger-blade-0').material.map, texture);
+ assert.equal(sections[1].material.map, texture);
+ disposeScene(scene);
+ assert.equal(shell.material.map, null);
+ assert.equal(shell.geometry, geometry);
 });
 
-test('cropped armor overlaps its neighbor at the knee and planted toe through the descent and scurry', () => {
+test('the apron shields a recessed chamber until the claws fail, and the rig scrubs deterministically', () => {
+ const rig = createVentBoss();
+ const crusher = rig.root.getObjectByName('crab-crusher'), finger = rig.root.getObjectByName('crab-finger-0');
+ const ray = new T.Raycaster(new T.Vector3(.25, 0, 8), new T.Vector3(0, 0, -1));
+ const front = () => {
+  rig.root.updateMatrixWorld(true);
+  return ray.intersectObject(rig.root, true)[0].object;
+ };
+ rig.pose(1, .8, -c.CRAB_TARGET_X, 0, 0, 109);
+ const charge = finger.rotation.z;
+ assert.match(front().parent.name, /crab-apron/);
+ rig.pose(1, .8, 0, 0, 0, 116, [1, 1], 1);
+ assert(crusher.rotation.z > .8);
+ assert(rig.root.getObjectByName('crab-apron-1').rotation.y > 1);
+ const exposed = front();
+ assert(exposed.parent.name === 'crab-gill-chamber' || exposed.name === 'crab-gill-vent');
+ rig.pose(1, .8, -c.CRAB_TARGET_X, 0, 0, 109);
+ assert.equal(finger.rotation.z, charge);
+});
+
+test('rigid links meet at every knee and ankle, with curved toe tips on the wall anchors', () => {
  const rig = createVentBoss();
  const part = (name, i) => rig.root.getObjectByName(`crab-${name}-${i}`);
- const inPart = (point, mesh) => mesh.worldToLocal(rig.root.localToWorld(point.clone()));
- for (const [reveal, time] of [[.25,106], [1,108], [1,110], [1,114.5]]) {
+ const end = (mesh, y) => new T.Vector3(0, y, 0).applyMatrix4(mesh.matrix);
+ const near = (a, b) => assert(a.distanceTo(b) < 1e-6);
+ for (const [reveal, time] of [[0, 105], [.25, 106], [.7, 106.5], [1, 108], [1, 110], [1, 114.5], [1, 118.3]]) {
   rig.pose(reveal, .6, -2.4, -2.4, 1, time);
   rig.root.updateMatrixWorld(true);
   const feet = c.crabFeet(reveal, Math.max(0, time - v.VENT_DURATION - v.VENT_APPROACH));
   for (let i = 0; i < c.CRAB_LEGS; i++) {
    const upper = part('leg-upper', i), lower = part('leg-lower', i), toe = part('foot', i);
-   const knee = part('knee', i).position.clone();
-   knee.z -= .11;
-   const tip = new T.Vector3().copy(feet[i]).divideScalar(v.VENT_CRAB_SCALE);
-   const ankle = new T.Vector3(0, .39, 0).applyMatrix4(toe.matrix);
-   assert(Math.abs(inPart(knee, upper).y) < .48 && Math.abs(inPart(knee, lower).y) < .48);
-   assert(Math.abs(inPart(ankle, lower).y) < .5);
-   assert(inPart(tip, toe).y > -.5 && inPart(tip, toe).y < -.3);
+   const knee = part('knee', i).position;
+   near(end(upper, -.5), knee);
+   near(end(lower, .5), knee);
+   near(end(lower, -.5), end(toe, .5));
+   const position = toe.geometry.attributes.position;
+   const tip = new T.Vector3().fromBufferAttribute(position, position.count - 1).applyMatrix4(toe.matrix);
+   near(tip, new T.Vector3().copy(feet[i]).divideScalar(v.VENT_CRAB_SCALE));
   }
  }
  const uv = part('leg-upper', 0).geometry.attributes.uv;
@@ -132,6 +168,7 @@ test('cropped armor overlaps its neighbor at the knee and planted toe through th
 test('outer legs attach higher on the shell and neither link stretches through a scurry', () => {
  const rig = createVentBoss();
  const start = v.VENT_DURATION + v.VENT_APPROACH;
+ const lengths = new Map();
  for (let time = 0; time <= 12; time += .05) {
   rig.pose(1, 0, 0, 0, 0, start + time);
   for (const side of [0, 1]) {
@@ -139,15 +176,14 @@ test('outer legs attach higher on the shell and neither link stretches through a
    for (let i = side; i < c.CRAB_LEGS; i += 2) {
     const upper = rig.root.getObjectByName(`crab-leg-upper-${i}`);
     const lower = rig.root.getObjectByName(`crab-leg-lower-${i}`);
-    const knee = rig.root.getObjectByName(`crab-knee-${i}`).position.clone();
-    knee.z -= .11;
-    const hip = upper.position.clone().multiplyScalar(2).sub(knee);
+    const hip = new T.Vector3(0, upper.scale.y * .5, 0).applyQuaternion(upper.quaternion).add(upper.position);
     if (previous) {
      assert(Math.abs(hip.x) - Math.abs(previous.x) > .2);
      assert(hip.y - previous.y > .2);
     }
     previous = hip;
-    assert(upper.scale.y < 3.1 && lower.scale.y < 3.1);
+    if (!lengths.has(i)) lengths.set(i, [upper.scale.y, lower.scale.y]);
+    assert.deepEqual([upper.scale.y, lower.scale.y], lengths.get(i));
    }
   }
  }
