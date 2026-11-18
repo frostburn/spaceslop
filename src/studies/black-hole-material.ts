@@ -77,7 +77,15 @@ export function createBlackHoleOptics(sky?: T.Texture) {
         return 4.0 / impact + 15.0 * PI / (4.0 * impact * impact);
       }
 
-      vec3 lensedSky(vec2 q, float impact, float footprint) {
+      #ifdef DEN_PORTRAIT_SKY
+      // Map the 2:1 panorama sideways across the 9:16 playfield at a uniform texel scale.
+      vec3 portraitRay(vec2 screenPoint) {
+        vec2 angles = vec2(-screenPoint.y * (16.0 / 9.0), screenPoint.x) * (.44 * PI);
+        return vec3(sin(angles.x) * cos(angles.y), sin(angles.y), cos(angles.x) * cos(angles.y));
+      }
+      #endif
+
+      vec3 lensedSky(vec2 screenPoint, vec2 q, float impact, float footprint) {
         float bend = 0.0;
         float visible = 1.0;
         if (mode == 0) {
@@ -91,10 +99,19 @@ export function createBlackHoleOptics(sky?: T.Texture) {
         }
         // Stereographic framing opens up the panorama independently of the
         // disk scale. Deflect the wider viewing ray in its orbital plane.
+        #ifdef DEN_PORTRAIT_SKY
+        // Confine the warp to the lens neighborhood; the outer star field stays at plate scale.
+        bend *= 1.0 - smoothstep(10.0, 19.0, impact);
+        vec3 source = portraitRay(screenPoint);
+        vec3 center = portraitRay(lensCenter);
+        vec3 tangent = center - dot(center, source) * source;
+        vec3 ray = source * cos(bend) + tangent / max(length(tangent), .00001) * sin(bend);
+        #else
         float angle = 2.0 * atan(impact / skyFocalLength) - bend;
         vec3 ray = vec3(q / max(impact, .001) * sin(angle), cos(angle));
         float rollC = cos(skyRoll), rollS = sin(skyRoll);
         ray.xy = mat2(rollC, rollS, -rollS, rollC) * ray.xy;
+        #endif
         float c = cos(skyOffset.y), s = sin(skyOffset.y);
         ray.yz = vec2(c * ray.y + s * ray.z, c * ray.z - s * ray.y);
         vec2 skyUV = vec2(atan(ray.x, ray.z) / (2.0 * PI) + skyOffset.x, asin(clamp(ray.y, -1.0, 1.0)) / PI) + .5;
@@ -237,7 +254,7 @@ export function createBlackHoleMaterial(sky?: T.Texture) {
           q *= lensExtent;
           #ifdef LENSED_SKY
           float impact = length(q);
-          color = lensedSky(q, impact, fwidth(impact));
+          color = lensedSky(screen, q, impact, fwidth(impact));
           #endif
           color = sampleBlackHoleDisk(q, color);
         }
