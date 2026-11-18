@@ -174,9 +174,9 @@ export function groundskeeperPose(time: number, aim: GkAim = { x: 0, y: -5.3 }, 
     }
     const committed = striking ? stroke * strength : 0;
     const pole = point(handSide, .48 - .85 * guard - .7 * committed, -.22 + .36 * guard);
-    // Open the wrist as the rake leaves its guard so the hooked tips lead.
-    const cutting = rake && striking ? gkSmooth((attack.age - GROUNDSKEEPER_STRIKE + .16) / .48) * strength : 0;
-    const wristFlex = .58 + .20 * guard - .48 * cutting;
+    // Hold the wrist cocked through the warning, then open it as the arm swings.
+    const release = gkSmooth((attack.age - GROUNDSKEEPER_STRIKE) / .42);
+    const wristFlex = .58 + guard * (.44 - (rake ? .72 : .24) * release);
     const solved = clawArm(shoulder, tip, pole, wristFlex);
     const { hinge, direction } = solved;
     // Turn the hand over on the way to the strike. Roll about its long axis

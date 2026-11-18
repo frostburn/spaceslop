@@ -193,6 +193,20 @@ test('wrists and weight-bearing legs stay articulated through attacks, recovery 
  }
 });
 
+test('striking wrists stay cocked through the windup and open as the arm swings', () => {
+  const wristAngle = arm => new T.Vector3().subVectors(arm.wrist, arm.elbow)
+    .angleTo(new T.Vector3().copy(arm.direction));
+  for (const [cycle, hands] of [[0, [0]], [1, [1]], [2, [0, 1]]]) {
+    const strike = cycle * g.GROUNDSKEEPER_CYCLE + g.GROUNDSKEEPER_STRIKE;
+    for (const hand of hands) {
+      const [loaded, start, midSwing, contact] = [-.045, 0, .21, .48].map(offset =>
+        wristAngle(g.groundskeeperPose(strike + offset).arms[hand]));
+      assert(loaded > .95 && start >= loaded, 'wrist opens before the arm starts to swing');
+      assert(start - midSwing > .08 && midSwing - contact > .08, 'wrist does not open during the swing');
+    }
+  }
+});
+
 test('striking hands turn over 180 degrees while both arm sections keep their hinge axis',()=>{
  const rig=createGroundskeeper(),v=p=>new T.Vector3(p.x,p.y,p.z),xAxis=new T.Vector3(1,0,0),yAxis=new T.Vector3(0,1,0);
  const rest=rig.pose(0);
