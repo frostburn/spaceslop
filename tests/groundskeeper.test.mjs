@@ -52,6 +52,28 @@ test('the marked rake, slam and bite targets remain within reach across the flig
   }
 });
 
+test('both rakes lead with talon points aimed into the flight lane around contact', () => {
+  const toFlight = p => new T.Vector3().copy(g.groundskeeperFlight(p));
+  const duration = g.GROUNDSKEEPER_END - g.GROUNDSKEEPER_STRIKE;
+  for (const x of [-3.5, -2, 0, 2, 3.5]) for (const y of [-6.8, -3, 0, 3, 5.5]) {
+    const aim = { x, y };
+    const ship = new T.Vector3(x, y, 0);
+    for (const arm of [0, 1]) for (const progress of [.54, .62, .69]) {
+      const time = arm * g.GROUNDSKEEPER_CYCLE + g.GROUNDSKEEPER_STRIKE + duration * progress;
+      const hand = g.groundskeeperPose(time, aim).arms[arm];
+      const next = g.groundskeeperPose(time + STEP, aim).arms[arm];
+      for (const [finger, curve] of hand.claws.entries()) {
+        const [base, bow, tip] = curve.map(toFlight);
+        const pointDirection = tip.clone().sub(bow).normalize();
+        const toShip = ship.clone().sub(base).normalize();
+        const travel = toFlight(next.claws[finger][2]).sub(tip).normalize();
+        assert(pointDirection.dot(toShip) > .5, 'talon point faces away from the marked ship');
+        assert(pointDirection.z > 0 && pointDirection.dot(travel) > 0, 'talon point trails the cut');
+      }
+    }
+  }
+});
+
 test('warning aim locks once, Pulse interrupts once, and new runs reset the attack state',()=>{
  const f=quiet();while(f.time<1.1)f.step(STEP);const locked={...f.groundskeeperAim};
  f.player.x=-3.5;while(f.time<2.6)f.step(STEP);assert.deepEqual(f.groundskeeperAim,locked);

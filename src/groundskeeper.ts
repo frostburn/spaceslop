@@ -150,7 +150,8 @@ export function groundskeeperPose(time: number, aim: GkAim = { x: 0, y: -5.3 }, 
     if (striking) {
       // Open the folded arm into a high, forward-facing guard. Both the windup
       // and recovery pass outside the breast before the claws cross the lane.
-      const ready = attached(point(handSide * 5.55, -6.9, 13.7));
+      const readyHeight = rake ? 13.45 - 1.9 * gkSmooth((aim.y + 1) / 6.5) : 13.7;
+      const ready = attached(point(handSide * 5.55, -6.9, readyHeight));
       tip = mix(rest, ready, windup);
       tip.y -= 2.5 * 4 * windup * (1 - windup);
       if (stroke > 0) {
@@ -158,8 +159,9 @@ export function groundskeeperPose(time: number, aim: GkAim = { x: 0, y: -5.3 }, 
         const target = fromFlight(point(aim.x + (slam ? handSide * 1.35 : 0), aim.y, slam ? .5 : 0));
         if (slam) tip = mix(ready, target, stroke);
         else {
+          // Carry the talon points through the ship's plane toward the camera.
           // Match the approach arc's exit tangent to the follow-through.
-          const follow = fromFlight(point(clamp(aim.x - side * GROUNDSKEEPER_RAKE_FOLLOW, -3.8, 3.8), aim.y - 1, -4));
+          const follow = fromFlight(point(clamp(aim.x - side * GROUNDSKEEPER_RAKE_FOLLOW, -3.8, 3.8), aim.y - 1, 1.8));
           const cut = .7, exit = sub(follow, target);
           if (stroke < cut) {
             const t = stroke / cut, lead = sub(target, mul(exit, .5 * cut / (1 - cut)));
@@ -172,7 +174,10 @@ export function groundskeeperPose(time: number, aim: GkAim = { x: 0, y: -5.3 }, 
     }
     const committed = striking ? stroke * strength : 0;
     const pole = point(handSide, .48 - .85 * guard - .7 * committed, -.22 + .36 * guard);
-    const solved = clawArm(shoulder, tip, pole, .58 + .20 * guard);
+    // Open the wrist as the rake leaves its guard so the hooked tips lead.
+    const cutting = rake && striking ? gkSmooth((attack.age - GROUNDSKEEPER_STRIKE + .16) / .48) * strength : 0;
+    const wristFlex = .58 + .20 * guard - .48 * cutting;
+    const solved = clawArm(shoulder, tip, pole, wristFlex);
     const { across, direction } = solved;
     const palmNormal = cross(across, direction);
     const claws = clawShapes[handSide < 0 ? 0 : 1].map(curve => curve.map(p =>
