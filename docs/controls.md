@@ -2,7 +2,7 @@
 
 From the main menu, choose a sector and select **Open briefing**. Pick a pilot and select **Launch**. Use **Menu** to leave the run and choose another sector.
 
-Tap or click the playfield to send the drone to that point. It parks and fires automatically. Drag from the same touch to steer the ship while the drone covers its lane. On a keyboard use WASD or the arrow keys. Guns fire automatically. Use Pulse or Space to clear incoming fire, and Pause or Escape to pause.
+Tap or click the playfield to send the drone to that point. It parks and fires automatically. Drag to steer the ship while the drone holds its lane. Lift to stop. On a keyboard use WASD or the arrow keys. Guns fire automatically. Space fires Pulse from the playfield and activates a focused button. Escape pauses.
 
 Boss tips in the HUD identify the current target and attack cues. Line up the ship or park the drone on a marked weak point, and move clear of amber aim warnings after they lock.
 

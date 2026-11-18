@@ -19,6 +19,8 @@ interface InputContext {
   pause: () => void;
   pulse: () => void;
 }
+const DRAG_THRESHOLD_PX = 5;
+
 export function bindFlightInput(canvas: HTMLCanvasElement, context: InputContext, signal: AbortSignal) {
   const keys = new Set<string>();
   let pointer: {
@@ -26,6 +28,7 @@ export function bindFlightInput(canvas: HTMLCanvasElement, context: InputContext
     x: number;
     y: number;
     dragging: boolean;
+    steered: boolean;
   } | undefined;
   function reset() {
     if (pointer && canvas.hasPointerCapture(pointer.id))
@@ -37,28 +40,25 @@ export function bindFlightInput(canvas: HTMLCanvasElement, context: InputContext
   canvas.addEventListener('pointerdown', event => {
     if (!context.active() || context.flight().phase === 'won' || pointer || event.button !== 0)
       return;
-    const { left, top, width, height } = canvas.getBoundingClientRect();
-    if (!width || !height)
-      return;
     canvas.setPointerCapture(event.pointerId);
-    context.flight().deployDrone(((event.clientX - left) / width - .5) * WIDTH, (.5 - (event.clientY - top) / height) * HEIGHT);
     pointer = {
       id: event.pointerId,
       x: event.clientX,
       y: event.clientY,
-      dragging: false
+      dragging: false,
+      steered: false
     };
   }, { signal });
-  canvas.addEventListener('pointermove', event => {
+  function movePointer(event: PointerEvent) {
     if (pointer?.id !== event.pointerId)
-      return;
-    const { width, height } = canvas.getBoundingClientRect();
-    if (!width || !height)
       return;
     const dx = event.clientX - pointer.x;
     const dy = pointer.y - event.clientY;
+    if (!dx && !dy) return;
+    const { width, height } = canvas.getBoundingClientRect();
+    if (!width || !height) return;
     if (!pointer.dragging) {
-      if (Math.hypot(dx, dy) < 5)
+      if (Math.hypot(dx, dy) < DRAG_THRESHOLD_PX)
         return;
       pointer.dragging = true;
       context.flight().clearAim();
@@ -66,13 +66,25 @@ export function bindFlightInput(canvas: HTMLCanvasElement, context: InputContext
     context.flight().aimBy(dx * WIDTH / width, dy * HEIGHT / height);
     pointer.x = event.clientX;
     pointer.y = event.clientY;
+  }
+  canvas.addEventListener('pointermove', movePointer, { signal });
+  canvas.addEventListener('pointerup', event => {
+    if (pointer?.id !== event.pointerId) return;
+    movePointer(event);
+    if (!pointer.dragging) {
+      const { left, top, width, height } = canvas.getBoundingClientRect();
+      if (width && height)
+        context.flight().deployDrone(((pointer.x - left) / width - .5) * WIDTH, (.5 - (pointer.y - top) / height) * HEIGHT);
+    } else if (pointer.steered) {
+      context.flight().clearAim();
+    }
+    pointer = undefined;
   }, { signal });
-  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'] as const)
+  for (const type of ['pointercancel', 'lostpointercapture'] as const)
     canvas.addEventListener(type, event => {
       if (pointer?.id !== event.pointerId)
         return;
-      if (type !== 'pointerup' && pointer.dragging)
-        context.flight().clearAim();
+      context.flight().clearAim();
       pointer = undefined;
     }, { signal });
   window.addEventListener('keydown', event => {
@@ -82,9 +94,9 @@ export function bindFlightInput(canvas: HTMLCanvasElement, context: InputContext
       event.preventDefault();
       context.pause();
     }
-    else if (event.code === 'Space' && !event.repeat) {
+    else if (event.code === 'Space' && (event.target === canvas || event.target === document.body)) {
       event.preventDefault();
-      context.pulse();
+      if (!event.repeat) context.pulse();
     }
     else if (Object.hasOwn(directions, event.code)) {
       event.preventDefault();
@@ -100,7 +112,14 @@ export function bindFlightInput(canvas: HTMLCanvasElement, context: InputContext
         x += directions[key][0];
         y += directions[key][1];
       }
-      context.flight().steer(x, y, dt);
+      const flight = context.flight();
+      flight.steer(x, y, dt);
+      if (pointer?.dragging) {
+        pointer.steered = true;
+      } else {
+        // A swipe entirely between ticks gets just this one speed-limited step.
+        flight.clearAim();
+      }
     }
   };
 }

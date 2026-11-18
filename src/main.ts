@@ -49,7 +49,7 @@ let session: AbortController | undefined;
 let briefController: AbortController | undefined;
 let pilotPicker: ReturnType<typeof setupPilotPicker> | undefined;
 let practiceDifficulty: HTMLSelectElement | undefined;
-let reloadBeforePreparation = false;
+const failedSectors = new Set<LevelId>();
 let logoPosition = .5;
 let logoPointerX = 0;
 let logoFrame = 0;
@@ -155,6 +155,12 @@ function updateCards() {
 }
 
 function showMenuStatus() {
+  if (failedSectors.has(selected)) {
+    prepare.textContent = 'Reload menu';
+    status.textContent = `${levels[selected].name} could not be prepared. Check your connection or WebGL support. Choose another sector or reload to retry.`;
+    return;
+  }
+  prepare.textContent = 'Open briefing';
   const { rank, next } = campaignStatus(cleared);
   const progress = next ? `${cleared.size}/${campaign.length} cleared` : 'Campaign complete';
   status.textContent = mode === 'campaign' ? `Return to Sender · ${ranks[rank].name} · ${progress}`
@@ -247,8 +253,8 @@ function refreshChallengeSelection() {
 }
 
 function openBriefing() {
-  if (reloadBeforePreparation) { location.reload(); return; }
   refreshChallengeSelection();
+  if (failedSectors.has(selected)) { location.reload(); return; }
   briefController = new AbortController();
   const { signal } = briefController;
   briefTitle.textContent = levels[selected].name;
@@ -384,10 +390,8 @@ async function launchFlight(shortcut?: FlightShortcut) {
   }
   catch {
     if (controller.signal.aborted) return;
+    failedSectors.add(id);
     returnToMenu();
-    reloadBeforePreparation = true;
-    prepare.textContent = 'Reload menu';
-    status.textContent = 'This sector could not be prepared. Check your connection or WebGL support, then reload the menu to retry. Apply an available update if needed.';
   }
 }
 document.querySelector('#launch-flight')!.addEventListener('click', () => void launchFlight());
