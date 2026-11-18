@@ -2,6 +2,7 @@ import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TITAN_CENTIPEDE_MUZZLE, TITAN_SCOUT_MUZZLE } from './titan-challenge';
 import { addTitanSetae, titanChitin } from './titan-insect-surfaces';
+import { cicadaWingGeometry, mountCicadaWing } from './titan-wings';
 
 // Small patrol models share all GPU resources; each pool entry owns only its pivots.
 const scoutShell = titanChitin(0x7f9690, .74); scoutShell.vertexColors = true;
@@ -54,16 +55,7 @@ function scoutGeometry() {
         link([side * .49, y - .14, -.08], [side * .60, y - .45, -.02], .023));
     }
   }
-  // Every vein point is inside the simple convex wing outline.
-  const shape = new T.Shape(); shape.moveTo(0, 0);
-  shape.bezierCurveTo(.35, .24, .98, -.10, 1.08, -.86);
-  shape.bezierCurveTo(.99, -1.07, .40, -.90, 0, -.12); shape.closePath();
-  const wing = new T.ShapeGeometry(shape, 16), lines: number[] = [];
-  for (const [x, y] of [[.39, -.12], [.66, -.33], [.87, -.57], [.98, -.83], [.75, -.85], [.48, -.66]])
-    lines.push(.025, -.06, .006, x, y, .006);
-  lines.push(.39, -.12, .006, .48, -.66, .006, .66, -.33, .006, .75, -.85, .006,
-    .87, -.57, .006, .98, -.83, .006);
-  const veins = new T.BufferGeometry(); veins.setAttribute('position', new T.Float32BufferAttribute(lines, 3));
+  const wing = cicadaWingGeometry(1.10, -.86, .66, .062, .15);
   const carapace = merge(body), positions = carapace.attributes.position, uv = carapace.attributes.uv, colors: number[] = [];
   const spots = [[-.19,.34,.22],[.21,-.15,.26],[-.12,-.62,.17],[.11,.56,.13]];
   for (let i=0;i<positions.count;i++) {
@@ -74,7 +66,7 @@ function scoutGeometry() {
     colors.push(value,value*.98,value*.94);
   }
   carapace.setAttribute('color',new T.Float32BufferAttribute(colors,3));
-  return { body: carapace, ribs: merge(ribs), legs: merge(legs), eyes: merge(eyes), wing, veins };
+  return { body: carapace, ribs: merge(ribs), legs: merge(legs), eyes: merge(eyes), wing };
 }
 
 export function createCicadaScout() {
@@ -85,42 +77,57 @@ export function createCicadaScout() {
   muzzle.position.set(0, TITAN_SCOUT_MUZZLE, .31); muzzle.visible = false;
   addTitanSetae(root, 0, -.08, .32, .57, .76, 0);
   for (const side of [-1, 1]) addTitanSetae(root, side * .24, .31, .32, .30, .32, 0);
-  const wings: { pivot: T.Group; side: number; rear: boolean }[] = [];
+  const wings: { pivot: T.Group; side: number; rear: boolean; flex: (amount: number) => void }[] = [];
   for (const side of [-1, 1]) for (const rear of [true, false]) {
     const pivot = new T.Group(); pivot.name = `patrol-${rear ? 'hind' : 'fore'}wing-${side}`;
     pivot.position.set(side * .18, rear ? -.17 : .15, rear ? .32 : .34);
     const hinge = mesh(root, orb, scoutRim, 'dorsal-wing-hinge');
     hinge.position.copy(pivot.position).add(new T.Vector3(0, 0, -.035)); hinge.scale.set(.07, .10, .065);
-    const blade = new T.Group(); blade.scale.set(side * (rear ? .73 : 1), rear ? .76 : 1, 1);
+    const { blade, flex } = mountCicadaWing(g.wing, membrane, vein); blade.scale.set(side * (rear ? .73 : 1), rear ? .76 : 1, 1);
     blade.rotation.z = side * (rear ? -.15 : .05);
-    mesh(blade, g.wing, membrane, 'wing-membrane'); blade.add(new T.LineSegments(g.veins, vein));
-    pivot.add(blade); root.add(pivot); wings.push({ pivot, side, rear });
+    pivot.add(blade); root.add(pivot); wings.push({ pivot, side, rear, flex });
   }
   return { root, prime() { muzzle.visible = true; muzzle.scale.setScalar(.12); }, pose(time: number, bank = 0, charge = 0) {
     muzzle.visible = charge > 0;
     muzzle.scale.setScalar(.045 + charge * .105);
     root.rotation.y = bank; feet.rotation.x = Math.sin(time * 9) * .12;
-    for (const { pivot, side, rear } of wings) {
+    for (const { pivot, side, rear, flex } of wings) {
       // The full beat stays at or above the dorsal hinge, never beneath the shell.
-      pivot.rotation.y = side * (-.16 + Math.sin(time * 48 + (rear ? .8 : 0)) * .14);
-      pivot.rotation.z = side * Math.sin(time * 48) * .04;
+      const beat = time * 48 + (rear ? .8 : 0);
+      pivot.rotation.y = side * (-.16 + Math.sin(beat) * .14);
+      pivot.rotation.z = side * Math.sin(beat - .3) * .045;
+      flex(.5 + .5 * Math.sin(beat - .95));
     }
   } };
 }
 
 let crawlerParts: ReturnType<typeof crawlerGeometry> | undefined;
 function crawlerGeometry() {
-  const plates: T.BufferGeometry[] = [oval(0, -.07, .15, .36, .43, .24)];
+  // Broader at the rear lip, with a raised spine and rolled-over margins.
+  const armor = orb.clone(), positions = armor.attributes.position;
+  for (let i = 0; i < positions.count; i++) {
+    const x = positions.getX(i), y = positions.getY(i), z = positions.getZ(i);
+    const taper = .96 - .18 * y;
+    const keel = Math.max(0, z) * (1 - Math.abs(x)) ** 3 * .09;
+    positions.setXYZ(i, x * .375 * taper, y * .43 - .07, .14 + z * .19 + keel);
+  }
+  armor.computeVertexNormals();
+  const plates: T.BufferGeometry[] = [armor];
   for (const side of [-1, 1]) {
     plates.push(oval(side * .30, -.10, .1, .12, .28, .14),
       link([side * .32, -.15, .18], [side * .48, -.34, .26], .052));
   }
-  const legs = [-1, 1].map(side => merge([
-    link([0, 0, 0], [side * .28, -.13, -.04], .064),
-    link([side * .28, -.13, -.04], [side * .47, -.43, -.10], .043),
-    link([side * .47, -.43, -.10], [side * .53, -.52, -.01], .025),
-    link([side * .28, -.13, -.04], [side * .44, -.08, .03], .032),
-  ]));
+  const legs = [-1, 1].map(side => ({
+    femur: merge([
+      link([0, 0, 0], [side * .28, -.13, -.04], .076),
+      oval(side * .28, -.13, -.04, .054, .056, .048),
+    ]),
+    tibia: merge([
+      link([0, 0, 0], [side * .19, -.30, -.06], .053),
+      link([0, 0, 0], [side * .16, .05, .07], .033),
+    ]),
+    foot: link([0, 0, 0], [side * .06, -.09, .09], .028),
+  }));
   const head: T.BufferGeometry[] = [oval(0, .21, .17, .34, .26, .23)], eyes: T.BufferGeometry[] = [], jaws: T.BufferGeometry[] = [];
   for (const side of [-1, 1]) {
     eyes.push(oval(side * .25, .31, .32, .075, .10, .07));
@@ -130,7 +137,7 @@ function crawlerGeometry() {
       link([side * .24, .58, .13], [side * .07, .67, .14], .044));
   }
   return { shell: merge(plates), joint: oval(0, .13, .07, .28, .40, .17),
-    ridge: oval(0, -.20, .33, .25, .035, .052), legs, head: merge(head), eyes: merge(eyes), jaws: merge(jaws),
+    ridge: oval(0, -.25, .34, .27, .028, .036), legs, head: merge(head), eyes: merge(eyes), jaws: merge(jaws),
     stump: oval(0, .29, .16, .26, .08, .19) };
 }
 
@@ -139,8 +146,16 @@ export function createCentipedeSection() {
   mesh(root, g.joint, joint, 'flexible-joint'); mesh(root, g.shell, shell, 'overlapping-tergite');
   mesh(root, g.ridge, rim, 'tergite-ridge');
   const legs = g.legs.map((geometry, i) => {
-    const pivot = new T.Group(); pivot.position.set(i === 0 ? -.28 : .28, -.05, .04);
-    mesh(pivot, geometry, joint, 'walking-leg'); root.add(pivot); return pivot;
+    const side = i === 0 ? -1 : 1;
+    const hip = new T.Group(), knee = new T.Group(), ankle = new T.Group();
+    hip.name = 'walking-leg'; hip.position.set(side * .28, -.05, .04);
+    knee.name = 'walking-knee'; knee.position.set(side * .28, -.13, -.04);
+    ankle.name = 'walking-ankle'; ankle.position.set(side * .19, -.30, -.06);
+    mesh(hip, geometry.femur, shell, 'femur');
+    mesh(knee, geometry.tibia, joint, 'tibia');
+    mesh(ankle, geometry.foot, joint, 'tarsus');
+    root.add(hip); hip.add(knee); knee.add(ankle);
+    return { side, hip, knee, ankle };
   });
   const head = new T.Group(); head.name = 'original-head'; root.add(head);
   mesh(head, g.head, shell, 'head-and-antennae'); mesh(head, g.eyes, eye, 'head-eyes'); mesh(head, g.jaws, joint, 'mandibles');
@@ -148,16 +163,20 @@ export function createCentipedeSection() {
   muzzle.position.set(0, TITAN_CENTIPEDE_MUZZLE, .28); muzzle.visible = false;
   const stump = mesh(root, g.stump, wound, 'severed-joint');
   return { root, prime() { head.visible = stump.visible = muzzle.visible = true; muzzle.scale.setScalar(.12); },
-    pose(time: number, slot: number, originalHead: boolean, escaping: boolean, charge = 0) {
+    pose(time: number, slot: number, originalHead: boolean, escaping: boolean, charge = 0, gaitSlot = slot) {
       head.visible = originalHead; stump.visible = slot === 0 && !originalHead;
       muzzle.visible = !escaping && charge > 0;
       muzzle.scale.setScalar(.045 + charge * .135);
-      const gait = time * (escaping ? 22 : 14) - slot * .85;
-      legs.forEach((leg, i) => {
-        const phase = gait + i * Math.PI;
-        leg.rotation.z = Math.sin(phase) * .30;
-        leg.rotation.y = Math.cos(phase) * .22;
-      });
+      const gait = time * 16 - gaitSlot * .85;
+      for (const { side, hip, knee, ankle } of legs) {
+        const phase = gait + (side < 0 ? 0 : Math.PI);
+        const lift = Math.max(0, Math.cos(phase)) ** 2;
+        hip.rotation.z = side * Math.sin(phase) * .31;
+        hip.rotation.y = side * (.12 - lift * .25);
+        knee.rotation.z = side * (.09 + lift * .38);
+        knee.rotation.y = -side * lift * .28;
+        ankle.rotation.x = lift * .43;
+      }
       head.rotation.z = Math.sin(time * 5) * .035;
     } };
 }

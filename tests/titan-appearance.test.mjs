@@ -19,7 +19,7 @@ test('patrol wing roots and membranes stay on the dorsal side throughout the bea
       assert(wing.position.z >= .32); assert(Math.abs(wing.position.x) < .2);
       const blade = wing.getObjectByName('wing-membrane'), vertices = blade.geometry.attributes.position;
       for (let i = 0; i < vertices.count; i++) {
-        p.fromBufferAttribute(vertices, i); blade.localToWorld(p); rig.root.worldToLocal(p);
+        blade.getVertexPosition(i, p); blade.localToWorld(p); rig.root.worldToLocal(p);
         assert(p.z > .31, 'membrane dips underneath the carapace');
       }
     }

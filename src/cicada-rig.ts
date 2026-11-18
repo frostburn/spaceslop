@@ -1,5 +1,5 @@
 import * as T from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { cicadaWingGeometry, mountCicadaWing } from './titan-wings';
 import { addTitanSetae, titanChitin } from './titan-insect-surfaces';
 import { CICADA_VENT_X, CICADA_VENT_Z } from './cicada';
 
@@ -77,41 +77,39 @@ export function createCicada(makeChitin = titanChitin) {
     for(let j=-1;j<=1;j++)volume(root,chitin,side*2.4,j*.3,.8,.26,.044,.055);
     const anchor=new T.Object3D();anchor.name=side<0?'laser_contact_L':'laser_contact_R';anchor.position.set(side*CICADA_VENT_X,0,CICADA_VENT_Z);root.add(anchor);
   }
-  const wings:T.Group[]=[];
-  const membrane=new T.MeshPhysicalMaterial({color:0xd3ab67,emissive:0xffb375,emissiveIntensity:0,transparent:true,opacity:.32,roughness:.25,metalness:.12,clearcoat:.8,side:T.DoubleSide,depthWrite:false,iridescence:.15});
-  for(const side of [-1,1])for(const rear of [false,true]){
-    const wing=new T.Group();wing.name=`${rear?'hind':'fore'}wing-${side}`;wing.position.set(side*.9,rear?-.45:.5,-.3);root.add(wing);wings.push(wing);
-    const shape=new T.Shape();shape.moveTo(0,0);shape.bezierCurveTo(1.5,1.8,4.3,3.2,5.6,2.7);shape.bezierCurveTo(5.8,1.8,3.2,-.8,0,0);
-    const geometry=new T.ShapeGeometry(shape,28);geometry.scale(side*(rear?.84:1),rear?.66:1,1);if(rear)geometry.rotateZ(-side*.48);
-    const mesh=new T.Mesh(geometry,membrane);wing.add(mesh);
-    const lines:T.BufferGeometry[]=[];
-    function vein(points:T.Vector3[],radius:number){lines.push(new T.TubeGeometry(new T.CatmullRomCurve3(points),12,radius,5,false));}
-    for(let i=0;i<6;i++){
-      const t=i/5,end=new T.Vector3(side*(2.8+t*2.6)*(rear?.84:1),(.0+t*2.7)*(rear?.66:1),.025);
-      if(rear)end.applyAxisAngle(new T.Vector3(0,0,1),-side*.48);
-      const middle=end.clone().multiplyScalar(.47);middle.y+=.28;
-      vein([new T.Vector3(),middle,end],.022);
-      for(let j=1;j<=3;j++){
-        const a=middle.clone().lerp(end,j/4),b=a.clone().add(new T.Vector3(side*.22,-.13,.004));vein([a,b],.011);
-      }
-    }
-    // Clip whole vein triangles against the actual membrane outline, including
-    // the tube radius and mirrored/rotated hindwing transforms.
-    const veins=mergeGeometries(lines),positions=veins.attributes.position,triangles:T.Triangle[]=[],q=new T.Vector3();
-    const surface=geometry.attributes.position,faces=geometry.index!;
-    for(let i=0;i<faces.count;i+=3)triangles.push(new T.Triangle(new T.Vector3().fromBufferAttribute(surface,faces.getX(i)),new T.Vector3().fromBufferAttribute(surface,faces.getX(i+1)),new T.Vector3().fromBufferAttribute(surface,faces.getX(i+2))));
-    const covered=Array.from({length:positions.count},(_,i)=>{q.fromBufferAttribute(positions,i).setZ(0);return triangles.some(t=>t.containsPoint(q));});
-    const ix=veins.index!,kept:number[]=[];for(let i=0;i<ix.count;i+=3){const a=ix.getX(i),b=ix.getX(i+1),c=ix.getX(i+2);if(covered[a]&&covered[b]&&covered[c])kept.push(a,b,c);}
-    veins.setIndex(kept);veins.name='clipped-wing-veins';wing.add(new T.Mesh(veins,rim));for(const g of lines)g.dispose();
+  const wings: { pivot: T.Group; side: number; rear: boolean; flex: (amount: number) => void }[] = [];
+  const membrane = new T.MeshPhysicalMaterial({ color: 0xd3ab67, emissive: 0xffb375, emissiveIntensity: 0,
+    transparent: true, opacity: .38, roughness: .28, metalness: .12, clearcoat: .8,
+    side: T.DoubleSide, depthWrite: false, iridescence: .15 });
+  const veins = new T.LineBasicMaterial({ color: 0xa2774c, transparent: true, opacity: .8, depthWrite: false });
+  const wingGeometry = cicadaWingGeometry(5.6, 2.55, 1.94, .24, .79);
+  for (const side of [-1, 1]) for (const rear of [false, true]) {
+    const pivot = new T.Group();
+    pivot.name = `${rear ? 'hind' : 'fore'}wing-${side}`;
+    pivot.position.set(side * .9, rear ? -.45 : .5, -.3);
+    const { blade, flex } = mountCicadaWing(wingGeometry, membrane, veins);
+    blade.scale.set(side * (rear ? .84 : 1), rear ? .73 : 1, 1);
+    blade.rotation.z = rear ? -side * .42 : side * .08;
+    pivot.add(blade);
+    root.add(pivot);
+    wings.push({ pivot, side, rear, flex });
   }
-  const legs:T.Group[]=[];
+  const legs: { root: T.Group; tibia: T.Group; foot: T.Group; side: number; index: number }[]=[];
   for(const side of [-1,1])for(let i=0;i<3;i++){
-    const leg=new T.Group();leg.name=`leg-${side}-${i}`;leg.position.set(side*.85,.3-i*.65,.3);root.add(leg);legs.push(leg);
+    const leg=new T.Group();leg.name=`leg-${side}-${i}`;leg.position.set(side*.85,.3-i*.65,.3);root.add(leg);
     const a=new T.Vector3(),b=new T.Vector3(side*(1.5+i*.12),-.8-i*.13,.65),c=new T.Vector3(side*(1.4+i*.24),-1.9-i*.25,1.1),d=new T.Vector3(side*(1.15+i*.27),-2.35-i*.3,1.15);
-    link(a,b,.23,chitin,leg);link(b,c,.16,rim,leg);link(c,d,.075,dark,leg);
+    const tibia = new T.Group(), foot = new T.Group();
+    tibia.name = 'tibia'; tibia.position.copy(b); leg.add(tibia);
+    foot.name = 'tarsus'; foot.position.copy(c).sub(b); tibia.add(foot);
+    const shin = c.clone().sub(b);
+    link(a,b,.23,chitin,leg);
+    link(a,shin,.16,rim,tibia);
+    link(a,d.clone().sub(c),.075,dark,foot);
+    volume(foot,faceCuticle,0,0,0,.10,.11,.10);
+    legs.push({ root: leg, tibia, foot, side, index: i });
     for(let j=0;j<5;j++){
-      const base=b.clone().lerp(c,(j+.8)/6),tip=base.clone().add(new T.Vector3(side*(.2+j*.025),-.13,.1));
-      const spine=link(base,tip,.065,dark,leg);spine.geometry.dispose();spine.geometry=new T.ConeGeometry(.085,base.distanceTo(tip),8);spine.name='tibial-spine';
+      const base=shin.clone().multiplyScalar((j+.8)/6),tip=base.clone().add(new T.Vector3(side*(.2+j*.025),-.13,.1));
+      const spine=link(base,tip,.065,dark,tibia);spine.geometry.dispose();spine.geometry=new T.ConeGeometry(.085,base.distanceTo(tip),8);spine.name='tibial-spine';
     }
     volume(leg,chitin,b.x,b.y,b.z,.2,.2,.2);
     addTitanSetae(leg,b.x*.48,b.y*.48,b.z*.48+.17,.75,.70,2);
@@ -119,15 +117,21 @@ export function createCicada(makeChitin = titanChitin) {
   return {root,pose(_reveal:number,charge:number,exposed:number,_fired:number,recoil:number,time=0,wingSpread=1,backlight=0){
     head.rotation.y=Math.sin(time*.75)*.09;head.rotation.z=Math.sin(time*.47)*.035;
     head.position.z=.65-recoil*.13;
-    for(let i=0;i<wings.length;i++){
-      const side=i<2?-1:1;
-      const beat = time * 32 + 1.65 * Math.sin(time * 1.46) + i % 2 * .65 + side * .13;
+    for (const { pivot, side, rear, flex } of wings) {
+      const beat = time * 32 + 1.65 * Math.sin(time * 1.46) + (rear ? .65 : 0) + side * .13;
       const stroke = .22 + .035 * Math.sin(time * 2.34 + side * .6);
-      wings[i].rotation.y=side*(.16+1.02*(1-wingSpread)+Math.sin(beat)*stroke*wingSpread);
-      wings[i].rotation.z=Math.sin(time*2+i)*.025;
+      pivot.rotation.y = side * (.16 + 1.02 * (1 - wingSpread) + Math.sin(beat) * stroke * wingSpread);
+      pivot.rotation.z = side * .04 * Math.sin(beat - .35) * wingSpread;
+      flex((.5 + .5 * Math.sin(beat - .9)) * wingSpread);
     }
     membrane.emissiveIntensity=backlight;
-    legs.forEach((leg,i)=>{leg.rotation.x=Math.sin(time*1.8+i)*.13;leg.rotation.z=Math.sin(time*1.3+i)*.06;});
+    for (const { root, tibia, foot, side, index } of legs) {
+      const reach = Math.sin(time * 1.8 - index * .61 + side * .28);
+      root.rotation.x = .09 * reach - .23 * charge;
+      root.rotation.z = side * (.11 * reach + .08 * charge);
+      tibia.rotation.x = -.14 + reach * .21 + .42 * charge;
+      foot.rotation.x = .08 - reach * .21 - .28 * charge;
+    }
     vents.forEach((vent,i)=>{const live=(i===0?exposed<0:exposed>0);(vent.material as T.MeshStandardMaterial).emissiveIntensity=live?.9+charge*2.6:.1;});
   }};
 }

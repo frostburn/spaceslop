@@ -2,11 +2,11 @@ export const CENTIPEDE_SPACING=.72;
 export const CENTIPEDE_POOL=32;
 export type CentipedePart={x:number;y:number;hp:number;heading?:number;centipede?:CentipedeLink};
 export type CentipedeChain={parts:CentipedePart[];age:number;lane:number;escape:number};
-export type CentipedeLink={chain:CentipedeChain;slot:number;originalHead:boolean};
+export type CentipedeLink={chain:CentipedeChain;slot:number;originalHead:boolean;gaitSlot:number};
 
 export function bindCentipede(parts:CentipedePart[],escape=0){
  const chain:CentipedeChain={parts,age:0,lane:parts[0]?.x??0,escape};
- parts.forEach((part,slot)=>{const originalHead=part.centipede?.originalHead??slot===0;part.centipede={chain,slot,originalHead};});
+ parts.forEach((part,slot)=>{const originalHead=part.centipede?.originalHead??slot===0;part.centipede={chain,slot,originalHead,gaitSlot:part.centipede?.gaitSlot??slot};});
  return chain;
 }
 

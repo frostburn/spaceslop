@@ -33,6 +33,11 @@ test('shooting a middle plate preserves live targets and sends the two connected
   assert.deepEqual(parts.map(p => [p.x, p.y]), positions, 'a sever must not teleport any targets');
   assert.equal(parts.filter(p => p.centipede.originalHead).length, 1);
   assert.equal(parts[4].centipede.originalHead, false, 'the cut end must not grow a replacement head');
+  const rig = createCentipedeSection(), gait = rig.root.getObjectByName('walking-knee');
+  rig.pose(.7, 4, false, false);
+  const before = gait.rotation.toArray();
+  rig.pose(.7, parts[4].centipede.slot, false, true, 0, parts[4].centipede.gaitSlot);
+  assert.deepEqual(gait.rotation.toArray(), before, 'a sever must not reset the gait phase');
   for (let i = 0; i < 90; i++) stepCentipedes(parts, STEP);
   assert(front.parts.every(p => p.x < -.5)); assert(rear.parts.every(p => p.x > .5));
   for (const group of [front, rear]) for (let i = 1; i < group.parts.length; i++)

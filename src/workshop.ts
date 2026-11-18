@@ -327,7 +327,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
         parts.forEach((part, i) => {
           const rig = centipede[i], link = part.centipede!;
           rig.root.visible = part.hp > 0; rig.root.position.set(part.x, part.y + Math.min(time, 1.4) * 2.15, 0);
-          rig.root.rotation.z = -(part.heading ?? Math.PI); rig.pose(time, link.slot, link.originalHead, Boolean(link.chain.escape));
+          rig.root.rotation.z = -(part.heading ?? Math.PI); rig.pose(time, link.slot, link.originalHead, Boolean(link.chain.escape), 0, link.gaitSlot);
         });
         return time < 1.4 ? 'metachronal crawl' : 'mid-section severed · opposite escapes';
       } },

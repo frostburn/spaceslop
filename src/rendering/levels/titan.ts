@@ -66,7 +66,7 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
         rig.root.rotation.z = -(enemy.heading ?? Math.PI);
         if (enemy.centipede) {
           const link = enemy.centipede;
-          (rig as typeof centipedeParts[number]).pose(enemy.age, link.slot, link.originalHead, Boolean(link.chain.escape), patternBurstCharge(enemy, titanChallengeCentipede.windup));
+          (rig as typeof centipedeParts[number]).pose(enemy.age, link.slot, link.originalHead, Boolean(link.chain.escape), patternBurstCharge(enemy, titanChallengeCentipede.windup), link.gaitSlot);
         }
         else if (enemy.cicada) {
           (rig as typeof cicadaScouts[number]).pose(enemy.age, cicadaMotion(enemy.age, enemy.lane, enemy.cicada).bank, patternBurstCharge(enemy, titanChallengeScout.windup));
