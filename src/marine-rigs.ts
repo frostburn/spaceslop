@@ -217,7 +217,7 @@ function animal(kind:Animal) {
     const wave = time * (large ? 2.3 : 3.85);
     bones[1].rotation.z = kind === 'plesiosaur' ? 0 : Math.sin(wave) * .115;
     bones[2].rotation.z = Math.sin(wave - .93) * (kind === 'plesiosaur' ? .025 : large ? .26 : .30);
-    if(tail) flexMarineFin(tail, Math.sin(wave - 1.66) * .88);
+    if (tail) flexMarineFin(tail, Math.sin(wave - (large ? 1.66 : 1.20)) * (large ? .88 : .30));
     if(large){const motion=leviathanMotion(time);bones[3].rotation.set(.5+motion.headPitch,motion.headRoll,motion.headYaw);bones[1].rotation.x=-.12;bones[2].rotation.x=-.20;}
     if(kind==='plesiosaur'){bones[3].rotation.z=Math.sin(time*.8)*.025;bones[4].rotation.z=Math.sin(time*.8-.5)*.020;bones[5].rotation.z=-bones[3].rotation.z*.4;}
     for (const { joint, blade, rear, side } of flippers) {
