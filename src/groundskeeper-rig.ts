@@ -1,9 +1,10 @@
 import * as T from 'three';
 import { part, pivot } from './rig-geometry';
-import { groundskeeperClaw, groundskeeperPose, GROUNDSKEEPER_UPPER_ARM, GROUNDSKEEPER_FOREARM, GROUNDSKEEPER_THIGH, GROUNDSKEEPER_SHIN, GROUNDSKEEPER_TARSUS, type GkPoint } from './groundskeeper';
+import { groundskeeperClaw, groundskeeperPose, GROUNDSKEEPER_THIGH, GROUNDSKEEPER_SHIN, GROUNDSKEEPER_TARSUS, type GkPoint } from './groundskeeper';
 import { gkFeatherGeometry, gkPlumage, gkTorsoSurface, gkTube, mergeGkFixed } from './groundskeeper-geometry';
 import { createGroundskeeperMaterials } from './groundskeeper-materials';
 import { createGroundskeeperFace } from './groundskeeper-face';
+import { createGroundskeeperArmSkin } from './groundskeeper-arm-skin';
 import { preserveRandom } from './preserve-layout';
 import { gkCamouflage } from './groundskeeper-plumage';
 
@@ -50,13 +51,12 @@ export function createGroundskeeper() {
     return group;
   }
   const arms = [-1, 1].map(side => {
-    const upper = segment(`upper-arm-${side}`, .78, GROUNDSKEEPER_UPPER_ARM, true), lower = segment(`forearm-${side}`, .49, GROUNDSKEEPER_FOREARM, true);
+    const skin = createGroundskeeperArmSkin(side, feather, m.hand, m.feathers);
+    root.add(skin.mesh, skin.coat);
     // The wrist, knuckles and keratin move as one hand. Build the blades in
     // hand space so a turn cannot roll a claw independently of its socket.
     const palm = pivot(root, `palm-${side}`, 0, 0, 0);
     const pads = pivot(palm, 'knuckles', 0, 0, 0);
-    part(pads, sphere, m.hand, 0, .32, .01).scale.set(.63, .66, .32);
-    part(lower, sphere, m.darkDown, 0, .08, 0).scale.set(.43, .51, .38);
     for (const finger of [-1, 0, 1]) {
       const curve = groundskeeperClaw(side, finger).map(vec), socket = curve[0];
       const base = new T.Vector3(finger * .37, .39, .01);
@@ -75,7 +75,7 @@ export function createGroundskeeper() {
       part(palm, tube.geometry, m.talon, 0, 0, 0).name = `claw-${side}-${finger + 1}`;
     }
     mergeGkFixed(pads);
-    return { upper, lower, palm };
+    return { skin, palm };
   });
   const legs = [-1, 1].map(side => {
     const thigh = segment(`haunch-${side}`, 1.1, GROUNDSKEEPER_THIGH, true), shin = segment(`shin-${side}`, .51, GROUNDSKEEPER_SHIN, false), tarsus = segment(`ankle-${side}`, .34, GROUNDSKEEPER_TARSUS, false);
@@ -123,11 +123,6 @@ export function createGroundskeeper() {
     group.position.copy(a); direction.copy(b).sub(a).normalize();
     group.quaternion.setFromUnitVectors(axis, direction);
   }
-  function armSpan(group: T.Group, a: GkPoint, b: GkPoint, hinge: GkPoint) {
-    group.position.copy(a); direction.copy(b).sub(a).normalize();
-    across.copy(hinge); n.crossVectors(across, direction);
-    group.quaternion.setFromRotationMatrix(basis.makeBasis(across, direction, n));
-  }
   function pose(time: number, aim = { x: 0, y: -5.3 }, cancelledAt = -100) {
     const p = groundskeeperPose(time, aim, cancelledAt);
     body.scale.copy(vec(p.torsoScale));
@@ -140,7 +135,8 @@ export function createGroundskeeper() {
     head.position.copy(vec(p.head)); head.rotation.set(p.headPitch,0,p.headYaw,'ZYX');
     face.pose(p.jaw);
     for (const [i, a] of p.arms.entries()) {
-      const rig = arms[i]; armSpan(rig.upper, a.shoulder, a.elbow, a.hinge); armSpan(rig.lower, a.elbow, a.wrist, a.hinge);
+      const rig = arms[i];
+      rig.skin.pose(a);
       rig.palm.position.copy(a.wrist);
       across.copy(a.across); direction.copy(a.direction); n.crossVectors(across, direction);
       rig.palm.quaternion.setFromRotationMatrix(basis.makeBasis(across, direction, n));

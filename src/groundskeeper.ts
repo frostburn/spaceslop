@@ -86,7 +86,8 @@ function clawArm(shoulder: GkPoint, goal: GkPoint, pole: GkPoint, wristFlex: num
   const tip = add(shoulder, mul(axis, distance));
   const elbow = twoBone(shoulder, axis, distance, bend, upper, reach);
   const line = norm(sub(tip, elbow));
-  const wrist = twoBone(elbow, line, reach, cross(hinge, line), forearm, middleClaw);
+  const shaft = add(mul(line, Math.cos(wristOffset)), mul(cross(hinge, line), Math.sin(wristOffset)));
+  const wrist = add(elbow, mul(shaft, forearm));
   return { shoulder, elbow, wrist, hinge, direction: norm(sub(tip, wrist)) };
 }
 
@@ -106,9 +107,11 @@ export function groundskeeperPose(time: number, aim: GkAim = { x: 0, y: -5.3 }, 
   const attack = groundskeeperAttack(time), { kind, windup, stroke, recovery } = attack;
   const cancelled = Math.floor(cancelledAt / GROUNDSKEEPER_CYCLE) === attack.cycle;
   const strength = (1 - recovery) * (cancelled ? 1 - gkSmooth((time - cancelledAt) / .45) : 1);
-  const moving = gkSmooth((attack.age - GROUNDSKEEPER_STRIKE + .2) / .5) * strength;
+  const bite = kind === 'lunge';
+  const drive = bite ? (attack.age - GROUNDSKEEPER_STRIKE + .2) / .5 : (attack.age - GROUNDSKEEPER_STRIKE + .12) / .66;
+  const moving = gkSmooth(drive) * strength;
   const side = kind === 'right rake' ? 1 : -1;
-  const lunge = kind === 'lunge' ? moving : 0;
+  const lunge = bite ? moving : 0;
   const highLunge = lunge * gkSmooth((aim.y + 3.8) / 9);
   // Independent, slightly uneven rhythms avoid a metronomic idle loop. Quiet
   // the weight shift during warnings/contact; breathing continues underneath.
@@ -117,12 +120,12 @@ export function groundskeeperPose(time: number, aim: GkAim = { x: 0, y: -5.3 }, 
   const breath = Math.sin(phase + .22 * Math.sin(phase)) * (.7 + .3 * resting);
   const sway = (t: number) => .16 * Math.sin(t * .53) + .035 * Math.sin(t * .91);
   const torso = point((side * .24 + aim.x * .35) * moving + sway(time) * resting,
-    -moving * (kind === 'lunge' ? 4.8 : 3.6) + highLunge * 2.6 + .055 * Math.sin(time * .67) * resting,
-    -moving * (kind === 'lunge' ? 1.35 : .55) + highLunge * 2.5 + .035 * breath);
+    -moving * (bite ? 4.8 : 3.6) + highLunge * 2.6 + .055 * Math.sin(time * .67) * resting,
+    -moving * (bite ? 1.35 : .55) + highLunge * 2.5 + .035 * breath);
   const torsoScale = point(1 + .009 * breath, 1 + .017 * breath, 1 + .008 * breath);
   const rake = kind === 'left rake' || kind === 'right rake';
   const load = windup * strength * (1 - stroke);
-  const torsoPitch = -.10 * load + moving * (kind === 'lunge' ? .42 : .24) - highLunge * .69;
+  const torsoPitch = -.10 * load + moving * (bite ? .42 : .24) - highLunge * .69;
   const torsoYaw = rake ? side * (.20 * load - .33 * stroke * strength) : lunge * aim.x * .065;
   const cp = Math.cos(torsoPitch), sp = Math.sin(torsoPitch), cy = Math.cos(torsoYaw), sy = Math.sin(torsoYaw);
   const attached = (p: GkPoint) => {
@@ -135,12 +138,12 @@ export function groundskeeperPose(time: number, aim: GkAim = { x: 0, y: -5.3 }, 
   const headYaw = (.34 + .065 * Math.sin(time * .55)) * (1 - lunge) + lunge * aim.x * .11;
   let head = add(point(.08 * Math.sin(time * .6) + (sway(time - .55) - sway(time)) * resting,
     -4 + .04 * Math.sin(time * .67 - .45) * resting, 11.8 + .045 * breath), torso);
-  if (kind === 'lunge') {
+  if (bite) {
     const target = fromFlight(point(aim.x, aim.y, -.2));
     head = mix(head, sub(target, headOffset(headPitch, headYaw)), moving * (1 - recovery));
   }
   const arms = [-1, 1].map(handSide => {
-    const striking = kind === 'double slam' || (kind !== 'lunge' && side === handSide);
+    const striking = kind === 'double slam' || (rake && side === handSide);
     const shoulder = attached(point(handSide * 2.6, -2.2, 8.5));
     const rest = add(point(handSide * 3.92 + (sway(time - .38) - sway(time)) * resting,
       -5.65 + .055 * Math.sin(time * .67 - .6 - handSide * .15) * resting,
@@ -170,26 +173,27 @@ export function groundskeeperPose(time: number, aim: GkAim = { x: 0, y: -5.3 }, 
         }
       }
       const retract = 4 * strength * (1 - strength) * windup;
-      tip = add(mix(rest, tip, strength), point(handSide * .8 * retract, -4.6 * retract, 0));
+      tip = add(mix(rest, tip, strength), point(handSide * 1.75 * retract, -1.8 * retract, -.45 * retract));
     }
     const committed = striking ? stroke * strength : 0;
     const pole = point(handSide, .48 - .85 * guard - .7 * committed, -.22 + .36 * guard);
-    // Hold the wrist cocked through the warning, then open it as the arm swings.
+    // Straighten briefly while the forearm turns. Cock the wrist in its own
+    // bend plane once the palm faces the lane, then release it with the arm.
+    const roll = handSide * Math.PI * gkSmooth((guard - .10) / .68);
+    const restingFlex = .58 * (1 - gkSmooth(guard / .31));
+    const cocked = gkSmooth((guard - .64) / .36);
     const release = gkSmooth((attack.age - GROUNDSKEEPER_STRIKE) / .42);
-    const wristFlex = .58 + guard * (.44 - (rake ? .72 : .24) * release);
+    const wristFlex = restingFlex + cocked * (1.02 - (rake ? .72 : .24) * release);
     const solved = clawArm(shoulder, tip, pole, wristFlex);
     const { hinge, direction } = solved;
-    // Turn the hand over on the way to the strike. Roll about its long axis
-    // so the wrist and the middle talon's contact path stay in place.
-    const roll = handSide * Math.PI * guard;
     const across = add(mul(hinge, Math.cos(roll)), mul(cross(direction, hinge), Math.sin(roll)));
     const palmNormal = cross(across, direction);
     const claws = clawShapes[handSide < 0 ? 0 : 1].map(curve => curve.map(p =>
       add(solved.wrist, add(mul(across, p.x), add(mul(direction, p.y), mul(palmNormal, p.z))))));
-    return { ...solved, across, claws, side: handSide };
+    return { ...solved, across, roll, claws, side: handSide };
   });
-  const feet = [-1, 1].map(s => point(s * 2.15, -.35 - (s === side ? moving * (kind === 'lunge' ? 3.5 : 1.2) : 0),
-    s === side ? Math.sin(moving * Math.PI) * (kind === 'lunge' ? .45 : .22) : 0));
+  const feet = [-1, 1].map(s => point(s * 2.15, -.35 - (s === side ? moving * (bite ? 3.5 : 1.2) : 0),
+    s === side ? Math.sin(moving * Math.PI) * (bite ? .45 : .22) : 0));
   const hips = [-1, 1].map(s => attached(point(s * 1.7, .75, 5.8)));
   const legs = feet.map((foot, i) => leg(hips[i], foot, i === 0 ? -1 : 1));
   return { ...attack, cancelled, torso, torsoScale, torsoPitch, torsoYaw, head, headPitch, headYaw, jaw, feathers: windup * strength, arms, feet,
