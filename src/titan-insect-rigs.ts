@@ -1,22 +1,23 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TITAN_CENTIPEDE_MUZZLE, TITAN_SCOUT_MUZZLE } from './titan-challenge';
-import { addTitanSetae, titanChitin } from './titan-insect-surfaces';
+import { addTitanSetae, cicadaAbdomen, cicadaEye, titanChitin } from './titan-insect-surfaces';
 import { cicadaWingGeometry, mountCicadaWing } from './titan-wings';
+import { centipedeFoot, CENTIPEDE_BODY_HEIGHT, type CentipedeGait } from './centipede-gait';
 
 // Small patrol models share all GPU resources; each pool entry owns only its pivots.
 const scoutShell = titanChitin(0x7f9690, .74); scoutShell.vertexColors = true;
 const scoutRim = titanChitin(0xa9b3a0, .7);
 const scoutJoint = new T.MeshStandardMaterial({ color: 0x234147, roughness: .8 });
-const scoutEye = new T.MeshStandardMaterial({ color: 0xe2a94e, roughness: .24, metalness: .2 });
+const scoutEye = cicadaEye(0x594832, .004);
 const shell = titanChitin(0xb74c44, .57);
 const rim = titanChitin(0xebb16c, .7);
 const joint = new T.MeshStandardMaterial({ color: 0x38212b, roughness: .83 });
 const eye = new T.MeshStandardMaterial({ color: 0x93dccc, emissive: 0x2d746b, emissiveIntensity: .3, roughness: .24, metalness: .3 });
 const wound = new T.MeshStandardMaterial({ color: 0x553923, roughness: .88 });
-const membrane = new T.MeshPhysicalMaterial({ color: 0xb5c4b6, transparent: true, opacity: .38,
+const membrane = new T.MeshPhysicalMaterial({ color: 0xb5c4b6, transparent: true, opacity: .30,
   roughness: .28, metalness: .08, clearcoat: .7, side: T.DoubleSide, depthWrite: false });
-const vein = new T.LineBasicMaterial({ color: 0xc0c9b4, transparent: true, opacity: .8, depthWrite: false });
+const vein = new T.LineBasicMaterial({ color: 0xa4a88d, transparent: true, opacity: .58, depthWrite: false });
 const orb = new T.SphereGeometry(1, 16, 10);
 const chargeLight = new T.MeshBasicMaterial({ color: 0xe8acff });
 const up = new T.Vector3(0, 1, 0);
@@ -42,12 +43,12 @@ function mesh(parent: T.Object3D, geometry: T.BufferGeometry, material: T.Materi
 
 let scoutParts: ReturnType<typeof scoutGeometry> | undefined;
 function scoutGeometry() {
-  const body = [oval(0, 0, .08, .29, .44, .23), oval(0, .41, .15, .37, .22, .22)];
-  const ribs: T.BufferGeometry[] = [], legs: T.BufferGeometry[] = [], eyes: T.BufferGeometry[] = [];
-  for (let i = 0; i < 5; i++) body.push(oval(0, -.39 - i * .105, .04, .24 - i * .031, .13, .17 - i * .018));
-  for (let i = 0; i < 4; i++) ribs.push(oval(0, -.31 - i * .12, .17, .22 - i * .03, .023, .075));
+  const body: T.BufferGeometry[] = [oval(0, 0, .08, .29, .44, .23), oval(0, .41, .15, .37, .22, .22)];
+  const legs: T.BufferGeometry[] = [], eyes: T.BufferGeometry[] = [];
+  const abdomen = cicadaAbdomen(.67, .267, .19, 5).translate(0, -.28, .058);
+  body.push(abdomen);
   for (const side of [-1, 1]) {
-    eyes.push(oval(side * .31, .46, .24, .12, .14, .11));
+    eyes.push(orb.clone().scale(.103, .141, .079).rotateZ(side * -.33).translate(side * .282, .442, .257));
     legs.push(link([side * .16, .5, .1], [side * .43, .73, .12], .018));
     for (let i = 0; i < 3; i++) {
       const y = .19 - i * .18;
@@ -66,12 +67,12 @@ function scoutGeometry() {
     colors.push(value,value*.98,value*.94);
   }
   carapace.setAttribute('color',new T.Float32BufferAttribute(colors,3));
-  return { body: carapace, ribs: merge(ribs), legs: merge(legs), eyes: merge(eyes), wing };
+  return { body: carapace, legs: merge(legs), eyes: merge(eyes), wing };
 }
 
 export function createCicadaScout() {
   const g = scoutParts ??= scoutGeometry(), root = new T.Group(); root.name = 'cicada-scout';
-  mesh(root, g.body, scoutShell, 'scout-carapace'); mesh(root, g.ribs, scoutRim, 'abdomen-ribs');
+  mesh(root, g.body, scoutShell, 'scout-carapace');
   mesh(root, g.eyes, scoutEye, 'compound-eyes'); const feet = mesh(root, g.legs, scoutJoint, 'folded-legs');
   const muzzle = mesh(root, orb, chargeLight, 'scout-charge');
   muzzle.position.set(0, TITAN_SCOUT_MUZZLE, .31); muzzle.visible = false;
@@ -101,6 +102,20 @@ export function createCicadaScout() {
   } };
 }
 
+const femurLength = .41, tibiaLength = .48;
+const toeBack = .071, toeHeight = .088;
+const crawlerShadow = (() => {
+  const pixels = new Uint8Array(32 * 32 * 4);
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
+    const radius = Math.hypot((x - 15.5) / 15.5, (y - 15.5) / 15.5);
+    pixels[(y * 32 + x) * 4 + 3] = 121 * Math.max(0, 1 - radius * radius) ** 2;
+  }
+  const map = new T.DataTexture(pixels, 32, 32);
+  map.magFilter = map.minFilter = T.LinearFilter; map.needsUpdate = true;
+  return new T.MeshBasicMaterial({ map, transparent: true, depthWrite: false });
+})();
+const shadowPlate = new T.PlaneGeometry(1.42, 1.21);
+
 let crawlerParts: ReturnType<typeof crawlerGeometry> | undefined;
 function crawlerGeometry() {
   // Broader at the rear lip, with a raised spine and rolled-over margins.
@@ -117,17 +132,17 @@ function crawlerGeometry() {
     plates.push(oval(side * .30, -.10, .1, .12, .28, .14),
       link([side * .32, -.15, .18], [side * .48, -.34, .26], .052));
   }
-  const legs = [-1, 1].map(side => ({
+  const legs = {
     femur: merge([
-      link([0, 0, 0], [side * .28, -.13, -.04], .076),
-      oval(side * .28, -.13, -.04, .054, .056, .048),
+      link([0, 0, 0], [0, femurLength, 0], .065),
+      oval(0, femurLength, 0, .043, .057, .046),
     ]),
     tibia: merge([
-      link([0, 0, 0], [side * .19, -.30, -.06], .053),
-      link([0, 0, 0], [side * .16, .05, .07], .033),
+      link([0, 0, 0], [0, tibiaLength, 0], .043),
+      link([0, .13, 0], [.047, .20, .05], .024),
     ]),
-    foot: link([0, 0, 0], [side * .06, -.09, .09], .028),
-  }));
+    foot: link([0, 0, 0], [0, Math.hypot(toeBack, toeHeight), 0], .025),
+  };
   const head: T.BufferGeometry[] = [oval(0, .21, .17, .34, .26, .23)], eyes: T.BufferGeometry[] = [], jaws: T.BufferGeometry[] = [];
   for (const side of [-1, 1]) {
     eyes.push(oval(side * .25, .31, .32, .075, .10, .07));
@@ -145,37 +160,54 @@ export function createCentipedeSection() {
   const g = crawlerParts ??= crawlerGeometry(), root = new T.Group(); root.name = 'centipede-section';
   mesh(root, g.joint, joint, 'flexible-joint'); mesh(root, g.shell, shell, 'overlapping-tergite');
   mesh(root, g.ridge, rim, 'tergite-ridge');
-  const legs = g.legs.map((geometry, i) => {
-    const side = i === 0 ? -1 : 1;
+  const shadow = mesh(root, shadowPlate, crawlerShadow, 'ground-contact-shadow');
+  shadow.position.z = -CENTIPEDE_BODY_HEIGHT + .007;
+  const legs = [-1, 1].map(side => {
     const hip = new T.Group(), knee = new T.Group(), ankle = new T.Group();
-    hip.name = 'walking-leg'; hip.position.set(side * .28, -.05, .04);
-    knee.name = 'walking-knee'; knee.position.set(side * .28, -.13, -.04);
-    ankle.name = 'walking-ankle'; ankle.position.set(side * .19, -.30, -.06);
-    mesh(hip, geometry.femur, shell, 'femur');
-    mesh(knee, geometry.tibia, joint, 'tibia');
-    mesh(ankle, geometry.foot, joint, 'tarsus');
-    root.add(hip); hip.add(knee); knee.add(ankle);
-    return { side, hip, knee, ankle };
+    const socket = new T.Vector3(side * .26, -.05, .053);
+    hip.name = 'walking-leg'; knee.name = 'walking-knee'; ankle.name = 'walking-ankle';
+    mesh(hip, g.legs.femur, shell, 'femur');
+    mesh(knee, g.legs.tibia, joint, 'tibia');
+    mesh(ankle, g.legs.foot, joint, 'tarsus');
+    root.add(hip, knee, ankle);
+    return { side, socket, hip, knee, ankle };
   });
+  const toe = new T.Vector3(), heel = new T.Vector3(), kneePoint = new T.Vector3();
+  const axis = new T.Vector3(), bend = new T.Vector3(), direction = new T.Vector3();
+  function poseLink(group: T.Group, from: T.Vector3, to: T.Vector3) {
+    group.position.copy(from);
+    group.quaternion.setFromUnitVectors(up, direction.subVectors(to, from).normalize());
+  }
   const head = new T.Group(); head.name = 'original-head'; root.add(head);
   mesh(head, g.head, shell, 'head-and-antennae'); mesh(head, g.eyes, eye, 'head-eyes'); mesh(head, g.jaws, joint, 'mandibles');
   const muzzle = mesh(head, orb, chargeLight, 'centipede-charge');
   muzzle.position.set(0, TITAN_CENTIPEDE_MUZZLE, .28); muzzle.visible = false;
   const stump = mesh(root, g.stump, wound, 'severed-joint');
   return { root, prime() { head.visible = stump.visible = muzzle.visible = true; muzzle.scale.setScalar(.12); },
-    pose(time: number, slot: number, originalHead: boolean, escaping: boolean, charge = 0, gaitSlot = slot) {
+    pose(time: number, slot: number, originalHead: boolean, escaping: boolean, charge = 0, gait?: CentipedeGait) {
       head.visible = originalHead; stump.visible = slot === 0 && !originalHead;
       muzzle.visible = !escaping && charge > 0;
       muzzle.scale.setScalar(.045 + charge * .135);
-      const gait = time * 16 - gaitSlot * .85;
-      for (const { side, hip, knee, ankle } of legs) {
-        const phase = gait + (side < 0 ? 0 : Math.PI);
-        const lift = Math.max(0, Math.cos(phase)) ** 2;
-        hip.rotation.z = side * Math.sin(phase) * .31;
-        hip.rotation.y = side * (.12 - lift * .25);
-        knee.rotation.z = side * (.09 + lift * .38);
-        knee.rotation.y = -side * lift * .28;
-        ankle.rotation.x = lift * .43;
+      for (const [index, { side, socket, hip, knee, ankle }] of legs.entries()) {
+        if (gait) toe.copy(centipedeFoot(gait, index, -root.rotation.z));
+        else toe.set(side * .69, -.13, -CENTIPEDE_BODY_HEIGHT);
+        heel.copy(toe); heel.y += toeBack; heel.z += toeHeight;
+        axis.subVectors(heel, socket);
+        const length = axis.length();
+        axis.divideScalar(length);
+        const reach = Math.min(length, femurLength + tibiaLength - .001);
+        if (reach < length) {
+          heel.copy(socket).addScaledVector(axis, reach);
+          toe.copy(heel); toe.y -= toeBack; toe.z -= toeHeight;
+        }
+        const along = (femurLength ** 2 - tibiaLength ** 2 + reach ** 2) / (2 * reach);
+        bend.set(side * .63, .08, .84);
+        bend.addScaledVector(axis, -bend.dot(axis)).normalize();
+        kneePoint.copy(socket).addScaledVector(axis, along)
+          .addScaledVector(bend, Math.sqrt(Math.max(0, femurLength ** 2 - along ** 2)));
+        poseLink(hip, socket, kneePoint);
+        poseLink(knee, kneePoint, heel);
+        poseLink(ankle, heel, toe);
       }
       head.rotation.z = Math.sin(time * 5) * .035;
     } };

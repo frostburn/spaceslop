@@ -1,12 +1,14 @@
+import { createCentipedeGait, stepCentipedeGait, type CentipedeGait } from './centipede-gait';
+
 export const CENTIPEDE_SPACING=.72;
 export const CENTIPEDE_POOL=32;
 export type CentipedePart={x:number;y:number;hp:number;heading?:number;centipede?:CentipedeLink};
 export type CentipedeChain={parts:CentipedePart[];age:number;lane:number;escape:number};
-export type CentipedeLink={chain:CentipedeChain;slot:number;originalHead:boolean;gaitSlot:number};
+export type CentipedeLink={chain:CentipedeChain;slot:number;originalHead:boolean;gaitSlot:number;gait?:CentipedeGait};
 
 export function bindCentipede(parts:CentipedePart[],escape=0){
  const chain:CentipedeChain={parts,age:0,lane:parts[0]?.x??0,escape};
- parts.forEach((part,slot)=>{const originalHead=part.centipede?.originalHead??slot===0;part.centipede={chain,slot,originalHead,gaitSlot:part.centipede?.gaitSlot??slot};});
+ parts.forEach((part,slot)=>{const originalHead=part.centipede?.originalHead??slot===0;part.centipede={chain,slot,originalHead,gaitSlot:part.centipede?.gaitSlot??slot,gait:part.centipede?.gait};});
  return chain;
 }
 
@@ -22,7 +24,7 @@ export function severCentipede(part:CentipedePart){
 }
 
 const turn=(angle:number,target:number,max:number)=>angle+Math.max(-max,Math.min(max,Math.atan2(Math.sin(target-angle),Math.cos(target-angle))));
-export function stepCentipedes(parts:CentipedePart[],dt:number){
+export function stepCentipedes(parts:CentipedePart[],dt:number,scroll=0){
  const chains=new Set(parts.filter(p=>p.hp>0&&p.centipede).map(p=>p.centipede!.chain));
  for(const chain of chains){
   const head=chain.parts[0];if(!head||head.hp<=0)continue;
@@ -41,6 +43,12 @@ export function stepCentipedes(parts:CentipedePart[],dt:number){
    if(d<1e-6)continue;
    const move=Math.max(-8*dt,Math.min(8*dt,d-CENTIPEDE_SPACING));
    part.x+=dx/d*move;part.y+=dy/d*move;part.heading=Math.atan2(dx,dy);
+  }
+  for(const part of chain.parts){
+   const link=part.centipede!;
+   const center={x:part.x,y:part.y+scroll},heading=part.heading??Math.PI;
+   if(link.gait)stepCentipedeGait(link.gait,center,heading,dt);
+   else link.gait=createCentipedeGait(center,heading,link.gaitSlot);
   }
  }
 }

@@ -322,12 +322,13 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
         // Replay the same chain solver so timeline scrubbing includes an actual mid-body cut.
         for (let t = 0; t < time; t += 1 / 60) {
           if (t >= 1.4 && parts[3].hp > 0) { parts[3].hp = 0; severCentipede(parts[3]); }
-          stepCentipedes(parts, Math.min(1 / 60, time - t));
+          const dt = Math.min(1 / 60, time - t);
+          stepCentipedes(parts, dt, (t + dt) * 1.6);
         }
         parts.forEach((part, i) => {
           const rig = centipede[i], link = part.centipede!;
-          rig.root.visible = part.hp > 0; rig.root.position.set(part.x, part.y + Math.min(time, 1.4) * 2.15, 0);
-          rig.root.rotation.z = -(part.heading ?? Math.PI); rig.pose(time, link.slot, link.originalHead, Boolean(link.chain.escape), 0, link.gaitSlot);
+          rig.root.visible = part.hp > 0; rig.root.position.set(part.x, part.y + time * 1.6, 0);
+          rig.root.rotation.z = -(part.heading ?? Math.PI); rig.pose(time, link.slot, link.originalHead, Boolean(link.chain.escape), 0, link.gait);
         });
         return time < 1.4 ? 'metachronal crawl' : 'mid-section severed · opposite escapes';
       } },

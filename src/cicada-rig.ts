@@ -1,15 +1,15 @@
 import * as T from 'three';
 import { cicadaWingGeometry, mountCicadaWing } from './titan-wings';
-import { addTitanSetae, titanChitin } from './titan-insect-surfaces';
+import { addTitanSetae, cicadaAbdomen, cicadaEye, titanChitin } from './titan-insect-surfaces';
 import { CICADA_VENT_X, CICADA_VENT_Z } from './cicada';
 
 export function createCicada(makeChitin = titanChitin) {
   const root=new T.Group();root.name='titan-cicada';
   const orb=new T.SphereGeometry(1,32,24);
-  const chitin=makeChitin(0xfff0d5,.72);
+  const chitin=makeChitin(0xe2c49a,.78);
   const rim=makeChitin(0xaf8e64,.75);
   const dark=new T.MeshStandardMaterial({color:0x302530,roughness:.8});
-  const eye=new T.MeshPhysicalMaterial({color:0x632631,roughness:.3,metalness:.18,clearcoat:.7});
+  const eye=cicadaEye(0x553326,.012);
   function volume(parent:T.Object3D,material:T.Material,x:number,y:number,z:number,sx:number,sy:number,sz:number,geometry:T.BufferGeometry=orb){
     const mesh=new T.Mesh(geometry,material);mesh.position.set(x,y,z);mesh.scale.set(sx,sy,sz);parent.add(mesh);return mesh;
   }
@@ -18,15 +18,14 @@ export function createCicada(makeChitin = titanChitin) {
     mesh.position.copy(a).add(b).multiplyScalar(.5);mesh.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),b.clone().sub(a).normalize());parent.add(mesh);return mesh;
   }
   volume(root,chitin,0,-.2,0,1.3,1.65,.9);
-  for(let i=0;i<7;i++){
-    const w=1.05*(1-i*.115);volume(root,i%2?rim:chitin,0,-1.3-i*.38,-.35-i*.09,w,.4,.57*(1-i*.08));
-  }
+  const abdomen = volume(root,rim,0,-.93,-.13,1,1,1,cicadaAbdomen(3.02,1.12,.63,7));
+  abdomen.name = 'lapped-abdomen';
   // A thick coat on the torso and abdomen; eyes, ribbed face and vents stay clear.
   for (const y of [.4,-.4,-1.1]) for (const x of [-.7,0,.7])
     addTitanSetae(root,x,y,.98,1.35,1.3,x===0?1:2);
   for (let i=0;i<7;i++) {
-    const w=1.05*(1-i*.115);
-    addTitanSetae(root,0,-1.3-i*.38,Math.max(.32-i*.10,.97*(1-i*.18)),w*2.5,.95,i%2+1);
+    const taper=Math.sin((1-(i+.5)/7)*Math.PI*.48)**.65;
+    addTitanSetae(root,0,-.93-(i+.5)*3.02/7,-.13+.56*taper,2.38*taper,.72,i%2+1);
   }
   const head=new T.Group();root.add(head);head.position.set(0,1.2,.65);
   const faceCuticle=makeChitin(0x4c3941,.77);
@@ -35,8 +34,11 @@ export function createCicada(makeChitin = titanChitin) {
     diffuseColor.rgb*=mix(vec3(1),vec3(.18,.16,.12),smoothstep(-.7,-.2,faceY));`);};
   volume(head,faceCuticle,0,0,0,1.7,.72,.8);
   for(const side of [-1,1]){
-    volume(head,chitin,side*1.4,.15,.43,.42,.3,.53);
-    const compound=volume(head,eye,side*1.65,.15,.83,.50,.50,.42,new T.IcosahedronGeometry(1,3));compound.name='compound-eye';
+    volume(head,chitin,side*1.35,.12,.45,.37,.29,.43);
+    const compound=volume(head,eye,side*1.49,.17,.64,.49,.35,.35);
+    compound.rotation.z=side*.30;
+    compound.rotation.y=side*.35;
+    compound.name='compound-eye';
     link(new T.Vector3(side*1.02,-.23,.6),new T.Vector3(side*1.5,-.65,.7),.045,faceCuticle,head);
     link(new T.Vector3(side*1.5,-.65,.7),new T.Vector3(side*2.1,-1.3,.5),.022,faceCuticle,head);
   }

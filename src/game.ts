@@ -50,7 +50,7 @@ import { calderaChallengeRow, ioChallengeBoss, ioChallengeCrucible,
   ioChallengeSkipper, ioChallengeSkipperFirstShot, ioChallengeWaves, stepIoChallengeCrucible, stepIoChallengeSkipper } from './io-challenge';
 import { bindCentipede, severCentipede, stepCentipedes, CENTIPEDE_SPACING, type CentipedeLink } from './centipede';
 import { cicadaMotion, titanInsectWaves, type CicadaCourse } from './titan-insects';
-import { TITAN_ROUTE_DURATION, TITAN_ROUTE_END } from './titan-layout';
+import { TITAN_ROUTE_DURATION, TITAN_ROUTE_END, TITAN_TRAVEL } from './titan-layout';
 import { CICADA_HP, TITAN_ASCENT, CICADA_INTERVAL, CICADA_WINDUP, CICADA_FIRE, CICADA_TRAVEL, cicadaVent } from './cicada';
 import {
   BOSS_FIRE_AT, BOSS_MUZZLE_Z, BOSS_RECOIL_TIME, BOSS_VOLLEY_INTERVAL, BOSS_WINDUP_AT, raptorFlight,
@@ -1374,7 +1374,7 @@ export class Flight {
       : iceChallenge ? ICE_CHALLENGE_PACE : preserveChallenge ? PRESERVE_CHALLENGE_PACE
       : summerChallenge ? SUMMER_CHALLENGE_PACE : boulevardChallenge ? BOULEVARD_CHALLENGE_PACE
       : groveChallenge ? GROVE_CHALLENGE_PACE : tuning.pace;
-    stepCentipedes(this.enemies, dt * routePace);
+    stepCentipedes(this.enemies, dt * routePace, this.hiveProgress * TITAN_TRAVEL);
     for (const enemy of this.enemies) {
       if (enemy.hp <= 0) continue;
       // Only mobile encounters use the faster clock. Anchored enemies,

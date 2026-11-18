@@ -10,6 +10,8 @@ const { bindCentipede, severCentipede, stepCentipedes, CENTIPEDE_SPACING, CENTIP
 const { cicadaMotion, CICADA_SCOUT_POOL } = await server.ssrLoadModule('/src/titan-insects.ts');
 const { Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
 const { createCicadaScout, createCentipedeSection } = await server.ssrLoadModule('/src/titan-insect-rigs.ts');
+const { TITAN_GROUND_Z } = await server.ssrLoadModule('/src/titan-layout.ts');
+const { CENTIPEDE_BODY_HEIGHT } = await server.ssrLoadModule('/src/centipede-gait.ts');
 const { createLaserContactTrace } = await server.ssrLoadModule('/src/laser-contact.ts');
 
 function chain(count = 7, x = 0) {
@@ -25,7 +27,9 @@ function combat(parts, drone = 'sentry', loadout = []) {
 }
 
 test('shooting a middle plate preserves live targets and sends the two connected fragments in opposite directions', () => {
-  const parts = chain(), positions = parts.map(p => [p.x, p.y]);
+  const parts = chain();
+  stepCentipedes(parts, STEP);
+  const positions = parts.map(p => [p.x, p.y]), gait = parts[4].centipede.gait;
   parts[3].hp = 0; severCentipede(parts[3]);
   const front = parts[0].centipede.chain, rear = parts[4].centipede.chain;
   assert.deepEqual(front.parts, parts.slice(0, 3)); assert.deepEqual(rear.parts, parts.slice(4));
@@ -33,15 +37,52 @@ test('shooting a middle plate preserves live targets and sends the two connected
   assert.deepEqual(parts.map(p => [p.x, p.y]), positions, 'a sever must not teleport any targets');
   assert.equal(parts.filter(p => p.centipede.originalHead).length, 1);
   assert.equal(parts[4].centipede.originalHead, false, 'the cut end must not grow a replacement head');
-  const rig = createCentipedeSection(), gait = rig.root.getObjectByName('walking-knee');
-  rig.pose(.7, 4, false, false);
-  const before = gait.rotation.toArray();
-  rig.pose(.7, parts[4].centipede.slot, false, true, 0, parts[4].centipede.gaitSlot);
-  assert.deepEqual(gait.rotation.toArray(), before, 'a sever must not reset the gait phase');
+  assert.equal(parts[4].centipede.gait, gait, 'a sever must preserve the planted contacts');
   for (let i = 0; i < 90; i++) stepCentipedes(parts, STEP);
   assert(front.parts.every(p => p.x < -.5)); assert(rear.parts.every(p => p.x > .5));
   for (const group of [front, rear]) for (let i = 1; i < group.parts.length; i++)
     assert(Math.abs(Math.hypot(group.parts[i].x - group.parts[i-1].x, group.parts[i].y - group.parts[i-1].y) - CENTIPEDE_SPACING) < .03);
+});
+
+test('rendered centipede toes hold their terrain coordinates while the world scrolls and chains split', () => {
+  for (const pace of [1.1, 1.19]) {
+    const parts = chain(), rig = createCentipedeSection();
+    const feet = rig.root.children.filter(object => object.name === 'walking-ankle');
+    const last = new Map();
+    let plants = 0, lifted = 0;
+    for (let frame = 0; frame < 230; frame++) {
+      if (frame === 87) { parts[3].hp = 0; severCentipede(parts[3]); }
+      const scroll = frame * STEP * 1.6;
+      stepCentipedes(parts, STEP * pace, scroll);
+      for (const [i, part] of parts.entries()) {
+        if (!part.hp) continue;
+        const { gait, slot, originalHead, chain } = part.centipede;
+        rig.root.position.set(part.x, part.y, TITAN_GROUND_Z + CENTIPEDE_BODY_HEIGHT);
+        rig.root.rotation.z = -part.heading;
+        rig.pose(frame * STEP, slot, originalHead, Boolean(chain.escape), 0, gait);
+        rig.root.updateMatrixWorld(true);
+        for (const [side, ankle] of feet.entries()) {
+          const key = i * 2 + side, foot = gait.feet[side];
+          const footLength = Math.hypot(.071, .088);
+          const tip = ankle.localToWorld(new T.Vector3(0, footLength, 0));
+          tip.y += scroll;
+          if (foot.progress === 1) {
+            assert(tip.distanceTo(new T.Vector3(foot.contact.x, foot.contact.y, TITAN_GROUND_Z)) < 1e-6,
+              'posed foot must reach its ground contact');
+            if (last.get(key)?.contact === foot.contact) {
+              assert(tip.distanceTo(last.get(key).tip) < 1e-6, 'planted foot slid between frames');
+              plants++;
+            }
+            last.set(key, { contact: foot.contact, tip });
+          } else if (foot.progress > 0) {
+            assert(tip.z > TITAN_GROUND_Z, 'swing foot must clear the terrain');
+            lifted++;
+          }
+        }
+      }
+    }
+    assert(plants > 500 && lifted > 100, 'gait must include stance and swing across the route and retreat');
+  }
 });
 
 test('head, tail and repeated fragment cuts leave no dead leaders or orphaned live sections', () => {
@@ -142,7 +183,14 @@ test('pooled patrol rigs share geometry and materials while wingbeats and leg ga
       const list = []; rig.root.traverse(o => { if (o.geometry) list.push([o.geometry, o.material]); }); resources.push(list);
     }
     for (const list of resources.slice(1)) list.forEach(([g, m], i) => { assert.equal(g, resources[0][i][0]); assert.equal(m, resources[0][i][1]); });
-    rigs[0].pose(.4, 0, true, false); rigs[1].pose(.9, 0, true, false);
+    if (create === createCicadaScout) {
+      rigs[0].pose(.4); rigs[1].pose(.9);
+    } else {
+      const parts = chain(2);
+      for (let i = 0; i < 24; i++) stepCentipedes(parts, STEP, i * STEP * 1.6);
+      rigs[0].pose(.4, 0, true, false, 0, parts[0].centipede.gait);
+      rigs[1].pose(.4, 1, false, false, 0, parts[1].centipede.gait);
+    }
     assert.notDeepEqual(rigs[0].root.children.map(o => o.rotation.toArray()), rigs[1].root.children.map(o => o.rotation.toArray()));
     for (const rig of rigs) rig.root.traverse(o => assert(o.matrix.elements.every(Number.isFinite)));
   }

@@ -67,7 +67,7 @@ Rebuild after owner art uploads. Test changed media at the same filename to catc
 
 ## Titan creatures
 
-`titan-wings.ts` builds cambered membranes and branching veins for the Cicada and its scouts. The surface and vein geometry share a flex shape, with each wing's flex driven by its beat. Scouts share those buffers across the actor pool. The boss folds its six femurs, tibiae and tarsi as the vents charge. Centipede sections carry keeled armor over independently jointed legs. A section's gait phase stays tied to its original position in the chain when a cut gives it a new slot.
+`titan-wings.ts` builds cambered membranes and branching veins for the Cicada and its scouts. The surface and vein geometry share a flex shape, with each wing's flex driven by its beat. Scouts share those buffers across the actor pool. The boss folds its six femurs, tibiae and tarsi as the vents charge. The cicadas’ inset eyes share mip-filtered compound facets, and overlapping plates form one continuous abdomen. Centipede sections carry keeled armor over legs solved to planted terrain contacts. The gait samples the same scroll as the ground tiles and retains both contacts when a section changes chains.
 
 ## Heliostat Gate
 
