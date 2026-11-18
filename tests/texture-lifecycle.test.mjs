@@ -39,13 +39,13 @@ test('scene teardown releases shared uploads and preserves procedural surface ma
     globalThis.document = previousDocument;
   }
   const root = new T.Scene();
-  const shell = new T.Mesh(new T.BoxGeometry(), hive.antShell);
+  const shell = new T.Mesh(new T.BoxGeometry(), hive.antPlate);
   root.add(shell, new T.Mesh(shell.geometry, hive.fungusStem));
-  mold.addMoldPatch(root, 0, 0, 0, 1, 1);
-  const sprite = root.getObjectByName('camera-facing-mold');
-  const proceduralShell = hive.antShell.map;
-  const proceduralMold = sprite.material.map;
-  const proceduralCap = hive.fungusCap.map;
+  const patch = new T.Mesh(mold.gasterMold, mold.antMold);
+  root.add(patch);
+  const proceduralShell = shell.material.map;
+  const proceduralMold = patch.material.map;
+  const proceduralCup = hive.sporeCup.map;
   const relief = new T.MeshStandardMaterial();
   root.add(new T.Mesh(shell.geometry, relief));
   const photo = new T.Texture();
@@ -55,13 +55,14 @@ test('scene teardown releases shared uploads and preserves procedural surface ma
   hive.setFungusTexture(photo);
   mold.setAntMoldTexture(photo);
   applyRelief(photo, [relief]);
-  assert.equal(sprite.material.map, photo);
-  assert.equal(hive.fungusCap.map, photo);
+  assert.equal(patch.material.map, photo);
+  assert.equal(shell.material.map, photo);
+  assert.equal(hive.sporeCup.map, photo);
   disposeScene(root);
   assert.deepEqual(releases, [photo]);
-  assert.equal(sprite.material.map, proceduralMold);
+  assert.equal(patch.material.map, proceduralMold);
   assert.equal(shell.material.map, proceduralShell);
-  assert.equal(hive.fungusCap.map, proceduralCap);
+  assert.equal(hive.sporeCup.map, proceduralCup);
   assert.equal(relief.map, null);
   assert.equal(relief.bumpMap, null);
   assert.equal(root.children.length, 0);

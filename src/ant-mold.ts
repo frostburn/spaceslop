@@ -1,5 +1,6 @@
 import * as T from 'three';
 import { applySurfaceMap } from './encounter-surfaces';
+import { antGaster, antHead, antThorax } from './ant-shell';
 
 function fallbackMold() {
   const size = 128, canvas = document.createElement('canvas');
@@ -26,21 +27,45 @@ function fallbackMold() {
   return texture;
 }
 
-const moldMap = fallbackMold();
-const materials = [0, 0.85, -0.65].map((rotation) => new T.SpriteMaterial({
-  map: moldMap, color: 0xf0ead4, transparent: true, opacity: 0.88,
-  alphaTest: 0.015, depthWrite: false, rotation,
-}));
+export const antMold = new T.MeshStandardMaterial({
+  map: fallbackMold(), color: 0xd8dbc5, roughness: 1, transparent: true, opacity: 0.86,
+  alphaTest: 0.02, depthWrite: false,
+});
 
 export function setAntMoldTexture(texture: T.Texture) {
   texture.wrapS = texture.wrapT = T.ClampToEdgeWrapping;
-  applySurfaceMap(texture, materials);
+  applySurfaceMap(texture, [antMold]);
 }
 
-export function addMoldPatch(parent: T.Group, x: number, y: number, z: number, width: number, height: number, variant = 0) {
-  const patch = new T.Sprite(materials[variant % materials.length]);
-  patch.name = 'camera-facing-mold';
-  patch.position.set(x, y, z);
-  patch.scale.set(width, height, 1);
-  parent.add(patch);
+type Patch = readonly [y: number, angle: number, halfHeight: number, halfAngle: number, rotation: number];
+
+function moldPatches(shell: typeof antGaster, patches: readonly Patch[]) {
+  const positions: number[] = [], uv: number[] = [], indices: number[] = [];
+  const rows = 22, cols = 12;
+  for (const [y, angle, halfHeight, halfAngle, rotation] of patches) {
+    const start = positions.length / 3;
+    const cos = Math.cos(rotation), sin = Math.sin(rotation);
+    for (let row = 0; row <= rows; row++) for (let col = 0; col <= cols; col++) {
+      const u = col / cols, v = row / rows;
+      const x = 2 * u - 1, s = 2 * v - 1;
+      const p = shell.point(y + halfHeight * (x * sin + s * cos), angle + halfAngle * (x * cos - s * sin), 0.007);
+      positions.push(p.x, p.y, p.z);
+      uv.push(u, v);
+      if (row < rows && col < cols) {
+        const a = start + row * (cols + 1) + col, b = a + cols + 1;
+        indices.push(a, a + 1, b, a + 1, b + 1, b);
+      }
+    }
+  }
+  const geometry = new T.BufferGeometry();
+  geometry.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+  geometry.setIndex(indices).computeVertexNormals();
+  return geometry;
 }
+
+export const gasterMold = moldPatches(antGaster, [
+  [-0.105, -0.28, 0.28, 0.51, -0.14], [-0.106, 0.91, 0.28, 0.70, 0.47], [-0.163, -1.18, 0.22, 0.56, -0.33],
+]);
+export const thoraxMold = moldPatches(antThorax, [[0.095, -0.25, 0.208, 1.03, 0.27]]);
+export const headMold = moldPatches(antHead, [[-0.073, -0.27, 0.135, 0.79, -0.31]]);

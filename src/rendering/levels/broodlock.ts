@@ -3,6 +3,7 @@ import { addRoots, genericBoss, type LevelFactory } from '../level';
 import { createBossLaserContact } from '../../laser-contact';
 import { loadEncounterTexture } from '../../encounter-texture';
 import { BOSS_RECOIL_TIME } from '../../encounters';
+import { BOSS_CANNON_X } from '../../game';
 import { CHALLENGE_ANT_PACE, CHALLENGE_ANT_WINDUP } from '../../broodlock/challenge';
 import { patternBurstCharge } from '../../challenge-patterns';
 import { createHiveScenery } from '../../hive-scenery';
@@ -14,7 +15,7 @@ import { HIVE_CAMERA_DISTANCE } from '../../hive-layout';
 export const createLevel: LevelFactory = ({ plane, signal }) => {
   const root = new T.Group();
   const hive = createHiveScenery(signal);
-  const boss = createHiveGuardian(2.4);
+  const boss = createHiveGuardian(BOSS_CANNON_X);
   const ants = Array.from({ length: 12 }, () => createAntRig());
   const models: (T.Object3D | undefined)[] = [];
   addRoots(root, hive, boss, ...ants);
@@ -31,10 +32,11 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
     contacts: [boss.root, ...ants.map(r => r.root)],
     warmup: [[hive.root, boss.root, ...ants.map(r => r.root)]],
     contact: createBossLaserContact(plane, boss.root),
-    update({ flight, reveal: eased, distance }) {
+    update({ flight, reveal: eased, distance, animationTime }) {
       genericBoss(boss.root, flight, eased);
       if (boss.root.visible)
-        boss.pose(eased, flight.cannonWindup, flight.exposedCannonX, flight.firedCannonX, flight.bossRecoil / BOSS_RECOIL_TIME);
+        boss.pose(eased, flight.cannonWindup, flight.exposedCannonX, flight.firedCannonX,
+          flight.bossRecoil / BOSS_RECOIL_TIME, animationTime);
       hive.update(flight.hiveProgress, distance);
       models.length = flight.enemies.length;
       models.fill(undefined);

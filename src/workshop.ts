@@ -155,7 +155,7 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
         const fired = elapsed >= BOSS_FIRE_AT;
         const windup = fired ? 0 : Math.max(0, (elapsed - BOSS_WINDUP_AT) / (BOSS_FIRE_AT - BOSS_WINDUP_AT));
         const recoil = fired ? Math.max(0, 1 - (elapsed - BOSS_FIRE_AT) / BOSS_RECOIL_TIME) : 0;
-        rig.pose(eased, windup, fired ? -cannon : cannon, fired ? cannon : 0, recoil);
+        rig.pose(eased, windup, fired ? -cannon : cannon, fired ? cannon : 0, recoil, time);
         if (burners) poseBurners(burners, time, 0.42 + 0.48 * Math.sin(eased * Math.PI));
         if (reveal < 1) return 'reveal';
         if (recoil > 0) return 'recoil';
