@@ -78,7 +78,7 @@ export function createGroundskeeperMaterials() {
   }
   const shadowMap = detailTexture(shadowPixels, 64); shadowMap.wrapS = shadowMap.wrapT = T.ClampToEdgeWrapping;
   const contactShadow = new T.MeshBasicMaterial({ map: shadowMap, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 });
-  return { feathers, puff, skin, face, ochre, hand, down, darkDown, claw, toeClaw, dark, flesh, tongue, eye, pupil, contactShadow,
+  return { feathers, puff, skin, face, ochre, hand, down, darkDown, claw, toeClaw, talon, dark, flesh, tongue, eye, pupil, contactShadow,
     setFeathers(texture: T.Texture) { feathers.map = texture; feathers.needsUpdate = true; },
     setScales(texture: T.Texture) { for (const material of [skin, face, ochre, hand]) { material.map = texture; material.needsUpdate = true; } } };
 }
