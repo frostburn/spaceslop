@@ -2,24 +2,6 @@ import * as T from 'three';
 import { heliostatBatch } from './geometry';
 import type { HeliostatMaterials } from './materials';
 
-export function createHeliostatDrone(m: HeliostatMaterials) {
-  const root = new T.Group(); root.name = 'heliostat-inspection-drone'; const b = heliostatBatch(root);
-  b.box([.6,.95,.32],[0,0,0],m.ceramic,.12);
-  b.box([.4,.48,.16],[0,-.12,.21],m.dark,.04);
-  b.box([.28,.16,.1],[0,-.4,.23],m.amber,.025);
-  for(const side of [-1,1]) {
-    b.box([.42,.2,.1],[side*.42,.05,0],m.titanium,.035);
-    b.rod([side*.57,-.38,0],[side*.57,.38,0],.14,m.blue,12);
-    b.ring(.15,.035,[side*.57,.28,0],m.copper);
-    b.box([.18,.04,.1],[side*.57,.43,0],m.cyan,.01);
-  }
-  b.rod([0,-.35,0],[0,-.75,0],.065,m.dark,10); b.finish();
-  const glow = new T.Mesh(new T.SphereGeometry(1, 10, 8), new T.MeshBasicMaterial({ color: 0xffd87a }));
-  glow.name = 'drone-charge'; glow.position.set(0, -.43, .30); glow.scale.setScalar(.12); glow.visible = false;
-  root.add(glow);
-  return root;
-}
-
 /** Pneumatophore, raised sail and trailing articulated stinging filaments. */
 export function createGuardFallback(m: HeliostatMaterials) {
   const root = new T.Group(); root.name = 'cyborg-man-o-war'; const b = heliostatBatch(root);
@@ -52,7 +34,6 @@ export function actorPose(root: T.Group) {
   const raster=root.getObjectByName('guard-raster'),fallback=root.getObjectByName('guard-fallback');
   const body=root.getObjectByName('guard-raster-body') as T.Mesh<T.BufferGeometry,T.MeshBasicMaterial>|undefined;
   const sail=root.getObjectByName('guard-sail'),glow=root.getObjectByName('guard-charge') as T.Mesh<T.BufferGeometry,T.MeshBasicMaterial>|undefined;
-  const droneGlow = root.getObjectByName('drone-charge');
   // Rest transforms belong to the rig, while buffers stay shared across actors.
   // Lower anchors keep soft tissue attached to the rigid harness as it breathes.
   const soft=[
@@ -70,10 +51,6 @@ export function actorPose(root: T.Group) {
     }
     if(sail)sail.rotation.y=.06*Math.sin(time*.9);
     if(glow)glow.material.color.setRGB(.55+charge*2.3,.16+charge*.9,.025+charge*.1);
-    if (droneGlow) {
-      droneGlow.visible = charge > 0;
-      droneGlow.scale.setScalar(.05 + charge * .115);
-    }
     filaments.forEach((f,i)=>{f.rotation.z=.18*Math.sin(time*1.4-i*.7);f.rotation.x=.12*Math.sin(time*1.1+i*.8);});
   };
 }

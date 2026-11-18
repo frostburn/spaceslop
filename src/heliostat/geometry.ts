@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { plating } from '../rig-geometry';
 
 export type Point3 = [number, number, number];
 
@@ -26,6 +27,9 @@ export function heliostatBatch(root: T.Group) {
     add,
     box(size: Point3, at: Point3, material: T.Material, bevel = 0, rotation?: Point3) {
       add(bevel ? new RoundedBoxGeometry(...size, 1, bevel) : new T.BoxGeometry(...size), material, at, rotation, true);
+    },
+    plate(outline: [number, number][], depth: number, bevel: number, at: Point3, material: T.Material, rotation?: Point3) {
+      add(plating(outline, depth, bevel).translate(0, 0, -depth / 2), material, at, rotation, true);
     },
     rod(a: Point3, b: Point3, radius: number, material: T.Material, sides = 10) {
       const start = new T.Vector3(...a), delta = new T.Vector3(...b).sub(start);
