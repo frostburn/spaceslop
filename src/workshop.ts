@@ -7,7 +7,8 @@ import {createLanternRay,createRaySeekerAssets,createRaySeekerRig} from './biolu
 import {raySignal} from './biolume/lantern-ray';
 import {createHeliostatMaterials} from './heliostat/materials';
 import {createGuardAssets,createHeliostatGuard} from './heliostat/guard';
-import {createHeliostatDrone,actorPose} from './heliostat/actors';
+import {actorPose} from './heliostat/actors';
+import {createInspectionDrone,createInspectionDroneAssets} from './heliostat/drone-rig';
 import {createHeliostatRegulator} from './heliostat/boss';
 import {HELIOSTAT_PITCH} from './heliostat/combat';
 import {crawlerPose,crawlerSites} from './heliostat/crawler';
@@ -217,7 +218,8 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
   const studyMine=createBoulevardMine(boulevard.materials),studyInterceptor=createBoulevardInterceptor(boulevard.materials);
   const studyWaterfall=boulevard.waterfalls.create(2,1);studyWaterfall.position.set(0,0,0);studyWaterfall.rotation.x=-Math.PI/2;
   const helioMaterials=createHeliostatMaterials(),helioGuardAssets=createGuardAssets(helioMaterials),helioGuard=createHeliostatGuard(helioGuardAssets),helioGuardPose=actorPose(helioGuard);
-  const helioDrone=createHeliostatDrone(helioMaterials),helioBoss=createHeliostatRegulator(helioMaterials);helioBoss.root.rotation.x=-HELIOSTAT_PITCH;
+  const helioDrone=createInspectionDrone(createInspectionDroneAssets(helioMaterials));
+  const helioBoss=createHeliostatRegulator(helioMaterials);helioBoss.root.rotation.x=-HELIOSTAT_PITCH;
   const helioCrawler=createCrawlerRig(createCrawlerAssets(helioMaterials));
   const helioUnstableBoss=createHeliostatRegulator(helioMaterials);helioUnstableBoss.root.rotation.x=-HELIOSTAT_PITCH;
   window.addEventListener('pagehide',()=>helioMaterials.releaseTextures(),{once:true});
@@ -284,8 +286,12 @@ function openWorkshop(renderer: T.WebGLRenderer, canvas: HTMLCanvasElement) {
     lantern_seeker:{root:raySeeker.root,duration:6,pose(time:number){raySeeker.pose({x:0,y:0,age:time,rayOrb:{heading:time*.4,previousX:0,previousY:0}});return 'shootable seeking lantern / rotating shell';}},
     ...createSummerStudies(camera),
     heliostat_manowar:{root:helioGuard,duration:4,pose(time:number){helioGuardPose(time,0,T.MathUtils.smoothstep(time,2.4,3.3));return 'raster float / ruffled sail / rigid harness / swaying tendrils';}},
-    heliostat_drone:{root:helioDrone,duration:3,pose(time:number){helioDrone.rotation.y=.12*Math.sin(time*2);return 'inspection drone';}},
-    heliostat_crawler:{root:helioCrawler.root,duration:8,bounds:new T.Box3(new T.Vector3(-4,-7,-5.6),new T.Vector3(1,3,1)),pose(time:number){const p=crawlerPose({site:0,aimY:-4},crawlerSites[0].at-4+time);helioCrawler.pose(p,time);helioCrawler.root.position.y=-p.physicalY;return p.hot?'cutting sweep':p.warning?'locked aim / marked sweep':p.brace>.5?'braced on rail':'rail traversal / telescoping cutter';}},
+    heliostat_drone: { root: helioDrone.root, duration: 4, pose(time: number) {
+      const charge = T.MathUtils.smoothstep(time, 2.55, 3.2) * (1 - T.MathUtils.smoothstep(time, 3.32, 3.58));
+      helioDrone.pose(time, 0.22 * Math.sin(time * 1.5), charge);
+      return charge > 0.01 ? 'Emitter charge' : 'Survey scan';
+    } },
+    heliostat_crawler:{root:helioCrawler.root,duration:8,bounds:new T.Box3(new T.Vector3(-4.2,-7,-6.6),new T.Vector3(1,3,1)),pose(time:number){const p=crawlerPose({site:0,aimY:-4},crawlerSites[0].at-4+time);helioCrawler.pose(p,time);helioCrawler.root.position.y=-p.physicalY;return p.hot?'cutting sweep':p.warning?'locked aim / marked sweep':p.brace>.5?'braced on rail':'rail traversal / telescoping cutter';}},
     heliostat_regulator:{root:helioBoss.root,duration:4.4,bounds:new T.Box3(new T.Vector3(-5.5,-2,-2),new T.Vector3(5.5,3,2)),pose(time:number){helioMaterials.updateThermal(time);helioBoss.pose(time,T.MathUtils.smoothstep(time,.65,1.9),0);return 'hot magnetic lenses / plasma conduits / exposed cyan aperture';}},
     heliostat_regulator_unstable:{root:helioUnstableBoss.root,duration:8.8,bounds:new T.Box3(new T.Vector3(-5.5,-2,-2),new T.Vector3(5.5,3,2)),pose(time:number){helioMaterials.updateThermal(time);const pattern=Math.floor(time/4.4)%2?1:-1;helioUnstableBoss.pose(time,Math.max(0,Math.min(1,(time%4.4-.65)/1.25)),0,{unstable:time+.1,pattern,attackTime:time});return 'unstable right lens / alternating lead / harmless stellar shards';}},
     boulevard_waterfall:{root:studyWaterfall,bounds:new T.Box3(new T.Vector3(-1.2,-.2,-1.6),new T.Vector3(1.2,2.5,1.6)),duration:6,pose(time:number){boulevard.waterfalls.update(time);return 'raised source pool / falling curtain / catch basin / spray';}},

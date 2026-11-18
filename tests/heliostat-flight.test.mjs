@@ -245,6 +245,33 @@ test('raster guards share atlas geometry, keep their 3D fallback and freeze rig 
   texture.dispose();m.releaseTextures();
 });
 
+test('inspection drones share meshes and keep independent scanner, gimbal and emitter poses', async () => {
+  const { createHeliostatMaterials } = await server.ssrLoadModule('/src/heliostat/materials.ts');
+  const { createInspectionDroneAssets, createInspectionDrone } = await server.ssrLoadModule('/src/heliostat/drone-rig.ts');
+  const materials = createHeliostatMaterials(), template = createInspectionDroneAssets(materials);
+  const first = createInspectionDrone(template), second = createInspectionDrone(template);
+  const named = (rig, name) => rig.root.getObjectByName(`inspection-${name}`);
+  const scanner = named(first, 'scanner'), emitter = named(first, 'emitter'), thruster = named(first, 'thruster');
+  const secondEmitter = named(second, 'emitter');
+  assert.equal(emitter.geometry, secondEmitter.geometry);
+  assert.equal(thruster.children[1].geometry, named(second, 'thruster').children[1].geometry);
+  second.pose(0.6, 0, 0);
+  first.pose(0.8, 0.16, 0);
+  const searchAngle = scanner.rotation.y, jetAngle = thruster.rotation.y;
+  assert(Math.abs(searchAngle) > 0.3);
+  assert(jetAngle < 0);
+  first.pose(2.9, -0.21, 1);
+  assert.equal(Math.abs(scanner.rotation.y), 0);
+  assert(thruster.rotation.y > jetAngle);
+  assert(emitter.scale.x > secondEmitter.scale.x);
+  assert.deepEqual(secondEmitter.position.toArray().slice(0, 2), [0, -0.43]);
+  first.pose(0.8, 0.16, 0);
+  assert.equal(scanner.rotation.y, searchAngle);
+  assert.equal(thruster.rotation.y, jetAngle);
+  assert.equal(emitter.scale.x, secondEmitter.scale.x);
+  materials.releaseTextures();
+});
+
 test('sunspot feed cores stay visible through the actual distant plant geometry',async()=>{
   const scene=new T.Scene(),plane=new T.Group();scene.add(plane);const level=createLevel({scene,plane,signal:new AbortController().signal});plane.add(level.root);await level.ready;
   const f=new Flight('sentry',[],'vex','heliostat');f.phase='boss';f.time=2.8;f.markers=[{x:-.75,y:-5.3},{x:.75,y:-5.3}];

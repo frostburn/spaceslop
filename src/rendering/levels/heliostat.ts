@@ -3,7 +3,8 @@ import type { LevelFactory } from '../level';
 import { createHeliostatScenery } from '../../heliostat/scenery';
 import { createHeliostatBackdrop } from '../../heliostat/backdrop';
 import { createHeliostatEnvironment } from '../../heliostat/materials';
-import { createHeliostatDrone,actorPose } from '../../heliostat/actors';
+import { actorPose } from '../../heliostat/actors';
+import { createInspectionDrone, createInspectionDroneAssets } from '../../heliostat/drone-rig';
 import { patternBurstCharge } from '../../challenge-patterns';
 import { heliostatChallengeDrone, heliostatChallengeGuard } from '../../heliostat/challenge';
 import {createGuardAssets,createHeliostatGuard} from '../../heliostat/guard';
@@ -20,13 +21,15 @@ import { BOSS_RECOIL_TIME } from '../../encounters';
 export const createLevel:LevelFactory=({plane,scene,signal})=>{
   const root=new T.Group(),scenery=createHeliostatScenery(),backdrop=createHeliostatBackdrop(),environment=createHeliostatEnvironment();
   root.add(scenery.root);scene.environment=environment;
-  const drone=createHeliostatDrone(scenery.materials),guard=createGuardAssets(scenery.materials),plasma=createAttackPlasma(scenery.plasma);
+  const drone=createInspectionDroneAssets(scenery.materials),guard=createGuardAssets(scenery.materials),plasma=createAttackPlasma(scenery.plasma);
   root.add(plasma.root);
-  const drones=Array.from({length:HELIOSTAT_DRONE_POOL},()=>drone.clone(true));
-  const guards=Array.from({length:HELIOSTAT_GUARD_POOL},()=>createHeliostatGuard(guard));
+  const drones=Array.from({length:HELIOSTAT_DRONE_POOL},()=>createInspectionDrone(drone));
+  const guards=Array.from({length:HELIOSTAT_GUARD_POOL},()=>{
+    const root=createHeliostatGuard(guard);return{root,pose:actorPose(root)};
+  });
   const crawlerAssets=createCrawlerAssets(scenery.materials),crawlers=Array.from({length:CRAWLER_POOL},()=>createCrawlerRig(crawlerAssets));
   for(const r of crawlers){root.add(r.root);r.root.visible=false;}
-  const actors=[...drones,...guards].map(root=>({root,pose:actorPose(root)}));for(const r of actors){root.add(r.root);r.root.visible=false;}
+  const actors=[...drones,...guards];for(const r of actors){root.add(r.root);r.root.visible=false;}
   const models:(T.Object3D|undefined)[]=[],contact=createBossLaserContact(plane,scenery.boss.root),art:HeliostatArt={};
   const flags=new Map<T.Mesh,boolean>();let restoreRoute:(()=>void)|undefined,restoreUnderworks:(()=>void)|undefined,restoreBoss:(()=>void)|undefined,restoreCrawlers:(()=>void)[]=[],progress=0,disposed=false;
   const size=new T.Vector2();
@@ -41,7 +44,6 @@ export const createLevel:LevelFactory=({plane,scene,signal})=>{
     orientation:(_time,reveal)=>heliostatFrame(reveal),contacts:[scenery.boss.root,...actors.map(r=>r.root),...crawlers.map(r=>r.head)],
     warmup:[[scenery.root,plasma.root,...actors.map(r=>r.root),...crawlers.map(r=>r.root)]],
     prepare(){
-      drones[0].getObjectByName('drone-charge')!.visible = true;
       restoreRoute=scenery.route.prepare(-scenery.world.position.y);scenery.gates.prime();plasma.prime();
       restoreUnderworks=scenery.underworks.prepare(-scenery.world.position.y);
       restoreBoss=scenery.boss.prime();restoreCrawlers=crawlers.map(r=>r.prime());
@@ -71,10 +73,11 @@ export const createLevel:LevelFactory=({plane,scene,signal})=>{
         const p=heliostatMotion(enemy.age,enemy.lane,enemy.heliostat);
         rig.root.visible=enemy.hp>0;rig.root.position.set(enemy.x,enemy.y,0);rig.root.rotation.set(0,0,enemy.heading??0);
         const guard = enemy.heliostat.kind === 'guard';
+        const windup = guard ? HELIOSTAT_GUARD_CHARGE : .40;
         const charge = flight.isHeliostatChallenge
           ? patternBurstCharge(enemy, (guard ? heliostatChallengeGuard : heliostatChallengeDrone).windup)
-          : guard && heliostatCanAttack(enemy.age,enemy.lane,enemy.heliostat)
-            ? T.MathUtils.clamp(1-(enemy.fire-enemy.age)/HELIOSTAT_GUARD_CHARGE,0,1) : 0;
+          : enemy.y < 8 && heliostatCanAttack(enemy.age,enemy.lane,enemy.heliostat)
+            ? T.MathUtils.clamp(1-(enemy.fire-enemy.age)/windup,0,1) : 0;
         rig.pose(animationTime+enemy.heliostat.slot,p.bank,charge);models[i]=rig.root.getObjectByName('guard-contact')??rig.root;
       }
     },

@@ -25,6 +25,40 @@ test('crawlers ride actual station rails, expose their cutter before warning, an
   }scenery.materials.releaseTextures();
 });
 
+test('crawler sleeves stay seated through the lift and the opening cutter meets its beam origin', () => {
+  const scenery = createHeliostatScenery();
+  const rig = createCrawlerRig(createCrawlerAssets(scenery.materials));
+  const sleeves = rig.root.getObjectsByProperty('name', 'crawler-mast-sleeve');
+  const shields = rig.root.getObjectsByProperty('name', 'crawler-cutter-shield');
+  const light = rig.root.getObjectByName('crawler-emitter');
+  const wheel = rig.root.getObjectByName('crawler-wheel');
+  const tread = wheel.children[0];
+  const world = new T.Vector3();
+  assert.equal(sleeves.length, 4);
+  for (const site of [0, 1]) for (const age of [0, 0.8, 1.4, 2.5, 3.55, 4.5]) {
+    const time = c.crawlerSites[site].at - 4 + age;
+    const p = c.crawlerPose({ site, aimY: -4.3 }, time);
+    rig.pose(p, time);
+    rig.root.updateMatrixWorld(true);
+    const top = sleeves.at(-1).localToWorld(new T.Vector3(0, 0.70, 0));
+    assert(top.distanceTo(new T.Vector3(p.head.x, p.head.y, p.head.z - 0.08)) < 1e-8);
+    for (let i = 1; i < sleeves.length; i++) {
+      assert(sleeves[i].position.y - sleeves[i - 1].position.y < 1.4);
+      assert.deepEqual(sleeves[i].scale.toArray(), [1, 1, 1]);
+    }
+    wheel.getWorldPosition(world);
+    const ray = new T.Raycaster(world.clone().setZ(c.CRAWLER_RAIL_Z - 0.06), new T.Vector3(0, 0, 1));
+    const footprint = ray.intersectObject(tread, false)[0].point.z;
+    assert(Math.abs(footprint - c.CRAWLER_RAIL_Z - 0.031) < 0.007);
+    if (p.warning || p.hot) {
+      assert(light.getWorldPosition(world).distanceTo(new T.Vector3(p.muzzle.x, p.muzzle.y, 0.06)) < 1e-8);
+    }
+    assert(shields[0].rotation.z < 0 && shields[1].rotation.z > 0);
+    assert(Math.abs(Math.abs(shields[0].rotation.z) - (0.042 + 0.32 * p.charge)) < 1e-9);
+  }
+  scenery.materials.releaseTextures();
+});
+
 test('the crawler locks aim once, warns harmlessly and sweeps only its marked half of the lane',()=>{
   for(let site=0;site<c.crawlerSites.length;site++){
     const state={site},at=c.crawlerSites[site].at;
