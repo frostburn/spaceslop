@@ -35,6 +35,42 @@ test('rakes, paired slams and lunges hit only their physical contact paths; oppo
  const idle=quiet();for(let i=0;i<336;i++)idle.step(STEP);assert.equal(idle.hull,3,'one rake costs one hull, rather than one per claw/frame');
 });
 
+test('the marked rake, slam and bite targets remain within reach across the flight lane', () => {
+  for (const x of [-3.5, 0, 3.5]) for (const y of [-6.8, 0, 5.5]) {
+    const aim = { x, y };
+    for (let cycle = 0; cycle < 4; cycle++) {
+      const start = cycle * g.GROUNDSKEEPER_CYCLE + g.GROUNDSKEEPER_STRIKE;
+      for (const offset of cycle === 2 ? [-1.35, 1.35] : [0]) {
+        const victim = { x: x + offset, y };
+        let hit = false;
+        for (let age = 0; age <= g.GROUNDSKEEPER_END - g.GROUNDSKEEPER_STRIKE; age += STEP) {
+          if (g.groundskeeperHits(start + age, start + age - STEP, aim, victim)) { hit = true; break; }
+        }
+        assert(hit, `attack ${cycle} misses its marked target at ${victim.x}, ${y}`);
+      }
+    }
+  }
+});
+
+test('both rakes aim the hooked points toward the marked ship at contact', () => {
+  const toFlight = p => new T.Vector3().copy(g.groundskeeperFlight(p));
+  const duration = g.GROUNDSKEEPER_END - g.GROUNDSKEEPER_STRIKE;
+  for (const x of [-3.5, -2, 0, 2, 3.5]) for (const y of [-6.8, -3, 0, 3, 5.5]) {
+    const aim = { x, y };
+    const ship = new T.Vector3(x, y, 0);
+    for (const arm of [0, 1]) for (const progress of [.54, .62, .69]) {
+      const time = arm * g.GROUNDSKEEPER_CYCLE + g.GROUNDSKEEPER_STRIKE + duration * progress;
+      const hand = g.groundskeeperPose(time, aim).arms[arm];
+      for (const curve of hand.claws) {
+        const [base, bow, tip] = curve.map(toFlight);
+        const pointDirection = tip.clone().sub(bow).normalize();
+        const toShip = ship.clone().sub(base).normalize();
+        assert(pointDirection.dot(toShip) > .5, 'talon point faces away from the marked ship');
+      }
+    }
+  }
+});
+
 test('warning aim locks once, Pulse interrupts once, and new runs reset the attack state',()=>{
  const f=quiet();while(f.time<1.1)f.step(STEP);const locked={...f.groundskeeperAim};
  f.player.x=-3.5;while(f.time<2.6)f.step(STEP);assert.deepEqual(f.groundskeeperAim,locked);
@@ -87,8 +123,8 @@ test('rotunda transform coasts continuously, and posed claw geometry/contact anc
 
 test('diagonal attacks, paired slams and recovery keep the rendered limbs outside the abdomen',()=>{
  const rig=createGroundskeeper(),torso=rig.root.getObjectByName('heavy-torso');
- const skin=torso.children.find(o=>o.isMesh&&o.material===rig.materials.down);
- const shell=new T.Mesh(skin.geometry,new T.MeshBasicMaterial({side:T.DoubleSide}));shell.updateMatrixWorld();
+ const skin=torso.getObjectByName('breast');
+ const shell=new T.Mesh(skin.geometry,new T.MeshBasicMaterial({side:T.DoubleSide}));shell.position.copy(skin.position);shell.updateMatrixWorld();
  const center=new T.Vector3(0,-.1,6.9),ray=new T.Raycaster(),q=new T.Vector3(),direction=new T.Vector3();
  for(const x of[-3.5,0,3.5])for(const y of[-6.8,-5.3,0,5.5])for(const cycle of[0,1,2])for(const age of[0,1.8,2.35,2.6,2.85,3.05,3.25,3.5,3.8,4.1,4.35]){
   const time=cycle*g.GROUNDSKEEPER_CYCLE+age,p=rig.pose(time,{x,y});rig.root.updateMatrixWorld(true);
@@ -96,14 +132,15 @@ test('diagonal attacks, paired slams and recovery keep the rendered limbs outsid
    assert(Math.abs(Math.hypot(arm.elbow.x-arm.shoulder.x,arm.elbow.y-arm.shoulder.y,arm.elbow.z-arm.shoulder.z)-g.GROUNDSKEEPER_UPPER_ARM)<1e-6);
    assert(Math.abs(Math.hypot(arm.wrist.x-arm.elbow.x,arm.wrist.y-arm.elbow.y,arm.wrist.z-arm.elbow.z)-g.GROUNDSKEEPER_FOREARM)<1e-6);
   }
-  for(const side of[-1,1])for(const[name,length]of[['upper-arm',g.GROUNDSKEEPER_UPPER_ARM],['forearm',g.GROUNDSKEEPER_FOREARM]]){
-   const mesh=rig.root.getObjectByName(`${name}-${side}`).children.find(o=>o.isMesh&&!o.isInstancedMesh),positions=mesh.geometry.attributes.position;
-   // Probe the actual tapered limb surface, allowing only the shoulder's first
-   // fifth to merge into its attachment. No proxy hitbox supplies the verdict.
-   for(let i=0;i<positions.count;i+=8){
-    const t=(positions.getY(i)+mesh.position.y)/length;if(t<(name==='upper-arm'?.2:0)||t>1)continue;
-    q.fromBufferAttribute(positions,i);mesh.localToWorld(q);torso.worldToLocal(q);direction.subVectors(q,center);const distance=direction.length();direction.normalize();ray.set(center,direction);
-    const surface=ray.intersectObject(shell)[0];assert(surface&&distance>surface.distance+.03,`${name} enters abdomen: time=${time}, aim=${x},${y}, side=${side}`);
+  for(const side of [-1, 1]){
+   const geometry=rig.root.getObjectByName(`arm-skin-${side}`).geometry;
+   const {position,uv}=geometry.attributes;
+   // The shoulder root overlaps its socket. The rest of the continuous skin
+   // must clear the breast, including the inside of the elbow and the palm.
+   for(let i=0;i<position.count;i+=3){
+    if(uv.getY(i)<.15)continue;
+    q.fromBufferAttribute(position,i);torso.worldToLocal(q);direction.subVectors(q,center);const distance=direction.length();direction.normalize();ray.set(center,direction);
+    const surface=ray.intersectObject(shell)[0];assert(surface&&distance>surface.distance+.03,`arm enters abdomen: time=${time}, aim=${x},${y}, side=${side}`);
    }
   }
  }
@@ -131,23 +168,52 @@ test('nostrils are recessed skin openings with lined passages and a closed manif
  geometry.dispose();mesh.material.dispose();
 });
 
-test('arm bends keep their lengths and avoid frame flips through attacks, recovery and Pulse',()=>{
+test('wrists and weight-bearing legs stay articulated through attacks, recovery and Pulse',()=>{
  const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
- for(const x of[-3.5,0,3.5])for(const y of[-6.8,-5.3,0,5.5])for(const cancelledAt of[-100,2.5,8.5]){
+ for(const x of[-3.5,0,3.5])for(const y of[-6.8,-5.3,0,5.5])for(const cancelledAt of[-100,2.5,8.3,13.2,17.7]){
   let previous;
   for(let frame=0;frame<=g.GROUNDSKEEPER_CYCLE*4*60;frame++){
    const time=frame/60,p=g.groundskeeperPose(time,{x,y},cancelledAt);
    for(const[i,arm]of p.arms.entries()){
     assert(Math.abs(distance(arm.shoulder,arm.elbow)-g.GROUNDSKEEPER_UPPER_ARM)<1e-6);
     assert(Math.abs(distance(arm.elbow,arm.wrist)-g.GROUNDSKEEPER_FOREARM)<1e-6);
-    if(previous)assert(distance(arm.elbow,previous.arms[i].elbow)<2,'an elbow flips across its bend circle in a single simulation step');
+    const forearm = new T.Vector3().subVectors(arm.wrist, arm.elbow);
+    assert(forearm.angleTo(new T.Vector3().copy(arm.direction)) < Math.PI / 3, 'claws fold back into the wrist');
+    assert(Math.abs(forearm.normalize().dot(arm.across)) < .20, 'palm turns over while the wrist is bent sideways');
+    if (previous) {
+      const before = previous.arms[i];
+      assert(distance(arm.elbow, before.elbow) < 2, 'elbow flips across its bend circle');
+      assert(distance(arm.across, before.across) < .49, 'palm rolls abruptly in one simulation step');
+    }
+    const {hip, knee, hock, ankle} = p.legs[i];
+    assert(Math.abs(distance(hip, knee) - g.GROUNDSKEEPER_THIGH) < 1e-6);
+    assert(Math.abs(distance(knee, hock) - g.GROUNDSKEEPER_SHIN) < 1e-6);
+    assert(Math.abs(distance(hock, ankle) - g.GROUNDSKEEPER_TARSUS) < 1e-6);
    }
    previous=p;
   }
  }
 });
 
-test('resting elbows fold back and down, and both arm sections preserve the elbow hinge axis',()=>{
+test('striking wrists cock after the turnover and open as the arm swings', () => {
+  const wristAngle = arm => new T.Vector3().subVectors(arm.wrist, arm.elbow)
+    .angleTo(new T.Vector3().copy(arm.direction));
+  for (const [cycle, hands] of [[0, [0]], [1, [1]], [2, [0, 1]]]) {
+    const strike = cycle * g.GROUNDSKEEPER_CYCLE + g.GROUNDSKEEPER_STRIKE;
+    for (const hand of hands) {
+      const [loaded, start, midSwing, contact] = [-.045, 0, .21, .48].map(offset =>
+        wristAngle(g.groundskeeperPose(strike + offset).arms[hand]));
+      assert(loaded > .95 && start >= loaded, 'wrist opens before the arm starts to swing');
+      assert(start - midSwing > .08 && midSwing - contact > .08, 'wrist does not open during the swing');
+      const recovering = g.groundskeeperPose(strike + 1.45).arms[hand];
+      const upper = new T.Vector3().subVectors(recovering.elbow, recovering.shoulder);
+      const lower = new T.Vector3().subVectors(recovering.wrist, recovering.elbow);
+      assert(upper.angleTo(lower) > .5, 'elbow stays outstretched while recovering');
+    }
+  }
+});
+
+test('the wrist skin follows the hand through its 180-degree turn',()=>{
  const rig=createGroundskeeper(),v=p=>new T.Vector3(p.x,p.y,p.z),xAxis=new T.Vector3(1,0,0),yAxis=new T.Vector3(0,1,0);
  const rest=rig.pose(0);
  for(const arm of rest.arms){
@@ -156,18 +222,33 @@ test('resting elbows fold back and down, and both arm sections preserve the elbo
   assert(bend>60&&bend<115,'resting elbow has an open flexion angle');
   assert(arm.elbow.z<arm.shoulder.z-1.2&&arm.elbow.y>arm.shoulder.y+.3,'humerus descends back toward the elbow');
  }
- for(const x of[-3.5,0,3.5])for(const y of[-6.8,0,5.5])for(const t of[0,1.8,2.5,2.85,3.25,3.85,8.5,8.85,14.1,19.4]){
+ for(const x of[-3.5,0,3.5])for(const y of[-6.8,0,5.5])for(const t of[0,1.8,2.5,2.85,3.25,3.85,7.9,8.5,8.85,12.95,14.1,18,19.4]){
   const p=rig.pose(t,{x,y});
   for(const arm of p.arms){
-   const upper=rig.root.getObjectByName(`upper-arm-${arm.side}`),lower=rig.root.getObjectByName(`forearm-${arm.side}`);
-   const u=v(arm.elbow).sub(v(arm.shoulder)).normalize(),l=v(arm.wrist).sub(v(arm.elbow)).normalize(),hinge=u.clone().cross(l).normalize();
-   const ux=xAxis.clone().applyQuaternion(upper.quaternion),lx=xAxis.clone().applyQuaternion(lower.quaternion);
-   assert(Math.abs(ux.dot(hinge))>1-1e-6&&ux.dot(lx)>1-1e-6,'a bone rolls away from the shared hinge plane');
-   assert(yAxis.clone().applyQuaternion(upper.quaternion).dot(u)>1-1e-6&&yAxis.clone().applyQuaternion(lower.quaternion).dot(l)>1-1e-6);
-   const palm=rig.root.getObjectByName(`palm-${arm.side}`),direction=v(arm.direction),across=ux.clone().addScaledVector(direction,-ux.dot(direction)).normalize();
-   assert(xAxis.clone().applyQuaternion(palm.quaternion).dot(across)>1-1e-6,'hand acquires independent forearm twist');
+   const u=v(arm.elbow).sub(v(arm.shoulder)).normalize(),l=v(arm.wrist).sub(v(arm.elbow)).normalize();
+   const hinge=v(arm.hinge);
+   assert(Math.abs(hinge.dot(u))<1e-6&&Math.abs(hinge.dot(l))<1e-6,'elbow leaves its bend plane');
+   const palm=rig.root.getObjectByName(`palm-${arm.side}`),across=xAxis.clone().applyQuaternion(palm.quaternion);
+   assert(across.dot(v(arm.across))>1-1e-6,'rendered hand disagrees with the posed talons');
+   assert(yAxis.clone().applyQuaternion(palm.quaternion).dot(v(arm.direction))>1-1e-6,'hand turns away from its contact path');
+   if(t===0||p.active){
+    const striking=p.active&&(p.kind==='double slam'||p.kind===(arm.side<0?'left rake':'right rake'));
+    assert(Math.abs(across.dot(hinge)-(striking?-1:1))<1e-6,'only striking hands should turn over');
+   }
+   const skin=rig.root.getObjectByName(`arm-skin-${arm.side}`).geometry;
+   const {position,uv}=skin.attributes;
+   const ringAcross=row=>{
+    let first=0;while(uv.getY(first)<row)first++;
+    let opposite=first;while(uv.getX(opposite)<.5)opposite++;
+    return new T.Vector3().fromBufferAttribute(position,first)
+     .sub(new T.Vector3().fromBufferAttribute(position,opposite)).normalize();
+   };
+   assert(ringAcross(1).dot(across)>1-1e-6,'skin twists away from the hand at the carpus');
+   if(Math.abs(arm.roll)>3.14){
+    assert(Math.abs(ringAcross(.66).dot(hinge))<.3,'turn is concentrated in the wrist instead of rolling along the forearm');
+   }
    const claw=rig.root.getObjectByName(`claw-${arm.side}-1`),positions=claw.geometry.attributes.position,curve=new T.CatmullRomCurve3(arm.claws[1].map(v)),tangent=curve.getTangent(0);
-   const expected=across.clone().addScaledVector(tangent,-across.dot(tangent)).normalize(),actual=new T.Vector3().fromBufferAttribute(positions,0).sub(new T.Vector3().fromBufferAttribute(positions,6)).normalize();
+   const expected=across.clone().addScaledVector(tangent,-across.dot(tangent)).normalize(),actual=new T.Vector3().fromBufferAttribute(positions,0).sub(new T.Vector3().fromBufferAttribute(positions,6)).applyQuaternion(palm.quaternion).normalize();
    assert(actual.dot(expected)>1-1e-6,'flattened claw cross-section rolls independently of its hand');
   }
  }
