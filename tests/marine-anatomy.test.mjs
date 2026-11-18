@@ -27,9 +27,9 @@ test('plesiosaur hip flipper roots remain embedded through the paddle cycle', ()
     for(const time of [0,.65,1.3,1.95,2.6]) {
       rig.pose(time,.055);rig.root.updateMatrixWorld(true);
       for(const name of ['rear-flipper-L','rear-flipper-R']) {
-        const fin=rig.root.getObjectByName(name).children[0],positions=fin.geometry.getAttribute('position');
+        const fin=rig.root.getObjectByName(name).children[0];
         for(const index of [0,3,6,9]) {
-          const point=new T.Vector3().fromBufferAttribute(positions,index).applyMatrix4(fin.matrixWorld);
+          const point=fin.getVertexPosition(index,new T.Vector3()).applyMatrix4(fin.matrixWorld);
           for(const sign of [-1,1]) {
             const ray=new T.Raycaster(point,new T.Vector3(0,0,sign),0,2);
             assert(ray.intersectObject(rig.body,false).length>0,`${name} separated at ${time}`);
@@ -38,6 +38,60 @@ test('plesiosaur hip flipper roots remain embedded through the paddle cycle', ()
       }
     }
   } finally { material.side=previousSide; }
+});
+
+test('rear flippers travel with the posed hips of the ichthyosaur and Leviathan', () => {
+  const hunter = createMarineRig('ichthyosaur'), leviathan = createLeviathan();
+  const body = leviathan.root.getObjectByName('mosasaur-body');
+  const ray = new T.Raycaster(), point = new T.Vector3(), normal = new T.Vector3();
+  for (const [rig, skin, pose] of [[hunter, hunter.body, time => hunter.pose(time, .38)],
+    [leviathan, body, time => leviathan.pose(1, 0, 0, 0, 0, time)]]) {
+    const initialSide = skin.material.side;
+    skin.material.side = T.DoubleSide;
+    try {
+      for (let time = 0; time < 3.4; time += .13) {
+        pose(time);
+        rig.root.updateMatrixWorld(true);
+        for (const side of ['L', 'R']) {
+          const joint = rig.root.getObjectByName('rear-flipper-' + side);
+          const fin = joint.children[0];
+          assert(skin.skeleton.bones.includes(joint.parent), 'rear flipper must follow the body skeleton');
+          for (const index of [0, 4, 8, 12]) {
+            fin.getVertexPosition(index, point).applyMatrix4(fin.matrixWorld);
+            normal.set(0, 0, 1).transformDirection(joint.parent.matrixWorld);
+            for (const sign of [1, -1]) {
+              ray.set(point, normal.clone().multiplyScalar(sign));
+              assert(ray.intersectObject(skin, false).length > 0, `${skin.name} ${side} root ring ${index} lifts out at ${time.toFixed(2)}`);
+            }
+          }
+        }
+      }
+    } finally { skin.material.side = initialSide; }
+  }
+});
+
+test('paddles flex independently through power and return around an embedded root', () => {
+  const lead = createMarineRig('plesiosaur'), trail = createMarineRig('plesiosaur');
+  const fore = lead.root.getObjectByName('fore-flipper-L').children[0];
+  const rear = lead.root.getObjectByName('rear-flipper-L').children[0];
+  const other = trail.root.getObjectByName('fore-flipper-L').children[0];
+  assert.equal(other.geometry, fore.geometry);
+  trail.pose(0);
+  const reference = other.morphTargetInfluences.slice(), root = new T.Vector3(), tip = new T.Vector3();
+  const tips = [], loads = new Set();
+  const position = fore.geometry.attributes.position;
+  for (let time = 0; time < 2; time += .08) {
+    lead.pose(time);
+    assert.deepEqual(other.morphTargetInfluences, reference);
+    fore.getVertexPosition(0, root);
+    assert(root.distanceTo(new T.Vector3().fromBufferAttribute(position, 0)) < 1e-8);
+    fore.getVertexPosition(position.count - 1, tip);
+    tips.push(tip.z);
+    loads.add(Math.sign(fore.morphTargetInfluences[0] - fore.morphTargetInfluences[1]));
+  }
+  assert(loads.has(1) && loads.has(-1) && Math.max(...tips) - Math.min(...tips) > .27);
+  lead.pose(.4);
+  assert.notDeepEqual(fore.morphTargetInfluences, rear.morphTargetInfluences, 'the rear paddle moves out of phase');
 });
 
 test('Leviathan mandible rotates about both skull condyles without a displaced hinge', () => {

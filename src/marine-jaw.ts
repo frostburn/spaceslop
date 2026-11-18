@@ -199,16 +199,40 @@ function lip(lower:boolean) {
   const geometry=new T.TubeGeometry(curve,64,.010,6,false);
   oralLight(geometry);return lower?hingeLocal(geometry):geometry;
 }
-function teeth(lower:boolean) {
-  const pieces:T.BufferGeometry[]=[],count=lower?28:29;
-  for(let i=0;i<count;i++) {
-    const t=(i+.5)/count,p=arcade.getPointAt(t),height=.085+.035*Math.sin(t*Math.PI);
-    const geometry=new T.ConeGeometry(height*.23,height,8).rotateX(lower?Math.PI/2:-Math.PI/2);
-    geometry.translate(p.x*(lower?.96:1),p.y,(lower?lowerBite:0)+(lower?height:-height)*.5);
+function teeth(lower: boolean) {
+  const pieces: T.BufferGeometry[] = [], count = lower ? 28 : 29;
+  const rows = 8, sides = 10;
+  const profile = lower ? lowerProfile : upperProfile;
+  const direction = lower ? 1 : -1;
+  for (let tooth = 0; tooth < count; tooth++) {
+    const variant = Math.sin(tooth * 2.39996 + (lower ? .7 : 0));
+    const t = (tooth + .5 + .13 * variant) / count, p = arcade.getPointAt(t);
+    const archWidth = atY(profile, p.y).x;
+    const x = Math.sign(p.x) * Math.min(Math.abs(p.x) * .94, archWidth - .02);
+    const height = (.089 + .037 * Math.sin(t * Math.PI)) * (1 + .17 * variant);
+    const root = biteHeight(p.y, lower) - direction * .026;
+    const radius = height * .235;
+    const positions: number[] = [], indices: number[] = [];
+    for (let row = 0; row <= rows; row++) for (let side = 0; side <= sides; side++) {
+      const u = row / rows, angle = side % sides / sides * Math.PI * 2;
+      const taper = radius * (1 - u) ** .84 + .001;
+      positions.push(x * (1 - .075 * u * u) + Math.cos(angle) * taper,
+        p.y - height * .36 * u * u - Math.sin(angle) * taper * .80 * direction, root + direction * height * u);
+      if (row < rows && side < sides) {
+        const a = row * (sides + 1) + side, b = a + sides + 1;
+        indices.push(a, b, a + 1, b, b + 1, a + 1);
+      }
+    }
+    const geometry = new T.BufferGeometry();
+    geometry.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
+    geometry.setIndex(indices);
+    sealMarineTube(geometry, rows, sides);
+    geometry.computeVertexNormals();
     pieces.push(geometry);
   }
-  const geometry=mergeGeometries(pieces);pieces.forEach(p=>p.dispose());
-  return lower?hingeLocal(geometry):geometry;
+  const geometry = oralLight(mergeGeometries(pieces));
+  pieces.forEach(piece => piece.dispose());
+  return lower ? hingeLocal(geometry) : geometry;
 }
 
 let cached: ReturnType<typeof build> | undefined;

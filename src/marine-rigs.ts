@@ -2,50 +2,56 @@ import * as T from 'three';
 import { applyRelief } from './encounter-surfaces';
 import { createMarineMouth } from './marine-mouth';
 import { sealMarineTube } from './marine-geometry';
+import { flexMarineFin, marineDorsal, marineFluke, marinePaddle } from './marine-fins';
 import { marineJawGeometry, marineEyeFrame, JAW_HINGE_Y, JAW_HINGE_Z } from './marine-jaw';
 import { part, pivot } from './rig-geometry';
 import { iceEnvironment } from './ice-surfaces';
 import { leviathanMotion, leviathanRig, type MarineKind } from './marine';
 
 type Animal = MarineKind | 'mosasaur';
-type SkinPattern = 'plain' | 'stripes' | 'spots';
+type SkinPattern = 'plain' | 'saddles' | 'mottle';
 const skins = new Map<string, T.MeshPhysicalMaterial>();
 let hideTexture: T.Texture | undefined;
 function skin(scales = 0, pattern: SkinPattern = 'plain') {
   const key = `${scales}/${pattern}`;
   if (skins.has(key)) return skins.get(key)!;
-  const material = new T.MeshPhysicalMaterial({ vertexColors: true, roughness: .48, metalness: 0,
-    clearcoat: .22, clearcoatRoughness: .3, envMap: iceEnvironment(), envMapIntensity: .35, bumpScale: .025 });
+  const material = new T.MeshPhysicalMaterial({ vertexColors: true, roughness: .54, metalness: 0,
+    clearcoat: .19, clearcoatRoughness: .42, envMap: iceEnvironment(), envMapIntensity: .35, bumpScale: .025 });
   material.onBeforeCompile = shader => {
     shader.vertexShader = 'attribute vec3 hideCoord; varying vec3 vHide;\n' + shader.vertexShader;
     shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvHide=hideCoord;');
-    shader.fragmentShader = `varying vec3 vHide;\n` + shader.fragmentShader;
+    shader.fragmentShader = `
+      varying vec3 vHide;
+      float hideHash(vec2 cell) {
+        return fract(sin(dot(cell, vec2(113.7, 249.3))) * 37264.29);
+      }
+      float hideNoise(vec2 p) {
+        vec2 cell = floor(p), f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hideHash(cell), hideHash(cell + vec2(1.0, 0.0)), f.x),
+          mix(hideHash(cell + vec2(0.0, 1.0)), hideHash(cell + vec2(1.0, 1.0)), f.x), f.y);
+      }
+    ` + shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `#ifdef USE_MAP\n vec3 detail=texture2D(map,vMapUv).rgb;diffuseColor.rgb*=clamp(detail*1.4+0.72,0.8,1.18);\n #endif`);
     shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-      float mottling = sin(vHide.x*19.0+sin(vHide.y*13.0)*2.0)*sin(vHide.y*23.0+vHide.z*17.0);
-      float broad = sin(vHide.x*7.0+sin(vHide.y*6.0))*sin(vHide.z*9.0+vHide.y*4.0);
-      diffuseColor.rgb *= 0.86 + mottling*0.075 + broad*0.10;
-      ${pattern === 'stripes' ? `
-      float band = 1.0-smoothstep(.26,.49,abs(sin(vHide.y*11.0+sin(vHide.x*7.0+vHide.z*3.0)*.65)));
-      float back = .3+.7*smoothstep(-.18,.12,vHide.z);
-      diffuseColor.rgb *= mix(1.14,.46,band*back);` : pattern === 'spots' ? `
-      vec2 p = vec2(vHide.x+sin(vHide.y*2.1)*.12,vHide.y+vHide.z*.3)*6.0;
-      vec2 cell = floor(p); float spots = 0.0;
-      for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++) {
-        vec2 c = cell+vec2(float(x),float(y));
-        float h = fract(sin(dot(c,vec2(127.1,311.7)))*43758.5453);
-        float h2 = fract(sin(dot(c,vec2(269.5,183.3)))*41563.123);
-        vec2 q = (p-c-vec2(.2+h*.6,.2+h2*.6))/vec2(.23+h*.21,.23+h2*.19);
-        float d = dot(q,q)+sin(q.x*7.0+q.y*5.0)*.13;
-        spots = max(spots,(1.0-smoothstep(.6,1.25,d))*smoothstep(.18,.34,h2));
-      }
-      float back = .2+.8*smoothstep(-.22,.12,vHide.z);
-      diffuseColor.rgb *= mix(1.22,.48,spots*back);` : ''}
+      vec2 skinSpace = vec2(vHide.x + vHide.z * .38, vHide.y + vHide.z * .27);
+      float grain = hideNoise(skinSpace * vec2(22.0, 19.0));
+      float clouds = hideNoise(skinSpace * vec2(4.1, 3.2));
+      diffuseColor.rgb *= .88 + grain * .085 + clouds * .095;
+      ${pattern === 'saddles' ? `
+      float phase = vHide.y * 8.7 + sin(vHide.y * 3.1) * .9 + clouds * 1.6;
+      float edge = abs(sin(phase + .55 * sin(vHide.x * 7.0 + vHide.z * 5.0)));
+      float saddle = (1.0 - smoothstep(.22, .53, edge)) * smoothstep(-.10, .11, vHide.z);
+      diffuseColor.rgb *= 1.06 - saddle * (.37 + grain * .11);` : pattern === 'mottle' ? `
+      float broken = hideNoise(skinSpace * vec2(10.2, 7.5) + clouds);
+      float patches = smoothstep(.42, .69, clouds * .67 + broken * .33);
+      float back = smoothstep(-.11, .29, vHide.z + clouds * .11);
+      diffuseColor.rgb *= 1.07 - patches * back * .57;` : ''}
       ${scales ? `vec2 scaleCell = fract(vec2(vHide.x*69.0+sin(vHide.y*100.0)*.13,vHide.y*100.0));
       float seam = smoothstep(.38,.49,max(abs(scaleCell.x-.5),abs(scaleCell.y-.5)));
       diffuseColor.rgb *= 1.0-seam*.13;` : ''}`);
   };
-  material.customProgramCacheKey = () => `marine-hide-v2-${key}`;
+  material.customProgramCacheKey = () => `marine-hide-v3-${key}`;
   if (hideTexture) applyRelief(hideTexture, [material]);
   skins.set(key, material);
   return material;
@@ -106,29 +112,20 @@ function bodyGeometry(kind: MarineKind) {
     const v=new T.Vector3(n.getX(a)+n.getX(b),n.getY(a)+n.getY(b),n.getZ(a)+n.getZ(b)).normalize();n.setXYZ(a,v.x,v.y,v.z);n.setXYZ(b,v.x,v.y,v.z);}
   tintGeometry(g);geometryCache.set(kind,g);return g;
 }
-function flipper(length:number,width:number) {
-  const key=`fin-${length}-${width}`;if(geometryCache.has(key))return geometryCache.get(key)!;
-  const p:number[]=[],uv:number[]=[],ix:number[]=[];
-  for(let row=0;row<=16;row++) {
-    const t=row/16, w=width*(.35+.65*Math.sin(Math.PI*Math.min(1,t*1.15))) * Math.sqrt(1-t) + .001;
-    for(let j=0;j<=12;j++){const a=j/12*Math.PI*2;p.push(t*length, -t*t*length*.45 + Math.cos(a)*w,Math.sin(a)*w*.19);uv.push(j/12,t);
-      if(row<16&&j<12){const i=row*13+j;ix.push(i,i+1,i+13,i+1,i+14,i+13);}}
+function paintedFin(key: string, create: () => T.BufferGeometry, x: number, y: number, z: number, side = 1, scale = 1) {
+  if (!geometryCache.has(key)) {
+    const geometry = tintGeometry(create(), true), coord = geometry.getAttribute('hideCoord');
+    for (let i = 0; i < coord.count; i++) {
+      coord.setXYZ(i, x + side * coord.getX(i) * scale, y + coord.getY(i) * scale, z + coord.getZ(i) * scale);
+    }
+    geometryCache.set(key, geometry);
   }
-  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(p,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(ix);sealMarineTube(g,16,12,true);g.computeVertexNormals();tintGeometry(g,true);geometryCache.set(key,g);return g;
-}
-function verticalFin(kind:'dorsal'|'fluke') {
-  if(geometryCache.has(kind))return geometryCache.get(kind)!;
-  const shape=new T.Shape();
-  if(kind==='dorsal'){shape.moveTo(-.5,0);shape.quadraticCurveTo(-.35,.3,-.07,.68);shape.quadraticCurveTo(-.04,.28,.35,0);}
-  else {shape.moveTo(.05,0);shape.quadraticCurveTo(-.1,.32,-.47,.62);shape.quadraticCurveTo(-.3,.22,-.25,0);shape.quadraticCurveTo(-.35,-.26,-.58,-.78);shape.quadraticCurveTo(-.13,-.43,.05,0);}
-  const g=new T.ExtrudeGeometry(shape,{depth:.018,bevelEnabled:true,bevelSize:.018,bevelThickness:.018,bevelSegments:3,steps:1,curveSegments:16});
-  const p=g.getAttribute('position');for(let i=0;i<p.count;i++){const y=p.getX(i),z=p.getY(i),x=p.getZ(i)-.009;p.setXYZ(i,x,y,z);}g.computeVertexNormals();tintGeometry(g);geometryCache.set(kind,g);return g;
+  return geometryCache.get(key)!;
 }
 const orb = tintGeometry(new T.SphereGeometry(1,24,16));
 const eyeMaterial = new T.MeshPhysicalMaterial({color:0x060c0d,roughness:.08,clearcoat:1});
 const amber = new T.MeshStandardMaterial({color:0x69533b,roughness:.3});
 const mouthMaterial = new T.MeshBasicMaterial({color:0x080609,side:T.DoubleSide});
-const toothMaterial = new T.MeshStandardMaterial({color:0xa59e89,roughness:.7});
 function eyes(parent:T.Object3D,y:number,width:number,z:number,size:number) {
   for(const side of [-1,1]) {
     const socket=part(parent,orb,skin(),side*width,y,z);socket.scale.set(size*1.35,size*1.6,size*.7);
@@ -145,29 +142,35 @@ function animal(kind:Animal) {
   bones[0].add(bones[1],bones[3]);bones[1].position.y=-.7;bones[1].add(bones[2]);bones[2].position.y=-.9;
   bones[3].position.y=leviathanRig.headY;bones[3].add(bones[4]);bones[4].position.y=.65;bones[4].add(bones[5]);bones[5].position.y=.65;
   if(large){bones[6].name='lower-jaw';bones[6].position.set(0,JAW_HINGE_Y-.5,JAW_HINGE_Z);bones[3].add(bones[6]);}
-  const pattern: SkinPattern = kind==='plesiosaur'?'stripes':kind==='mosasaur'?'spots':'plain';
+  const pattern: SkinPattern = kind==='plesiosaur'?'saddles':kind==='mosasaur'?'mottle':'plain';
   const body=new T.SkinnedMesh(kind==='mosasaur'?jawParts!.exterior:bodyGeometry(kind),skin(kind==='mosasaur'?1:0,pattern));body.name=`${kind}-body`;body.add(bones[0]);body.bind(new T.Skeleton(bones));body.frustumCulled=false;root.add(body);
-  const flippers:T.Group[]=[];
-  for(const rear of [false,true])for(const side of [-1,1]) {
-    const x=large?(rear?.5:.7):(kind==='plesiosaur'?(rear?.22:.29):rear?.19:.27);
-    const y=large?(rear?-1.6:0):(kind==='plesiosaur'?(rear?-.50:.25):rear?-.55:.25);
-    const fin=pivot(root,`${rear?'rear':'fore'}-flipper-${side<0?'L':'R'}`,side*x,y,-.04);
-    const length=large?(rear?1.15:1.55):kind==='plesiosaur'?(rear?.9:1.1):rear?.32:.65;
-    const base=flipper(length,large?.36:kind==='plesiosaur'?.22:.14);
-    const key=`${kind}-${rear}-${side}-flipper`;
-    if(!geometryCache.has(key)) {
-      const geometry=base.clone(), coords=geometry.getAttribute('hideCoord');
-      for(let i=0;i<coords.count;i++)coords.setXYZ(i,side*(x+coords.getX(i)),y+coords.getY(i),-.04+coords.getZ(i));
-      geometryCache.set(key,geometry);
-    }
-    const mesh=part(fin,geometryCache.get(key)!,skin(kind==='plesiosaur'?1:large?1:0,pattern),0,0,0);
-    mesh.scale.x=side; // mirror the volume; Three corrects the front-face winding for negative determinants
-    flippers.push(fin);
+  const flippers: { joint: T.Group; blade: T.Mesh; rear: boolean; side: number }[] = [];
+  for (const rear of [false, true]) for (const side of [-1, 1]) {
+    const hips = rear && kind !== 'plesiosaur';
+    const parent = hips ? bones[large ? 2 : 1] : root;
+    const x = large ? (rear ? .43 : .68) : kind === 'plesiosaur' ? (rear ? .22 : .28) : (rear ? .132 : .25);
+    const y = large ? (rear ? -1.6 : 0) : kind === 'plesiosaur' ? (rear ? -.50 : .25) : (rear ? -.70 : .25);
+    const joint = pivot(parent, `${rear ? 'rear' : 'fore'}-flipper-${side < 0 ? 'L' : 'R'}`, side * x, hips ? 0 : y, -.04);
+    const length = large ? (rear ? 1.07 : 1.52) : kind === 'plesiosaur' ? (rear ? .95 : 1.11) : (rear ? .33 : .68);
+    const width = large ? (rear ? .27 : .36) : kind === 'plesiosaur' ? (rear ? .22 : .25) : (rear ? .095 : .14);
+    const geometry = paintedFin(`${kind}-${rear}-${side}-paddle`,
+      () => marinePaddle(length, width, kind === 'plesiosaur' ? .27 : .38), side * x, y, -.04, side);
+    const blade = part(joint, geometry, skin(large || kind === 'plesiosaur' ? 1 : 0, pattern), 0, 0, 0);
+    blade.scale.x = side;
+    flippers.push({ joint, blade, rear, side });
   }
-  if(kind==='ichthyosaur')part(root,verticalFin('dorsal'),skin(),0,-.04,.27);
-  if(kind!=='plesiosaur') {
-    const tail=part(bones[2],verticalFin('fluke'),skin(large?1:0,pattern),0,large?-2.4:.15,0);
-    tail.name='vertical-tail-fluke';if(large)tail.scale.setScalar(1.5);
+  if (kind === 'ichthyosaur') {
+    const dorsal = paintedFin('dorsal', marineDorsal, 0, .025, .23);
+    part(root, dorsal, skin(), 0, .025, .23).name = 'dorsal-fin';
+  }
+  let tail: T.Mesh | undefined;
+  if (kind !== 'plesiosaur') {
+    const tailY = large ? -3.86 : -1.42, scale = large ? 1.50 : 1;
+    const geometry = paintedFin(`${kind}-fluke`,
+      () => marineFluke(large ? .86 : .69, large ? .52 : .62, .48), 0, tailY, 0, 1, scale);
+    tail = part(bones[2], geometry, skin(large ? 1 : 0, pattern), 0, tailY + 1.6, 0);
+    tail.name = 'vertical-tail-fluke';
+    tail.scale.setScalar(scale);
   }
   const headParent=kind==='plesiosaur'?bones[5]:large?bones[3]:root, offset=kind==='plesiosaur'?1.8:large?.5:0;
   if(!large)eyes(headParent,(kind==='plesiosaur'?2.08:.77)-offset,kind==='plesiosaur'?.16:.19,kind==='plesiosaur'?.085:.10,kind==='plesiosaur'?.04:.045);
@@ -187,7 +190,7 @@ function animal(kind:Animal) {
   const glow=part(headParent,orb,glowMaterial,0,(large?leviathanRig.mouthY:end-.12)-offset,leviathanRig.mouthZ);glow.scale.setScalar(large?.10:.065);glow.name='mouth-charge';
   const jaw=large?bones[6]:undefined;
   if(jaw && jawParts && mouth) {
-    jawParts.ridges.forEach((geometry,index)=>{part(headParent,geometry,skin(1,'spots'),0,-offset,0).name=`cranial-ridge-${index}`;});
+    jawParts.ridges.forEach((geometry,index)=>{part(headParent,geometry,skin(1,'mottle'),0,-offset,0).name=`cranial-ridge-${index}`;});
     part(headParent,jawParts.upperPalate,mouth.tissue,0,-offset,0).name='upper-palate';
     part(jaw,jawParts.lowerPalate,mouth.tissue,0,0,0).name='lower-palate';
     const throat=new T.SkinnedMesh(jawParts.throat,mouth.tissue);throat.name='oral-cavity';root.add(throat);
@@ -197,7 +200,7 @@ function animal(kind:Animal) {
       const name=side<0?'L':'R';
       pivot(headParent,`skull-hinge-${name}`,side*.50,JAW_HINGE_Y-offset,JAW_HINGE_Z);
       pivot(jaw,`jaw-hinge-${name}`,side*.50,0,0);
-      part(headParent,jawParts.socketRims[side<0?0:1],skin(1,'spots'),0,-offset,0).name=`orbital-rim-${name}`;
+      part(headParent,jawParts.socketRims[side<0?0:1],skin(1,'mottle'),0,-offset,0).name=`orbital-rim-${name}`;
       part(headParent,jawParts.socketCups[side<0?0:1],mouthMaterial,0,-offset,0).name=`orbital-cup-${name}`;
       const frame=marineEyeFrame(side),eye=pivot(headParent,`protected-eye-${name}`,frame.position.x,frame.position.y-offset,frame.position.z);
       eye.quaternion.copy(frame.rotation);
@@ -205,27 +208,38 @@ function animal(kind:Animal) {
       const iris=part(eye,orb,amber,0,0,.004);iris.scale.set(.044,.074,.014);
       const pupil=part(eye,orb,eyeMaterial,0,0,.017);pupil.scale.set(.014,.058,.009);
     }
-    part(headParent,jawParts.upperTeeth,toothMaterial,0,-offset,0).name='upper-dentition';
-    part(jaw,jawParts.lowerTeeth,toothMaterial,0,0,0).name='lower-dentition';
+    part(headParent,jawParts.upperTeeth,mouth.teeth,0,-offset,0).name='upper-dentition';
+    part(jaw,jawParts.lowerTeeth,mouth.teeth,0,0,0).name='lower-dentition';
     const upperLip=part(headParent,jawParts.upperLip,mouth.tissue,0,-offset,0);upperLip.name='upper-lip';
     part(jaw,jawParts.lowerLip,mouth.tissue,0,0,0).name='lower-lip';
   }
-  return {root,body,head:headParent,headOffset:offset, pose(time:number,charge=0,jawOpen=.1) {
-    bones[1].rotation.z=kind==='plesiosaur'?0:Math.sin(time*3.2)*.13;
-    bones[2].rotation.z=Math.sin(time*3.2-.9)*(kind==='plesiosaur'?.025:.30);
+  return {root,body,head:headParent,headOffset:offset, pose(time: number, charge = 0, jawOpen = .1, bank = 0) {
+    const wave = time * (large ? 2.3 : 3.85);
+    bones[1].rotation.z = kind === 'plesiosaur' ? 0 : Math.sin(wave) * .115;
+    bones[2].rotation.z = Math.sin(wave - .93) * (kind === 'plesiosaur' ? .025 : large ? .26 : .30);
+    if(tail) flexMarineFin(tail, Math.sin(wave - 1.66) * .88);
     if(large){const motion=leviathanMotion(time);bones[3].rotation.set(.5+motion.headPitch,motion.headRoll,motion.headYaw);bones[1].rotation.x=-.12;bones[2].rotation.x=-.20;}
     if(kind==='plesiosaur'){bones[3].rotation.z=Math.sin(time*.8)*.025;bones[4].rotation.z=Math.sin(time*.8-.5)*.020;bones[5].rotation.z=-bones[3].rotation.z*.4;}
-    flippers.forEach((fin,i)=>{
-      const side=i%2?1:-1;
-      if(kind==='plesiosaur') {
-        const stroke=time*2.4-(i<2?0:.5);
-        fin.rotation.set(Math.cos(stroke)*.14,side*Math.sin(stroke)*.28,side*(.06+Math.cos(stroke)*.10));
+    for (const { joint, blade, rear, side } of flippers) {
+      if (kind === 'plesiosaur') {
+        const turn = time * .52 - (rear ? .22 : 0);
+        const cycle = turn - Math.floor(turn);
+        // A long broad stroke and a quicker, edge-on return. The rear pair
+        // follows the front; the flexible tips trail their own shoulder.
+        const phase = 2 * Math.PI * cycle;
+        const stroke = phase - .5 * (1 - Math.cos(phase));
+        const pull = Math.sin(stroke), lift = Math.cos(stroke);
+        joint.rotation.set(-.14 + .56 * pull, side * (.44 * lift), side * (.08 + .18 * pull));
+        flexMarineFin(blade, .91 * Math.sin(stroke - .61));
       } else {
-        const phase=i<2?0:1.25;
-        fin.rotation.y=side*Math.sin(time*2.5+phase)*.25;
-        fin.rotation.z=side*(.08+Math.cos(time*2.5+phase)*.08);
+        const trim = side * bank;
+        const phase = wave * .73 - (rear ? 1.17 : 0);
+        joint.rotation.set(.075 * Math.sin(phase) - trim * .28,
+          side * (.10 + Math.sin(phase) * .16 - trim * .21),
+          side * (.08 + Math.cos(phase) * .11 + .13 * charge));
+        flexMarineFin(blade, .53 * Math.sin(phase - .77));
       }
-    });
+    }
     if(jaw)jaw.rotation.x=-jawOpen*.50;
     mouth?.pose(jawOpen);
     glowMaterial.opacity=charge*.4;glow.scale.setScalar((large?.10:.0650)*(1+charge*.8));
@@ -234,7 +248,7 @@ function animal(kind:Animal) {
 export function createMarineRig(kind:MarineKind) {
   const rig=animal(kind),root=rig.root;root.scale.setScalar(kind==='plesiosaur'?.66:.67);
   root.rotation.order='ZYX'; // Bank around the animal's forward axis before turning into the route.
-  return {...rig,pose(time:number,bank=0,charge=0){root.rotation.y=bank;rig.pose(time,charge);}};
+  return {...rig,pose(time:number,bank=0,charge=0){root.rotation.y=bank;rig.pose(time,charge,.1,bank);}};
 }
 export function createLeviathan() {
   const root=new T.Group();root.name='leviathan';const rig=animal('mosasaur');

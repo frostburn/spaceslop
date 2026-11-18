@@ -5,7 +5,7 @@ import * as T from 'three';
 // The warm albedo remains visible at the lips and on the exposed tongue.
 export function createMarineMouth() {
   const aperture = { value: .02 };
-  function flesh(color: number, roughness: number) {
+  function oralMaterial(color: number, roughness: number) {
     const material = new T.MeshPhysicalMaterial({ color, roughness, metalness: 0,
       clearcoat: .12, clearcoatRoughness: .5, side: T.DoubleSide });
     material.onBeforeCompile = shader => {
@@ -24,6 +24,6 @@ export function createMarineMouth() {
     material.customProgramCacheKey = () => 'marine-mouth-cavity-v1';
     return material;
   }
-  return { tissue: flesh(0x79464d, .78), tongue: flesh(0x96555e, .62),
+  return { tissue: oralMaterial(0x79464d, .78), tongue: oralMaterial(0x96555e, .62), teeth: oralMaterial(0xc4b394, .49),
     pose(open: number) { aperture.value = T.MathUtils.clamp(open,0,1); } };
 }
