@@ -56,7 +56,6 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
   setPilotRank(mission.pilotRank);
   const start = element<HTMLButtonElement>('start');
   const nextMission = element<HTMLButtonElement>('next-mission');
-  element('return-menu').textContent = campaignRun || challengeRun ? 'Mission list' : 'Choose another sector';
   const pause = element<HTMLButtonElement>('pause');
   const pulse = element<HTMLButtonElement>('pulse');
   const status = element('status');
@@ -82,6 +81,9 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
   let screen: Screen = 'loading';
   const { mode } = loadout;
   const playback = import.meta.env.DEV ? dev?.playback : undefined;
+  element('return-menu').textContent = playback ? 'Back to replays' : campaignRun || challengeRun ? 'Mission list' : 'Choose another sector';
+  const keyboardHint = element('flight-keyboard-hint');
+  keyboardHint.hidden = Boolean(playback);
   const recordProgress = !shortcut && !playback;
   const restartHardcoreCampaign = mode === 'hardcore' && challengeRun !== undefined && recordProgress;
   let seed = 0;
@@ -117,10 +119,13 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
       speedField.className = 'loadout-field';
       const speed = document.createElement('select');
       for (const rate of [1, 2, 4]) speed.add(new Option(`${rate}×`, String(rate)));
-      speed.addEventListener('change', () => { playbackSpeed = Number(speed.value); }, { signal });
+      speed.addEventListener('change', () => {
+        playbackSpeed = Number(speed.value);
+        syncUI();
+      }, { signal });
       speedField.append('Replay speed', speed);
       speedField.hidden = true;
-      panel.querySelector('.flight-actions')!.before(speedField);
+      panel.querySelector('.flight-actions')!.after(speedField);
     } else {
       saveReplay = document.createElement('button');
       saveReplay.type = 'button';
@@ -169,7 +174,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     selectedPortrait.classList.toggle('perk-flash', active && flight.perkTime > 1.15);
     status.classList.toggle('preparing-graphics', preparingGraphics);
     const tip = import.meta.env.DEV && playback && replayPlayer && !preparingGraphics
-      ? `Replay · ${replayClock(replayPlayer.tick)} / ${replayClock(playback.ticks)}${differentRevision ? ' · Different revision' : ''}`
+      ? `Replay · ${replayClock(replayPlayer.tick)} / ${replayClock(playback.ticks)} · ${playbackSpeed}×`
       : readout.tip;
     if (status.textContent !== tip) status.textContent = tip;
   }
@@ -204,9 +209,12 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     screen = 'paused';
     input?.reset();
     heading.textContent = 'Paused';
-    message.textContent = playback ? 'Replay paused.' : 'Your run is on hold.';
+    message.textContent = playback
+      ? differentRevision ? 'This replay was recorded on a different revision.' : 'Replay paused.'
+      : 'Your run is on hold.';
     start.textContent = 'Resume';
     syncUI();
+    if (document.hasFocus() && !contextLost) start.focus({ preventScroll: true });
   }
   function recordVictory() {
     if (flight.phase !== 'won' || victoryTime !== undefined) return;
@@ -235,6 +243,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     if (import.meta.env.DEV && playback) {
       heading.textContent = replayPlayer?.matches ? 'Replay complete' : 'Replay diverged';
       report.push(flight.phase === 'won' || flight.phase === 'lost' ? outcome : 'Recording stopped');
+      if (differentRevision) report.push('Recorded on a different revision');
       if (!replayPlayer?.matches) report.push(`Recorded score ${playback.end.score}, hull ${playback.end.hull}`);
     }
     if (mode !== 'regular') report.splice(1, 0, challengeNames[mode]);
@@ -255,7 +264,9 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     keepRecording();
     panel.scrollTop = 0;
     syncUI();
-    if (fromCredits && !contextLost) start.focus({ preventScroll: true });
+    if (!contextLost && (fromCredits || document.activeElement === canvas || document.activeElement === document.body)) {
+      (nextLevel ? nextMission : start).focus({ preventScroll: true });
+    }
   }
   function finishCredits() {
     if (screen !== 'credits') return;
@@ -441,6 +452,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
       speedField?.remove();
       if (playback) {
         pulse.hidden = false;
+        keyboardHint.hidden = false;
         status.removeAttribute('aria-live');
       }
     }

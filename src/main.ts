@@ -51,6 +51,8 @@ let briefController: AbortController | undefined;
 let pilotPicker: ReturnType<typeof setupPilotPicker> | undefined;
 let practiceDifficulty: HTMLSelectElement | undefined;
 let keepLastReplay: ((replay: FlightReplay) => void) | undefined;
+let replayMenu: { open: HTMLButtonElement; status: HTMLParagraphElement } | undefined;
+let returnFocus: HTMLElement = prepare;
 const failedSectors = new Set<LevelId>();
 let logoPosition = .5;
 let logoPointerX = 0;
@@ -292,7 +294,8 @@ function returnToMenu() {
   menu.hidden = false;
   closeBriefing();
   showMenuStatus();
-  prepare.focus();
+  returnFocus.focus();
+  returnFocus = prepare;
   void refreshSavedLevels();
 }
 prepare.addEventListener('click', openBriefing);
@@ -343,6 +346,8 @@ async function launchFlight(shortcut?: FlightShortcut, replay?: FlightReplay) {
     openBriefing();
   }
   session = controller;
+  const replayControls = playback ? replayMenu : undefined;
+  returnFocus = replayControls?.open ?? prepare;
   closeBriefing();
   menu.hidden = true;
   document.querySelector<HTMLElement>('#panel')!.hidden = false;
@@ -395,7 +400,7 @@ async function launchFlight(shortcut?: FlightShortcut, replay?: FlightReplay) {
     if (controller.signal.aborted) return;
     if (!playback) failedSectors.add(id);
     returnToMenu();
-    if (import.meta.env.DEV && playback) status.textContent = 'Could not prepare the replay’s flight graphics.';
+    if (import.meta.env.DEV && replayControls) replayControls.status.textContent = 'Could not prepare the replay’s flight graphics.';
   }
 }
 document.querySelector('#launch-flight')!.addEventListener('click', () => void launchFlight());
@@ -450,6 +455,7 @@ if (import.meta.env.DEV) {
     const file = filePicker.files?.[0];
     filePicker.value = '';
     if (!file) return;
+    const restoreFocus = document.activeElement === chooseReplay;
     chooseReplay.disabled = true;
     replayStatus.textContent = '';
     try {
@@ -459,6 +465,9 @@ if (import.meta.env.DEV) {
       replayStatus.textContent = error instanceof Error ? error.message : 'Could not read this replay.';
     } finally {
       chooseReplay.disabled = false;
+      if (restoreFocus && !menu.hidden && !missionList.hidden && document.activeElement === document.body) {
+        chooseReplay.focus({ preventScroll: true });
+      }
     }
   });
   const saveLastReplay = document.createElement('button');
@@ -474,10 +483,11 @@ if (import.meta.env.DEV) {
     if (lastReplay) saveFlightReplay(lastReplay);
   });
   const replayActions = document.createElement('div');
-  replayActions.className = 'flight-actions';
+  replayActions.className = 'replay-actions';
   replayActions.append(chooseReplay, saveLastReplay);
   replayTools.append(replaySummary, replayActions, filePicker, replayStatus);
-  links.before(replayTools);
+  replayMenu = { open: chooseReplay, status: replayStatus };
+  cards.before(replayTools);
 
   const shortcuts = document.createElement('details');
   shortcuts.className = 'brief-shortcuts';
