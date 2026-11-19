@@ -23,25 +23,32 @@ export function readChallengeCode(value: string) {
 type ChallengeProgress = {
   unlocked: ChallengeMode[];
   cleared: Record<ChallengeMode, LevelId[]>;
+  hardcoreBest: number;
 };
 
+export function hardcoreClearedCount(progress: ChallengeProgress) {
+  const next = route.findIndex(level => !progress.cleared.hardcore.includes(level));
+  return next < 0 ? route.length : next;
+}
+
 export function decodeChallengeProgress(value: string | null): ChallengeProgress {
+  const progress: ChallengeProgress = {
+    unlocked: [], cleared: { 'bullet-hell': [], hardcore: [] }, hardcoreBest: 0,
+  };
   try {
     const save = JSON.parse(value ?? 'null') as {
       unlocked?: unknown;
       cleared?: Partial<Record<ChallengeMode, unknown>>;
+      hardcoreBest?: unknown;
     } | null;
     const unlocked = save?.unlocked;
-    return {
-      unlocked: Array.isArray(unlocked) ? challengeModes.filter(mode => unlocked.includes(mode)) : [],
-      cleared: {
-        'bullet-hell': [...new Set(campaignClearIds(save?.cleared?.['bullet-hell']))],
-        hardcore: [...new Set(campaignClearIds(save?.cleared?.hardcore))],
-      },
-    };
-  } catch {
-    return { unlocked: [], cleared: { 'bullet-hell': [], hardcore: [] } };
-  }
+    progress.unlocked = Array.isArray(unlocked) ? challengeModes.filter(mode => unlocked.includes(mode)) : [];
+    for (const mode of challengeModes) progress.cleared[mode] = [...new Set(campaignClearIds(save?.cleared?.[mode]))];
+    const best = save?.hardcoreBest;
+    const validBest = typeof best === 'number' && Number.isInteger(best) && best >= 0 && best <= route.length;
+    progress.hardcoreBest = Math.max(validBest ? best : 0, hardcoreClearedCount(progress));
+  } catch { /* An unreadable save starts with empty progress. */ }
+  return progress;
 }
 
 export function unlockChallenge(progress: ChallengeProgress, mode: ChallengeMode) {
@@ -65,7 +72,10 @@ export function selectableChallengeLevel(progress: ChallengeProgress, mode: Chal
 export function recordChallengeClear(progress: ChallengeProgress, mode: ChallengeMode, level: LevelId) {
   const frontier = nextChallengeLevel(progress, mode);
   const cleared = progress.cleared[mode];
-  if (level === frontier) cleared.push(level);
+  if (level === frontier) {
+    cleared.push(level);
+    if (mode === 'hardcore') progress.hardcoreBest = Math.max(progress.hardcoreBest, hardcoreClearedCount(progress));
+  }
   const next = nextChallengeLevel(progress, mode);
   return { next, unlockedHardcore: mode === 'bullet-hell' && level === frontier && next === undefined && unlockChallenge(progress, 'hardcore') };
 }

@@ -3,7 +3,7 @@ import { setupBriefing } from './app/briefing';
 import type { FlightLoadout, FlightShortcut } from './app/flight-session';
 import { saveLevelOffline, savedLevels, clearSavedLevels } from './app/offline';
 import { CHALLENGE_SAVE_KEY, challengeAvailable, challengeModes, challengeNames, challengeRoutes, decodeChallengeProgress,
-  nextChallengeLevel, readChallengeCode, recordChallengeClear, resetHardcoreProgress, selectableChallengeLevel, unlockChallenge, type ChallengeMode, type FlightMode } from './campaign/challenges';
+  hardcoreClearedCount, nextChallengeLevel, readChallengeCode, recordChallengeClear, resetHardcoreProgress, selectableChallengeLevel, unlockChallenge, type ChallengeMode, type FlightMode } from './campaign/challenges';
 import { campaign } from './campaign/missions';
 import { CAMPAIGN_SAVE_KEY, campaignStatus, decodeCampaignClears, recordCampaignClear } from './campaign/progress';
 import { ranks } from './campaign/ranks';
@@ -143,6 +143,8 @@ function updateCards() {
   const inCampaign = mode === 'campaign';
   const challenge = mode === 'bullet-hell' || mode === 'hardcore' ? mode : undefined;
   const next = challenge ? nextChallengeLevel(challengeProgress, challenge) : campaignStatus(cleared).next;
+  const best = mode === 'hardcore' && challengeProgress.hardcoreBest > 0
+    ? challengeRoutes.hardcore[challengeProgress.hardcoreBest - 1] : undefined;
   for (const name of challengeModes) modeButtons[name].hidden = !challengeAvailable(challengeProgress, name, cleared);
   for (const card of levelCards) {
     const { id, button, title, detail } = card;
@@ -154,7 +156,7 @@ function updateCards() {
     title.textContent = inCampaign || challenge ? `${card.number} · ${levels[id].name}` : levels[id].name;
     const note = inCampaign || challenge ? (complete ? 'Cleared' : id === next ? 'Ready' : 'Locked')
       : id === 'wormhole' ? 'Boss rush' : `${levels[id].duration} second route`;
-    detail.textContent = saved.has(id) ? `${note} · Saved offline` : note;
+    detail.textContent = [note, id === best ? 'Personal best' : '', saved.has(id) ? 'Saved offline' : ''].filter(Boolean).join(' · ');
   }
 }
 
@@ -169,7 +171,8 @@ function showMenuStatus() {
   const progress = next ? `${cleared.size}/${campaign.length} cleared` : 'Campaign complete';
   status.textContent = mode === 'campaign' ? `Return to Sender · ${ranks[rank].name} · ${progress}`
     : mode === 'free-flight' ? levels[selected].name
-    : mode === 'hardcore' ? `${challengeNames[mode]} · One hit ends the run` : challengeNames[mode];
+    : mode === 'hardcore' ? `Current run ${hardcoreClearedCount(challengeProgress)}/${challengeRoutes.hardcore.length} cleared · Personal best ${challengeProgress.hardcoreBest}/${challengeRoutes.hardcore.length} cleared`
+    : challengeNames[mode];
 }
 
 function select(id: LevelId) {

@@ -25,6 +25,24 @@ test('a Hardcore reset redirects a stale mission selection while cleared sectors
   assert.equal(selectableChallengeLevel(progress, 'hardcore', 'io'), 'broodlock');
 });
 
+test('Hardcore imports an existing run and saves the personal best across resets and shorter runs', () => {
+  const legacy = decodeChallengeProgress('{"unlocked":["hardcore"],"cleared":{"hardcore":["broodlock","io"]}}');
+  assert.equal(legacy.hardcoreBest, 2);
+  resetHardcoreProgress(legacy);
+  const progress = decodeChallengeProgress(JSON.stringify(legacy));
+  assert.equal(progress.hardcoreBest, 2);
+  assert.equal(nextChallengeLevel(progress, 'hardcore'), 'broodlock');
+  recordChallengeClear(progress, 'bullet-hell', 'broodlock');
+  recordChallengeClear(progress, 'hardcore', 'broodlock');
+  resetHardcoreProgress(progress);
+  assert.equal(progress.hardcoreBest, 2);
+  recordChallengeClear(progress, 'hardcore', 'vents');
+  assert.equal(progress.hardcoreBest, 2, 'a clear outside the current frontier does not count');
+  for (const level of ['broodlock', 'io', 'vents']) recordChallengeClear(progress, 'hardcore', level);
+  assert.equal(progress.hardcoreBest, 3);
+  assert.equal(decodeChallengeProgress('{"hardcoreBest":999}').hardcoreBest, 0);
+});
+
 test('challenge unlocks are case-insensitive and Hardcore loss resets only Hardcore clears', () => {
   const progress = decodeChallengeProgress('invalid');
   const campaignClears = new Set(campaign.map(mission => mission.level));
@@ -75,6 +93,7 @@ test('challenge unlocks are case-insensitive and Hardcore loss resets only Hardc
   assert.deepEqual(saved.cleared.hardcore, route);
   resetHardcoreProgress(saved);
   assert.deepEqual(saved.cleared, { 'bullet-hell': route, hardcore: [] });
+  assert.equal(saved.hardcoreBest, route.length);
   assert.equal(nextChallengeLevel(saved, 'hardcore'), 'broodlock');
   assert(challengeAvailable(saved, 'hardcore', campaignClears));
 
