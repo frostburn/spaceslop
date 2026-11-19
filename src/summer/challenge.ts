@@ -1,4 +1,4 @@
-import { bossPatternCharge, patternBearing, patternBullet, stepPatternBurst, type BossPattern, type PatternColor } from '../challenge-patterns';
+import { bossPatternCharge, hookAimPending, patternBearing, patternBullet, stepPatternBurst, type BossPattern, type PatternColor } from '../challenge-patterns';
 import { hookBullet } from '../hook-bullet';
 import { BOSS_CAMERA_DISTANCE } from '../playfield';
 import { wingRewardForWave } from '../wing';
@@ -108,8 +108,10 @@ export function summerChallengeVortex(at: number, origin: Point, mirror: number)
 export const LOTUS_CHALLENGE_HEAD_HP = 74;
 export const lotusChallengeBoss = { interval: 5.65, lockAt: .46, first: 1.34, spacing: .187, rows: 16 } satisfies BossPattern;
 const crownStride = 6, crownShots = 4;
-const lotusBloom = { ...lotusChallengeBoss, relockRows: [crownShots, crownStride + crownShots] };
-const followingCrown = { ...lotusBloom, lockAt: lotusBloom.first - (crownStride - crownShots) * lotusBloom.spacing };
+const followingCrown = { ...lotusChallengeBoss, lockAt: lotusChallengeBoss.first - (crownStride - crownShots) * lotusChallengeBoss.spacing };
+const lotusBloom = { ...lotusChallengeBoss, hookSalvos: HYDRA_SIDES.map((_, i) => ({
+  row: i * crownStride, aimAt: i === 0 ? lotusChallengeBoss.lockAt : followingCrown.lockAt + i * crownStride * lotusChallengeBoss.spacing,
+})) };
 export function lotusBossPattern(cycle: number) {
   return cycle % 2 ? lotusBloom : lotusChallengeBoss;
 }
@@ -117,6 +119,11 @@ export function lotusBossPattern(cycle: number) {
 function headDelay(side: HydraSide, cycle: number) {
   const order = cycle % 4 < 2 ? side + 1 : 1 - side;
   return cycle % 2 ? order * crownStride : order;
+}
+
+export function lotusHookAimPending(state: HydraState, elapsed: number, cycle: number) {
+  return lotusBossPattern(cycle) === lotusBloom && HYDRA_SIDES.some(side => hydraAlive(state, side) &&
+    hookAimPending(elapsed, lotusBloom, lotusBloom.hookSalvos[headDelay(side, cycle) / crownStride]));
 }
 
 export function lotusChallengeHeadCharge(elapsed: number, cycle: number, side: HydraSide) {

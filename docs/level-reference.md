@@ -23,7 +23,7 @@ Only Summer's code, shared alloy and five optional sheets are loaded/saved when 
 
 Soft summer clouds drift above the camera and appear as rippled sky reflections in the river and palace pool. The sky is registered to the world throughout the route and slowdown, while the grass, actors and projectiles remain clear. The clouds are procedural and require no separate sky image; their wind and water ripples freeze on pause/results.
 
-**Bullet Hell** sends staggered scout and donut volleys around drifting openings. Vortex drones leave a break in the inner arm of their spiral. At the palace, the Hydra alternates its overlapping petal fans with a volley from each living crown in turn. A crown samples the ship's position as it lights up. Its petals curl back over the head and cross at that spot. Destroying a head silences its remaining volleys. Pulse clears the field and interrupts the current attack.
+**Bullet Hell** sends staggered scout and donut volleys around drifting openings. Vortex drones leave a break in the inner arm of their spiral. At the palace, the Hydra alternates its overlapping petal fans with a volley from each living crown in turn. A ring follows the ship during the crown's windup and disappears at release, when the crown locks its aim. Its petals curl back over the head and cross at that spot. Destroying a head silences its remaining volleys. Pulse clears the field and interrupts the current attack.
 
 ## Heliostat Gate
 
@@ -113,7 +113,7 @@ The continuous 3D heightfield uses denser, irregular triangulation along the ban
 
 The boss and its six foot foundations share that same world. Perspective is active from launch. Stage flight keeps a fixed oblique angle and a straight heading, with no path-following pan, bank or pitch sway. Aircraft controls and weapon positions stay anchored to the screen. The ship then coasts to a hover while the view blends smoothly into the existing 35° boss framing above the ground, with no scenic image replacement or boss reveal fade. The 60-HP **Caldera Engine** fires locked three-shot volleys from its dredging wheel every 4.5 seconds. The first 16 damage breaks the cyan coupling, articulates one failed leg and sags the chassis while the feet remain fixed. A shutter opens over the central machinery for the remaining 44 HP. All ship, drone, wing, Towline and Pulse weapons work in both phases; projectile origins, impact markers and laser contacts follow the posed target.
 
-**Bullet Hell** uses the same route and approach. Skippers trace short, staggered lines of embers while Crucibles pour slower, shootable slag. The Caldera Engine opens with its exhaust valves. Orange embers curl out around the stacks while slower pink embers cross above the furnace. Both streams converge where the ship was when the valves lit. The next attack comes from the dredging wheel. Breaking the support opens the machinery and lengthens the next burst.
+**Bullet Hell** uses the same route and approach. Skippers trace short, staggered lines of embers while Crucibles pour slower, shootable slag. The Caldera Engine opens with its exhaust valves. Orange embers curl out around the stacks while slower pink embers cross above the furnace. Both streams converge where the ship was when the valves fired. The next attack comes from the dredging wheel. Breaking the support opens the machinery and lengthens the next burst.
 
 Vite dev offers **Launch at transition**, the **Io camera study** (`/io-study.html`) with a 0–108 s timeline and section jump menu, failed-support inspection, and Skipper/Crucible/slag/Caldera/burner asset-workshop entries. Production has no QA hooks or skip controls. The owner's reviewed basalt and ceramic maps are optional; finite mip-filtered procedural textures preserve the full route and combat if media is absent, missing or corrupt. Generated media continues to go through chat for owner review/upload.
 
@@ -149,7 +149,7 @@ Stems and caps obstruct the fighter, drone, and wing pods. Contact slides craft 
 
 Ants look ahead along their path and steer into clear lanes before reaching a fruiting body. They bank gently during detours and ease back toward their original lane afterward. Collision clearance also keeps their bodies and legs out of stems and caps. Their avoidance is identical with art and placeholders.
 
-Bullet Hell and Hardcore use the same hive route. Workers release short spore streams. Soldiers loft paired seeds from their abdomens. The seeds trace a heart around the soldier and meet at the ship's position when the abdomen charged. Staggered arrivals reward formation clears with repeat Cannon drops for both wing upgrades, Towline, and surplus pickups. The Brood Guardian grows alternating amber and violet blooms from its exposed cannon, with a pause between bursts.
+Bullet Hell and Hardcore use the same hive route. Workers release short spore streams. Soldiers loft paired seeds from their abdomens. The seeds trace a heart around the soldier and meet at the ship's position when the seeds launched. Staggered arrivals reward formation clears with repeat Cannon drops for both wing upgrades, Towline, and surplus pickups. The Brood Guardian grows alternating amber and violet blooms from its exposed cannon, with a pause between bursts.
 
 ## The Greenhouse Ark
 

@@ -132,7 +132,7 @@ export class FlightView {
   private cannonMarker = new T.Mesh(new T.RingGeometry(BOSS_CANNON_RADIUS * BOSS_PROJECTION - 0.06, BOSS_CANNON_RADIUS * BOSS_PROJECTION, 24), new T.MeshBasicMaterial({ color: mint, depthTest: false, depthWrite: false }));
   private projectiles = Object.fromEntries(projectileKinds.map((kind) => [kind, createProjectileBatch(kind)])) as Record<ProjectileKind, ReturnType<typeof createProjectileBatch>>;
   private patternProjectiles?: ReturnType<typeof createPatternProjectileBatch>;
-  private dodgeMarker?: T.Group;
+  private hookTargetMarker?: T.Group;
   private playerMuzzle = createMuzzleFlash(teal);
   private droneMuzzle = createMuzzleFlash(mint);
   private combat = createCombatEffects();
@@ -186,17 +186,17 @@ export class FlightView {
       this.patternProjectiles = createPatternProjectileBatch(palette);
       this.plane.add(this.patternProjectiles.root);
     }
-    if (palette || levelId === 'wormhole') {
-      this.dodgeMarker = new T.Group();
-      this.dodgeMarker.name = 'fighter-dodge-point';
+    if (palette) {
+      this.hookTargetMarker = new T.Group();
+      this.hookTargetMarker.name = 'fighter-hook-target';
       const rim = new T.Mesh(new T.RingGeometry(PATTERN_HIT_RADIUS - .022, PATTERN_HIT_RADIUS, 32),
         new T.MeshBasicMaterial({ color: 0xdcf9ff, transparent: true, opacity: .64, depthTest: false, depthWrite: false }));
       const center = new T.Mesh(new T.CircleGeometry(.053, 16),
         new T.MeshBasicMaterial({ color: 0xfff4e6, depthTest: false, depthWrite: false }));
       rim.renderOrder = center.renderOrder = 14;
-      this.dodgeMarker.add(rim, center);
-      this.dodgeMarker.visible = false;
-      this.plane.add(this.dodgeMarker);
+      this.hookTargetMarker.add(rim, center);
+      this.hookTargetMarker.visible = false;
+      this.plane.add(this.hookTargetMarker);
     }
     this.playerBurners = shipBurners(this.player.root);
     this.drone = createDroneRig(livery);
@@ -282,7 +282,7 @@ export class FlightView {
     const flares = this.level.ending?.cockpitFlares.root ?? this.victoryFlares!.root;
     const ordnance = [this.player.root, this.drone, this.towlineEmitters, ...Object.values(this.projectiles).map(r => r.root), this.combat.root, this.playerMuzzle.root, this.droneMuzzle.root, ...this.drops.slice(0, powerupKinds.length).map(r => r.root), flares];
     if (this.patternProjectiles) ordnance.push(this.patternProjectiles.root);
-    if (this.dodgeMarker) ordnance.push(this.dodgeMarker);
+    if (this.hookTargetMarker) ordnance.push(this.hookTargetMarker);
     const lasers = [...pods[1], ...this.wingLasers.map(r => r.root)];
     try {
       this.level.prepare?.();
@@ -481,11 +481,9 @@ export class FlightView {
     this.player.root.rotation.set(orientation ? -this.pitch : -(this.level.shipPitch ?? 1.18) * eased, this.bank, 0);
     if (formation > 0) this.player.root.quaternion.slerp(this.victoryFacing, formation);
     this.player.root.visible = flight.hull > 0 && (victoryTime !== undefined || Math.floor(flight.invulnerable * 12) % 2 === 0);
-    if (this.dodgeMarker) {
-      this.dodgeMarker.visible = this.player.root.visible && (this.levelId === 'wormhole'
-        ? flight.phase === 'boss' && (flight.isFonsFight ? flight.fonsVariant !== 'normal' : flight.mode !== 'regular')
-        : flight.phase === 'stage' || flight.phase === 'boss');
-      this.dodgeMarker.position.set(flight.player.x, flight.player.y, 0);
+    if (this.hookTargetMarker) {
+      this.hookTargetMarker.visible = this.player.root.visible && flight.hookTargeting;
+      this.hookTargetMarker.position.set(flight.player.x, flight.player.y, 0);
     }
     if (ending && exitTime !== undefined) {
       ending.poseExit(exitTime, this.player.root, camera);

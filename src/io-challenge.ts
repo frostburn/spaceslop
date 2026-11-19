@@ -68,6 +68,8 @@ export function stepIoChallengeCrucible(enemy: Crucible, player: Point) {
 export const ioChallengeBoss = { health: 132, supportHealth: 32, interval: 4.3, lockAt: .4,
   first: 1.05, spacing: .20, rows: 9, exposedRows: 13 } satisfies BossPattern & { health: number; supportHealth: number };
 
+export const calderaStackPattern: BossPattern = { ...ioChallengeBoss, hookSalvos: [{ row: 0, aimAt: ioChallengeBoss.lockAt }] };
+
 const curtainY = -4.8;
 export function calderaStackRow(left: Point, right: Point, target: Point, row: number) {
   const shots = [];

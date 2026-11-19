@@ -14,8 +14,8 @@ type AttackClock = {
 type BurstTiming = { windup: number; rows: number; spacing: number; rest: number };
 
 // Fire is the next emission on the attacker's clock. Keep the aim fixed for
-// every row of a burst, and start a new windup if the attacker leaves view.
-export function stepPatternBurst(enemy: AttackClock, target: Point, visible: boolean, timing: BurstTiming) {
+// every row of a burst (some attacks lock at release), and start a new windup if the attacker leaves view.
+export function stepPatternBurst(enemy: AttackClock, target: Point, visible: boolean, timing: BurstTiming, lockOnFire = false) {
   if (!visible) {
     enemy.fire = Math.max(enemy.fire, enemy.age + timing.windup);
     enemy.burst = undefined;
@@ -26,6 +26,7 @@ export function stepPatternBurst(enemy: AttackClock, target: Point, visible: boo
   if (enemy.age < enemy.fire) return;
 
   const row = burst.row++;
+  if (lockOnFire && row === 0) burst.target = { ...target };
   if (burst.row === timing.rows) {
     enemy.fire = enemy.age + timing.rest;
     enemy.burst = undefined;
@@ -60,6 +61,8 @@ export function rippleRow(origin: Point, bearing: number, turn: number, row: num
   });
 }
 
+type HookSalvo = { row: number; aimAt: number };
+
 export type BossPattern = {
   interval: number;
   lockAt: number;
@@ -67,9 +70,12 @@ export type BossPattern = {
   spacing: number;
   rows: number;
   exposedRows?: number;
-  /** A new windup can lock the ship again after the previous salvo is away. */
-  relockRows?: readonly number[];
+  hookSalvos?: readonly HookSalvo[];
 };
+
+export function hookAimPending(elapsed: number, pattern: BossPattern, salvo: HookSalvo) {
+  return elapsed >= salvo.aimAt && elapsed + 1e-8 < pattern.first + salvo.row * pattern.spacing;
+}
 
 export function bossPatternCharge(elapsed: number, timing: BossPattern, rows: number) {
   const sinceFirst = elapsed - timing.first;

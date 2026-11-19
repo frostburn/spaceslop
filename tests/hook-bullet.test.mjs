@@ -58,21 +58,24 @@ test('edge, close and overhead locks stay finite and agree across step sizes', (
   }
 });
 
-test('soldiers and armored hovercars lock at windup, then release from the moving rear', () => {
-  const player = { x: -2.75, y: -4.5 }, lock = { ...player };
+test('soldiers and armored hovercars lock at release from the moving rear and keep that aim', () => {
+  const player = { x: -2.75, y: -4.5 }, lock = { x: 2.6, y: -2.1 };
   for (const fire of [
     enemy => stepChallengeAnt(enemy, 'soldier', 0, player),
     enemy => stepBoulevardChallengeDriver(enemy, { heavy:true, formation:'rush', slot:0, mirror:1 }, player, 12, STEP),
   ]) {
-    Object.assign(player, lock);
+    Object.assign(player, { x: -2.75, y: -4.5 });
     const enemy = { x: 1.1, y: 4.2, lane: 1, heading: .14, age: 1.6, fire: 2 };
     assert.equal(fire(enemy), undefined);
-    Object.assign(player, { x: 2.6, y: -2.1 });
+    Object.assign(player, lock);
     enemy.age = 2; enemy.y = 3.5;
     const hooks = fire(enemy).filter(shot => shot.hook);
     assert(hooks.length >= 2);
     assert(hooks.every(shot => shot.y > enemy.y + .6 && shot.x < enemy.x && shot.vy > 0));
     for (const shot of hooks) checkLock(shot, lock);
+    player.x = -3;
+    enemy.age = enemy.fire;
+    for (const shot of fire(enemy).filter(shot => shot.hook)) checkLock(shot, lock);
   }
 });
 
@@ -100,10 +103,13 @@ test('all three bosses use the same locked trajectories in Bullet Hell and Hardc
       const start = level === 'io' ? 0 : timing.interval;
       f.time = start;
       const lock = {x:-2.8,y:-4.4};
-      Object.assign(f.player, lock);
-      until(f, start + timing.lockAt + STEP);
+      assert.equal(f.hookTargeting, false);
       Object.assign(f.player, {x:2.5,y:-6.1});
+      until(f, start + timing.lockAt + STEP);
+      assert.equal(f.hookTargeting, mode !== 'regular', level);
+      Object.assign(f.player, lock);
       const shots = nextHooks(f, start + timing.first + STEP);
+      assert.equal(f.hookTargeting, false, level);
       if (mode === 'regular') { assert.equal(shots.length, 0); continue; }
       assert(shots.length >= 2 && shots.every(shot => shot.vy > 0), level);
       shots.forEach(shot => checkLock(shot, lock));
@@ -141,18 +147,31 @@ test('later cruiser and Hydra salvos take a fresh lock, and breaking the next cr
     until(f, first + STEP);
     const oldShots = [...f.threats];
     const lock = {x:1.8,y:-3.2};
-    Object.assign(f.player, lock);
-    until(f, first + relockRow * timing.spacing + STEP);
     Object.assign(f.player, {x:3,y:-6.7});
+    until(f, first + relockRow * timing.spacing + STEP);
+    assert.equal(f.hookTargeting, true, level);
+    Object.assign(f.player, lock);
     oldShots.forEach(shot => checkLock(shot, {x:-3,y:-5}));
     const shots = nextHooks(f, first + firstRow * timing.spacing + STEP);
     assert(shots.length > 0);
+    assert.equal(f.hookTargeting, false, level);
     shots.forEach(shot => checkLock(shot, lock));
     if (level === 'summer') {
       f.damageBoss(f.summerHeadMaxHealth, false, 1);
       until(f, first + 10 * timing.spacing + STEP);
       assert.equal(f.summerHeadCharge(1), 0);
+      assert.equal(f.hookTargeting, false);
       assert.deepEqual(nextHooks(f, first + 15 * timing.spacing + STEP), []);
     }
   }
+});
+
+test('a soldier warns only while charging and Pulse removes the warning', () => {
+  const f = new Flight('sentry', [], 'vex', 'broodlock', () => .5, 'bullet-hell');
+  f.cooldown = f.droneCooldown = f.invulnerable = 1e5;
+  assert.equal(f.hookTargeting, false);
+  while (!f.hookTargeting && f.time < 6) f.step(STEP);
+  assert.equal(f.hookTargeting, true);
+  f.pulse();
+  assert.equal(f.hookTargeting, false);
 });

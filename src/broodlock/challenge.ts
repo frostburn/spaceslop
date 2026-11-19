@@ -35,7 +35,7 @@ export function stepChallengeAnt(ant: Ant, kind: AntKind, slot: number, player: 
   const origin = { x: ant.x, y: ant.y - .55 * antScales[kind] };
   const timing = antPatterns[kind];
   const soldier = kind === 'soldier';
-  const burst = stepPatternBurst(ant, soldier ? player : ant, ant.y <= 6.9 && origin.y > -1, timing);
+  const burst = stepPatternBurst(ant, soldier ? player : ant, ant.y <= 6.9 && origin.y > -1, timing, soldier);
   if (!burst) return;
   if (soldier) {
     const heading = ant.heading ?? 0;

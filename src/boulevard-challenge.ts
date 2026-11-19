@@ -57,7 +57,7 @@ export function stepBoulevardChallengeDriver(enemy: Driver, course: BoulevardCou
   const timing = boulevardChallengeTiming(course);
   // Nearby patrols steer their rows around the same stretch of road.
   const opening = { x: 1.35 * Math.sin(time * .36) + player.x * .14, y: -6.2 };
-  const burst = stepPatternBurst(enemy, course.heavy ? player : opening, visible, timing);
+  const burst = stepPatternBurst(enemy, course.heavy ? player : opening, visible, timing, course.heavy);
   if (course.heavy) {
     if (!burst) return;
     const tail = HOVERCAR_EXHAUST_Y * HAULER_LENGTH_SCALE;
@@ -110,9 +110,11 @@ export function boulevardChallengeMineBurst(x: number, y: number) {
 export const boulevardChallengeBoss = { health: 244, interval: 5.3, lockAt: .45,
   first: 1.22, spacing: .165, rows: 16 } satisfies BossPattern & { health: number };
 const firstVentRows = 6, secondVentRow = 9;
-const ventPattern = { ...boulevardChallengeBoss, relockRows: [firstVentRows] };
-const secondVent = { ...ventPattern, lockAt: ventPattern.first + firstVentRows * ventPattern.spacing,
-  first: ventPattern.first + secondVentRow * ventPattern.spacing };
+const secondVent = { ...boulevardChallengeBoss, lockAt: boulevardChallengeBoss.first + firstVentRows * boulevardChallengeBoss.spacing,
+  first: boulevardChallengeBoss.first + secondVentRow * boulevardChallengeBoss.spacing };
+const ventPattern = { ...boulevardChallengeBoss, hookSalvos: [
+  { row: 0, aimAt: boulevardChallengeBoss.lockAt }, { row: secondVentRow, aimAt: secondVent.lockAt },
+] };
 
 export function boulevardUsesVents(cycle: number) { return cycle % 3 === 1; }
 export function boulevardBossPattern(cycle: number) { return boulevardUsesVents(cycle) ? ventPattern : boulevardChallengeBoss; }
