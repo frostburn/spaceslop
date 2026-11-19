@@ -72,7 +72,7 @@ import { ICE_CAMERA_DISTANCE } from './ice-layout';
 import { DRONE_HULL, FIGHTER_HULL, HiveCollision, POD_BOUNDS, POD_HULL } from './hive-collision';
 import { HIVE_CAMERA_DISTANCE } from './hive-layout';
 import { steerHiveAnt, type AntKind } from './ant-navigation';
-import { BOSS_CAMERA_DISTANCE, HEIGHT, WIDTH } from './playfield';
+import { BOSS_CAMERA_DISTANCE, CONTROL_BOUNDS, HEIGHT, WIDTH } from './playfield';
 import { GROUNDSKEEPER_HP, GROUNDSKEEPER_CYCLE, GROUNDSKEEPER_RADIUS, groundskeeperContact, groundskeeperAttack, groundskeeperHits } from './groundskeeper';
 import { PRESERVE_CHALLENGE_PACE, preserveChallengeBoss, preserveChallengeBossRow, preserveChallengeFirstShot,
   preserveChallengeWaves, stepPreserveChallengeFlyer } from './preserve-challenge';
@@ -85,8 +85,7 @@ import { FONS_APPROACH, fonsBodyEntry, fonsHealth, fonsPhase, fonsPose, fonsRock
 import { fonsBeamHits, fonsCrownfireStart, fonsVolleys } from './wormhole/fons/attacks';
 import type { FonsVariant } from './wormhole/fons/variants';
 
-export { BOSS_CAMERA_DISTANCE, HEIGHT, WIDTH } from './playfield';
-export const STEP = 1 / 60;
+export { BOSS_CAMERA_DISTANCE, HEIGHT, STEP, WIDTH } from './playfield';
 export const BOSS_DEPTH = -12;
 export const BOSS_Y = 4.2;
 export const BOSS_PROJECTION = BOSS_CAMERA_DISTANCE / (BOSS_CAMERA_DISTANCE - BOSS_DEPTH);
@@ -237,8 +236,8 @@ function denTargetEntry(a: Point, b: Point, enemy: Enemy) {
 }
 
 function moveWithinField(point: Point, dx: number, dy: number) {
-  point.x = clamp(point.x + dx, -3.95, 3.95);
-  point.y = clamp(point.y + dy, -7.1, 6.6);
+  point.x = clamp(point.x + dx, CONTROL_BOUNDS.minX, CONTROL_BOUNDS.maxX);
+  point.y = clamp(point.y + dy, CONTROL_BOUNDS.minY, CONTROL_BOUNDS.maxY);
 }
 
 function moveToward(point: Point, target: Point, maxStep: number) {
@@ -723,7 +722,9 @@ export class Flight {
     this.aim = undefined;
   }
 
-  steer(x: number, y: number, dt: number) {
+  get steeringTarget(): Readonly<Point> | undefined { return this.aim; }
+
+  steer(x: number, y: number, dt: number, target: Readonly<Point> | undefined = this.aim) {
     this.prepareObstacles();
     const maxStep = (this.mode === 'regular' ? SHIP_SPEED : CHALLENGE_SHIP_SPEED) * dt;
     const direction = Math.hypot(x, y);
@@ -734,9 +735,9 @@ export class Flight {
       return;
     }
 
-    if (this.aim) {
+    if (target) {
       const next = { ...this.player };
-      const reached = moveToward(next, this.aim, maxStep);
+      const reached = moveToward(next, target, maxStep);
       const blocked = this.obstacles?.move(this.player, next.x - this.player.x, next.y - this.player.y, FIGHTER_HULL);
       if (!this.obstacles) Object.assign(this.player, next);
       if (reached || blocked) this.clearAim();

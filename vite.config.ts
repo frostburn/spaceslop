@@ -2,6 +2,8 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { officerPortraitFile, rankInsigniaFile, textureFiles, studyTextureFiles } from './src/assets/catalog';
 import { officers, type OfficerId } from './src/campaign/missions';
 import { levelPackages } from './scripts/level-packages';
@@ -37,7 +39,16 @@ const briefingUrls = Object.fromEntries(briefingPaths.filter(src => existsSync(n
   .map(src => [src, versioned(src)]));
 const packages = levelPackages(encounterTextures, Object.values(portraitUrls), briefingUrls);
 
-export default defineConfig(({ command }) => ({
+function replayRevision() {
+  try {
+    return execFileSync('git', ['describe', '--always', '--dirty', '--abbrev=12'], {
+      cwd: fileURLToPath(new URL('.', import.meta.url)),
+      encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 1500,
+    }).trim();
+  } catch { return undefined; }
+}
+
+export default defineConfig(({ command, isPreview }) => ({
 
   define: {
 
@@ -48,6 +59,8 @@ export default defineConfig(({ command }) => ({
     __BRIEFING_URLS__: JSON.stringify(briefingUrls),
 
     __ENCOUNTER_TEXTURES__: JSON.stringify(encounterTextures),
+
+    __REPLAY_REVISION__: command === 'serve' && !isPreview ? JSON.stringify(replayRevision()) ?? 'undefined' : 'undefined',
 
     __STUDY_TEXTURES__: JSON.stringify(command === 'serve' ? Object.fromEntries(
       Object.entries(studyTextureFiles)

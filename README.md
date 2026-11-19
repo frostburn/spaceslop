@@ -17,6 +17,10 @@ The app opens in **Campaign**. **Open briefing** shows the selected mission’s 
 
 The development menu links the asset workshop, Draconian patrol blend editor and camera studies. Open the workshop at `/workshop.html` or the patrol editor at `/patrol-study.html`. Dev briefings also offer shortcuts into boss approaches. `?level=vents` selects Hadal Cable in Free Flight and `?testLoadout=1` enables the weapon picker.
 
+Dev runs record automatically. Choose **Save replay** on the pause or results screen to download the run as JSON. If you leave mid-flight, **Flight replays → Save last replay** on the main menu exports the run up to that point. The latest recording stays in the tab until you record another run or reload. Share the JSON as an attachment for gameplay review.
+
+Use **Flight replays → Open replay…** to watch the recorded level, loadout and difficulty. Pause to change playback speed. Playback leaves campaign progress alone. Use the same game revision to reproduce a run exactly. You can also replay after a balance change to compare outcomes.
+
 ## Validate
 
 ```sh
