@@ -63,6 +63,11 @@
               <p></p>
               <p id="brief-challenge" hidden></p>
             </div>
+            <details class="brief-scoring">
+              <summary>Graze scoring <span id="brief-best" hidden></span></summary>
+              <p>Skim live shots to light up to four lamps. Each holds 25 points. Destroy an enemy or take a quarter off a boss’s health to bank them. Getting hit empties the lamps.</p>
+              <p>Clear the sector with the standard starting loadout to set a personal best for this difficulty.</p>
+            </details>
           </div>
           <div class="brief-loadout">
             <fieldset id="pilot-picker">
@@ -93,7 +98,13 @@
     <main id="game-app" hidden>
       <div class="console">
         <header class="hud" aria-label="Flight status">
-          <div><span id="sector">SECTOR 01</span><strong id="score">000000</strong></div>
+          <div>
+            <span id="sector">SECTOR 01</span><strong id="score">000000</strong>
+            <span id="graze-meter" role="meter" aria-label="Graze charge" aria-valuemin="0" aria-valuemax="4" aria-valuenow="0" hidden>
+              <b id="graze-label" aria-hidden="true">Graze</b>
+              <span class="graze-lamps" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            </span>
+          </div>
           <div id="hull-readout"><span>HULL</span><strong id="hull">04</strong></div>
           <span id="pilot-rank-hud" class="rank-badge"></span>
           <button id="menu-button" type="button">Menu</button>
@@ -122,6 +133,11 @@
             <h1 id="heading">Spaceslop</h1>
             <p id="promotion-subtitle" hidden></p>
             <p id="message">Tap to place the drone. Drag to steer.</p>
+            <div id="scorecard" role="group" aria-label="Sortie score" hidden>
+              <div class="sortie-total"><span>Score</span><strong id="sortie-total"></strong></div>
+              <div class="sortie-grazes"><span id="sortie-grazes"></span><span id="sortie-bonus"></span></div>
+              <p id="sortie-best"></p>
+            </div>
             <div class="flight-actions">
               <button id="next-mission" type="button" hidden>Next briefing</button>
               <button id="start" type="button" hidden disabled>Resume</button>

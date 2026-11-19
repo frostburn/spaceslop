@@ -1,7 +1,8 @@
 import * as T from 'three';
 
-type Kind = 'hit' | 'kill' | 'pickup' | 'defeat';
+type Kind = 'hit' | 'kill' | 'pickup' | 'defeat' | 'graze';
 const specs = { hit: { life: 0.22, size: 0.1, spread: 1.5, sparks: 4 },
+  graze: { life: 0.24, size: 0, spread: 1.1, sparks: 3 },
   kill: { life: 0.42, size: 0.22, spread: 2.2, sparks: 8 },
   defeat: { life: 0.62, size: 0.33, spread: 3.2, sparks: 8 },
   pickup: { life: 0.55, size: 0.28, spread: 1.65, sparks: 8 } };
@@ -51,8 +52,10 @@ export function createCombatEffects() {
           scale.set(0.036 * (1 - t), (0.11 + burst.age * 0.22) * (1 - t), 0.025);
           identity.compose(position, rotation, scale); sparks.setMatrixAt(s, identity); sparks.setColorAt(s++, color);
         }
-        identity.compose(burst.position, rotation.identity(), scale.setScalar(spec.size + burst.age * spec.spread));
-        rings.setMatrixAt(r, identity); rings.setColorAt(r++, color);
+        if (spec.size > 0) {
+          identity.compose(burst.position, rotation.identity(), scale.setScalar(spec.size + burst.age * spec.spread));
+          rings.setMatrixAt(r, identity); rings.setColorAt(r++, color);
+        }
       }
       sparks.count = s; rings.count = r;
       for (const mesh of [sparks, rings]) {

@@ -7,6 +7,7 @@ import { CHALLENGE_SAVE_KEY, challengeAvailable, challengeModes, challengeNames,
 import { campaign } from './campaign/missions';
 import { CAMPAIGN_SAVE_KEY, campaignStatus, decodeCampaignClears, recordCampaignClear } from './campaign/progress';
 import { ranks } from './campaign/ranks';
+import { formatScore, sectorBest } from './campaign/sector-records';
 import { levels, readLevel, type LevelId } from './levels';
 import { setupPilotPicker } from './pilots';
 import { readWingWeapon, wingWeapons } from './wing';
@@ -260,9 +261,13 @@ function openBriefing() {
   briefTitle.textContent = levels[selected].name;
   setupBriefing(selected, briefing, signal);
   const challengeRules = document.querySelector<HTMLElement>('#brief-challenge')!;
+  const bestReadout = document.querySelector<HTMLElement>('#brief-best')!;
   pilotPicker = setupPilotPicker(document.querySelector('#pilot-choices')!, document.querySelector('#pilot-perk-description')!, signal);
   function updateDifficulty() {
     const flightMode = selectedFlightMode();
+    const best = sectorBest(selected, flightMode);
+    bestReadout.hidden = best === undefined;
+    bestReadout.textContent = best === undefined ? '' : `Best ${formatScore(best)}`;
     challengeRules.hidden = flightMode === 'regular';
     challengeRules.textContent = flightMode === 'hardcore'
       ? `${challengeNames.hardcore} · ${mode === 'free-flight' ? 'One hit ends the run.' : 'One hit ends the run and resets Hardcore progress.'}`
