@@ -18,6 +18,8 @@ interface InputContext {
   active: () => boolean;
   pause: () => void;
   pulse: () => void;
+  recordSteering?: (x: number, y: number, target: Flight['steeringTarget']) => void;
+  recordDrone?: (x: number, y: number) => void;
 }
 const DRAG_THRESHOLD_PX = 5;
 
@@ -73,8 +75,13 @@ export function bindFlightInput(canvas: HTMLCanvasElement, context: InputContext
     movePointer(event);
     if (!pointer.dragging) {
       const { left, top, width, height } = canvas.getBoundingClientRect();
-      if (width && height)
-        context.flight().deployDrone(((pointer.x - left) / width - .5) * WIDTH, (.5 - (pointer.y - top) / height) * HEIGHT);
+      if (width && height) {
+        const flight = context.flight();
+        flight.deployDrone(((pointer.x - left) / width - .5) * WIDTH, (.5 - (pointer.y - top) / height) * HEIGHT);
+        if (import.meta.env.DEV && flight.droneTarget) {
+          context.recordDrone?.(flight.droneTarget.x, flight.droneTarget.y);
+        }
+      }
     } else if (pointer.steered) {
       context.flight().clearAim();
     }
@@ -113,6 +120,7 @@ export function bindFlightInput(canvas: HTMLCanvasElement, context: InputContext
         y += directions[key][1];
       }
       const flight = context.flight();
+      if (import.meta.env.DEV) context.recordSteering?.(x, y, flight.steeringTarget);
       flight.steer(x, y, dt);
       if (pointer?.dragging) {
         pointer.steered = true;

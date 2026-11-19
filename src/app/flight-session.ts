@@ -1,6 +1,7 @@
 import { missionFor } from '../campaign/missions';
 import { challengeNames, type FlightMode } from '../campaign/challenges';
 import { ranks, type Rank } from '../campaign/ranks';
+import { playFlightReplay, recordFlightReplay, replayClock, replayRandom, replayRevision, saveFlightReplay, type FlightReplay } from '../dev/flight-replay';
 import { FLEET_TRENCH_AT } from '../fleet/route';
 import { Flight, STEP, type DroneWeapon } from '../game';
 import { levels, type LevelId } from '../levels';
@@ -27,7 +28,10 @@ type ChallengeRun = {
   onLoss(): void;
 };
 
-export async function openFlightSession(selectedLevel: LevelId, loadout: FlightLoadout, signal: AbortSignal, shortcut?: FlightShortcut, campaignRun?: CampaignRun, challengeRun?: ChallengeRun) {
+type DevReplay = { playback?: FlightReplay; onRecord?: (replay: FlightReplay) => void };
+
+export async function openFlightSession(selectedLevel: LevelId, loadout: FlightLoadout, signal: AbortSignal,
+  shortcut?: FlightShortcut, campaignRun?: CampaignRun, challengeRun?: ChallengeRun, dev?: DevReplay) {
   function element<T extends HTMLElement>(id: string) {
     const node = document.getElementById(id);
     if (!node)
@@ -77,19 +81,60 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
   type Screen = 'loading' | 'active' | 'paused' | 'credits' | 'results';
   let screen: Screen = 'loading';
   const { mode } = loadout;
-  const restartHardcoreCampaign = mode === 'hardcore' && challengeRun !== undefined && !shortcut;
-  const createFlight = () => new Flight(loadout.drone, loadout.wings, loadout.pilot, selectedLevel, undefined, mode);
+  const playback = import.meta.env.DEV ? dev?.playback : undefined;
+  const recordProgress = !shortcut && !playback;
+  const restartHardcoreCampaign = mode === 'hardcore' && challengeRun !== undefined && recordProgress;
+  let seed = 0;
+  let recorder: ReturnType<typeof recordFlightReplay> | undefined;
+  let replayPlayer: ReturnType<typeof playFlightReplay> | undefined;
+  let saveReplay: HTMLButtonElement | undefined;
+  let speedField: HTMLLabelElement | undefined;
+  let playbackSpeed = 1;
+  const differentRevision = playback?.revision && replayRevision && playback.revision !== replayRevision;
+  const createFlight = () => {
+    let random: (() => number) | undefined;
+    if (import.meta.env.DEV) {
+      seed = playback?.seed ?? Math.floor(Math.random() * 0x100000000);
+      random = replayRandom(seed);
+    }
+    return new Flight(loadout.drone, loadout.wings, loadout.pilot, selectedLevel, random, mode);
+  };
   let flight = createFlight();
   let nextLevel: LevelId | undefined;
   let promotion: Rank | undefined;
   let unlockedBulletHell = false;
   let unlockedHardcore = false;
   let victoryTime: number | undefined;
-  const recordProgress = !shortcut;
   let offlineReady = false;
   let view: FlightView | undefined;
   let preparing: AbortController | undefined;
   let contextLost = false;
+  if (import.meta.env.DEV) {
+    if (playback) {
+      pulse.hidden = true;
+      status.setAttribute('aria-live', 'off');
+      speedField = document.createElement('label');
+      speedField.className = 'loadout-field';
+      const speed = document.createElement('select');
+      for (const rate of [1, 2, 4]) speed.add(new Option(`${rate}×`, String(rate)));
+      speed.addEventListener('change', () => { playbackSpeed = Number(speed.value); }, { signal });
+      speedField.append('Replay speed', speed);
+      speedField.hidden = true;
+      panel.querySelector('.flight-actions')!.before(speedField);
+    } else {
+      saveReplay = document.createElement('button');
+      saveReplay.type = 'button';
+      saveReplay.textContent = 'Save replay';
+      saveReplay.hidden = true;
+      saveReplay.addEventListener('click', () => {
+        if (recorder?.hasFlight) saveFlightReplay(recorder.snapshot(flight));
+      }, { signal });
+      panel.querySelector('.flight-actions')!.append(saveReplay);
+    }
+  }
+  function keepRecording() {
+    if (import.meta.env.DEV && recorder?.hasFlight) dev?.onRecord?.(recorder.snapshot(flight));
+  }
   function syncUI() {
     const active = screen === 'active';
     const fighting = flight.phase === 'stage' || flight.phase === 'boss';
@@ -104,7 +149,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     bossHealth.max = flight.bossMaxHealth;
     bossHealth.value = flight.bossHealth;
     bossName.textContent = readout.boss;
-    pulse.disabled = !active || !fighting || flight.charges === 0;
+    pulse.disabled = Boolean(playback) || !active || !fighting || flight.charges === 0;
     pause.hidden = !active;
     panel.hidden = active || screen === 'credits';
     heading.classList.toggle('preparing-flight', screen === 'loading');
@@ -117,10 +162,16 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     if (!perkReadout.hidden && perkReadout.textContent !== flight.perkReadout) {
       perkReadout.textContent = flight.perkReadout;
     }
+    if (import.meta.env.DEV) {
+      if (saveReplay) saveReplay.hidden = !(screen === 'paused' || screen === 'results') || !recorder?.hasFlight;
+      if (speedField) speedField.hidden = screen !== 'paused';
+    }
     selectedPortrait.classList.toggle('perk-flash', active && flight.perkTime > 1.15);
     status.classList.toggle('preparing-graphics', preparingGraphics);
-    if (status.textContent !== readout.tip)
-      status.textContent = readout.tip;
+    const tip = import.meta.env.DEV && playback && replayPlayer && !preparingGraphics
+      ? `Replay · ${replayClock(replayPlayer.tick)} / ${replayClock(playback.ticks)}${differentRevision ? ' · Different revision' : ''}`
+      : readout.tip;
+    if (status.textContent !== tip) status.textContent = tip;
   }
   async function prepareGraphics() {
     if (!view)
@@ -151,16 +202,16 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     if (screen !== 'active')
       return;
     screen = 'paused';
-    input.reset();
+    input?.reset();
     heading.textContent = 'Paused';
-    message.textContent = 'Your run is on hold.';
+    message.textContent = playback ? 'Replay paused.' : 'Your run is on hold.';
     start.textContent = 'Resume';
     syncUI();
   }
   function recordVictory() {
     if (flight.phase !== 'won' || victoryTime !== undefined) return;
     victoryTime = 0;
-    input.reset();
+    input?.reset();
     if (recordProgress && campaignRun) {
       const result = campaignRun.onClear();
       nextLevel = result.next;
@@ -177,9 +228,15 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     const fromCredits = screen === 'credits';
     screen = 'results';
     credits.hidden = true;
-    input.reset();
-    heading.textContent = flight.phase === 'won' ? 'Mission Complete' : 'Ship lost';
+    input?.reset();
+    const outcome = flight.phase === 'won' ? 'Mission Complete' : 'Ship lost';
+    heading.textContent = outcome;
     const report = [levels[selectedLevel].name, `Score ${flight.score}`];
+    if (import.meta.env.DEV && playback) {
+      heading.textContent = replayPlayer?.matches ? 'Replay complete' : 'Replay diverged';
+      report.push(flight.phase === 'won' || flight.phase === 'lost' ? outcome : 'Recording stopped');
+      if (!replayPlayer?.matches) report.push(`Recorded score ${playback.end.score}, hull ${playback.end.hull}`);
+    }
     if (mode !== 'regular') report.splice(1, 0, challengeNames[mode]);
     if (flight.phase === 'won' && recordProgress && campaignRun) {
       if (promotion) setPilotRank(promotion);
@@ -193,8 +250,9 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     nextMission.textContent = nextLevel ? `Next briefing · ${levels[nextLevel].name}` : 'Next briefing';
     promotionSubtitle.textContent = promotion ? `Promoted to ${ranks[promotion].name}` : '';
     message.textContent = report.join(' · ');
-    start.textContent = restartHardcoreCampaign && flight.phase === 'lost' && selectedLevel !== 'broodlock'
-      ? 'Restart at Broodlock' : 'Fly again';
+    start.textContent = playback ? 'Watch again'
+      : restartHardcoreCampaign && flight.phase === 'lost' && selectedLevel !== 'broodlock' ? 'Restart at Broodlock' : 'Fly again';
+    keepRecording();
     panel.scrollTop = 0;
     syncUI();
     if (fromCredits && !contextLost) start.focus({ preventScroll: true });
@@ -213,7 +271,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
   }
   function showCredits() {
     screen = 'credits';
-    input.reset();
+    input?.reset();
     credits.hidden = false;
     unlockNotice.hidden = true;
     continueCredits.hidden = true;
@@ -259,9 +317,13 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
           flight.step(0);
         } else flight.startFonsApproach();
       }
+      if (import.meta.env.DEV) {
+        if (playback) replayPlayer = playFlightReplay(playback);
+        else recorder = recordFlightReplay(flight, loadout, seed, shortcut);
+      }
     }
     screen = 'active';
-    input.reset();
+    input?.reset();
     previous = performance.now();
     view.render(flight, 0, victoryTime);
     if (document.hidden) pauseFlight();
@@ -272,20 +334,31 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
   }
   start.addEventListener('click', startFlight, { signal });
   function firePulse() {
-    if (screen !== 'active')
-      return;
+    if (screen !== 'active' || playback) return;
+    const before = flight.charges;
     flight.pulse();
+    if (import.meta.env.DEV && flight.charges !== before) recorder?.pulse(flight);
     recordVictory();
     syncUI();
   }
   pause.addEventListener('click', pauseFlight, { signal });
   pulse.addEventListener('click', firePulse, { signal });
-  const input = bindFlightInput(canvas, {
+  const input = playback ? undefined : bindFlightInput(canvas, {
     flight: () => flight,
     active: () => screen === 'active',
     pause: pauseFlight,
-    pulse: firePulse
+    pulse: firePulse,
+    ...(import.meta.env.DEV ? {
+      recordSteering: (x: number, y: number, target: Flight['steeringTarget']) => recorder?.steer(x, y, target),
+      recordDrone: (x: number, y: number) => recorder?.drone(x, y),
+    } : {}),
   }, signal);
+  if (import.meta.env.DEV && playback) window.addEventListener('keydown', event => {
+    if (event.code === 'Escape' && screen === 'active') {
+      event.preventDefault();
+      pauseFlight();
+    }
+  }, { signal });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden)
       pauseFlight();
@@ -324,10 +397,15 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
     if (screen === 'active' && view) {
       let presentationStep = elapsed;
       if (victoryTime === undefined) {
-        accumulator += elapsed;
-        while (accumulator >= STEP && flight.phase !== 'won' && flight.phase !== 'lost') {
-          input.steer(STEP);
-          flight.step(STEP);
+        presentationStep = elapsed * playbackSpeed;
+        accumulator += presentationStep;
+        while (accumulator >= STEP && !replayPlayer?.done && flight.phase !== 'won' && flight.phase !== 'lost') {
+          if (import.meta.env.DEV && replayPlayer) replayPlayer.step(flight);
+          else {
+            input?.steer(STEP);
+            flight.step(STEP);
+            if (import.meta.env.DEV) recorder?.step(flight);
+          }
           accumulator -= STEP;
         }
         recordVictory();
@@ -337,7 +415,7 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
         victoryTime = next;
       }
       view.render(flight, presentationStep, victoryTime);
-      if (flight.phase === 'lost') showResults();
+      if (flight.phase === 'lost' || (replayPlayer?.done && victoryTime === undefined)) showResults();
       else if (victoryTime === view.victoryDuration) {
         if (view.hasEnding) showCredits();
         else showResults();
@@ -356,7 +434,16 @@ export async function openFlightSession(selectedLevel: LevelId, loadout: FlightL
       return;
     disposed = true;
     preparing?.abort();
-    input.reset();
+    input?.reset();
+    keepRecording();
+    if (import.meta.env.DEV) {
+      saveReplay?.remove();
+      speedField?.remove();
+      if (playback) {
+        pulse.hidden = false;
+        status.removeAttribute('aria-live');
+      }
+    }
     panel.classList.remove('victory-results');
     credits.remove();
     promotionSubtitle.hidden = true;

@@ -7,6 +7,7 @@ import { CHALLENGE_SAVE_KEY, challengeAvailable, challengeModes, challengeNames,
 import { campaign } from './campaign/missions';
 import { CAMPAIGN_SAVE_KEY, campaignStatus, decodeCampaignClears, recordCampaignClear } from './campaign/progress';
 import { ranks } from './campaign/ranks';
+import { readFlightReplay, saveFlightReplay, type FlightReplay } from './dev/flight-replay';
 import { levels, readLevel, type LevelId } from './levels';
 import { setupPilotPicker } from './pilots';
 import { readWingWeapon, wingWeapons } from './wing';
@@ -49,6 +50,7 @@ let session: AbortController | undefined;
 let briefController: AbortController | undefined;
 let pilotPicker: ReturnType<typeof setupPilotPicker> | undefined;
 let practiceDifficulty: HTMLSelectElement | undefined;
+let keepLastReplay: ((replay: FlightReplay) => void) | undefined;
 const failedSectors = new Set<LevelId>();
 let logoPosition = .5;
 let logoPointerX = 0;
@@ -315,19 +317,20 @@ function completeMission(id: LevelId) {
   return outcome;
 }
 
-async function launchFlight(shortcut?: FlightShortcut) {
-  if (session || !pilotPicker) return;
-  if (refreshChallengeSelection()) {
+async function launchFlight(shortcut?: FlightShortcut, replay?: FlightReplay) {
+  const playback = import.meta.env.DEV ? replay : undefined;
+  if (session || (!playback && !pilotPicker)) return;
+  if (!playback && refreshChallengeSelection()) {
     closeBriefing();
     openBriefing();
     return;
   }
-  const id = selected;
-  const campaignFlight = mode === 'campaign';
-  const challengeFlight = mode === 'bullet-hell' || mode === 'hardcore' ? mode : undefined;
-  const flightMode = selectedFlightMode();
-  const loadout: FlightLoadout = {
-    pilot: pilotPicker.selectedId,
+  const id = playback?.level ?? selected;
+  const campaignFlight = !playback && mode === 'campaign';
+  const challengeFlight = !playback && (mode === 'bullet-hell' || mode === 'hardcore') ? mode : undefined;
+  const flightMode = playback?.loadout.mode ?? selectedFlightMode();
+  const loadout: FlightLoadout = playback ? { ...playback.loadout, wings: playback.loadout.wings.map(wing => wing ?? undefined) } : {
+    pilot: pilotPicker!.selectedId,
     drone: testingLoadout && droneWeapon.value === 'towline' ? 'towline' : 'sentry',
     wings: testingLoadout ? wingSelectors.map(select => readWingWeapon(select.value)) : [],
     mode: flightMode,
@@ -361,7 +364,7 @@ async function launchFlight(shortcut?: FlightShortcut) {
   try {
     const { openFlightSession } = await import('./app/flight-session');
     if (controller.signal.aborted) return;
-    const handle = await openFlightSession(id, loadout, controller.signal, shortcut, campaignFlight ? {
+    const handle = await openFlightSession(id, loadout, controller.signal, playback?.shortcut ?? shortcut, campaignFlight ? {
       onClear: () => completeMission(id),
       onNext: nextBriefing,
     } : undefined, challengeFlight ? {
@@ -380,7 +383,7 @@ async function launchFlight(shortcut?: FlightShortcut) {
         saveChallenges();
         select(challengeSelection(challengeFlight));
       },
-    } : undefined);
+    } : undefined, import.meta.env.DEV ? { playback, onRecord: keepLastReplay } : undefined);
     if (handle && !controller.signal.aborted)
       void saveLevelOffline(id, controller.signal).then(ready => {
         if (!controller.signal.aborted)
@@ -390,8 +393,9 @@ async function launchFlight(shortcut?: FlightShortcut) {
   }
   catch {
     if (controller.signal.aborted) return;
-    failedSectors.add(id);
+    if (!playback) failedSectors.add(id);
     returnToMenu();
+    if (import.meta.env.DEV && playback) status.textContent = 'Could not prepare the replay’s flight graphics.';
   }
 }
 document.querySelector('#launch-flight')!.addEventListener('click', () => void launchFlight());
@@ -427,6 +431,53 @@ if (import.meta.env.DEV) {
     const link=document.createElement('a');link.href=import.meta.env.BASE_URL+path;link.textContent=label;links.append(link);
   }
   menu.querySelector('.menu-actions')!.append(links);
+
+  const replayTools = document.createElement('details');
+  replayTools.className = 'menu-settings';
+  const replaySummary = document.createElement('summary');
+  replaySummary.textContent = 'Flight replays';
+  const chooseReplay = document.createElement('button');
+  chooseReplay.type = 'button';
+  chooseReplay.textContent = 'Open replay…';
+  const filePicker = document.createElement('input');
+  filePicker.type = 'file';
+  filePicker.accept = '.json,application/json';
+  filePicker.hidden = true;
+  chooseReplay.addEventListener('click', () => filePicker.click());
+  const replayStatus = document.createElement('p');
+  replayStatus.setAttribute('role', 'status');
+  filePicker.addEventListener('change', async () => {
+    const file = filePicker.files?.[0];
+    filePicker.value = '';
+    if (!file) return;
+    chooseReplay.disabled = true;
+    replayStatus.textContent = '';
+    try {
+      const replay = await readFlightReplay(file);
+      if (!menu.hidden && !missionList.hidden) void launchFlight(undefined, replay);
+    } catch (error) {
+      replayStatus.textContent = error instanceof Error ? error.message : 'Could not read this replay.';
+    } finally {
+      chooseReplay.disabled = false;
+    }
+  });
+  const saveLastReplay = document.createElement('button');
+  saveLastReplay.type = 'button';
+  saveLastReplay.textContent = 'Save last replay';
+  saveLastReplay.hidden = true;
+  let lastReplay: FlightReplay | undefined;
+  keepLastReplay = replay => {
+    lastReplay = replay;
+    saveLastReplay.hidden = false;
+  };
+  saveLastReplay.addEventListener('click', () => {
+    if (lastReplay) saveFlightReplay(lastReplay);
+  });
+  const replayActions = document.createElement('div');
+  replayActions.className = 'flight-actions';
+  replayActions.append(chooseReplay, saveLastReplay);
+  replayTools.append(replaySummary, replayActions, filePicker, replayStatus);
+  links.before(replayTools);
 
   const shortcuts = document.createElement('details');
   shortcuts.className = 'brief-shortcuts';

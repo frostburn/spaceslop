@@ -9,8 +9,10 @@ const server = await createServer({
 after(() => server.close());
 const { Flight, STEP } = await server.ssrLoadModule('/src/game.ts');
 const { bindFlightInput } = await server.ssrLoadModule('/src/app/input.ts');
+const { recordFlightReplay, parseFlightReplay, playFlightReplay, replayRandom } =
+  await server.ssrLoadModule('/src/dev/flight-replay.ts');
 
-function setup(t) {
+function setup(t, capture = false) {
   const keys = new EventTarget();
   globalThis.window = keys;
   globalThis.document = { body: new EventTarget() };
@@ -26,8 +28,11 @@ function setup(t) {
     delete globalThis.document;
   });
   const flight = new Flight('sentry', [], 'vex', 'boulevard');
+  const recorder = capture && recordFlightReplay(flight, { drone: 'sentry', pilot: 'vex', wings: [], mode: 'regular' }, 28);
   const input = bindFlightInput(canvas, {
-    flight: () => flight, active: () => true, pause() {}, pulse: () => flight.pulse(),
+    flight: () => flight, active: () => true, pause() {},
+    pulse() { flight.pulse(); if (recorder) recorder.pulse(flight); },
+    ...(recorder ? { recordSteering: recorder.steer, recordDrone: recorder.drone } : {}),
   }, controller.signal);
   function pointer(type, clientX, clientY, pointerId = 1) {
     canvas.dispatchEvent(Object.assign(new Event(type), { pointerId, clientX, clientY, button: 0 }));
@@ -39,7 +44,7 @@ function setup(t) {
     keys.dispatchEvent(event);
     return event.defaultPrevented;
   }
-  return { flight, input, pointer, space, canvas };
+  return { flight, input, pointer, space, canvas, recorder, keys };
 }
 
 test('a tap parks the drone and a drag moves only the fighter', t => {
@@ -112,4 +117,52 @@ test('Space stays native on HUD controls and fires once per press on the playfie
   assert.equal(flight.charges, charges - 1);
   assert.equal(space(document.body), true);
   assert.equal(flight.charges, charges - 2);
+});
+
+test('recorded controls replay a short swipe, interrupted drag, keyboard override and final-tick Pulse', t => {
+  const { flight, input, pointer, space, recorder, keys, canvas } = setup(t, true);
+  function step() {
+    input.steer(STEP);
+    flight.step(STEP);
+    recorder.step(flight);
+  }
+  function key(type, code) {
+    keys.dispatchEvent(Object.assign(new Event(type, { cancelable: true }), { code }));
+  }
+  pointer('pointerdown', 150, 400);
+  pointer('pointerup', 208, 408);
+  step();
+  step();
+  pointer('pointerdown', 112, 254);
+  pointer('pointermove', 192, 240);
+  step();
+  key('keydown', 'ArrowUp');
+  key('keydown', 'KeyW');
+  key('keydown', 'KeyD');
+  for (let i = 0; i < 27; i++) step();
+  key('keyup', 'ArrowUp');
+  key('keyup', 'KeyW');
+  key('keyup', 'KeyD');
+  pointer('pointermove', 192, 352);
+  step();
+  input.reset();
+  pointer('pointerup', 192, 352);
+  step();
+  pointer('pointerdown', 120, 270);
+  pointer('pointerup', 120, 270);
+  for (let i = 0; i < 120; i++) step();
+  space(canvas);
+  const saved = parseFlightReplay(JSON.stringify(recorder.snapshot(flight)));
+  assert.equal(saved.commands.at(-1)[0], saved.ticks);
+  assert.deepEqual(saved.commands.at(-1), [saved.ticks, 'pulse']);
+  assert.equal(saved.commands.filter(command => command[1] === 'steer' && command[3] === 2).length, 1);
+  const replay = playFlightReplay(saved);
+  const played = new Flight('sentry', [], 'vex', saved.level, replayRandom(saved.seed));
+  for (let i = 0; i <= saved.ticks && !replay.done; i++) replay.step(played);
+  assert.equal(replay.matches, true);
+  assert.deepEqual(played.player, flight.player);
+  assert.deepEqual(played.drone, flight.drone);
+  assert.deepEqual(played.enemies, flight.enemies);
+  assert.deepEqual(played.shots, flight.shots);
+  assert.equal(played.time, flight.time, 'playback does not advance beyond the snapshot');
 });
