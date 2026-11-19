@@ -106,14 +106,17 @@ function bossTip(flight: Flight) {
   const encounter = flight.encounterLevel;
   if (flight.isBroodlockChallenge) return towline ? 'Sweep the arc across the green cannon. Watch the spores spread.'
     : 'Tap the green cannon. Watch the spores spread.';
-  if (flight.isIoChallenge) return flight.ioLegBroken ? 'Target the exposed machinery. The sweeps come faster now.'
-    : 'Break the cyan support. Watch for embers overtaking the first rows.';
+  if (flight.isIoChallenge) {
+    const aim = flight.ioLegBroken ? 'Target the exposed machinery.' : 'Break the cyan support.';
+    return aim + (flight.calderaStackVolley ? ' Draw the exhaust to one side.' : ' Watch the faster embers overtake the first rows.');
+  }
   if (flight.isTitanChallenge) return 'Target the glowing thorax vent. Watch the wingbeats split into rings.';
   if (flight.isHeliostatChallenge) return 'Target the cyan core. The lenses alternate volleys and aimed plasma.';
   if (flight.isIceChallenge) return 'Aim at the mouth. Watch the fast strands overtake the slow ones.';
   if (flight.isPreserveChallenge) return 'Aim at the belly. Move after the claws lock. Watch for the feather barbs.';
-  if (flight.isSummerChallenge) return 'Destroy heads to thin the overlapping petals.';
-  if (flight.isBoulevardChallenge) return 'Watch the crossed neon lanes. Keep the cruiser ahead of you.';
+  if (flight.isSummerChallenge) return 'Break the heads. When the crowns fire in turn, move after each glow.';
+  if (flight.isBoulevardChallenge) return flight.cruiserVentVolley ? 'The roof vents fire twice. Draw each volley away from your next move.'
+    : 'Watch the crossed neon lanes. Keep the cruiser ahead of you.';
   if (flight.isGroveChallenge) return 'Slip between the fronds. Shoot seeking lanterns from a distance.';
   if (flight.isFleetChallenge) return 'When the central lens fills the screen, find an empty pocket before the pellets fill.';
   if (flight.isDenChallenge) return 'When both guns seed the screen, move into a clear lane before the pellets fill.';

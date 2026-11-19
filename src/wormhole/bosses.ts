@@ -3,7 +3,7 @@ import { setAntMoldTexture } from '../ant-mold';
 import { createHiveGuardian } from '../ant-rigs';
 import { RAY_SEEKER_POOL, type RayOrb } from '../biolume/lantern-ray';
 import { createLanternRay, createRaySeekerAssets, createRaySeekerRig } from '../biolume/lantern-ray-rig';
-import { BOULEVARD_APPROACH, BOULEVARD_DURATION, BOULEVARD_PITCH, CRUISER_MUZZLE_Y } from '../boulevard';
+import { BOULEVARD_APPROACH, BOULEVARD_DURATION, BOULEVARD_PITCH } from '../boulevard';
 import { createBoulevardMaterials } from '../boulevard-materials';
 import { createPursuitCruiser } from '../boulevard-rigs';
 import { cicadaFlight } from '../cicada';
@@ -119,8 +119,6 @@ export function createWormholeBosses(plane: T.Group, signal: AbortSignal) {
   const cruiser = createPursuitCruiser(boulevardMaterials);
   cruiser.root.position.set(0, BOSS_Y, BOSS_DEPTH);
   cruiser.root.rotation.x = -BOULEVARD_PITCH;
-  const cruiserCharges = [createPatternCharge(0xff72cb), createPatternCharge(0x70f4ff)]
-    .map((charge, i) => charge.attach(cruiser.guns[i].rotor, 0, CRUISER_MUZZLE_Y, 0));
 
   const ray = createLanternRay();
   const seekerAssets = createRaySeekerAssets();
@@ -136,7 +134,9 @@ export function createWormholeBosses(plane: T.Group, signal: AbortSignal) {
         flight.bossRecoil / BOSS_RECOIL_TIME, animationTime);
     }),
     io: boss(caldera.root, ({ flight }, time) => {
-      caldera.pose(IO_DURATION + IO_APPROACH + time, flight.ioCollapse, flight.ioLegBroken, flight.cannonWindup);
+      const charge = flight.cannonWindup;
+      caldera.pose(IO_DURATION + IO_APPROACH + time, flight.ioCollapse, flight.ioLegBroken, charge,
+        flight.isIoChallenge && !flight.calderaStackVolley ? charge : 0, flight.calderaStackVolley ? charge : 0);
     }),
     vents: boss(crab.root, ({ flight }, time) => {
       const local = ventBossPose(1, time);
@@ -173,8 +173,9 @@ export function createWormholeBosses(plane: T.Group, signal: AbortSignal) {
     }),
     boulevard: boss(cruiser.root, ({ flight }, time) => {
       const age = flight.isBoulevardChallenge ? BOULEVARD_DURATION + BOULEVARD_APPROACH + time : time;
-      cruiser.pose(age, flight.cannonWindup, flight.bossRecoil / BOSS_RECOIL_TIME);
-      for (const charge of cruiserCharges) charge(flight.isBoulevardChallenge ? flight.cannonWindup : 0);
+      const vents = flight.cruiserVentVolley, charge = flight.cannonWindup;
+      cruiser.pose(age, vents ? 0 : charge, vents ? 0 : flight.bossRecoil / BOSS_RECOIL_TIME);
+      cruiser.chargePorts(flight.isBoulevardChallenge && !vents ? charge : 0, vents ? charge : 0);
     }),
     biolume: boss(ray.root, ({ flight }) => ray.pose(flight.rayTime, false, flight.rayAttackSignal), true),
     fleet: boss(command.root, ({ flight, distance }) => {
@@ -225,7 +226,8 @@ export function createWormholeBosses(plane: T.Group, signal: AbortSignal) {
       portalFeeds.update(0, BOSS_CAMERA_DISTANCE, 1, 0, { unstable: 0, pattern: 0, attackTime: 0 });
       groundskeeperEffects.prime();
       shoulders.forEach(glow => glow(1));
-      cruiserCharges.forEach(glow => glow(1));
+      caldera.chargeStacks(1);
+      cruiser.chargePorts(1,1);
       chief.pose(1.55, true);
       command.prime();
     },
@@ -233,7 +235,8 @@ export function createWormholeBosses(plane: T.Group, signal: AbortSignal) {
       restoreRegulator?.();
       restoreRegulator = undefined;
       shoulders.forEach(glow => glow(0));
-      cruiserCharges.forEach(glow => glow(0));
+      caldera.chargeStacks(0);
+      cruiser.chargePorts(0,0);
       plasma.root.visible = portalFeeds.root.visible = groundskeeperEffects.root.visible = false;
     },
     applyArmor(texture: T.Texture) {

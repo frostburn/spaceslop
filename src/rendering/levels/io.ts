@@ -44,8 +44,9 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
     prepare() {
       io.update(IO_DURATION + IO_APPROACH, 1);
       io.prime(true);
+      boss.chargeStacks(1);
     },
-    afterWarmup: () => io.prime(false),
+    afterWarmup() { io.prime(false); boss.chargeStacks(0); },
     contact,
     update({ flight, reveal: eased, time: ioTime }) {
       const orientation = ioFrame(ioTime, eased);
@@ -55,7 +56,8 @@ export const createLevel: LevelFactory = ({ plane, signal }) => {
       boss.root.visible = flight.bossHealth > 0;
       const windup = flight.cannonWindup;
       const challenge = flight.isIoChallenge;
-      boss.pose(ioTime, flight.ioCollapse, flight.ioLegBroken, windup, challenge ? windup : 0);
+      boss.pose(ioTime, flight.ioCollapse, flight.ioLegBroken, windup,
+        challenge && !flight.calderaStackVolley ? windup : 0, flight.calderaStackVolley ? windup : 0);
       skipperModels.length = flight.enemies.length;
       for (const rig of skippers)
         rig.root.visible = false;

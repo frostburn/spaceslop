@@ -1,5 +1,6 @@
-import { patternBearing, patternBullet, stepPatternBurst, type BossPattern } from './challenge-patterns';
-import { turnBoulevardTurret, type BoulevardCourse } from './boulevard';
+import { bossPatternCharge, patternBearing, patternBullet, stepPatternBurst, type BossPattern } from './challenge-patterns';
+import { HAULER_LENGTH_SCALE, HOVERCAR_EXHAUST_Y, turnBoulevardTurret, type BoulevardCourse } from './boulevard';
+import { hookBullet } from './hook-bullet';
 import { mineBurst } from './boulevard-mines';
 import { wingRewardForWave } from './wing';
 
@@ -56,7 +57,21 @@ export function stepBoulevardChallengeDriver(enemy: Driver, course: BoulevardCou
   const timing = boulevardChallengeTiming(course);
   // Nearby patrols steer their rows around the same stretch of road.
   const opening = { x: 1.35 * Math.sin(time * .36) + player.x * .14, y: -6.2 };
-  const burst = stepPatternBurst(enemy, opening, visible, timing);
+  const burst = stepPatternBurst(enemy, course.heavy ? player : opening, visible, timing, course.heavy);
+  if (course.heavy) {
+    if (!burst) return;
+    const tail = HOVERCAR_EXHAUST_Y * HAULER_LENGTH_SCALE;
+    const jet = { x: enemy.x - tail * Math.sin(heading), y: enemy.y + tail * Math.cos(heading) };
+    return [-1, 1].flatMap(side => {
+      const shots = [
+        hookBullet(jet, burst.target, side * 2.9, 1.8, 4.35, 'accent'),
+        hookBullet(jet, burst.target, side * 1.35, 1.55, 5.15, 'primary'),
+        patternBullet(jet, side * 1.45, 4.65, 'accent'),
+      ];
+      if (burst.row % 2 === 0) shots.push(patternBullet(jet, side * 1.77, 4.15, 'accent'));
+      return shots;
+    });
+  }
   const target = burst?.target ?? enemy.burst?.target ?? opening;
   const row = burst?.row ?? enemy.burst?.row ?? 0;
   const sweep = row / (timing.rows - 1) * 2 - 1;
@@ -75,7 +90,7 @@ export function stepBoulevardChallengeDriver(enemy: Driver, course: BoulevardCou
   }
   if (!burst) return;
 
-  const lanes = course.heavy ? [-4, -3, -2, -1, 1, 2, 3, 4] : [-3, -2, -1, 1, 2, 3];
+  const lanes = [-3, -2, -1, 1, 2, 3];
   const slotOffset = .18 * Math.sin(course.slot * 1.4);
   return lanes.map(lane => {
     const side = Math.sign(lane), distance = Math.abs(lane) - 1;
@@ -94,9 +109,38 @@ export function boulevardChallengeMineBurst(x: number, y: number) {
 
 export const boulevardChallengeBoss = { health: 244, interval: 5.3, lockAt: .45,
   first: 1.22, spacing: .165, rows: 16 } satisfies BossPattern & { health: number };
+const firstVentRows = 6, secondVentRow = 9;
+const secondVent = { ...boulevardChallengeBoss, lockAt: boulevardChallengeBoss.first + firstVentRows * boulevardChallengeBoss.spacing,
+  first: boulevardChallengeBoss.first + secondVentRow * boulevardChallengeBoss.spacing };
+const ventPattern = { ...boulevardChallengeBoss, hookSalvos: [
+  { row: 0, aimAt: boulevardChallengeBoss.lockAt }, { row: secondVentRow, aimAt: secondVent.lockAt },
+] };
+
+export function boulevardUsesVents(cycle: number) { return cycle % 3 === 1; }
+export function boulevardBossPattern(cycle: number) { return boulevardUsesVents(cycle) ? ventPattern : boulevardChallengeBoss; }
+
+export function boulevardVentCharge(elapsed: number) {
+  return Math.max(bossPatternCharge(elapsed, ventPattern, firstVentRows),
+    bossPatternCharge(elapsed, secondVent, ventPattern.rows - secondVentRow));
+}
+
+export function boulevardVentRow(left: Point, right: Point, target: Point, row: number) {
+  const second = row >= secondVentRow;
+  if (!second && row >= firstVentRows) return [];
+  const shots = [];
+  for (const side of [-1, 1]) {
+    const vent = side < 0 ? left : right;
+    const color = side < 0 ? 'primary' : 'accent';
+    // The first pair swings outside the wings. The reply crosses over the roof.
+    const direction = second ? -side : side;
+    shots.push(hookBullet(vent, target, direction * 3.95, 3.35, 4.8, color));
+    shots.push(hookBullet(vent, target, direction * 2.1, 1.55, 5.5, color));
+  }
+  return shots;
+}
 
 export function boulevardChallengeBossRow(muzzles: readonly [Point, Point], target: Point, cycle: number, row: number) {
-  const crossing = cycle % 2 === 1, reverse = cycle % 4 < 2 ? 1 : -1;
+  const crossing = cycle % 3 === 2, reverse = Math.floor(cycle / 3) % 2 === 0 ? 1 : -1;
   const phase = row / (boulevardChallengeBoss.rows - 1);
   const gap = target.x * .25 + reverse * (phase * 2 - 1) * (crossing ? 1.5 : 1.8);
   const height = Math.max(-5.55, Math.min(-3.8, target.y));

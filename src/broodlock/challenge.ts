@@ -1,9 +1,10 @@
 import { antScales, type AntKind } from '../ant-navigation';
 import { patternBearing, patternBullet, rippleRow, stepPatternBurst, type BossPattern } from '../challenge-patterns';
+import { hookBullet } from '../hook-bullet';
 import type { WingWeapon } from '../wing';
 
 type Point = { x: number; y: number };
-type Ant = Point & Parameters<typeof stepPatternBurst>[0];
+type Ant = Point & Parameters<typeof stepPatternBurst>[0] & { heading?: number };
 type HiveWave = { time: number; lanes: number[]; ant: AntKind; drop?: WingWeapon };
 
 export const challengeWaves: readonly HiveWave[] = [
@@ -22,24 +23,29 @@ export const challengeWaves: readonly HiveWave[] = [
 export const CHALLENGE_ANT_PACE = 1.38;
 export const CHALLENGE_ANT_WINDUP = .68;
 const antPatterns = {
-  worker: { first: 1.24, windup: CHALLENGE_ANT_WINDUP, rows: 3, spacing: .24, rest: 2.95, speed: 4.45, spread: [-.27, 0, .27] },
-  soldier: { first: 1.48, windup: CHALLENGE_ANT_WINDUP, rows: 4, spacing: .22, rest: 3.25, speed: 4.6, spread: [-.47, -.29, .29, .47] },
+  worker: { first: 1.24, windup: CHALLENGE_ANT_WINDUP, rows: 3, spacing: .24, rest: 2.95, speed: 4.45 },
+  soldier: { first: 1.48, windup: CHALLENGE_ANT_WINDUP, rows: 4, spacing: .22, rest: 3.25, speed: 4.6 },
 };
 
 export function challengeAntFirstShot(kind: AntKind, slot: number) {
   return antPatterns[kind].first + slot * .34;
 }
 
-export function stepChallengeAnt(ant: Ant, kind: AntKind, slot: number) {
+export function stepChallengeAnt(ant: Ant, kind: AntKind, slot: number, player: Point) {
   const origin = { x: ant.x, y: ant.y - .55 * antScales[kind] };
   const timing = antPatterns[kind];
-  const burst = stepPatternBurst(ant, ant, ant.y <= 6.9 && origin.y > -1, timing);
+  const soldier = kind === 'soldier';
+  const burst = stepPatternBurst(ant, soldier ? player : ant, ant.y <= 6.9 && origin.y > -1, timing, soldier);
   if (!burst) return;
-  const spread = timing.spread;
+  if (soldier) {
+    const heading = ant.heading ?? 0;
+    const rear = { x: ant.x - .72 * Math.sin(heading), y: ant.y + .72 * Math.cos(heading) };
+    return [-1, 1].map(side => hookBullet(rear, burst.target, side * 2.35, 1.65, timing.speed, 'accent'));
+  }
   const mirror = slot % 2 === 0 ? 1 : -1;
   const sweep = (burst.row - (timing.rows - 1) / 2) * mirror * .13;
   const aim = patternBearing(origin, { x: burst.target.x * .52, y: -5.2 }, .36) + sweep;
-  return spread.map(offset => patternBullet(origin, aim + offset, timing.speed, kind === 'worker' ? 'primary' : 'accent'));
+  return [-.27, 0, .27].map(offset => patternBullet(origin, aim + offset, timing.speed, 'primary'));
 }
 
 export const challengeGuardian = { health: 96, interval: 3.8, lockAt: .38, first: 1.04, spacing: .19, rows: 8 } satisfies BossPattern & { health: number };

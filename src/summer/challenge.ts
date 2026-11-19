@@ -1,4 +1,5 @@
-import { bossPatternCharge, patternBearing, patternBullet, stepPatternBurst, type BossPattern, type PatternColor } from '../challenge-patterns';
+import { bossPatternCharge, hookAimPending, patternBearing, patternBullet, stepPatternBurst, type BossPattern, type PatternColor } from '../challenge-patterns';
+import { hookBullet } from '../hook-bullet';
 import { BOSS_CAMERA_DISTANCE } from '../playfield';
 import { wingRewardForWave } from '../wing';
 import type { SummerCourse } from './combat';
@@ -106,28 +107,55 @@ export function summerChallengeVortex(at: number, origin: Point, mirror: number)
 
 export const LOTUS_CHALLENGE_HEAD_HP = 74;
 export const lotusChallengeBoss = { interval: 5.65, lockAt: .46, first: 1.34, spacing: .187, rows: 16 } satisfies BossPattern;
+const crownStride = 6, crownShots = 4;
+const followingCrown = { ...lotusChallengeBoss, lockAt: lotusChallengeBoss.first - (crownStride - crownShots) * lotusChallengeBoss.spacing };
+const lotusBloom = { ...lotusChallengeBoss, hookSalvos: HYDRA_SIDES.map((_, i) => ({
+  row: i * crownStride, aimAt: i === 0 ? lotusChallengeBoss.lockAt : followingCrown.lockAt + i * crownStride * lotusChallengeBoss.spacing,
+})) };
+export function lotusBossPattern(cycle: number) {
+  return cycle % 2 ? lotusBloom : lotusChallengeBoss;
+}
 
 function headDelay(side: HydraSide, cycle: number) {
-  return cycle % 2 === 0 ? side + 1 : 1 - side;
+  const order = cycle % 4 < 2 ? side + 1 : 1 - side;
+  return cycle % 2 ? order * crownStride : order;
+}
+
+export function lotusHookAimPending(state: HydraState, elapsed: number, cycle: number) {
+  return lotusBossPattern(cycle) === lotusBloom && HYDRA_SIDES.some(side => hydraAlive(state, side) &&
+    hookAimPending(elapsed, lotusBloom, lotusBloom.hookSalvos[headDelay(side, cycle) / crownStride]));
 }
 
 export function lotusChallengeHeadCharge(elapsed: number, cycle: number, side: HydraSide) {
-  const delay = headDelay(side, cycle) * lotusChallengeBoss.spacing;
-  return bossPatternCharge(elapsed - delay, lotusChallengeBoss, lotusChallengeBoss.rows - 2);
+  const timing = lotusBossPattern(cycle);
+  const delay = headDelay(side, cycle) * timing.spacing;
+  if (timing === lotusBloom) return bossPatternCharge(elapsed - delay, delay ? followingCrown : timing, crownShots);
+  return bossPatternCharge(elapsed - delay, timing, timing.rows - 2);
 }
 
 export function lotusChallengeBossRow(state: HydraState, time: number, depth: number, target: Point, cycle: number, row: number) {
-  const turn = cycle % 2 === 0 ? 1 : -1, span = lotusChallengeBoss.rows - 1;
+  const bloom = lotusBossPattern(cycle) === lotusBloom;
+  const turn = cycle % 4 < 2 ? 1 : -1, span = lotusChallengeBoss.rows - 1;
   const phase = row / span * Math.PI * 2;
   const gap = target.x * .24 + turn * (1.35 * Math.sin(phase - .78) + .34 * Math.sin(phase / 2));
   const targetHeight = Math.max(-5.5, target.y);
   const shots = [];
   for (const side of HYDRA_SIDES) {
     const localRow = row - headDelay(side, cycle);
-    if (!hydraAlive(state, side) || localRow < 0 || localRow > span - 2) continue;
+    const rows = bloom ? crownShots : lotusChallengeBoss.rows - 2;
+    if (!hydraAlive(state, side) || localRow < 0 || localRow >= rows) continue;
     const crown = hydraCrown(hydraBossHead(time, side), HYDRA_BOSS_SIZE);
     const scale = BOSS_CAMERA_DISTANCE / (BOSS_CAMERA_DISTANCE - depth - crown.z);
     const origin = { x: crown.x * scale, y: crown.y * scale };
+    if (bloom) {
+      origin.y += .33 * scale; // Rear lip of this head's crown ring.
+      for (const lobe of [-1, 1]) {
+        const color = side === 0 ? 'accent' : 'primary';
+        shots.push(hookBullet(origin, target, lobe * 3.75, 3.3, 4.35, color));
+        shots.push(hookBullet(origin, target, lobe * 1.85, 2.15, 5.05, color));
+      }
+      continue;
+    }
     const height = Math.min(origin.y - 2.6, targetHeight);
     const opening = 1.33 + .22 * Math.sin(phase + side * .7);
     for (let i = 0; i < 8; i++) {

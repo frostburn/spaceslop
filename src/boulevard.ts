@@ -54,15 +54,25 @@ export function boulevardHover(time:number){return{x:.06*Math.sin(time*.73)+.02*
 
 export const CRUISER_CANNON_X = 2.4, CRUISER_CANNON_Y = -1.15, CRUISER_CANNON_Z = -.19;
 export const CRUISER_ROTOR_Y = -.7, CRUISER_MUZZLE_Y = -.45, CRUISER_RECOIL = .22;
+export const CRUISER_VENT = { x: 1.9, y: 1.1, z: 1.24 };
+export const HOVERCAR_EXHAUST_Y = .75, HAULER_LENGTH_SCALE = 1.3;
 
 export function boulevardCruiserMuzzle(time: number, side: number, recoil: number) {
+  return cruiserMount(time, side * CRUISER_CANNON_X,
+    CRUISER_CANNON_Y + CRUISER_ROTOR_Y + CRUISER_MUZZLE_Y + recoil * CRUISER_RECOIL, CRUISER_CANNON_Z);
+}
+
+export function boulevardCruiserVent(time: number, side: number) {
+  return cruiserMount(time, side * CRUISER_VENT.x, CRUISER_VENT.y, CRUISER_VENT.z);
+}
+
+function cruiserMount(time: number, x: number, y: number, z: number) {
   const hull = boulevardBossPoint(time, 1);
   const hover = boulevardHover(time);
-  const x = side * CRUISER_CANNON_X, y = CRUISER_CANNON_Y + CRUISER_ROTOR_Y + CRUISER_MUZZLE_Y + recoil * CRUISER_RECOIL;
   const yawX = x * Math.cos(hover.yaw) - y * Math.sin(hover.yaw);
   const yawY = x * Math.sin(hover.yaw) + y * Math.cos(hover.yaw);
-  const rollX = yawX * Math.cos(hover.roll) + CRUISER_CANNON_Z * Math.sin(hover.roll);
-  const rollZ = CRUISER_CANNON_Z * Math.cos(hover.roll) - yawX * Math.sin(hover.roll);
+  const rollX = yawX * Math.cos(hover.roll) + z * Math.sin(hover.roll);
+  const rollZ = z * Math.cos(hover.roll) - yawX * Math.sin(hover.roll);
   const pitch = hover.pitch - BOULEVARD_PITCH;
   const c = Math.cos(BOULEVARD_PITCH), s = Math.sin(BOULEVARD_PITCH);
   return {
