@@ -56,13 +56,28 @@ export function showSelectedPilot(id: PilotId, slot: HTMLElement, name: HTMLElem
 export function setupPilotPicker(choices: HTMLElement, perkDescription: HTMLElement, signal: AbortSignal) {
   choices.replaceChildren();
 
+  function describe(pilot: Pilot, hardcore: boolean) {
+    const description = hardcore && pilot.id === 'brass'
+      ? 'Each surplus weapon pickup clears hostile bullets on screen.' : pilot.description;
+    return `${pilot.perk} · ${description}`;
+  }
+
+  // Size the text slot for every pilot and difficulty at the current wrapping width.
+  const visibleDescription = document.createElement('span');
+  const measurements = pilots.flatMap(pilot => (pilot.id === 'brass' ? [false, true] : [false]).map(hardcore => {
+    const measure = document.createElement('span');
+    measure.className = 'perk-description-measure';
+    measure.setAttribute('aria-hidden', 'true');
+    measure.textContent = describe(pilot, hardcore);
+    return measure;
+  }));
+  perkDescription.replaceChildren(visibleDescription, ...measurements);
+
   let selected = savedPilot();
   let hardcore = false;
   function showPilot(pilot: Pilot) {
     selected = pilot;
-    const description = hardcore && pilot.id === 'brass'
-      ? 'Each surplus weapon pickup clears hostile bullets on screen.' : pilot.description;
-    perkDescription.textContent = `${pilot.perk} · ${description}`;
+    visibleDescription.textContent = describe(pilot, hardcore);
   }
   showPilot(selected);
 
